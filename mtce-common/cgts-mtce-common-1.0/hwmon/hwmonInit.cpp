@@ -371,30 +371,14 @@ void daemon_service_run ( void )
         }
     }
 
-    /* Get an Authentication Token */
-    ilog ("%s Requesting initial token\n", hwmon_ctrl.my_hostname.c_str() );
-    do
-    {
-       // rc = mtcInv.mtcKeyApi_get_token ( mtcInv.my_hostname );
-       rc = tokenUtil_new_token ( hwmon_ctrl.httpEvent, hwmon_ctrl.my_hostname );
-       if ( rc )
-       {
-           elog ("Failed to get authentication token (%d)\n", rc );
-           sleep (2);
-       }
-       if ( hwmon_ctrl.httpEvent.base )
-       {
-           slog ("%s token base:%p\n",
-                     hwmon_ctrl.my_hostname.c_str(),
-                     hwmon_ctrl.httpEvent.base );
-       }
+    /* Get the initial token.
+     * This call does not return until a token is received */
+    tokenUtil_get_first ( hwmon_ctrl.httpEvent, hwmon_ctrl.my_hostname );
 
-    } while ( rc != PASS ) ;
-
+#ifdef WANT_FIT_TESTING
     if ( daemon_want_fit ( FIT_CODE__HWMON__CORRUPT_TOKEN ))
-    {
         tokenUtil_fail_token ();
-    }
+#endif
 
     /* enable the base level signal handler latency monitor */
     daemon_latency_monitor (true);

@@ -103,6 +103,8 @@
 #define FIT_CODE__NO_PULSE_REQUEST                   (15)
 #define FIT_CODE__NO_PULSE_RESPONSE                  (16)
 
+#define FIT_CODE__TOKEN                              (17)
+
 #define FIT_CODE__FAST_PING_AUDIT_HOST               (20)
 #define FIT_CODE__FAST_PING_AUDIT_ALL                (21)
 

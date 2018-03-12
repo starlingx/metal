@@ -46,7 +46,7 @@ using namespace std;
 #define HTTP_SYSINV_CRIT_TIMEOUT   (20)
 #define HTTP_SYSINV_NONC_TIMEOUT   (10)
 
-#define HTTP_TOKEN_TIMEOUT         (15)
+#define HTTP_TOKEN_TIMEOUT         (30)
 #define HTTP_KEYSTONE_GET_TIMEOUT  (10)
 #define HTTP_SMGR_TIMEOUT          (20)
 #define HTTP_VIM_TIMEOUT           (20)

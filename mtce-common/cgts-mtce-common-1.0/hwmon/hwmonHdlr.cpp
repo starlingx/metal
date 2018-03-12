@@ -253,7 +253,6 @@ void hwmon_service ( hwmon_ctrl_type * ctrl_ptr )
 
     daemon_config_type * config_ptr = daemon_get_cfg_ptr();
     hwmon_socket_type  * sock_ptr   = getSock_ptr();
-    keyToken_type      * token_ptr  = tokenUtil_get_ptr();
 
     hostInv.hostBase.my_hostname = ctrl_ptr->my_hostname ;
     hostInv.hostBase.my_local_ip = ctrl_ptr->my_local_ip ;
@@ -362,37 +361,11 @@ void hwmon_service ( hwmon_ctrl_type * ctrl_ptr )
 
         /* Handle refreshing the authentication token */
         tokenUtil_log_refresh ();
-        if ( hwmonTimer_token.ring == true )
-        {
-            hwmonTimer_token.ring = false ;
-            tokenUtil_new_token ( ctrl_ptr->httpEvent, ctrl_ptr->my_hostname );
-
-            /* If the token fetch fails then we retry in a shorter interval */
-            if ( token_ptr->delay == true )
-            {
-                mtcTimer_start( hwmonTimer_token, hwmonTimer_handler, 5 );
-                token_ptr->delay = false ;
-            }
-            /* otherwise at the normal refresh rate */
-            else
-            {
-                mtcTimer_start ( hwmonTimer_token, hwmonTimer_handler, config_ptr->token_refresh_rate ) ;
-            }
-        }
-        /* handle the spontaneous error case */
-        else if ( token_ptr->delay == true )
-        {
-            mtcTimer_stop ( hwmonTimer_token );
-            mtcTimer_start( hwmonTimer_token, hwmonTimer_handler, 5 );
-            token_ptr->delay = false ;
-        }
-
-        /* Always ensure that the token refesh timer is running */
-        if ( hwmonTimer_token.tid == NULL )
-        {
-            slog ("auto-restarting dead token refresh timer\n");
-            mtcTimer_start ( hwmonTimer_token, hwmonTimer_handler, config_ptr->token_refresh_rate ) ;
-        }
+        tokenUtil_manage_token ( ctrl_ptr->httpEvent,
+                                 ctrl_ptr->my_hostname,
+                                 config_ptr->token_refresh_rate,
+                                 hwmonTimer_token,
+                                 hwmonTimer_handler );
 
         /* Run the FSM */
         hostInv.hwmon_fsm ( ) ;
