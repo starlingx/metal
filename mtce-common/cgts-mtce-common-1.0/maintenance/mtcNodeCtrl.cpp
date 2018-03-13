@@ -1248,52 +1248,49 @@ void daemon_service_run ( void )
     daemon_latency_monitor (true);
 
     /* DOR Mode Check */
+    int enabled_nodes = mtcInv.enabled_nodes();
+    struct timespec ts ;
+    clock_gettime (CLOCK_MONOTONIC, &ts );
+
+#ifdef WANT_FIT_TESTING
+    /* Support low uptime FIT for testing */
+    if ( daemon_is_file_present ( MTC_CMD_FIT__UPTIME ))
     {
-        int enabled_nodes = mtcInv.enabled_nodes();
-        if ( enabled_nodes )
+        ts.tv_sec = daemon_get_file_int ( MTC_CMD_FIT__UPTIME );
+        slog ("FIT: Uptime %ld secs or %ld min %ld secs\n",
+               ts.tv_sec,
+               ts.tv_sec/60,
+               ts.tv_sec%60);
+    }
+#endif
+
+    if ( ts.tv_sec < MTC_MINS_20 )
+    {
+        /* CPE DOR window is much greater in CPE since heartbeat
+         * cannot start until the inactive CPE has run both manifests */
+        int timeout = DEFAULT_DOR_MODE_CPE_TIMEOUT ;
+
+        /* override the timeout to a smaller value for normal system */
+        if ( mtcInv.system_type == SYSTEM_TYPE__NORMAL )
         {
-            struct timespec ts ;
-            clock_gettime (CLOCK_MONOTONIC, &ts );
-
-            /* Support low uptime FIT for testing */
-            if ( daemon_is_file_present ( MTC_CMD_FIT__UPTIME ))
-            {
-                ts.tv_sec = daemon_get_file_int ( MTC_CMD_FIT__UPTIME );
-                slog ("FIT: Uptime %ld secs or %ld min %ld secs\n",
-                       ts.tv_sec,
-                       ts.tv_sec/60,
-                       ts.tv_sec%60);
-            }
-
-            if ( ts.tv_sec < MTC_MINS_20 )
-            {
-                /* CPE DOR window is much greater in CPE since heartbeat
-                 * cannot start until the inactive CPE has run both manifests */
-                int timeout = DEFAULT_DOR_MODE_CPE_TIMEOUT ;
-
-                /* override the timeout to a smaller value for normal system */
-                if ( mtcInv.system_type == SYSTEM_TYPE__NORMAL )
-                {
-                    /* calculate time from config variable and number of enabled hosts */
-                    timeout = mtc_config.dor_mode_timeout + (enabled_nodes);
-                }
-
-                mtcInv.dor_mode_active = true ;
-                mtcInv.dor_start_time  = ts.tv_sec ;
-
-                ilog ("%-12s ---------- ; DOR Recovery ---------------------- -------------------\n", mtcInv.my_hostname.c_str());
-                ilog ("%-12s is ACTIVE  ; DOR Recovery %2d:%02d mins (%4d secs) (duration %3d secs)\n",
-                        mtcInv.my_hostname.c_str(),
-                        mtcInv.dor_start_time/60,
-                        mtcInv.dor_start_time%60,
-                        mtcInv.dor_start_time,
-                        timeout );
-                ilog ("%-12s ---------- ; DOR Recovery ---------------------- -------------------\n", mtcInv.my_hostname.c_str());
-                ilog ("%-12s host state ; DOR Recovery    controller uptime         host uptime    \n", mtcInv.my_hostname.c_str());
-                ilog ("%-12s ---------- ; DOR Recovery ---------------------- -------------------\n", mtcInv.my_hostname.c_str());
-                mtcTimer_start ( mtcInv.mtcTimer_dor, mtcTimer_handler, timeout );
-            }
+            /* calculate time from config variable and number of enabled hosts */
+            timeout = mtc_config.dor_mode_timeout + (enabled_nodes);
         }
+
+        mtcInv.dor_mode_active = true ;
+        mtcInv.dor_start_time  = ts.tv_sec ;
+
+        ilog ("%-12s ---------- ; DOR Recovery ---------------------- -------------------\n", mtcInv.my_hostname.c_str());
+        ilog ("%-12s is ACTIVE  ; DOR Recovery %2d:%02d mins (%4d secs) (duration %3d secs)\n",
+                mtcInv.my_hostname.c_str(),
+                mtcInv.dor_start_time/60,
+                mtcInv.dor_start_time%60,
+                mtcInv.dor_start_time,
+                timeout );
+        ilog ("%-12s ---------- ; DOR Recovery ---------------------- -------------------\n", mtcInv.my_hostname.c_str());
+        ilog ("%-12s host state ; DOR Recovery    controller uptime         host uptime    \n", mtcInv.my_hostname.c_str());
+        ilog ("%-12s ---------- ; DOR Recovery ---------------------- -------------------\n", mtcInv.my_hostname.c_str());
+        mtcTimer_start ( mtcInv.mtcTimer_dor, mtcTimer_handler, timeout );
     }
 
     /* Run Maintenance service forever */
@@ -1343,7 +1340,7 @@ void daemon_service_run ( void )
         /* Initialize the timeval struct  */
         mtc_sock.waitd.tv_sec = 0;
         if ( mtcInv.system_type == SYSTEM_TYPE__NORMAL )
-        mtc_sock.waitd.tv_usec = MTCAGENT_SELECT_TIMEOUT ;
+            mtc_sock.waitd.tv_usec = MTCAGENT_SELECT_TIMEOUT ;
         else
             mtc_sock.waitd.tv_usec = MTCAGENT_CPE_SELECT_TIMEOUT ;
 
@@ -1450,8 +1447,6 @@ void daemon_service_run ( void )
                 }
             }
         }
-
-        // timeUtil_sched_sample ( );
 
         daemon_signal_hdlr ();
 
