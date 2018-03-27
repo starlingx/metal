@@ -131,6 +131,9 @@ rpm-python-4.14.0-1.tis.1.x86_64.rpm
 # We also now need bind-utils in the squashfs, due to the anaconda-preexec we've added.
 bind-utils-9.9.4-51.el7.x86_64.rpm
 
+# Add ntpd to the rootfs
+ntp-4.2.6p5-25.el7.centos.2.tis.3.x86_64.rpm
+
 # Mount the squashfs.img and copy the rootfs out:
 ORIG_SQUASHFS=$PWD/squashfs.img
 mkdir squashfs.mnt
@@ -178,7 +181,7 @@ rm -rf usr/lib64/python2.7/site-packages/rpm/
 for f in ../rootfs-rpms/*.rpm ; do rpm2cpio $f | cpio -idu; done
 #find old .pyo files and delete them
 find usr/lib64/python2.7/site-packages/pyanaconda/ usr/lib64/python2.7/site-packages/rpm/ -name *.pyo | xargs rm
-
+rm -rf usr/lib/.build-id
 
 # IMPORTANT Note, please do NOT forget the following step:
 # MUST HAVE!!! Update the kernel and related kernel modules, same as what was done for "initrd.img" updating

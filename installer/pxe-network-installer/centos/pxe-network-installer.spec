@@ -7,7 +7,7 @@ Group: base
 Packager: Wind River <info@windriver.com>
 URL: unknown
 
-%define tis_image_version stx-0.1
+%define tis_image_version stx-0.2
 
 Source0: LICENSE
 
