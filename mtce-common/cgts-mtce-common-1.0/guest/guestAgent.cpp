@@ -855,17 +855,11 @@ int recv_from_guestServer ( unsigned int cmd, char * buf_ptr )
                 if ( instInfo_ptr )
                 {
                     string state ;
-                    string status;
 
                     if ( instInfo_ptr->heartbeat.reporting == true )
                         state = "enabled" ;
                     else
                         state = "disabled" ;
-
-                    if ( instInfo_ptr->heartbeating == true )
-                        status = "enabled" ;
-                    else
-                        status = "disabled" ;
 
                     if ( cmd == MTC_EVENT_HEARTBEAT_ILLHEALTH )
                     {
@@ -879,6 +873,7 @@ int recv_from_guestServer ( unsigned int cmd, char * buf_ptr )
                             instInfo_ptr->heartbeating = true ;
                             ilog ("%s %s is now heartbeating\n", hostname.c_str(), instInfo_ptr->uuid.c_str());
                         }
+                        string status = "enabled";
                         rc = guestVimApi_svc_event ( hostname, uuid, state, status, instInfo_ptr->restart_to_str);
                     } 
                     else
@@ -888,11 +883,11 @@ int recv_from_guestServer ( unsigned int cmd, char * buf_ptr )
                             instInfo_ptr->heartbeating = false ;
                             wlog ("%s %s is not heartbeating\n", hostname.c_str(), instInfo_ptr->uuid.c_str());
                         }
+                        string status = "disabled";
                         rc = guestVimApi_svc_event ( hostname, uuid, state, status, "0");
                     }
                     if ( rc != PASS )
                     {
-                        /* TODO: make this an elog before delivery */
                         elog ("%s %s failed to send state change 'event' to vim (rc:%d)\n", 
                                      hostname.c_str(), instInfo_ptr->uuid.c_str(), rc );
                     }
