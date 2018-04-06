@@ -41,8 +41,9 @@ Source057: efi-centos-pxe-smallsystem_lowlatency-install
 
 BuildRequires: syslinux
 BuildRequires: grub2
+BuildRequires: grub2-efi-x64-pxeboot
 
-Requires: grub2-efi-pxeboot
+Requires: grub2-efi-x64-pxeboot
 
 %description
 TIS Network Installation
@@ -56,7 +57,7 @@ install -v -d -m 755 %{buildroot}/pxeboot/pxelinux.cfg.files
 install -v -d -m 755 %{buildroot}/pxeboot/rel-%{platform_release}
 install -v -d -m 755 %{buildroot}/pxeboot/EFI
 install -v -d -m 755 %{buildroot}/pxeboot/EFI/centos
-install -v -d -m 755 %{buildroot}/pxeboot/EFI/centos/x86_64-efi
+ln -s %{_prefix}/lib/grub/x86_64-efi %{buildroot}/pxeboot/EFI/centos/x86_64-efi
 
 install -v -m 644 %{_sourcedir}/vmlinuz-%{tis_image_version} \
     %{buildroot}/pxeboot/rel-%{platform_release}/installer-bzImage_1.0
@@ -131,13 +132,6 @@ install -v -m 0644 \
     %{_datadir}/syslinux/gpxelinux.0 \
     %{buildroot}/pxeboot
 
-# Copy files from grub2. Centos UEFI bootloader expect these files
-install -v -m 0644 \
-    %{_prefix}/lib/grub/i386-pc/command.lst \
-    %{_prefix}/lib/grub/i386-pc/fs.lst \
-    %{_prefix}/lib/grub/i386-pc/crypto.lst \
-    %{_prefix}/lib/grub/i386-pc/terminal.lst \
-    %{buildroot}/pxeboot/EFI/centos/x86_64-efi
 # Copy Titanium grub.cfg. It will be used to create ISO on the Controller.
 install -v -m 0644 %{_sourcedir}/grub.cfg \
     %{buildroot}/pxeboot/EFI/
