@@ -3,22 +3,7 @@
     <version>xxxSW_VERSIONxxx</version>
     <supported_upgrades>
         <upgrade>
-            <version>17.06</version>
-            <required_patch>TC_17.06_PATCH_0001</required_patch>
-            <required_patch>TC_17.06_PATCH_0002</required_patch>
-            <required_patch>TC_17.06_PATCH_0003</required_patch>
-            <required_patch>TC_17.06_PATCH_0004</required_patch>
-            <required_patch>TC_17.06_PATCH_0005</required_patch>
-            <required_patch>TC_17.06_PATCH_0006</required_patch>
-            <required_patch>TC_17.06_PATCH_0007</required_patch>
-            <required_patch>TC_17.06_PATCH_0008</required_patch>
-            <required_patch>TC_17.06_PATCH_0009</required_patch>
-            <required_patch>TC_17.06_PATCH_0010</required_patch>
-            <required_patch>TC_17.06_PATCH_0011</required_patch>
-            <required_patch>TC_17.06_PATCH_0012</required_patch>
-            <required_patch>TC_17.06_PATCH_0013</required_patch>
-            <required_patch>TC_17.06_PATCH_0014</required_patch>
-            <required_patch>TC_17.06_PATCH_0015</required_patch>
+            <version>18.03</version>
         </upgrade>
     </supported_upgrades>
 </build>
