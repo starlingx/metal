@@ -485,6 +485,7 @@ install -m 644 -p -D %{_buildsubdir}/pmon/scripts/acpid.conf %{buildroot}%{local
 install -m 644 -p -D %{_buildsubdir}/pmon/scripts/sshd.conf %{buildroot}%{local_etc_pmond}/sshd.conf
 install -m 644 -p -D %{_buildsubdir}/pmon/scripts/ntpd.conf %{buildroot}%{local_etc_pmond}/ntpd.conf
 install -m 644 -p -D %{_buildsubdir}/pmon/scripts/syslog-ng.conf %{buildroot}%{local_etc_pmond}/syslog-ng.conf
+install -m 644 -p -D %{_buildsubdir}/pmon/scripts/nslcd.conf %{buildroot}%{local_etc_pmond}/nslcd.conf
 install -m 644 -p -D %{_buildsubdir}/rmon/scripts/rmon.conf %{buildroot}%{local_etc_pmond}/rmon.conf
 install -m 644 -p -D %{_buildsubdir}/fsmon/scripts/fsmon.conf %{buildroot}%{local_etc_pmond}/fsmon.conf
 install -m 644 -p -D %{_buildsubdir}/scripts/mtclogd.conf %{buildroot}%{local_etc_pmond}/mtclogd.conf
@@ -579,7 +580,7 @@ install -m 755 -d %{buildroot}/var/run
 %{_sysconfdir}/mtc.conf
 %{_sysconfdir}/mtc/fsmond.conf
 
-# Mainteance Process Monitor Config Files
+# Maintenance Process Monitor Config Files
 %{local_etc_pmond}/sshd.conf
 %{local_etc_pmond}/ntpd.conf
 %{local_etc_pmond}/mtcClient.conf
@@ -589,8 +590,10 @@ install -m 755 -d %{buildroot}/var/run
 %{local_etc_pmond}/fsmon.conf
 %{local_etc_pmond}/mtclogd.conf
 %{local_etc_pmond}/mtcalarm.conf
+%{local_etc_pmond}/nslcd.conf
 
-# Mainteance log rotation config files
+
+# Maintenance log rotation config files
 %{local_etc_logrotated}/fsmon.logrotate
 %{local_etc_logrotated}/mtce.logrotate
 %{local_etc_logrotated}/mtcalarm.logrotate
