@@ -231,6 +231,40 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
                 dlog ("%s %s request ack (legacy mode)\n",
                           node_ptr->hostname.c_str(),
                           node_ptr->host_services_req.name.c_str());
+
+                // Upgrades that lock storage nodes can
+                // lead to storage corruption if ceph isn't given
+                // enough time to shut down.
+                //
+                // The following special case for storage node
+                // lock forces a 90 sec holdoff for pre-upgrade storage
+                // hosts ; i.e. legacy mode.
+                //
+                if ( is_storage(node_ptr) )
+                {
+                    ilog ("%s waiting for ceph OSD shutdown\n", node_ptr->hostname.c_str());
+                    mtcTimer_reset ( node_ptr->mtcCmd_timer );
+                    mtcTimer_start ( node_ptr->mtcCmd_timer, mtcTimer_handler, MTC_LOCK_CEPH_DELAY );
+                    node_ptr->mtcCmd_work_fifo_ptr->stage = MTC_CMD_STAGE__STORAGE_LOCK_DELAY ;
+                }
+                else
+                {
+                    node_ptr->mtcCmd_work_fifo_ptr->status =
+                    node_ptr->host_services_req.status = PASS ;
+
+                    node_ptr->mtcCmd_work_fifo_ptr->stage  = MTC_CMD_STAGE__DONE ;
+                }
+            }
+            break ;
+        }
+        case MTC_CMD_STAGE__STORAGE_LOCK_DELAY:
+        {
+            /* wait for the timer to expire before moving on */
+            if ( mtcTimer_expired ( node_ptr->mtcCmd_timer ) )
+            {
+                ilog ("%s ceph OSD shutdown wait complete\n",
+                          node_ptr->hostname.c_str());
+
                 node_ptr->mtcCmd_work_fifo_ptr->status =
                 node_ptr->host_services_req.status = PASS ;
 

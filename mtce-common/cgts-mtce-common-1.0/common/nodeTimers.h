@@ -88,6 +88,7 @@
 #define MTC_MIN_ONLINE_PERIOD_SECS      (7)
 #define MTC_RETRY_WAIT                  (5)
 #define MTC_AGENT_TIMEOUT_EXTENSION     (5)
+#define MTC_LOCK_CEPH_DELAY             (90)
 
 /** Host must stay enabled for this long for the
  *  failed_recovery_counter to get cleared */
