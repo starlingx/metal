@@ -1007,12 +1007,12 @@ int daemon_init ( string iface, string nodeType_str )
     if ( is_combo_system ( my_nodetype ) == true )
     {
         daemon_wait_for_file ( GOENABLED_SUBF_PASS , 0);
-        ilog ("GOENABLE (small system)\n");
+        ilog ("GOENABLE (AIO Host)\n");
     }
     else
     {
         daemon_wait_for_file ( GOENABLED_MAIN_PASS , 0);
-        ilog ("GOENABLE (large system)\n");
+        ilog ("GOENABLE\n");
     }
 
     /* Configure the client */

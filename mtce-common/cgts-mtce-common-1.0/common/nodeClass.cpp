@@ -2609,7 +2609,7 @@ int nodeLinkClass::add_host ( node_inv_type & inv )
         node_ptr->operState   = operState_str_to_enum   (inv.oper.data ());
         node_ptr->availStatus = availStatus_str_to_enum (inv.avail.data());
 
-        if ( CPE_SYSTEM )
+        if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
         {
             node_ptr->operState_subf   = operState_str_to_enum (inv.oper_subf.data());
             node_ptr->availStatus_subf = availStatus_str_to_enum (inv.avail_subf.data());
@@ -2720,7 +2720,7 @@ int nodeLinkClass::add_host ( node_inv_type & inv )
                     node_ptr->operState   = operState_str_to_enum   (inv.oper.data ());
                     node_ptr->availStatus = availStatus_str_to_enum (inv.avail.data());
 
-                    if ( CPE_SYSTEM )
+                    if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
                     {
                         node_ptr->operState_subf   = operState_str_to_enum (inv.oper_subf.data());
                         node_ptr->availStatus_subf = availStatus_str_to_enum (inv.avail_subf.data());
@@ -2736,13 +2736,13 @@ int nodeLinkClass::add_host ( node_inv_type & inv )
                     node_ptr->adminState  = adminState_str_to_enum  (inv.admin.data());
                     node_ptr->operState   = operState_str_to_enum   (inv.oper.data ());
                     node_ptr->availStatus = availStatus_str_to_enum (inv.avail.data());
-                    
-                    if ( CPE_SYSTEM )
+
+                    if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
                     {
                         node_ptr->operState_subf   = operState_str_to_enum (inv.oper_subf.data());
                         node_ptr->availStatus_subf = availStatus_str_to_enum (inv.avail_subf.data());
                     }
-               
+
                     adminActionChange ( node_ptr, MTC_ADMIN_ACTION__LOCK );
                 }
                 else if ( !inv.action.compare ("force-lock") && validStates )
@@ -2754,8 +2754,8 @@ int nodeLinkClass::add_host ( node_inv_type & inv )
                     node_ptr->adminState  = adminState_str_to_enum  (inv.admin.data());
                     node_ptr->operState   = operState_str_to_enum   (inv.oper.data ());
                     node_ptr->availStatus = availStatus_str_to_enum (inv.avail.data());
-                
-                    if ( CPE_SYSTEM )
+
+                    if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
                     {
                         node_ptr->operState_subf   = operState_str_to_enum (inv.oper_subf.data());
                         node_ptr->availStatus_subf = availStatus_str_to_enum (inv.avail_subf.data());
@@ -2766,58 +2766,58 @@ int nodeLinkClass::add_host ( node_inv_type & inv )
                 else if ( !inv.action.compare ("reboot") && validStates )
                 {
                     ilog ("%s Added with 'reboot' in 'locked' state\n", node_ptr->hostname.c_str());
-                    
+
                     print_inv ( inv );
 
                     node_ptr->adminState  = adminState_str_to_enum  (inv.admin.data());
                     node_ptr->operState   = operState_str_to_enum   (inv.oper.data ());
                     node_ptr->availStatus = availStatus_str_to_enum (inv.avail.data());
-                
-                    if ( CPE_SYSTEM )
+
+                    if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
                     {
                         node_ptr->operState_subf   = operState_str_to_enum (inv.oper_subf.data());
                         node_ptr->availStatus_subf = availStatus_str_to_enum (inv.avail_subf.data());
                     }
-;
+
                     adminActionChange ( node_ptr, MTC_ADMIN_ACTION__REBOOT );
                 }
                 else if ( !inv.action.compare ("reset") && validStates )
                 {
                     ilog ("%s Added with 'reset' in 'locked' state\n", node_ptr->hostname.c_str());
-                    
+
                     print_inv ( inv );
 
                     node_ptr->adminState  = adminState_str_to_enum  (inv.admin.data());
                     node_ptr->operState   = operState_str_to_enum   (inv.oper.data ());
                     node_ptr->availStatus = availStatus_str_to_enum (inv.avail.data());
-                
-                    if ( CPE_SYSTEM )
+
+                    if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
                     {
                         node_ptr->operState_subf   = operState_str_to_enum (inv.oper_subf.data());
                         node_ptr->availStatus_subf = availStatus_str_to_enum (inv.avail_subf.data());
                     }
 
                     adminActionChange ( node_ptr, MTC_ADMIN_ACTION__RESET );
-                }                    
+                }
                 else if ( !inv.action.compare ("power-off") && validStates )
                 {
                     ilog ("%s Added in a 'locked' and 'power-off' state\n", node_ptr->hostname.c_str());
-                    
+
                     print_inv ( inv );
 
                     node_ptr->adminState  = MTC_ADMIN_STATE__LOCKED ;
                     node_ptr->operState   = MTC_OPER_STATE__DISABLED;
                     node_ptr->availStatus = MTC_AVAIL_STATUS__POWERED_OFF ;
-                    
+
                     node_ptr->operState_subf   = MTC_OPER_STATE__DISABLED ;
                     node_ptr->availStatus_subf = MTC_AVAIL_STATUS__POWERED_OFF ;
-                
+
                     adminActionChange ( node_ptr, MTC_ADMIN_ACTION__POWEROFF );
                 }
                 else if ( !inv.action.compare ("power-on") && validStates )
                 {
                     ilog ("%s Added with 'power-on' in 'locked' state\n", node_ptr->hostname.c_str());
-                    
+
                     print_inv ( inv );
 
                     node_ptr->adminState  = MTC_ADMIN_STATE__LOCKED ;
@@ -2832,9 +2832,9 @@ int nodeLinkClass::add_host ( node_inv_type & inv )
                 }
                 else
                 {
-                    wlog ("%s Need add Action support for '%s' action\n", node_ptr->hostname.c_str(), 
+                    wlog ("%s Need add Action support for '%s' action\n", node_ptr->hostname.c_str(),
                                inv.action.c_str());
-                                              
+
                     print_inv ( inv );
 
                     /* Load in maintenance states */
@@ -2842,7 +2842,7 @@ int nodeLinkClass::add_host ( node_inv_type & inv )
                     node_ptr->operState   = MTC_OPER_STATE__DISABLED ;
                     node_ptr->availStatus = MTC_AVAIL_STATUS__OFFLINE ;
 
-                    if ( CPE_SYSTEM )
+                    if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
                     {
                         node_ptr->operState_subf   = MTC_OPER_STATE__DISABLED ;
                         node_ptr->availStatus_subf = MTC_AVAIL_STATUS__OFFLINE ;
@@ -2859,8 +2859,8 @@ int nodeLinkClass::add_host ( node_inv_type & inv )
                 node_ptr->adminState  = adminState_str_to_enum  (inv.admin.data());
                 node_ptr->operState   = operState_str_to_enum   (inv.oper.data ());
                 node_ptr->availStatus = availStatus_str_to_enum (inv.avail.data());
-                
-                if ( CPE_SYSTEM )
+
+                if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
                 {
                     node_ptr->operState_subf   = operState_str_to_enum (inv.oper_subf.data());
                     node_ptr->availStatus_subf = availStatus_str_to_enum (inv.avail_subf.data());
@@ -3678,8 +3678,8 @@ void nodeLinkClass::set_mtce_flags ( string hostname, int flags )
         }
 
 
-        /* Deal with sub-function if combo host */
-        if ( CPE_SYSTEM )
+        /* Deal with sub-function if AIO controller host */
+        if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
         {
             if ( flags & MTC_FLAG__SUBF_GOENABLED )
             {
@@ -5426,7 +5426,7 @@ int nodeLinkClass::degrade_resource_raise  ( string & hostname,
   * This utility handles critical process failure event notifications.
   * Typically this interface will force a host re-enable through reset.
   *
-  * For CPE Simplex this failure sets the auto recovery bool
+  * For AIO Simplex this failure sets the auto recovery bool
   * so that the main enable FSM can handle it through a thresholded
   * self reboot.
   *
@@ -5768,32 +5768,48 @@ string nodeLinkClass::get_node_subfunction_str ( string hostname )
 bool nodeLinkClass::is_controller ( string & hostname )
 {
     nodeLinkClass::node * node_ptr = getNode ( hostname );
-    return is_controller(node_ptr);
+    if ( node_ptr )
+    {
+        return is_controller(node_ptr);
+    }
+    return false ;
 }
 
 /** Check if a node is a compute */
 bool nodeLinkClass::is_compute ( string & hostname )
 {
     nodeLinkClass::node * node_ptr = getNode ( hostname );
-    return is_compute(node_ptr);
+    if ( node_ptr )
+    {
+        return is_compute(node_ptr);
+    }
+    return false ;
 }
 
 /** Check if a node is a compute */
 bool nodeLinkClass::is_compute_subfunction ( string & hostname )
 {
     nodeLinkClass::node * node_ptr = getNode ( hostname );
-    return is_compute_subfunction(node_ptr);
+    if ( node_ptr )
+    {
+        return is_compute_subfunction(node_ptr);
+    }
+    return false ;
 }
 
 /** Check if a node is a storage */
 bool nodeLinkClass::is_storage ( string & hostname )
 {
     nodeLinkClass::node * node_ptr = getNode ( hostname );
-    return is_storage(node_ptr);
+    if ( node_ptr )
+    {
+        return is_storage(node_ptr);
+    }
+    return false ;
 }
 
 /** Maintenance FSM Test Case Setup procedure */
-int nodeLinkClass::set_enableStage ( string & hostname, 
+int nodeLinkClass::set_enableStage ( string & hostname,
                                      mtc_enableStages_enum stage )
 {
     nodeLinkClass::node * node_ptr = getNode ( hostname ) ;
@@ -8306,10 +8322,10 @@ void nodeLinkClass::mem_log_bm ( struct nodeLinkClass::node * node_ptr )
 void nodeLinkClass::mem_log_identity ( struct nodeLinkClass::node * node_ptr )
 {
     char str[MAX_MEM_LOG_DATA] ;
-    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\t%s %s (%u)\n", 
-                node_ptr->hostname.c_str(), 
+    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\t%s %s (%u)\n",
+                node_ptr->hostname.c_str(),
                 node_ptr->uuid.c_str(),
-                node_ptr->type.c_str(), 
+                node_ptr->type.c_str(),
                 node_ptr->nodetype);
     mem_log (str);
 }
@@ -8321,32 +8337,23 @@ void nodeLinkClass::mem_log_state1 ( struct nodeLinkClass::node * node_ptr )
     string op = operState_enum_to_str(node_ptr->operState) ;
     string av = availStatus_enum_to_str(node_ptr->availStatus);
 
-    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\t%s-%s-%s    degrade_mask:%08x\n", 
-                node_ptr->hostname.c_str(), 
+    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\t%s-%s-%s    degrade_mask:%08x\n",
+                node_ptr->hostname.c_str(),
                 ad.c_str(),
-                op.c_str(), 
+                op.c_str(),
                 av.c_str(),
                 node_ptr->degrade_mask);
     mem_log (str);
     op = operState_enum_to_str(node_ptr->operState_subf) ;
     av = availStatus_enum_to_str(node_ptr->availStatus_subf);
-    if ( node_ptr->subfunction_str.empty() )
+    if ( ! node_ptr->subfunction_str.empty() )
     {
-        snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tFunction: %s %s-%s-%s\n", 
-                node_ptr->hostname.c_str(),
-                node_ptr->function_str.c_str(),
-                ad.c_str(),
-                op.c_str(), 
-                av.c_str());
-    }
-    else
-    {
-        snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tFunctions %s-%s %s-%s-%s\n", 
+        snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tSub-Functions: %s-%s %s-%s-%s\n",
                 node_ptr->hostname.c_str(),
                 node_ptr->function_str.c_str(),
                 node_ptr->subfunction_str.c_str(),
                 ad.c_str(),
-                op.c_str(), 
+                op.c_str(),
                 av.c_str());
     }
     mem_log (str);
@@ -8357,10 +8364,10 @@ void nodeLinkClass::mem_log_state2 ( struct nodeLinkClass::node * node_ptr )
     char str[MAX_MEM_LOG_DATA] ;
     string aa = adminAction_enum_to_str(node_ptr->adminAction) ;
 
-    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tmtcAction:%s invAction:%s Task:%s\n", 
-                node_ptr->hostname.c_str(), 
+    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tmtcAction:%s invAction:%s Task:%s\n",
+                node_ptr->hostname.c_str(),
                 aa.c_str(),
-                node_ptr->action.c_str(), 
+                node_ptr->action.c_str(),
                 node_ptr->task.c_str());
     mem_log (str);
 }
@@ -8518,7 +8525,7 @@ void nodeLinkClass::mem_log_type_info ( struct nodeLinkClass::node * node_ptr )
                 node_ptr->function);
     mem_log (str);
 
-    if ( CPE_SYSTEM )
+    if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
     {
         snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tSub-Function: %s (%u) (SubFunc Enabled:%c)\n",
                 node_ptr->hostname.c_str(),
