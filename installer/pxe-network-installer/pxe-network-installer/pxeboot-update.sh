@@ -30,6 +30,7 @@ Arguments:
     -u <tisnotify url>  : Base url for TIS install progress notification
     -s <mode>           : Specify Security Profile mode (optional)
     -T <tboot value>    : Specify whether or not to use tboot (optional)
+    -k <kernel args>    : Specify any extra kernel boot arguments (optional)
 
 EOF
 }
@@ -71,7 +72,7 @@ function generate_config()
 parms=$@
 logger -t $0 " $parms"
 
-while getopts "i:o:tgc:b:r:u:s:T:h" opt
+while getopts "i:o:tgc:b:r:u:s:T:k:h" opt
 do
     case $opt in
         i)
@@ -108,6 +109,9 @@ do
             ;;
         T)
             tboot=$OPTARG
+            ;;
+        k)
+            kernal_extra_args=$OPTARG
             ;;
         h)
             usage
@@ -156,6 +160,11 @@ APPEND_OPTIONS="$APPEND_OPTIONS inst.gpt"
 if [ -n "$security_profile" ]
 then
     APPEND_OPTIONS="$APPEND_OPTIONS security_profile=$security_profile"
+fi
+
+if [ -n "$kernal_extra_args" ]
+then
+    APPEND_OPTIONS="$APPEND_OPTIONS $kernal_extra_args"
 fi
 
 generate_config $input_file $output_file
