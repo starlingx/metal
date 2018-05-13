@@ -524,6 +524,43 @@ void pmon_timer_handler ( int sig, siginfo_t *si, void *uc)
     }
 }
 
+/****************************************************************************
+ *
+ * Name       : service_file_exists
+ *
+ * Description: Look in some well known places for the specified service file.
+ *
+ * Returns    : Return true if the specified service file is found.
+ *
+ * Updates    : If the service file is found then update the supplied
+ *              character string buffer with the full path/name of that
+ *              service file.
+ *
+ ****************************************************************************/
+bool service_file_exists ( string service_filename,
+                           char * path_n_name_ptr,
+                           int    max_len )
+{
+    /* load the name of the service file */
+    snprintf ( path_n_name_ptr, max_len, "%s/%s",
+                                          SYSTEMD_SERVICE_FILE_DIR1,
+                                          service_filename.data());
+    if (( path_n_name_ptr ) && (strnlen ( path_n_name_ptr, max_len )))
+    {
+        if ( daemon_is_file_present ( path_n_name_ptr ) == true )
+            return true ;
+    }
+    snprintf ( path_n_name_ptr, max_len, "%s/%s",
+                                          SYSTEMD_SERVICE_FILE_DIR2,
+                                          service_filename.data());
+    if (( path_n_name_ptr ) && ( strnlen ( path_n_name_ptr, max_len )))
+    {
+        if ( daemon_is_file_present ( path_n_name_ptr ) == true )
+            return true ;
+    }
+    return false ;
+}
+
 /*****************************************************************************
  *
  * Name    : process_config_load
@@ -533,8 +570,8 @@ void pmon_timer_handler ( int sig, siginfo_t *si, void *uc)
  *****************************************************************************/
 int process_config_load (process_config_type * pc_ptr, const char * config_file_ptr )
 {
-    char    service_name_buf  [_MAX_LEN_] ;
-    memset (service_name_buf,0, sizeof(service_name_buf));
+    char    recovery_method_buf  [_MAX_LEN_] ;
+    memset (recovery_method_buf,0, sizeof(recovery_method_buf));
 
     if ( _pmon_ctrl_ptr->processes >= MAX_PROCESSES )
     {
@@ -566,40 +603,59 @@ int process_config_load (process_config_type * pc_ptr, const char * config_file_
         pc_ptr->startuptime = PMON_MIN_START_DELAY ;
     }
 
-    /* default recovery method to process init script */
-    snprintf ( &service_name_buf[0], _MAX_LEN_, "%s", pc_ptr->script );
+    /* Many process conf files came from a sysvinit origin and might not
+     * have a service file label. Account for that in the following
+     * load of recovery_method_buf.
+     * Accept a script name if the service name is missing. */
+    bool recovery_method_found = false ;
 
-    /* Print error logs if there is no recovery method present for this service/process */
-    if ( _pmon_ctrl_ptr->recovery_method == PMOND_RECOVERY_METHOD__SYSTEMD )
+    /* look for the service file */
+    if ( pc_ptr->service )
     {
-       /* If the config file does not specify a service name
-        * then the service name defaults to the process name */
-       if ( ! pc_ptr->service )
-       {
-           snprintf ( &service_name_buf[0], _MAX_LEN_, "%s/%s.service", SYSTEMD_SERVICE_FILE_DIR, pc_ptr->process );
-           if ( daemon_is_file_present ( service_name_buf ) == false )
-           {
-               if ( daemon_is_file_present ( pc_ptr->script ) == false )
-               {
-                   /* print a log if we have no recovery method */
-                   wlog ("%s has no recovery method\n", pc_ptr->process );
-                   wlog ("... neither %s nor %s exist\n", service_name_buf, pc_ptr->script );
-               }
-           }
-       }
-       else
-       {
-           snprintf ( &service_name_buf[0], _MAX_LEN_, "%s/%s.service", SYSTEMD_SERVICE_FILE_DIR, pc_ptr->service );
-           if ( daemon_is_file_present ( service_name_buf ) == false )
-           {
-               /* print a log if we have no recovery method */
-               wlog ("%s service has no recovery method\n", pc_ptr->service );
-               wlog ("... %s does not exist\n", service_name_buf );
-           }
-       }
+        string service = pc_ptr->service ;
+        if ( service.find(".service") == string::npos )
+            service.append(".service");
+        if ( service_file_exists(service, &recovery_method_buf[0], _MAX_LEN_) == true )
+            recovery_method_found = true ;
+    }
+    else if ( pc_ptr->script )
+    {
+        string script = basename((char*)pc_ptr->script);
+        if ( script.find(".service") == string::npos )
+            script.append(".service");
+        if ( service_file_exists(script, &recovery_method_buf[0], _MAX_LEN_) == true )
+           recovery_method_found = true ;
+        else
+        {
+            /* resort to the script file only */
+            /* load the name of the process init script */
+            snprintf ( &recovery_method_buf[0], _MAX_LEN_, "%s", pc_ptr->script );
+            if ( daemon_is_file_present ( recovery_method_buf ) == true )
+            {
+                recovery_method_found = true ;
+            }
+            else
+            {
+                wlog ("%s has script but not found (%s)\n",
+                          pc_ptr->process, recovery_method_buf );
+            }
+        }
+    }
+    else
+    {
+        /* print a log if we have no recovery method */
+        wlog ("%s has no recovery method ; process not monitored\n", pc_ptr->process );
+        wlog ("... conf file has no 'service' or 'script' recovery entry\n");
+        return (FAIL_NOT_FOUND);
     }
 
-    update_config_option ( &pc_ptr->recovery_method , service_name_buf );
+    if ( recovery_method_found == false )
+    {
+        wlog ("%s has no recovery method found ; process not monitored\n", pc_ptr->process );
+        return (FAIL_NOT_FOUND);
+    }
+
+    update_config_option ( &pc_ptr->recovery_method , recovery_method_buf );
 
     if ( !strcmp ( pc_ptr->mode, "status" ) )
     {
@@ -710,7 +766,7 @@ int process_config_load (process_config_type * pc_ptr, const char * config_file_
              * that subfunction init is complete */
             ilog ("%7s Def : %-30s %-8s - %s (%s)\n", pc_ptr->mode,
                                                  pc_ptr->process,
-                                                 pc_ptr->ignore ? "ignored" : pc_ptr->severity, service_name_buf,
+                                                 pc_ptr->ignore ? "ignored" : pc_ptr->severity, recovery_method_buf,
                                                  pc_ptr->subfunction);
             /* defer subfunction processes to the FSM to get enabled */
             pc_ptr->stage = PMON_STAGE__POLLING ;
@@ -724,7 +780,7 @@ int process_config_load (process_config_type * pc_ptr, const char * config_file_
 
             ilog ("%7s Mon : %-30s %-8s - %s\n", pc_ptr->mode,
                                                  pc_ptr->process,
-                                                 pc_ptr->ignore ? "ignored" : pc_ptr->severity, service_name_buf);
+                                                 pc_ptr->ignore ? "ignored" : pc_ptr->severity, recovery_method_buf);
             pc_ptr->stage = PMON_STAGE__MANAGE ;
         }
         // mem_log_process ( pc_ptr );
@@ -1870,6 +1926,11 @@ void pmon_service ( pmon_ctrl_type * ctrl_ptr )
 
         if ( pmonTimer_hostwd.ring == true )
         {
+            /* inservice recovery from hostw connection failures */
+            if ( sock_ptr->hostwd_sock == 0 )
+            {
+                hostwd_port_init();
+            }
             if ( ctrl_ptr->event_mode == true )
             {
                 pmon_send_hostwd ( );
