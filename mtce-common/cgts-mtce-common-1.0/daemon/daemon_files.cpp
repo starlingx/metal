@@ -103,7 +103,7 @@ void daemon_healthcheck ( const char * sig )
 
 #define BUFFER 1024
 
-void daemon_log_value ( const char * filename , const char * str, int val )
+int daemon_log_value ( const char * filename , const char * str, int val )
 {
     FILE * file_stream = fopen (filename, "a" ) ;
     if ( file_stream != NULL )
@@ -111,10 +111,12 @@ void daemon_log_value ( const char * filename , const char * str, int val )
         fprintf ( file_stream,"%s %d\n", str, val );
         fflush (file_stream);
         fclose (file_stream);
+        return (PASS);
     }
+    return (FAIL_FILE_OPEN);
 }
 
-void daemon_log_value ( const char * filename , int val )
+int daemon_log_value ( const char * filename , int val )
 {
     FILE * file_stream = fopen (filename, "w" ) ;
     if ( file_stream != NULL )
@@ -122,10 +124,12 @@ void daemon_log_value ( const char * filename , int val )
         fprintf ( file_stream,"%d\n", val );
         fflush (file_stream);
         fclose (file_stream);
+        return (PASS);
     }
+    return (FAIL_FILE_OPEN);
 }
 
-void daemon_log ( const char * filename , const char * str )
+int daemon_log ( const char * filename , const char * str )
 {
     FILE * file_stream = fopen (filename, "a" ) ;
     if ( file_stream != NULL )
@@ -133,7 +137,9 @@ void daemon_log ( const char * filename , const char * str )
         fprintf ( file_stream,"%s\n", str );
         fflush (file_stream);
         fclose (file_stream);
+        return (PASS);
     }
+    return (FAIL_FILE_OPEN);
 }
 
 /* reads the first line of a file and if it contains a string

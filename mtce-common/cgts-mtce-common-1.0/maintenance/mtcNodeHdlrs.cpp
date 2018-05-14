@@ -5599,15 +5599,6 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
                 send_hwmon_command ( node_ptr->hostname, MTC_CMD_START_HOST );
             }
 
-            /* handle coming out of the ADD in a degraded state */
-            if (( node_ptr->degrade_mask != 0 ) &&
-                (( node_ptr->adminState  == MTC_ADMIN_STATE__UNLOCKED ) &&
-                 ( node_ptr->operState   == MTC_OPER_STATE__ENABLED ) &&
-                 ( node_ptr->availStatus == MTC_AVAIL_STATUS__AVAILABLE )))
-            {
-                availStatusChange ( node_ptr, MTC_AVAIL_STATUS__DEGRADED );
-            }
-
             node_ptr->mtcAlive_gate = false ;
             node_ptr->addStage = MTC_ADD__DONE ;
             break;
@@ -6111,22 +6102,6 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
                 {
                     alarm_compute_clear ( node_ptr, false );
                 }
-
-                /************************************************************
-                 *       Manage host degrade based on degrade mask          *
-                 ***********************************************************/
-                if (( node_ptr->degrade_mask == 0 ) &&
-                    ( node_ptr->availStatus == MTC_AVAIL_STATUS__DEGRADED ))
-                {
-                    availStatusChange ( node_ptr, MTC_AVAIL_STATUS__AVAILABLE );
-                }
-
-                /* expected degrade audit */
-                else if (( node_ptr->degrade_mask ) &&
-                         ( node_ptr->availStatus == MTC_AVAIL_STATUS__AVAILABLE ))
-                {
-                    availStatusChange ( node_ptr, MTC_AVAIL_STATUS__DEGRADED );
-                }
             }
             break ;
         }
@@ -6461,12 +6436,6 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
                     node_ptr->degrade_mask |= DEGRADE_MASK_SM ;
 
                     ilog ("%s sm degrade\n", node_ptr->hostname.c_str());
-
-                    /* degrade the host if not already degraded */
-                    if ( node_ptr->availStatus == MTC_AVAIL_STATUS__AVAILABLE )
-                    {
-                        availStatusChange ( node_ptr, MTC_AVAIL_STATUS__DEGRADED );
-                    }
                 }
 
                 /* Manage de-asserting degrade due to Software Management */
@@ -6477,16 +6446,6 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
                     node_ptr->degrade_mask &= ~DEGRADE_MASK_SM ;
 
                     ilog ("%s sm degrade clear\n", node_ptr->hostname.c_str());
-
-                    /* if the degrade mask is now clear then consider clearing the degrade state */
-                    if ( node_ptr->degrade_mask == 0 )
-                    {
-                        /* ... but only if we are degraded */
-                        if ( node_ptr->availStatus == MTC_AVAIL_STATUS__DEGRADED )
-                        {
-                            availStatusChange ( node_ptr, MTC_AVAIL_STATUS__AVAILABLE );
-                        }
-                    }
                 }
 
                 if ( node_ptr->mtce_flags & MTC_FLAG__I_AM_NOT_HEALTHY)
@@ -6502,10 +6461,6 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
                             if ( node_ptr->health_threshold_counter >= MTC_UNHEALTHY_THRESHOLD )
                             {
                                 node_ptr->degrade_mask |= DEGRADE_MASK_CONFIG ;
-                                if ( node_ptr->availStatus == MTC_AVAIL_STATUS__AVAILABLE )
-                                {
-                                    availStatusChange ( node_ptr, MTC_AVAIL_STATUS__DEGRADED );
-                                }
 
                                 /* threshold is reached so raise the config alarm if it is not already raised */
                                 if ( node_ptr->alarms[MTC_ALARM_ID__CONFIG] != FM_ALARM_SEVERITY_CRITICAL )
@@ -6554,6 +6509,30 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
     return (PASS);
 }
 
+/************************************************************
+ * Manage host degrade state based on degrade mask          *
+ * The availability state of degrade only applies when the  *
+ * host is unlocked-enabled.                                *
+ ***********************************************************/
+int nodeLinkClass::degrade_handler ( struct nodeLinkClass::node * node_ptr )
+{
+    if (( node_ptr->adminState == MTC_ADMIN_STATE__UNLOCKED ) &&
+        ( node_ptr->operState == MTC_OPER_STATE__ENABLED ))
+    {
+        if (( node_ptr->degrade_mask == DEGRADE_MASK_NONE ) &&
+            ( node_ptr->availStatus == MTC_AVAIL_STATUS__DEGRADED ))
+        {
+            availStatusChange ( node_ptr, MTC_AVAIL_STATUS__AVAILABLE );
+        }
+
+        else if (( node_ptr->degrade_mask ) &&
+                 ( node_ptr->availStatus == MTC_AVAIL_STATUS__AVAILABLE ))
+        {
+            availStatusChange ( node_ptr, MTC_AVAIL_STATUS__DEGRADED );
+        }
+    }
+    return (PASS);
+}
 
 int nodeLinkClass::cfg_handler ( struct nodeLinkClass::node * node_ptr )
 {

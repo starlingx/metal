@@ -74,6 +74,9 @@ int nodeLinkClass::fsm ( struct nodeLinkClass::node * node_ptr )
     /* manage the host connected state and board management alarms */
     nodeLinkClass::bm_handler ( node_ptr );
 
+    /* manage host's degrade state */
+    nodeLinkClass::degrade_handler ( node_ptr );
+
     /*
      * Always run the offline handler
      *

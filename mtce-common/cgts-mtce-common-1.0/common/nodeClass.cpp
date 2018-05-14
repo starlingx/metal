@@ -662,8 +662,8 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
     ptr->log_throttle = 0 ;
     ptr->no_work_log_throttle = 0 ;
 
-    /* Clear the degrade control structs */
-    ptr->degrade_mask = DEGRADE_MASK_NONE ;
+    ptr->degrade_mask = ptr->degrade_mask_save = DEGRADE_MASK_NONE ;
+
     ptr->degraded_resources_list.clear () ;
     ptr->pmond_ready = false ;
     ptr->rmond_ready = false ;
@@ -4561,16 +4561,6 @@ void nodeLinkClass::manage_heartbeat_degrade ( string hostname, iface_enum iface
         }
 
         hbs_minor_clear ( node_ptr, iface );
-
-        /* Set the host available if the degrade mask is now
-         * cleared and we are degraded */
-        if ( node_ptr->degrade_mask == 0 )
-        {
-            if ( get_availStatus ( hostname ) == MTC_AVAIL_STATUS__DEGRADED )
-            {
-                set_availStatus ( hostname, MTC_AVAIL_STATUS__AVAILABLE );
-            }
-        }
     }
     else if ( this->mtcTimer_dor.tid )
     {
@@ -4602,12 +4592,6 @@ void nodeLinkClass::manage_heartbeat_degrade ( string hostname, iface_enum iface
                     node_ptr->degrade_mask |= DEGRADE_MASK_HEARTBEAT_INFRA ;
                 }
             }
-
-            /* No point in changing if we are already degraded */
-            if ( nodeLinkClass::get_availStatus ( hostname ) == MTC_AVAIL_STATUS__AVAILABLE )
-            {
-                set_availStatus ( hostname, MTC_AVAIL_STATUS__DEGRADED );
-            }
         }
     }
 }
@@ -4621,7 +4605,7 @@ void nodeLinkClass::manage_heartbeat_minor ( string hostname, iface_enum iface, 
         wlog ("%s Unknown host\n", hostname.c_str());
         return ;
     }
-   
+
     /* is this a clear event ? */
     if ( clear_event == true )
     {
@@ -4639,15 +4623,15 @@ void nodeLinkClass::manage_heartbeat_minor ( string hostname, iface_enum iface, 
 
         else if ( node_ptr->hbs_minor[iface] != true )
         {
-            mnfa_add_host ( node_ptr, iface );            
+            mnfa_add_host ( node_ptr, iface );
         }
     }
 }
 
 
-/** Interface to declare that a key service on the 
+/** Interface to declare that a key service on the
   * specified host is up, running and ready */
-int nodeLinkClass::declare_service_ready  ( string & hostname, 
+int nodeLinkClass::declare_service_ready  ( string & hostname,
                                             unsigned int service )
 {
     nodeLinkClass::node * node_ptr = nodeLinkClass::getNode ( hostname );
@@ -4661,18 +4645,11 @@ int nodeLinkClass::declare_service_ready  ( string & hostname,
         node_ptr->pmond_ready = true ;
         plog ("%s got pmond ready event\n", hostname.c_str());
 
-        /* A ready event means that pmond pocess has started. 
-         * Any previous history is gone. Cleanup mtce. 
+        /* A ready event means that pmond pocess has started.
+         * Any previous history is gone. Cleanup mtce.
          * If there are still process issues on this host then
          * they will be reported again.*/
         node_ptr->degrade_mask &= ~DEGRADE_MASK_PMON ;
-        if ( node_ptr->degrade_mask == DEGRADE_MASK_NONE )
-        {
-            if ( node_ptr->availStatus == MTC_AVAIL_STATUS__DEGRADED )
-            {
-                availStatusChange ( node_ptr, MTC_AVAIL_STATUS__AVAILABLE );
-            }
-        }
         return (PASS);
     }
     else if ( service == MTC_SERVICE_HWMOND )
@@ -4719,14 +4696,6 @@ int nodeLinkClass::degrade_pmond_clear  ( string & hostname )
     if ( node_ptr->degrade_mask )
     {
         node_ptr->degrade_mask &= ~DEGRADE_MASK_PMON ;
-
-        if ( !node_ptr->degrade_mask )
-        {
-            if ( node_ptr->operState == MTC_OPER_STATE__ENABLED )
-            {
-                availStatusChange ( node_ptr, MTC_AVAIL_STATUS__AVAILABLE );
-            }
-        }
     }
 
     /* The only detectable inservice failures are process failures */
@@ -4735,15 +4704,65 @@ int nodeLinkClass::degrade_pmond_clear  ( string & hostname )
     return (PASS);
 }
 
+/* This private API handles event messages from collectd */
+int nodeLinkClass::collectd_notify_handler ( string & hostname,
+                                             string & resource,
+                                             string & state )
+{
+    int rc = PASS ;
+    nodeLinkClass::node * node_ptr = nodeLinkClass::getNode ( hostname );
+    if ( node_ptr == NULL )
+    {
+        wlog ("%s Unknown Host\n", hostname.c_str());
+        return (FAIL_UNKNOWN_HOSTNAME) ;
+    }
+    if ( state == "clear" )
+    {
+        if ( node_ptr->degrade_mask & DEGRADE_MASK_COLLECTD )
+        {
+            ilog("%s collectd degrade state change ; assert -> clear (%s)",
+                     hostname.c_str(), resource.c_str());
+            node_ptr->degrade_mask &= ~DEGRADE_MASK_COLLECTD ;
+        }
+        else
+        {
+            mlog3("%s collectd degrade 'clear' request (%s)",
+                      hostname.c_str(), resource.c_str());
+        }
+    }
+    else if ( state == "assert" )
+    {
+        if ( (node_ptr->degrade_mask & DEGRADE_MASK_COLLECTD) == 0 )
+        {
+            ilog("%s collectd degrade state change ; clear -> assert (due to %s)",
+                     hostname.c_str(), resource.c_str());
+            node_ptr->degrade_mask |= DEGRADE_MASK_COLLECTD ;
+        }
+        else
+        {
+            mlog3("%s collectd degrade 'assert' request (%s)",
+                     hostname.c_str(), resource.c_str());
+        }
+    }
+    else
+    {
+        wlog ("%s collectd degrade state unknown (%s)\n",
+                  hostname.c_str(),
+                  state.c_str());
+        rc = FAIL_OPERATION ;
+    }
+    return (rc);
+}
+
 /** Resource Monitor 'Clear' Event handler.
-  * 
+  *
   * The resource specified will be removed from the
   * 'degraded_resources_list' for specified host.
   * if there are no other degraded resources or other
   * degraded services/reasons against that host then
   * this handler will clear the degrade state for the
   * specified host all together. */
-int nodeLinkClass::degrade_resource_clear  ( string & hostname, 
+int nodeLinkClass::degrade_resource_clear  ( string & hostname,
                                              string & resource )
 {
     /* lr - Log Prefix Rmon */
@@ -4788,18 +4807,6 @@ int nodeLinkClass::degrade_resource_clear  ( string & hostname,
             if ( node_ptr->degraded_resources_list.empty() )
             {
                 node_ptr->degrade_mask &= ~DEGRADE_MASK_RESMON ; ;
-                if ( node_ptr->degrade_mask == DEGRADE_MASK_NONE )
-                {
-                    if ( node_ptr->availStatus == MTC_AVAIL_STATUS__DEGRADED )
-                    {
-                        availStatusChange ( node_ptr, MTC_AVAIL_STATUS__AVAILABLE );
-                    }
-                }
-                else
-                {
-                    wlog ("%s Remains Degraded - Reason Mask:0x%08x\n",
-                              hostname.c_str(), node_ptr->degrade_mask );
-                }
             }
             else
             {
@@ -4874,30 +4881,6 @@ int nodeLinkClass::node_degrade_control ( string & hostname, int state, string s
 
                 /* clear the mask regardless of host state */
                 node_ptr->degrade_mask &= ~service_flag ;
-
-                /* only applies if host is unlocked-enabled-degraded and
-                 * there are no other degrade flags in the degrade mask */
-                if (( node_ptr->adminState  == MTC_ADMIN_STATE__UNLOCKED ) &&
-                    ( node_ptr->operState   == MTC_OPER_STATE__ENABLED ) &&
-                    ( node_ptr->availStatus == MTC_AVAIL_STATUS__DEGRADED ))
-                {
-                    if ( node_ptr->degrade_mask == DEGRADE_MASK_NONE )
-                    {
-                        availStatusChange ( node_ptr, MTC_AVAIL_STATUS__AVAILABLE );
-                    }
-                    else
-                    {
-                        /* TODO: convert lask to a sring or services and print that string */
-                        wlog ("%s remains degraded - degrade mask:0x%08x\n",
-                                  hostname.c_str(),
-                                  node_ptr->degrade_mask );
-                    }
-                }
-                else
-                {
-                    dlog ("%s unexpected degrade clear for '%s' service\n", 
-                              hostname.c_str(), service.c_str() ); 
-                }
                 rc = PASS ;
                 break ;
             }
@@ -4909,13 +4892,6 @@ int nodeLinkClass::node_degrade_control ( string & hostname, int state, string s
                 {
                     wlog ("%s degrade 'assert' from '%s'\n", hostname.c_str(), service.c_str() );
                     node_ptr->degrade_mask |= service_flag ;
-                }
-
-                if (( node_ptr->adminState  == MTC_ADMIN_STATE__UNLOCKED ) &&
-                    ( node_ptr->operState   == MTC_OPER_STATE__ENABLED ) &&
-                    ( node_ptr->availStatus == MTC_AVAIL_STATUS__AVAILABLE ))
-                {
-                    availStatusChange ( node_ptr, MTC_AVAIL_STATUS__DEGRADED );
                 }
                 rc = PASS ;
                 break ;
@@ -5232,10 +5208,6 @@ int nodeLinkClass::degrade_process_raise  ( string & hostname,
         {
             node_ptr->degrade_mask |= DEGRADE_MASK_PMON ;
             wlog ("%s is degraded due to '%s' process failure\n", hostname.c_str(), process.c_str());
-            if ( node_ptr->availStatus == MTC_AVAIL_STATUS__AVAILABLE )
-            {
-                availStatusChange ( node_ptr, MTC_AVAIL_STATUS__DEGRADED );
-            }
         }
     }
     return (PASS);
@@ -5412,11 +5384,6 @@ int nodeLinkClass::degrade_resource_raise  ( string & hostname,
         {
             dlog ("%s '%s' Degraded (again)\n", lr.c_str(), resource.c_str());
         }
-        if ( node_ptr->availStatus == MTC_AVAIL_STATUS__AVAILABLE )
-        {
-            availStatusChange ( node_ptr, MTC_AVAIL_STATUS__DEGRADED );
-        }
-
     }
     return (PASS);
 }
@@ -7038,9 +7005,6 @@ struct nodeLinkClass::node * nodeLinkClass::get_insvTestTimer ( timer_t tid )
  * counter file /tmp/hostname_ar_count.
  *
  *****************************************************************************/
-
-#define TMP_DIR_PATH               ((const char *)"/etc/mtc/tmp/")
-#define AUTO_RECOVERY_FILE_SUFFIX  ((const char *)"_ar_count")
 
 void autorecovery_clear ( string hostname )
 {

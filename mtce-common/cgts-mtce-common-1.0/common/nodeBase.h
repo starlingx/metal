@@ -92,6 +92,9 @@ void daemon_exit ( void );
 #define NODE_HEALTHY            (1)
 #define NODE_UNHEALTHY          (2)
 
+#define AUTO_RECOVERY_FILE_SUFFIX  ((const char *)"_ar_count")
+#define TMP_DIR_PATH               ((const char *)"/etc/mtc/tmp/")
+
 #define HOST_IS_VIRTUAL        ((const char *)"/var/run/virtual.host")
 
 /** Configuration Pass/Fail Flag File */
@@ -145,10 +148,6 @@ void daemon_exit ( void );
 #define PMON_CONF_FILE_DIR      ((const char *)"/etc/pmon.d")
 
 #define BM_DNSMASQ_FILENAME     ((const char *)"dnsmasq.bmc_hosts")
-
-/* Added for Centos */
-#define CENTOS_RELEASE_FILE       ((const char *)"/etc/centos-release")
-#define SYSTEMD_SERVICE_FILE_DIR  ((const char *)"/usr/lib/systemd/system")
 
 #define THREAD_NAME__IPMITOOL        ((const char *)("ipmitool"))
 
@@ -970,7 +969,7 @@ string get_configStages_str ( mtc_configStages_enum stage );
 #define DEGRADE_MASK_SUBF             0x00000100
 #define DEGRADE_MASK_SM               0x00000200
 #define DEGRADE_MASK_CONFIG           0x00000400
-#define DEGRADE_MASK_RES2             0x00000800
+#define DEGRADE_MASK_COLLECTD         0x00000800
 #define DEGRADE_MASK_ENABLE           0x00001000
 #define DEGRADE_MASK_RES4             0x00002000
 #define DEGRADE_MASK_RES5             0x00004000

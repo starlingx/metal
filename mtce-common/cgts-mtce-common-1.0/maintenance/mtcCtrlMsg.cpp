@@ -191,8 +191,50 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
 
     print_mtc_message ( hostname, MTC_CMD_RX, msg, get_iface_name_str(iface), false );
 
+    if ( msg.hdr[0] == '{' )
+    {
+        int rc1 ;
+        string service ;
+
+        mlog1 ("%s\n", &msg.hdr[0] );
+
+        rc1 = jsonUtil_get_key_val(&msg.hdr[0],"service", service );
+        if ( rc1 == PASS )
+        {
+            if ( service == "collectd_notifier" )
+            {
+                int rc1,rc2,rc3 ;
+                string hostname,resource,state ;
+
+                rc1 = jsonUtil_get_key_val(&msg.hdr[0],"hostname", hostname );
+                rc2 = jsonUtil_get_key_val(&msg.hdr[0],"resource", resource );
+                rc3 = jsonUtil_get_key_val(&msg.hdr[0],"degrade", state );
+                if ( rc1|rc2|rc3 )
+                {
+                    elog ("failed to parse '%s' message\n", service.c_str());
+                    wlog ("... %s\n", &msg.hdr[0] );
+                }
+                else
+                {
+                    obj_ptr->collectd_notify_handler ( hostname,
+                                                       resource,
+                                                       state );
+                }
+            }
+            /* future service requests */
+            else
+            {
+                wlog ("Unexpected service request: '%s'\n", service.c_str());
+            }
+        }
+        else
+        {
+            wlog("Unexpected json message: %s\n", &msg.hdr[0] );
+        }
+    }
+
     /* Check for response messages */
-    if ( strstr ( &msg.hdr[0], get_cmd_rsp_msg_header() ) )
+    else if ( strstr ( &msg.hdr[0], get_cmd_rsp_msg_header() ) )
     {
         obj_ptr->set_cmd_resp ( hostname , msg ) ;
     }
