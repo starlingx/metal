@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Copyright (c) 2015-2016 Wind River Systems, Inc.
+# Copyright (c) 2015-2018 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -35,8 +35,10 @@
 #       10.10.10.42;10.10.10.43;10.10.10.44;
 #       10.10.10.43;
 #
-#  This file is re-created everytime the this script is run. It is used by caller of 
-#  the script to get more detail regarding the NTP servers status.  
+#  This temporary file is re-created everytime the this script is run. It is used by 
+#  caller of the script to get more detail regarding the NTP servers status.
+#
+#  This script will only be run on the controller nodes.
 #
 #  This script logs to user.log
 
@@ -60,6 +62,32 @@ isController ()
    fi
 }
 
+# loop through all the ntpq servers listed as IPs and get the controller's
+getControllerIP ()
+{
+    servers=$1
+    # loop through all the ntpq servers
+    while read line
+    do
+        server=$(echo $line | awk '{print $1;}')
+        if [[ "$line" != " "* ]] ; then
+           # if the first char is not a space then remove it e.g +159.203.31.244
+           server=$(echo $server| cut -c 2-)
+        fi
+
+        res=$(echo $(grep $server /etc/hosts) | grep controller)
+        if [[ "$res" != "" ]] ; then
+           echo $server
+           return
+        fi
+    done < <(echo "$servers")
+
+    # should of found the controller exit script
+    logger -p err -t $0 "Could not find the Controller's IP address"
+    exit -1
+}
+
+
 # set up ouput file
 ntpq_server_info="/tmp/ntpq_server_info"
 rm -f $ntpq_server_info
@@ -73,7 +101,7 @@ if [ $server_count -eq 0 ]; then
    logger -p info -t $0 "No NTP servers are provisioned (1)"
    exit $NTP_NOT_PROVISIONED
 fi
- 
+
 # query the ntp servers with ntpq
 ntpres="$(ntpq -pn)"
 
@@ -99,7 +127,7 @@ server_list=$( echo "$ntpres" | tail -n +3 )
 SAVEIFS=$IFS
 IFS=''
 
-# list all provisioned servers and save in temp file
+# list all provisioned servers and save the external ones in temp file
 while read line
 do
     server=$(echo $line | awk '{print $1;}')
@@ -117,6 +145,10 @@ done < <(echo "$server_list")
 
 echo >> $ntpq_server_info
 
+# remove the peer server (peer controller) from the server list
+controller_host_ip=$(getControllerIP $server_list)
+server_list=$(echo $server_list | grep -v $controller_host_ip)
+
 # list all non reachable ntp servers and save in temp file
 while read line
 do
@@ -128,12 +160,9 @@ do
        server=$(echo $server| cut -c 2-)
     fi
 
-    # add the non reachable ntp servers to temp file is its not a controller
-    isController $server
-    if [[ "$?" == 0 ]]; then
-       ((bad_server_count++))
-       echo -n $server";" >> $ntpq_server_info
-    fi
+    # add the non reachable external ntp servers to temp file
+    ((bad_server_count++))
+    echo -n $server";" >> $ntpq_server_info
   fi
 done < <(echo "$server_list")
 IFS=$SAVEIFS
@@ -166,7 +195,7 @@ fi
 
 if [ "$bad_server_count" -lt "$server_count" ];then
   if [ $selected -eq 0 ]; then
-    # this is probably not a valid scenario
+    # this will happen if the peer controller is the selected server
     logger -p info -t $0 "Some external NTP servers are reachable but none is selected (4)"
     exit $NTP_SOME_REACHABLE_NONE_SELECTED
   else
