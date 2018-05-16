@@ -302,3 +302,4 @@ openvswitch
 platform-kickstarts
 python-3parclient
 python-lefthandclient
+memcached
