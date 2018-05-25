@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2016 Wind River Systems, Inc.
+ * Copyright (c) 2015-2018 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -683,26 +683,27 @@ int guestInstClass::message_handler ( struct guestInstClass::inst * inst_ptr )
             if ( inst_ptr->message_list.size() )
             {
                 struct json_object *jobj_msg = inst_ptr->message_list.front();
+                inst_ptr->message_list.pop_front();
 
                 if (jsonUtil_get_int(jobj_msg, GUEST_HEARTBEAT_MSG_VERSION, &inst_ptr->instance.version) != PASS)
                 {
                     handle_parse_failure(inst_ptr, GUEST_HEARTBEAT_MSG_VERSION, jobj_msg);
-                    break;
+                    return FAIL;
                 }
                 if (jsonUtil_get_int(jobj_msg, GUEST_HEARTBEAT_MSG_REVISION, &inst_ptr->instance.revision) != PASS)
                 {
                     handle_parse_failure(inst_ptr, GUEST_HEARTBEAT_MSG_REVISION, jobj_msg);
-                    break;
+                    return FAIL;
                 }
                 if (jsonUtil_get_string(jobj_msg, GUEST_HEARTBEAT_MSG_MSG_TYPE, &inst_ptr->instance.msg_type) != PASS)
                 {
                     handle_parse_failure(inst_ptr, GUEST_HEARTBEAT_MSG_MSG_TYPE, jobj_msg);
-                    break;
+                    return FAIL;
                 }
                 if (jsonUtil_get_int(jobj_msg, GUEST_HEARTBEAT_MSG_SEQUENCE, &inst_ptr->instance.sequence) != PASS)
                 {
                     handle_parse_failure(inst_ptr, GUEST_HEARTBEAT_MSG_SEQUENCE, jobj_msg);
-                    break;
+                    return FAIL;
                 }
 
                 mlog1 ("%s:%s message - Seq:%x Ver:%d.%d Fd:%d\n",
@@ -730,22 +731,22 @@ int guestInstClass::message_handler ( struct guestInstClass::inst * inst_ptr )
                         if (jsonUtil_get_int(jobj_msg, GUEST_HEARTBEAT_MSG_HEARTBEAT_RESPONSE, &heartbeat_response) != PASS)
                         {
                             handle_parse_failure(inst_ptr, GUEST_HEARTBEAT_MSG_HEARTBEAT_RESPONSE, jobj_msg);
-                            break;
+                            return FAIL;
                         }
                         if (jsonUtil_get_string(jobj_msg, GUEST_HEARTBEAT_MSG_HEARTBEAT_HEALTH, &heartbeat_health) != PASS)
                         {
                             handle_parse_failure(inst_ptr, GUEST_HEARTBEAT_MSG_HEARTBEAT_HEALTH, jobj_msg);
-                            break;
+                            return FAIL;
                         }
                         if (jsonUtil_get_string(jobj_msg, GUEST_HEARTBEAT_MSG_CORRECTIVE_ACTION, &corrective_action) != PASS)
                         {
                             handle_parse_failure(inst_ptr, GUEST_HEARTBEAT_MSG_CORRECTIVE_ACTION, jobj_msg);
-                            break;
+                            return FAIL;
                         }
                         if (jsonUtil_get_string(jobj_msg, GUEST_HEARTBEAT_MSG_LOG_MSG, &log_msg) != PASS)
                         {
                             handle_parse_failure(inst_ptr, GUEST_HEARTBEAT_MSG_LOG_MSG, jobj_msg);
-                            break;
+                            return FAIL;
                         }
 
                         if ( heartbeat_response != inst_ptr->instance.heartbeat_challenge)
@@ -848,9 +849,6 @@ int guestInstClass::message_handler ( struct guestInstClass::inst * inst_ptr )
                                hb_get_state_name(inst_ptr->instance.hbState), 
                                inst_ptr->instance.sequence);
                     }
-                    inst_ptr->message_list.pop_front();
-                    json_object_put(jobj_msg);
-                    break ;
                 }
 
                 else if ( !inst_ptr->instance.msg_type.compare(GUEST_HEARTBEAT_MSG_INIT) )
@@ -869,8 +867,6 @@ int guestInstClass::message_handler ( struct guestInstClass::inst * inst_ptr )
                         /* Allow the heartbeat challenge response message log */
                         inst_ptr->instance.message_count = 0 ;
                         beatStateChange ( &inst_ptr->instance, hbs_server_waiting_init ) ;
-                        inst_ptr->message_list.pop_front();
-                        json_object_put(jobj_msg);
                     }
                     else
                     {
@@ -880,55 +876,55 @@ int guestInstClass::message_handler ( struct guestInstClass::inst * inst_ptr )
                         if (jsonUtil_get_int(jobj_msg, GUEST_HEARTBEAT_MSG_INVOCATION_ID, &inst_ptr->instance.invocation_id) != PASS)
                         {
                             handle_parse_failure(inst_ptr, GUEST_HEARTBEAT_MSG_INVOCATION_ID, jobj_msg);
-                            break;
+                            return FAIL;
                         }
 
                         if (jsonUtil_get_string(jobj_msg, GUEST_HEARTBEAT_MSG_NAME, &instance_name) != PASS)
                         {
                             handle_parse_failure(inst_ptr, GUEST_HEARTBEAT_MSG_NAME, jobj_msg);
-                            break;
+                            return FAIL;
                         }
 
                         if (jsonUtil_get_string(jobj_msg, GUEST_HEARTBEAT_MSG_CORRECTIVE_ACTION, &inst_ptr->instance.corrective_action) != PASS)
                         {
                             handle_parse_failure(inst_ptr, GUEST_HEARTBEAT_MSG_CORRECTIVE_ACTION, jobj_msg);
-                            break;
+                            return FAIL;
                         }
 
                         if (jsonUtil_get_int(jobj_msg, GUEST_HEARTBEAT_MSG_HEARTBEAT_INTERVAL_MS, &inst_ptr->instance.heartbeat_interval_ms) != PASS)
                         {
                             handle_parse_failure(inst_ptr, GUEST_HEARTBEAT_MSG_HEARTBEAT_INTERVAL_MS, jobj_msg);
-                            break;
+                            return FAIL;
                         }
 
                         if (jsonUtil_get_int(jobj_msg, GUEST_HEARTBEAT_MSG_VOTE_SECS, &inst_ptr->instance.vote_secs) != PASS)
                         {
                             handle_parse_failure(inst_ptr, GUEST_HEARTBEAT_MSG_VOTE_SECS, jobj_msg);
-                            break;
+                            return FAIL;
                         }
 
                         if (jsonUtil_get_int(jobj_msg, GUEST_HEARTBEAT_MSG_SHUTDOWN_NOTICE_SECS, &inst_ptr->instance.shutdown_notice_secs) != PASS)
                         {
                             handle_parse_failure(inst_ptr, GUEST_HEARTBEAT_MSG_SHUTDOWN_NOTICE_SECS, jobj_msg);
-                            break;
+                            return FAIL;
                         }
 
                         if (jsonUtil_get_int(jobj_msg, GUEST_HEARTBEAT_MSG_SUSPEND_NOTICE_SECS, &inst_ptr->instance.suspend_notice_secs) != PASS)
                         {
                             handle_parse_failure(inst_ptr, GUEST_HEARTBEAT_MSG_SUSPEND_NOTICE_SECS, jobj_msg);
-                            break;
+                            return FAIL;
                         }
 
                         if (jsonUtil_get_int(jobj_msg, GUEST_HEARTBEAT_MSG_RESUME_NOTICE_SECS, &inst_ptr->instance.resume_notice_secs) != PASS)
                         {
                             handle_parse_failure(inst_ptr, GUEST_HEARTBEAT_MSG_RESUME_NOTICE_SECS, jobj_msg);
-                            break;
+                            return FAIL;
                         }
 
                         if (jsonUtil_get_int(jobj_msg, GUEST_HEARTBEAT_MSG_RESTART_SECS, &inst_ptr->instance.restart_secs) != PASS)
                         {
                             handle_parse_failure(inst_ptr, GUEST_HEARTBEAT_MSG_RESTART_SECS, jobj_msg);
-                            break;
+                            return FAIL;
                         }
 
                         inst_ptr->instance.name = instance_name;
@@ -1019,9 +1015,6 @@ int guestInstClass::message_handler ( struct guestInstClass::inst * inst_ptr )
                         inst_ptr->instance.heartbeat.b2b_misses = 0 ;
                         inst_ptr->instance.heartbeat.failed = false ;
                         send_challenge ( inst_ptr ) ;
-                        /* send_challenge() will clear the message_list so no need to pop the msg here */
-                        json_object_put(jobj_msg);
-
                         inst_ptr->messageStage = INST_MESSAGE__RECEIVE ;
                     }
                 }
@@ -1035,7 +1028,7 @@ int guestInstClass::message_handler ( struct guestInstClass::inst * inst_ptr )
                     if (jsonUtil_get_int(jobj_msg, GUEST_HEARTBEAT_MSG_INVOCATION_ID, &invocation_id) != PASS)
                     {
                         handle_parse_failure(inst_ptr, GUEST_HEARTBEAT_MSG_INVOCATION_ID, jobj_msg);
-                        break;
+                        return FAIL;
                     }
 
                     if ( invocation_id != inst_ptr->instance.invocation_id )
@@ -1060,24 +1053,23 @@ int guestInstClass::message_handler ( struct guestInstClass::inst * inst_ptr )
                         if(jsonUtil_get_string(jobj_msg, GUEST_HEARTBEAT_MSG_EVENT_TYPE, &event_type) != PASS)
                         {
                             handle_parse_failure(inst_ptr, GUEST_HEARTBEAT_MSG_EVENT_TYPE, jobj_msg);
-                            break;
+                            return FAIL;
                         }
                         if (jsonUtil_get_string(jobj_msg, GUEST_HEARTBEAT_MSG_NOTIFICATION_TYPE, &notification_type) != PASS)
                         {
                             handle_parse_failure(inst_ptr, GUEST_HEARTBEAT_MSG_NOTIFICATION_TYPE, jobj_msg);
-                            break;
+                            return FAIL;
                         }
                         if (jsonUtil_get_string(jobj_msg, GUEST_HEARTBEAT_MSG_VOTE_RESULT, &vote_result) != PASS)
                         {
                             handle_parse_failure(inst_ptr, GUEST_HEARTBEAT_MSG_VOTE_RESULT, jobj_msg);
-                            break;
+                            return FAIL;
                         }
                         if (jsonUtil_get_string(jobj_msg, GUEST_HEARTBEAT_MSG_LOG_MSG, &reject_reason) != PASS)
                         {
                             handle_parse_failure(inst_ptr, GUEST_HEARTBEAT_MSG_LOG_MSG, jobj_msg);
-                            break;
+                            return FAIL;
                         }
-
 
                         send_vote_notify_resp (get_ctrl_ptr()->hostname,
                                                inst_ptr->instance.uuid,
@@ -1104,9 +1096,6 @@ int guestInstClass::message_handler ( struct guestInstClass::inst * inst_ptr )
                             mtcTimer_stop ( inst_ptr->vote_timer );
                         inst_ptr->vote_timer.ring = false ;
                     }
-                    /* Delete the message */
-                    inst_ptr->message_list.pop_front();
-                    json_object_put(jobj_msg);
                 }
                 else if ( !inst_ptr->instance.msg_type.compare(GUEST_HEARTBEAT_MSG_EXIT) )
                 {
@@ -1119,9 +1108,6 @@ int guestInstClass::message_handler ( struct guestInstClass::inst * inst_ptr )
                     beatStateChange ( &inst_ptr->instance, hbs_server_waiting_init ) ;
 
                     hbStatusChange ( &inst_ptr->instance, false );
-
-                    inst_ptr->message_list.pop_front();
-                    json_object_put(jobj_msg);
                 }
                 else
                 {
@@ -1132,14 +1118,9 @@ int guestInstClass::message_handler ( struct guestInstClass::inst * inst_ptr )
                     string log_err = "unsupported message type: ";
                     log_err.append(inst_ptr->instance.msg_type);
                     send_client_msg_nack(&inst_ptr->instance, log_err);
-
-                    /* Delete the message */
-                    inst_ptr->message_list.pop_front();
-                    json_object_put(jobj_msg);
                 }
+                json_object_put(jobj_msg);
             }
-
-            /* Global case break */
             break ;
         }
 
@@ -1188,9 +1169,6 @@ int guestInstClass::send_challenge ( struct guestInstClass::inst * inst_ptr )
                   bytes_sent, message.length() );
     }
     
-    /* Clear the message queue and wait for the challenge response */
-    inst_ptr->message_list.clear ();
-
     /* Waiting on a response now */
     inst_ptr->instance.heartbeat.waiting = true ;
 
@@ -1289,9 +1267,6 @@ int guestInstClass::send_vote_notify ( string uuid )
         wlog ("%s only sent %ld of %ld bytes\n", inst_ptr->instance.inst.c_str(),
                                                  bytes_sent, message.length() );
     }
-
-    /* Clear the message queue and wait for the vote response */
-    inst_ptr->message_list.clear ();
 
     if ( inst_ptr->vote_timer.tid )
         mtcTimer_stop ( inst_ptr->vote_timer );
@@ -1439,7 +1414,6 @@ void guestInstClass::handle_parse_failure ( struct guestInstClass::inst * inst_p
     log_err.append(key);
     elog("%s %s\n", log_prefix(&inst_ptr->instance).c_str(), log_err.c_str());
     send_client_msg_nack(&inst_ptr->instance, log_err);
-    inst_ptr->message_list.pop_front();
     /* pop_front() only deletes the internal copy of jobj_msg in the message_list.
        The original object still needs to be released here */
     json_object_put(jobj_msg);

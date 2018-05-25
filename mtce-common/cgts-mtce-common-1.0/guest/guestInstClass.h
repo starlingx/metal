@@ -2,7 +2,7 @@
 #define __INCLUDE_INSTBASECLASS_H__
 
 /*
- * Copyright (c) 2013-2016 Wind River Systems, Inc.
+ * Copyright (c) 2013-2018 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -13,6 +13,7 @@
   * Wind River CGTS Platform Guest Services "Instances Base Class Header"
   */
 
+#include <json-c/json.h>
 #include "guestBase.h"          /* for ... instInfo                    */
 
 typedef enum
@@ -76,6 +77,10 @@ class guestInstClass
         #define INST_TIMER_INIT      (3)
         #define INST_TIMER_VOTE      (4)
         #define INST_TIMER_MAX       (5)
+
+        // number of continuous reads for an instance to deal with
+        // potential message burst
+        #define INST_MSG_READ_COUNT   5
 
         /** General Purpose instance timer */
         // struct mtc_timer timer;
@@ -155,6 +160,9 @@ class guestInstClass
     void manage_comm_loss ( void );
 
     void mem_log_info ( void );
+    void process_msg(json_object *jobj_msg, struct guestInstClass::inst * inst_ptr);
+    void parser(char *buf, ssize_t len, json_tokener* tok, int newline_found, struct guestInstClass::inst * inst_ptr);
+    void handle_virtio_serial_msg(char *buf, ssize_t len, json_tokener* tok, struct guestInstClass::inst * inst_ptr);
 
     public:
 
