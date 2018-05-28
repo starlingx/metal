@@ -58,13 +58,16 @@ void nodeLinkClass::mtcSmgrApi_handler ( struct evhttp_request *req, void *arg )
 
 mtcSmgrApi_handler_out:
 
-    mtcHttpUtil_free_conn  ( smgrEvent );
-    mtcHttpUtil_free_base  ( smgrEvent );
+    if ( smgrEvent.blocking == true )
+    {
+        mtcHttpUtil_free_conn  ( smgrEvent );
+        mtcHttpUtil_free_base  ( smgrEvent );
 
+        /* This is needed to get out of the loop in the blocking case
+         * Calling this here in non-blocking calls can lead to segfault */
+        event_base_loopbreak((struct event_base *)arg);
+    }
     smgrEvent.active = false ;
-
-    /* This is needed to get out of the loop */
-    event_base_loopbreak((struct event_base *)arg);
 }
 
 /*
