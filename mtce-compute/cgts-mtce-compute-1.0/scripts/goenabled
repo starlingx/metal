@@ -1,0 +1,187 @@
+#!/bin/bash
+#
+# Copyright (c) 2013-2014 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+#
+# chkconfig: 2345 98 2
+#
+### BEGIN INIT INFO
+# Provides:          goenabled
+# Default-Start:     3 5
+# Default-Stop:      0 1 2 6
+# Short-Description: Maintenance Client "Go Enable" script
+### END INIT INFO
+
+# Platform paths and flags
+. /usr/bin/tsconfig
+
+GOENABLED_PATH=${GOENABLED_PATH:-"/etc/goenabled.d"}
+GOENABLED_FILE=${GOENABLED_FILE:-"/var/run/.goenabled_subf"}
+GOENABLED_TAG=${GOENABLED_TAG:-"GOENABLED"}
+
+RETVAL=0
+
+################################################################################
+# Log message to syslog
+################################################################################
+function log
+{
+    logger -t ${GOENABLED_TAG} $@
+}
+
+################################################################################
+# Utility function to print the status of a command result
+################################################################################
+function print_status()
+{
+    if [ "$1" -eq "0" ]; then
+        echo "[  OK  ]"
+    else
+        echo "[FAILED]"
+    fi
+}
+
+################################################################################
+# Run goenabled scripts to check system status
+################################################################################
+function goenabled_check()
+{
+    if [ -d ${GOENABLED_PATH} ]; then
+        run-parts ${GOENABLED_PATH} 2>&1 | logger -t ${GOENABLED_TAG}
+        RET=${PIPESTATUS[0]}
+        if [ ${RET} -ne 0 ]; then
+            return ${RET}
+        fi
+    fi
+
+    return 0
+}
+
+
+################################################################################
+# Write goenabled state file
+################################################################################
+function goenabled_enable_ready()
+{
+    echo "`date`: `hostname` : Ready to Run GoEnabled Scripts" > ${GOENABLED_FILE}
+    RET=$?
+    if [ ${RET} -ne 0 ]; then
+        log "Failed to write state file ${GOENABLED_FILE}"
+        return ${RET}
+    fi
+
+    log "enabled"
+
+    return 0
+}
+
+
+################################################################################
+# Remove goenabled state file
+################################################################################
+function goenabled_disable()
+{
+    rm -f ${GOENABLED_FILE}
+    RET=$?
+    if [ ${RET} -ne 0 ]; then
+        log "Failed to remove state file ${GOENABLED_FILE}"
+        return ${RET}
+    fi
+
+    log "disabled"
+
+    return 0
+}
+
+################################################################################
+# Start Action
+################################################################################
+function start()
+{
+    echo -n "Goenabled Ready: "
+
+    goenabled_enable_ready
+    RETVAL=$?
+    if [ "$RETVAL" -ne "0" ]; then
+        log "Go enabled failed"
+        print_status $RETVAL
+        return
+    fi
+
+    print_status $RETVAL
+}
+
+################################################################################
+# Stop Action
+################################################################################
+function stop()
+{
+    echo -n "Stopping goenabled: "
+
+    goenabled_disable
+    RETVAL=$?
+    if [ "$RETVAL" -ne "0" ]; then
+        log "Go disabled failed"
+        print_status $RETVAL
+        return
+    fi
+
+    print_status $RETVAL
+}
+
+################################################################################
+# Status Action
+################################################################################
+function status()
+{
+    echo -n "Checking goenabled: "
+
+    goenabled_check
+    RETVAL=$?
+    if [ "$RETVAL" -ne "0" ]; then
+        print_status $RETVAL
+        return
+    fi
+
+    print_status $RETVAL
+}
+
+
+################################################################################
+# Main Entry
+################################################################################
+
+# Don't run this till compute is configured
+if [ ! -e $VOLATILE_COMPUTE_CONFIG_COMPLETE ] ; then
+    logger "Compute is not configured"
+    exit $RETVAL
+fi
+
+case "$1" in
+    start)
+        start
+        ;;
+
+    stop)
+        stop
+        ;;
+
+    restart)
+        stop
+        start
+        ;;
+
+    status)
+        status
+        ;;
+
+    *)
+        echo "usage: $0 { start | stop | status | restart }"
+        exit 1
+        ;;
+esac
+
+exit $RETVAL

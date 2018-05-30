@@ -1,0 +1,37 @@
+#!/bin/bash
+#
+# Copyright (c) 2013-2014, 2016 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+# Controller Config Complete emulation file
+
+case "$1" in
+    start)
+        #touch /etc/platform/.initial_controller_config_complete
+        #touch /etc/platform/.initial_config_complete
+        #touch /var/run/.controller_config_complete
+        #touch /var/run/.config_pass
+        ;;
+
+    stop)
+        #rm -f /etc/platform/.initial_controller_config_complete
+        #rm -f /etc/platform/.initial_config_complete
+        #rm -f /var/run/.controller_config_complete
+        #rm -f /var/run/.config_pass
+        ;;
+
+    restart)
+        ;;
+
+    status)
+        ;;
+
+    *)
+        echo "usage: $0 { start | stop | status | restart }"
+        exit 1
+        ;;
+esac
+
+exit $RETVAL

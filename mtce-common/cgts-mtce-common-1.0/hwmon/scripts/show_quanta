@@ -1,0 +1,184 @@
+#!/bin/bash
+
+#
+# Copyright (c) 2015 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+      
+rc=0
+
+if [ "$0" == "reset" -a "$1" == "/SYS" ] ; then
+
+      echo ""
+      echo "SYS Power Reset"
+      echo "/SYS reset"
+      echo ""
+      sleep 5
+      reboot
+
+elif [ "$0" == "start" -a "$1" == "/SYS" ] ; then
+
+    echo ""
+    echo "SYS_Power_on"
+    echo "/SYS started"
+    echo ""
+
+elif [ "$0" == "stop" -a "$1" == "/SYS" ] ; then
+
+    echo ""
+    echo "SYS Power off"
+    echo "/SYS stopped"
+    echo ""
+    sleep 5
+    ifdown eth1
+
+elif [ "$1" == "" ] ; then
+
+      echo ""
+      echo "  /"
+      echo "    Targets:"
+      echo "        SP"
+      echo "        SYS"
+      echo ""
+      echo "    Properties:"
+      echo ""
+      echo "    Target Commands:"
+      echo "        show"
+      echo "        cd"
+      echo ""
+      echo ""
+
+elif [ "$1" == "/SYS" -a "$2" == "" ] ; then
+
+      echo "  /SYS"
+      echo "    Targets:"
+      echo "        voltage"
+      echo "        fan"
+      echo "        temperature"
+      echo "        powerSupply"
+      echo ""
+      echo "    Properties:"
+      echo "         LOM  = 2C:60:0C:AD:9A:A1"
+      echo "         LOM  = 2C:60:0C:AD:9A:A2"
+      echo "         OCP Mezz  = 2C:60:0C:A1:FD:7F"
+      echo "         OCP Mezz  = 2C:60:0C:A1:FD:80"
+      echo "        ChassisStatus = powerIsON"
+      echo ""
+      echo "    Target Commands:"
+      echo "        show"
+      echo "        cd"
+      echo "        start"
+      echo "        stop"
+      echo "        reset"
+      echo ""
+
+elif [ "$1" == "/SP" ] ; then
+
+      echo "  /SP"
+      echo "    Targets:"
+      echo ""
+      echo "    Properties:"
+      echo "        BMCVersion = v3.29"
+      echo "        BMCGUID = 3c 67 12 c0 1c 7c 00 10 b7 69 2c 60 0c ad 9a 91 "
+      echo "        ServerIdentify = off"
+      echo "        BMCMAC = 2C:60:0C:AD:9A:91"
+      echo ""
+      echo "    Target Commands:"
+      echo "        show"
+      echo "        set"
+      echo "        reset"
+      echo ""
+
+elif [ "$1" == "/SYS/powerSupply" ] ; then
+
+      echo ""
+      echo "    Properties:"
+      echo "        PSU Redundancy = N/A "
+      echo "        PSU1 Status = Presence Detected, "
+      echo "        PSU2 Status = All Deasserted "
+      echo ""
+      echo ""
+
+elif [ "$1" == "/SYS/voltage" ] ; then
+
+      echo ""
+      echo "    Properties:"
+      echo "        Volt_VR_CPU0 = ok"
+      echo "        Volt_VR_CPU1 = ok"
+      echo "        Volt_P5V = ok"
+      echo "        Volt_P5V_AUX = ok"
+      echo "        Volt_P3V3 = ok"
+      echo "        Volt_P1V05 = ok"
+      echo "        Volt_P1V8_AUX = ok"
+      echo "        Volt_P12V = ok"
+      echo "        Volt_P3V3_AUX = ok"
+      echo "        Volt_VR_DIMM_AB = ok"
+      echo "        Volt_VR_DIMM_CD = ok"
+      echo "        Volt_VR_DIMM_EF = ok"
+      echo "        Volt_VR_DIMM_GH = ok"
+      echo "        Volt_P3V_BAT = ok"
+      echo ""
+      echo ""
+
+elif [ "$1" == "/SYS/fan" ] ; then
+
+      echo ""
+      echo "    Properties:"
+      echo "        Fan_SYS0_1 = ok"
+      echo "        Fan_SYS0_2 = ok"
+      echo "        Fan_SYS1_1 = ok"
+      echo "        Fan_SYS1_2 = ok"
+      echo "        Fan_SYS2_1 = ok"
+      echo "        Fan_SYS2_2 = ok"
+      echo "        Fan_SYS3_1 = ok"
+      echo "        Fan_SYS3_2 = ok"
+      echo "        Fan_SYS4_1 = ok"
+      echo "        Fan_SYS4_2 = ok"
+      echo "        Fan_SYS5_1 = ok"
+      echo "        Fan_SYS5_2 = ok"
+      echo "        Fan_PSU1 = ok"
+      echo "        Fan_PSU2 = critical"
+      echo ""
+      echo ""
+
+
+elif [ "$1" == "/SYS/temperature" ] ; then
+
+      echo ""
+      echo "    Properties:"
+      echo "        PCH Thermal Trip = ok"
+      echo "        Temp_CPU0 = ok"
+      echo "        Temp_CPU1 = ok"
+      echo "        Temp_DIMM_AB = ok"
+      echo "        Temp_DIMM_CD = ok"
+      echo "        Temp_DIMM_EF = ok"
+      echo "        Temp_DIMM_GH = ok"
+      echo "        Temp_VR_CPU0 = ok"
+      echo "        Temp_VR_CPU1 = ok"
+      echo "        Temp_VR_DIMM_AB = ok"
+      echo "        Temp_VR_DIMM_CD = ok"
+      echo "        Temp_VR_DIMM_EF = ok"
+      echo "        Temp_VR_DIMM_GH = ok"
+      echo "        Temp_Ambient_FP = ok"
+      echo "        Temp_PCI_Area = ok"
+      echo "        Temp_PCI_Inlet1 = ok"
+      echo "        Temp_PCI_Inlet2 = ok"
+      echo "        Temp_PCH = ok"
+      echo "        Temp_Outlet = ok"
+      echo "        MB Thermal Trip = ok"
+      echo "        Temp_HBA_LSI = ok"
+      echo "        Temp_OCP = na"
+      echo "        Temp_PSU1 = ok"
+      echo "        Temp_PSU2 = ok"
+      echo ""
+      echo ""
+
+else
+
+     echo "Invalid command 'emulated' - type 'help' for a list of commands."
+     rc=1
+fi
+
+exit $rc
+

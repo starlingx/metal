@@ -1,0 +1,12 @@
+Metadata-Version: 1.1
+Name: cgts-mtce-compute
+Version: 1.0
+Summary: Titanium Cloud Platform Compute Node Maintenance Package
+Home-page:
+Author: Windriver
+Author-email: info@windriver.com
+License: Apache-2.0
+
+Description: Maintenance support files for compute-only node type
+
+Platform: UNKNOWN

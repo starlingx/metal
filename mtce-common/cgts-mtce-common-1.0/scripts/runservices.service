@@ -1,0 +1,12 @@
+[Unit]
+Description=Titanium Cloud Run Host Services
+After=network.target syslog.service
+
+[Service]
+Type=simple
+ExecStart=/etc/rc.d/init.d/runservices start
+ExecStop=/etc/rc.d/init.d/runservices stop
+
+[Install]
+WantedBy=multi-user.target
+

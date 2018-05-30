@@ -1,0 +1,9 @@
+default=0
+timeout=10
+GRUB_HIDDEN_TIMEOUT=0
+GRUB_TIMEOUT_STYLE='countdown'
+
+menuentry '1) UEFI All-in-one (lowlatency)' {
+  linuxefi rel-xxxSW_VERSIONxxx/installer-bzImage bootifonly=1 devfs=nomount inst.repo=http://pxecontroller/feed/rel-xxxSW_VERSIONxxx/ inst.ks=http://pxecontroller/feed/rel-xxxSW_VERSIONxxx/net_smallsystem_lowlatency_ks.cfg usbcore.autosuspend=-1 biosdevname=0 rd.net.timeout.dhcp=120  ksdevice=$net_default_mac BOOTIF=$net_default_mac xxxAPPEND_OPTIONSxxx
+  initrdefi rel-xxxSW_VERSIONxxx/installer-initrd
+}

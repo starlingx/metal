@@ -1,0 +1,182 @@
+/*
+ * Copyright (c) 2015 Wind River Systems, Inc.
+*
+* SPDX-License-Identifier: Apache-2.0
+*
+ */
+
+/**
+ * @file
+ * Wind River CGTS Platform PostgreSQL Database Access module for maintenance.
+ *
+ * pqdmClass member primitive implementation.
+ *
+ * query
+ *
+ *
+ */
+
+#include "pgdbClass.h"
+
+#define MAX_SQL_RESPONSE_MAX (4096)
+#define SENSOR_SAMPLE_TABLE  "sample"
+
+/* DB connection status */
+#define DB_DISCONNECTED       0
+#define DB_CONNECTED          1
+
+pgdbClass::pgdbClass()
+{
+	pg.uri = NULL;
+	pg.conn = NULL;
+	pg.connected = false ;
+}
+
+pgdbClass::~pgdbClass()
+{
+	if (pg.conn)
+    {
+		PQfinish(pg.conn);
+	}
+    pg.connected = false ;
+}
+
+int pgdbClass::connect(const char *uri)
+{
+	const char *val = NULL;
+
+	/* make a connection to the specified database */
+	this->pg.conn = PQconnectdb(uri);
+
+	/* verify the connection */
+	if ((this->pg.conn == NULL) || (PQstatus(this->pg.conn) != CONNECTION_OK))
+    {
+		elog ("failed to connected to DB: (%s)\n", uri);
+		PQfinish(this->pg.conn);
+		return FAIL;
+	}
+
+	this->pg.connected = true ;
+	this->pg.uri = uri;
+
+	val = get_parameter_status("standard_conforming_strings");
+	ilog ("server standard_conforming_strings parameter: %s\n", val ? val : "unavailable");
+
+    this->pg.equote = (val && (0 == strcmp("off", val)));
+	ilog ("server requires E'' quotes: %s\n", this->pg.equote ? "YES" : "NO");
+
+	this->pg.server_version = PQserverVersion(this->pg.conn);
+	this->pg.protocol = PQprotocolVersion(this->pg.conn);
+	this->pg.encoding = get_parameter_status("client_encoding");
+
+	return PASS ;
+}
+
+int pgdbClass::monitor( void )
+{
+	if (PQstatus(this->pg.conn) != CONNECTION_OK)
+    {
+		elog ("failed connection audit to '%s' (%s)\n", this->pg.uri, PQerrorMessage(this->pg.conn));
+		disconnect();
+
+        /* TODO: make this an FSM, otherwise this will bang away */
+		// return connect(this->pg.uri);
+        return (FAIL);
+	 }
+	return PASS ;
+}
+
+void pgdbClass::disconnect()
+{
+	if (this->pg.conn != NULL)
+    {
+		PQfinish(this->pg.conn);
+	}
+	if (this->pg.connected == true )
+    {
+		this->pg.connected = false ;
+	}
+}
+
+const char * pgdbClass::get_parameter_status(const char *param)
+{
+	return PQparameterStatus(this->pg.conn, param);
+}
+
+int pgdbClass::cmd(const char *db_cmd)
+{
+	PGresult *res;
+	int rc = PASS;
+
+	if (monitor() != PASS )
+    {
+		elog ("Failed to reconnect: %s", PQerrorMessage(this->pg.conn));
+		return FAIL ;
+	}
+	res = PQexec(this->pg.conn, db_cmd);
+	if (PQresultStatus(res) != PGRES_COMMAND_OK)
+    {
+		elog ("Request Status: %s\n", PQresStatus(PQresultStatus(res)));
+		elog ("execute Status: %s (%s)\n", db_cmd, PQresultErrorMessage(res));
+		rc = FAIL;
+	}
+	if (rc == PASS )
+    {
+		int row = atoi(PQcmdTuples(res));
+		ilog ("SQL command returned successful: %d rows affected.\n", row); /* dlog */
+		if (row < 1)
+        {
+            rc = FAIL;
+        }
+	}
+	PQclear(res);
+	return rc;
+}
+
+
+int pgdbUtil_get_version ( void )
+{
+    int ver = PQlibVersion();
+    ilog ("libpq version: %d\n", ver);
+    return ver ;
+}
+
+int pgdbClass::query (const char * db_cmd , mtc_query_type & result)
+{
+	PGresult *res;
+	int nfields, ntuples, i, j;
+
+	if (monitor() != PASS)
+    {
+		elog ("Failed to reconnect: %s\n", PQerrorMessage(this->pg.conn));
+		return (FAIL) ;
+	}
+
+	res = PQexec( pg.conn, db_cmd);
+	if (PQresultStatus(res) != PGRES_TUPLES_OK)
+    {
+		elog("request status: %s\n", PQresStatus(PQresultStatus(res)));
+		elog("execute status: %s (%s)\n", db_cmd, PQresultErrorMessage(res));
+		PQclear(res);
+		return(FAIL);
+	}
+
+	nfields = PQnfields(res);
+	ntuples = PQntuples(res);
+	ilog ("Cmd: (%s) OK, entries found: (%d)\n", db_cmd, ntuples); /* dlog */
+
+	for (i = 0; i < ntuples; ++i)
+    {
+		mtc_key_value_type key_value ;
+
+		for (j =0; j < nfields; ++j)
+        {
+			char * key = PQfname(res, j);
+			char * value = PQgetvalue(res, i, j);
+			key_value[key] = value;
+		}
+		result.push_back ( key_value );
+	}
+	PQclear(res);
+	return(PASS);
+}

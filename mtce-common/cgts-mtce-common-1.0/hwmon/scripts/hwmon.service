@@ -1,0 +1,16 @@
+[Unit]
+Description=Titanium Cloud Hardware Monitor
+After=network.target syslog.service
+
+[Service]
+Type=forking
+ExecStart=/etc/rc.d/init.d/hwmon start
+ExecStop=/etc/rc.d/init.d/hwmon stop
+ExecReload=/etc/rc.d/init.d/hwmon reload
+PIDFile=/var/run/hwmond.pid
+
+Restart=no
+
+[Install]
+WantedBy=multi-user.target
+

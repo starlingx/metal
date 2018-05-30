@@ -1,0 +1,14 @@
+[Unit]
+Description=Titanium Cloud Maintenance Alarm Handler Client
+After=network.target syslog.service config.service
+Before=pmon.service
+
+[Service]
+Type=forking
+ExecStart=/etc/rc.d/init.d/mtcalarm start
+ExecStop=/etc/rc.d/init.d/mtcalarm stop
+ExecReload=/etc/rc.d/init.d/mtcalarm reload
+PIDFile=/var/run/mtcalarmd.pid
+
+[Install]
+WantedBy=multi-user.target

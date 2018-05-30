@@ -1,0 +1,118 @@
+#! /bin/bash
+#
+# Copyright (c) 2013-2017 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+
+usage ()
+{
+    echo "Usage: `basename $0` [-h|--force]"
+    echo "Erases the master boot record on the hard drive."
+    echo "WARNING: All data on this hard drive will be lost."
+    echo ""
+    echo "Options:"
+    echo "  -h        display this help"
+    echo "  --force   do not ask for confirmation"
+    exit 1
+}
+
+OPTS=`getopt -o h -l force -- "$@"`
+if [ $? != 0 ]
+then
+    exit 1
+fi
+
+eval set -- "$OPTS"
+
+while true ; do
+    case "$1" in
+        -h) usage; shift;;
+        --force) FORCE=1; shift;;
+        --) shift; break;;
+    esac
+done
+
+if [ $# != 0 ]
+then
+    echo "Invalid argument. Use -h for help."
+    exit 1
+fi
+
+declare WIPE_HDD=
+
+# Only wipe the rootfs and boot device disks
+rootfs_part=$(df --output=source / | tail -1)
+rootfs=$(readlink -f $(find -L /dev/disk/by-path/ -samefile $rootfs_part | sed 's/-part[0-9]*'//))
+
+boot_disk_part=$(df --output=source /boot | tail -1)
+boot_disk=$(readlink -f $(find -L /dev/disk/by-path/ -samefile $boot_disk_part | sed 's/-part[0-9]*'//))
+
+WIPE_HDD=$rootfs
+if [ "$rootfs" != "$boot_disk" ]
+then
+    WIPE_HDD="$WIPE_HDD $boot_disk"
+fi
+
+# Due to dynamic partitioning, volume groups can have PVs across multiple disks.
+# When deleting the rootfs, we should also delete all PVs (across all disks) that
+# are part of volume groups that are also present on the rootfs.
+rootfs_vgs=$(pvdisplay -C --separator '  |  ' -o pv_name,vg_name | grep $rootfs | awk '{print $3}' | sort -u)
+
+pvs_to_delete=""
+
+for vg in $rootfs_vgs
+do
+    pv=$(pvdisplay --select "vg_name=$vg" | awk '/PV Name/{print $3}')
+    pvs_to_delete="$pvs_to_delete $pv"
+done
+
+WIPE_HDD="$pvs_to_delete $WIPE_HDD"
+
+if [ ! $FORCE ]
+then
+    echo "This will result in the loss of all data on the hard drives and"
+    echo "will require this node to be re-installed."
+    echo "The following disks will be wiped:"
+    for dev in $WIPE_HDD
+    do
+        echo "    $dev"
+    done | sort
+    echo
+    read -p "Are you absolutely sure? [y/n] " -r
+    if [[ ! $REPLY =~ ^[Yy]$ ]]
+    then
+        echo "Aborted"
+        exit 1
+    fi
+    read -p "Type 'wipediskscompletely' to confirm: " -r
+    if [[ ! $REPLY = "wipediskscompletely" ]]
+    then
+        echo "Aborted"
+        exit 1
+    fi
+fi
+
+for dev in $WIPE_HDD
+do
+    if [[ -e $dev ]]
+    then
+        echo "Wiping $dev..."
+        wipefs -f -a $dev
+
+        # Clearing previous GPT tables or LVM data
+        # Delete the first few bytes at the start and end of the partition. This is required with
+        # GPT partitions, they save partition info at the start and the end of the block.
+        dd if=/dev/zero of=$dev bs=512 count=34
+        dd if=/dev/zero of=$dev bs=512 count=34 seek=$((`blockdev --getsz $dev` - 34))
+    fi
+done
+
+if [[ -z $WIPE_HDD ]]
+then
+    echo "No disks were detected."
+else
+    sync
+    echo "The disk(s) have been wiped."
+fi

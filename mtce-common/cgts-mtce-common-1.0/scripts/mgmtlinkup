@@ -1,0 +1,78 @@
+#! /bin/sh
+#
+# Copyright (c) 2013-2014 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+#
+# chkconfig: 2345 95 95
+#
+### BEGIN INIT INFO
+# Provides:          mgmtlinkup 
+# Default-Start:     3 5
+# Default-Stop:      0 1 2 6
+# Short-Description: Loop trying to bring up the mgmt interface 
+### END INIT INFO
+
+. /etc/init.d/functions
+
+PLATFORM_CONF="/etc/platform/platform.conf"
+
+IFACE=""
+
+# Linux Standard Base (LSB) Error Codes
+RETVAL=0
+GENERIC_ERROR=1
+INVALID_ARGS=2
+UNSUPPORTED_FEATURE=3
+NOT_INSTALLED=5
+NOT_RUNNING=7
+
+PATH=/sbin:/usr/sbin:/bin:/usr/bin:/usr/local/bin
+export PATH
+
+LINK_UP_RETRIES=10
+LINK_UP_INTERVAL=5
+
+case "$1" in
+    start)
+        echo -n "$0 : "
+        if [ -f ${PLATFORM_CONF} ] ; then
+            while [ "${LINK_UP_RETRIES}" -gt 0 ] ; do
+                IFACE=`cat ${PLATFORM_CONF} | grep management_interface | cut -f2 -d'='`
+                if [ "${IFACE}" != "" ] ; then
+                    if ip link show ${IFACE} | grep -sq 'state UP'; then
+                        logger "${IFACE} is up"
+                        echo "OK $IFACE is up"
+                        break
+                    fi
+                    logger "trying to bring ${IFACE} up"
+                    ip link set dev ${IFACE} up
+                    sleep ${LINK_UP_INTERVAL}
+                    LINK_UP_RETRIES=`expr ${LINK_UP_RETRIES} - 1`
+                fi
+            done
+            if [ "${LINK_UP_RETRIES}" -eq 0 ] ; then
+                echo "FAILED to bring $IFACE up"
+            fi
+        fi
+        ;;
+
+    restart)
+        start
+        ;;
+
+    status)
+        ;;
+
+    condrestart)
+        $0 restart
+        ;;
+
+    *)
+        echo "usage: $0 { start | stop | status | restart | condrestart | status }"
+        ;;
+esac
+
+exit ${RETVAL}

@@ -1,0 +1,23 @@
+[Unit]
+Description=Titanium Cloud Maintenance Resource Monitor
+After=network.target syslog.service config.service
+Before=pmon.service
+
+[Service]
+Type=forking
+ExecStart=/etc/rc.d/init.d/rmon start
+ExecStop=/etc/rc.d/init.d/rmon stop
+ExecReload=/etc/rc.d/init.d/rmon reload
+PIDFile=/var/run/rmond.pid
+
+# Failure handling
+TimeoutStartSec=10s
+TimeoutStopSec=10s
+
+# Auto recovery by pmond
+Restart=no
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+

@@ -1,0 +1,118 @@
+#! /bin/sh
+#
+# Copyright (c) 2013-2014, 2016 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+#
+# chkconfig: 2345 95 95
+#
+### BEGIN INIT INFO
+# Provides:          mtcClient
+# Default-Start:     3 5
+# Default-Stop:      0 1 2 6
+# Short-Description: Maintenance Client Daemon 
+### END INIT INFO
+
+. /etc/init.d/functions
+
+DAEMON_NAME="mtcClient"
+DAEMON="/usr/local/bin/${DAEMON_NAME}"
+PIDFILE="/var/run/${DAEMON_NAME}.pid"
+PLATFORM_CONF="/etc/platform/platform.conf"
+
+IFACE=""
+
+# Linux Standard Base (LSB) Error Codes
+RETVAL=0
+GENERIC_ERROR=1
+INVALID_ARGS=2
+UNSUPPORTED_FEATURE=3
+NOT_INSTALLED=5
+NOT_RUNNING=7
+
+PATH=/sbin:/usr/sbin:/bin:/usr/bin:/usr/local/bin
+export PATH
+
+if [ ! -e  "${DAEMON}" ] ; then
+    logger "${DAEMON} is missing"
+    exit ${NOT_INSTALLED}
+fi
+
+# Note: Commenting out this check and replace it with a change to the
+# mtcClient service file to have it auto restarted by systemd if it fails.
+# This check or recovery action has been seen to stall the startup script
+# longer than 10 seconds.
+#
+# if [ -f ${PLATFORM_CONF} ] ; then
+#     IFACE=`cat ${PLATFORM_CONF} | grep management_interface | cut -f2 -d'='`
+#     if [ "${IFACE}" != "" ] ; then
+#         if ip link show $IFACE | grep -sq 'state DOWN'; then
+#            ip link set dev $IFACE up
+#         fi
+#     fi
+# fi
+
+case "$1" in
+    start)
+        logger "Starting ${DAEMON_NAME}"
+        echo -n "Starting ${DAEMON_NAME}: "
+        if [ -n "`pidof ${DAEMON_NAME}`" ] ; then
+            echo -n "is already running "
+            RETVAL=0
+        else
+            start-stop-daemon --start -b -x ${DAEMON} -- -l
+            RETVAL=$?
+        fi
+        if [ ${RETVAL} -eq 0 ] ; then
+            pid=`pidof ${DAEMON_NAME}`
+            echo "OK"
+            logger "${DAEMON} (${pid})"
+        else
+            echo "FAIL"
+            RETVAL=${GENERIC_ERROR}
+        fi
+        ;;
+
+    stop)
+        logger "Stopping ${DAEMON_NAME}"
+        echo -n "Stopping ${DAEMON_NAME}: "
+        if [ -n "`pidof ${DAEMON_NAME}`" ] ; then
+            killproc ${DAEMON_NAME}
+        fi
+        if [ -n "`pidof ${DAEMON_NAME}`" ] ; then
+            echo "FAIL"
+            RETVAL=${NOT_RUNNING}            
+        else
+            echo "OK"
+        fi
+        rm -f ${PIDFILE}
+        ;;
+
+    restart)
+        $0 stop
+        $0 start
+        ;;
+
+    status)
+        pid=`pidof ${DAEMON_NAME}`
+        RETVAL=$?
+        if [ ${RETVAL} -eq 0 ] ; then
+            echo "${DAEMON_NAME} is running"
+        else
+            echo "${DAEMON_NAME} is NOT running"
+            RETVAL=${NOT_RUNNING}
+        fi
+        ;;
+
+    condrestart)
+        $0 restart
+        ;;
+
+    *)
+        echo "usage: $0 { start | stop | status | restart | condrestart | status }"
+        ;;
+esac
+
+exit ${RETVAL}

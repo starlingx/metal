@@ -1,0 +1,16 @@
+[Unit]
+Description=Titanium Cloud Guest Agent
+After=network.target syslog.service
+
+[Service]
+Type=forking
+ExecStart=/etc/rc.d/init.d/guestAgent start
+ExecStop=/etc/rc.d/init.d/guestAgent stop
+ExecReload=/etc/rc.d/init.d/guestAgent reload
+PIDFile=/var/run/guestAgent.pid
+
+Restart=no
+
+[Install]
+WantedBy=multi-user.target
+

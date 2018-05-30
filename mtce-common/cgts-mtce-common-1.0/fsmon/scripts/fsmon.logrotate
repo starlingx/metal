@@ -1,0 +1,15 @@
+#daily
+nodateext
+
+/var/log/fsmond.log
+{
+    size 10M
+    start 1
+    missingok
+    rotate 20
+    compress
+    sharedscripts
+    postrotate
+        systemctl reload syslog-ng > /dev/null 2>&1 || true
+    endscript
+}

@@ -1,0 +1,13 @@
+[Unit]
+Description=Titanium Cloud Nova Init
+After=network.target config.service
+Before=goenabled-compute.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/etc/init.d/nova-init start
+ExecStop=/etc/init.d/nova-init stop
+
+[Install]
+WantedBy=multi-user.target

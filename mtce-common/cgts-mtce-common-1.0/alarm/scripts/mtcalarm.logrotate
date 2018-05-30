@@ -1,0 +1,17 @@
+#daily
+nodateext
+start 1
+compress
+copytruncate
+notifempty
+missingok
+
+/var/log/mtcalarmd.log
+{
+    size 10M
+    rotate 20
+    sharedscripts
+    postrotate
+        systemctl reload syslog-ng > /dev/null 2>&1 || true
+    endscript
+}

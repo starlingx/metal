@@ -1,0 +1,4 @@
+SRC_DIR=$CGCS_BASE/mwa-beas/mtce-control/cgts-mtce-control-1.0/scripts
+COPY_LIST="$SRC_DIR/* \
+           $PKG_BASE/LICENSE"
+TIS_PATCH_VER=4

@@ -1,0 +1,442 @@
+#!/bin/sh
+#
+# Copyright (c) 2013-2017 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+#
+# Support: www.windriver.com
+#
+# Purpose: This resource agent manages 
+#
+#     .... the Titanium Cloud Controller Maintenance Daemon
+#
+# RA Spec:
+#
+# http://www.opencf.org/cgi-bin/viewcvs.cgi/specs/ra/resource-agent-api.txt?rev=HEAD
+#
+#######################################################################
+# Initialization:
+
+: ${OCF_FUNCTIONS_DIR=${OCF_ROOT}/lib/heartbeat}
+. ${OCF_FUNCTIONS_DIR}/ocf-shellfuncs
+
+
+#######################################################################
+
+# Fill in some defaults if no values are specified
+OCF_RESKEY_binary_default="guestAgent"
+OCF_RESKEY_config_default="/etc/mtc/guestAgent.ini"
+OCF_RESKEY_dbg_default="false"
+OCF_RESKEY_mode_default="normal"
+OCF_RESKEY_user_default="admin"
+OCF_RESKEY_pid_default="/var/run/guestAgent.pid"
+
+
+: ${OCF_RESKEY_binary=${OCF_RESKEY_binary_default}}
+: ${OCF_RESKEY_config=${OCF_RESKEY_config_default}}
+: ${OCF_RESKEY_dbg=${OCF_RESKEY_dbg_default}}
+: ${OCF_RESKEY_mode=${OCF_RESKEY_mode_default}}
+: ${OCF_RESKEY_user=${OCF_RESKEY_user_default}}
+: ${OCF_RESKEY_pid=${OCF_RESKEY_pid_default}}
+
+mydaemon="/usr/local/bin/${OCF_RESKEY_binary}"
+statusfile="/var/run/${OCF_RESKEY_binary}.info"
+
+#######################################################################
+
+usage() {
+    cat <<UEND
+
+usage: $0 (start|stop|reload|status|monitor|validate-all|meta-data)
+
+$0 manages the Platform's Maintenance command and communication to compute server guest services.
+
+   The 'start' .....  operation starts the guestAgent service daemon.
+   The 'stop' ......  operation stops the guestAgent service daemon.
+   The 'reload' ....  operation stops and then starts the guestAgent service daemon.
+   The 'status' ....  operation checks the status of the guestAgent service daemon.
+   The 'monitor' ...  operation indicates the in-service status of the guestAgent service daemon.
+   The 'validate-all' operation reports whether the parameters are valid.
+   The 'meta-data' .  operation reports the guestAgent's meta-data information.
+
+UEND
+}
+
+#######################################################################
+
+meta_data() {
+   if [ ${OCF_RESKEY_dbg} = "true" ] ; then
+        ocf_log info "guestAgent:meta_data"
+   fi
+
+cat <<END
+<?xml version="1.0"?>
+<!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
+<resource-agent name="guestAgent">
+<version>1.0</version>
+
+<longdesc lang="en">
+This 'guestAgent' is an OCF Compliant Resource Agent that manages start, stop and in-
+service monitoring of Maintenance's guestAgent daemon on Wind River's Titanium Cloud.
+</longdesc>
+
+<shortdesc lang="en">
+Manages the Titanium Cloud's Maintenance guestAgent service daemon.
+</shortdesc>
+
+
+<parameters>
+
+<parameter name="mode" unique="0" required="0">
+<longdesc lang="en">
+mode = normal  ... run maintenance daemon in 'normal' mode (default)
+mode = passive ... run maintenance daemon in 'passive' mode
+</longdesc>
+<shortdesc lang="en">Maintenance Mode Option</shortdesc>
+<content type="string" default="${OCF_RESKEY_mode_default}"/>
+</parameter>
+
+
+<parameter name="dbg" unique="0" required="0">
+<longdesc lang="en">
+dbg = false  ... info, warn and err logs sent to output stream (default) 
+dbg = true   ... Additional dbg logs are also sent to the output stream
+</longdesc>
+<shortdesc lang="en">Service Debug Control Option</shortdesc>
+<content type="boolean" default="${OCF_RESKEY_dbg_default}"/>
+</parameter>
+
+</parameters>
+
+
+<actions>
+<action name="start"        timeout="10s" />
+<action name="stop"         timeout="10s" />
+<action name="monitor"      timeout="10s" interval="300s" />
+<action name="meta-data"    timeout="10s" />
+<action name="validate-all" timeout="10s" />
+</actions>
+</resource-agent>
+END
+   return ${OCF_SUCCESS}
+}
+
+guestAgent_validate() {
+
+   if [ ${OCF_RESKEY_dbg} = "true" ] ; then
+        ocf_log info "guestAgent:validate"
+   fi
+
+    check_binary "/usr/local/bin/${OCF_RESKEY_binary}"
+    check_binary pidof
+
+    if [ ! -f ${OCF_RESKEY_config} ] ; then
+        msg="${OCF_RESKEY_binary} file missing ${OCF_RESKEY_config}"
+        ocf_log err "${msg}"
+        return ${OCF_ERR_CONFIGURED}
+    fi
+
+    return ${OCF_SUCCESS}
+}
+
+guestAgent_status () {
+
+    proc="guestAgent:status"  
+    if [ ${OCF_RESKEY_dbg} = "true" ] ; then
+        ocf_log info "guestAgent:status"
+    fi
+
+    # remove the status file before we request a new
+    rm -f ${statusfile}
+
+    # Verify the pid file exists as part of status
+    for ((loop=0;loop<3;loop++)) {
+        if [ -f ${OCF_RESKEY_pid} ] ; then
+            break
+        else
+            sleep 1
+        fi
+    }
+
+    # See if the daemon is running
+    pid=`cat ${OCF_RESKEY_pid}`
+    kill -0 $pid 2> /dev/null
+    if [ $? -eq 0 ] ; then
+
+        log_sig="${OCF_RESKEY_binary} In-Service Active Monitor Test"
+
+        # Ask the daemon to produce status
+        ocf_run kill -s USR1 $pid
+
+        # Wait for the response
+        for ((loop=0;loop<10;loop++)) {
+            sleep 1
+            if [ -f ${statusfile} ] ; then
+
+                ocf_log info "${log_sig} Passed ($loop)"
+                return ${OCF_SUCCESS}
+
+            elif [ $loop -eq 5 ] ; then
+
+                # send the signal again
+                ocf_run kill -s USR1 $pid
+
+                pid_stat=`cat /proc/${pid}/stat`
+                ocf_log notice "${log_sig} is slow to respond"
+                ocf_log notice "$pid_stat"
+
+            elif [ $loop -eq 8 ] ; then
+
+                pid_stat=`cat /proc/${pid}/stat`
+                ocf_log warn "${log_sig} is very slow to respond"
+                ocf_log warn "$pid_stat"
+
+            fi
+        }
+        log_procfs
+        ocf_log err "${log_sig} Failed"
+        return ${OCF_ERR_GENERIC}
+    fi
+    return ${OCF_NOT_RUNNING}
+}
+
+guestAgent_monitor () {
+
+    proc="guestAgent:monitor"
+    if [ ${OCF_RESKEY_dbg} = "true" ] ; then
+        ocf_log info "${proc}"
+    fi
+
+    # Uncomment if you want the monitor function to force-pass
+    # return ${OCF_SUCCESS}
+
+    pid=`cat ${OCF_RESKEY_pid}`
+    kill -0 $pid 2> /dev/null
+    if [ $? -ne 0 ] ; then
+        if [ ${OCF_RESKEY_dbg} = "true" ] ; then
+            ocf_log info "${proc} called while ${OCF_RESKEY_binary} not running."
+        fi
+        return ${OCF_NOT_RUNNING}
+    fi
+
+    guestAgent_status
+    return $?
+}
+
+
+guestAgent_start () {
+
+    local rc
+
+    start_proc="guestAgent:start"
+    if [ ${OCF_RESKEY_dbg} = "true" ] ; then
+        ocf_log info "${start_proc}"
+    fi
+
+    # Uncomment if you want the start function to force-pass without starting
+    # return ${OCF_SUCCESS}
+
+    # If running then issue a ping test
+    pid=`cat ${OCF_RESKEY_pid}`
+    kill -0 $pid 2> /dev/null
+    if [ $? -eq 0 ] ; then
+        guestAgent_status
+        rc=$?
+        if [ $rc -ne ${OCF_SUCCESS} ] ; then
+            msg="${start_proc} ping test failed rc=${rc}"
+            ocf_log err "${msg}"
+            guestAgent_stop
+        else 
+            # Spec says to return success if process is already running for start
+            pid=`cat ${OCF_RESKEY_pid}`
+            kill -0 $pid 2> /dev/null
+            if [ $? -eq 0 ] ; then
+                ocf_log info "${start_proc} called while ${OCF_RESKEY_binary} is already running"
+                return ${OCF_SUCCESS}
+            fi
+        fi
+    fi
+
+    # should not be running now or error
+    pid=`cat ${OCF_RESKEY_pid}`
+    kill -0 $pid 2> /dev/null
+    if [ $? -eq 0 ] ; then
+        msg="${start_proc} cannot kill off existing instance of ${OCF_RESKEY_binary}"
+        ocf_log err "${msg}"
+        return ${OCF_RUNNING_MASTER}
+    fi
+
+    rm -f ${statusfile}
+
+    # default PID to null
+    pid=""
+
+    # Try to Start the daemon
+    ${mydaemon}
+    rc=$?
+
+    # verify it was started and set return code appropriately
+    if [ $rc -eq ${OCF_SUCCESS} ] ; then
+        # Verify the pid file exists as part of status
+        for ((loop=0;loop<3;loop++)) {
+            if [ -f ${OCF_RESKEY_pid} ] ; then
+                break
+            else
+                ocf_log info "${start_proc} waiting ... loop=${loop}"
+                sleep 1
+            fi
+        }
+
+        pid=`cat ${OCF_RESKEY_pid}`
+        # ocf_log info "PID:$pid"
+        kill -0 $pid 2> /dev/null
+        if [ $? -ne 0 ] ; then
+            rc=${OCF_FAILED_MASTER}
+        else
+            if [ ! -f ${statusfile} ] ; then
+               ocf_log info "guestAgent: Startup Health Test Failed - missing info"
+               rc = ${OCF_ERR_GENERIC}
+            fi
+        fi
+    else
+        ocf_log info "${start_proc} failed ${mydaemon} daemon rc=${rc}"
+        rc = ${OCF_ERR_GENERIC}
+    fi
+
+    # Record success or failure and return status
+    if [ ${rc} -eq $OCF_SUCCESS ] ; then
+        msg="${start_proc}ed pid=${pid}"
+        ocf_log info "${msg}"
+    else
+        msg="${start_proc} failed rc=${rc}"
+        ocf_log err "${msg}"
+        rc=${OCF_NOT_RUNNING}
+    fi
+    return $rc
+}
+
+guestAgent_confirm_stop () {
+
+    proc="guestAgent:confirm_stop"
+    ocf_log info "${proc}"
+
+    pid=`pidof ${OCF_RESKEY_binary}`
+    kill -0 ${pid} 2> /dev/null
+    if [ $? -eq 0 ] ; then
+        ocf_log info "${proc} 'kill -9 ${pid}'"
+        kill -9 ${pid}
+        ocf_log info "${proc}ed (by emergency kill -9 ${pid})"
+        sleep 1
+    fi
+    rm -f ${OCF_RESKEY_pid}
+}
+
+guestAgent_stop () {
+
+    proc="guestAgent:stop"
+
+    # See if the process is running by pidfile
+
+    pid=`pidof ${OCF_RESKEY_binary}`
+    ocf_log info "${proc} PID:${pid}"
+    kill -0 ${pid} 2> /dev/null
+    if [ $? -ne 0 ] ; then
+        ocf_log info "${proc} called while already stopped (no process)"
+        guestAgent_confirm_stop
+        return ${OCF_SUCCESS}
+    fi 
+
+    MAX=3
+    for ((loop=0;loop<$MAX;loop++)) {
+
+        # verify stop with pidfile 
+        if [ -f ${OCF_RESKEY_pid} ] ; then
+
+            pid=`cat ${OCF_RESKEY_pid}`
+
+            # if pid file is gone we are done
+            if [ ${pid} = "" ] ; then
+                ocf_log info "${proc}ped (by -int)"
+                break
+
+            # if pidfile is empty then kill by -int
+            else
+
+                kill -0 ${pid} 2> /dev/null
+                if [ $? -ne 0 ] ; then
+                    ocf_log info "${proc}ped (by pid)"
+                    break
+                else
+                    ocf_log info "${proc}ping (by -int - loop:${loop})"
+                    kill -int ${pid}
+                    sleep 1
+                fi
+            fi
+        fi
+    }
+    guestAgent_confirm_stop
+    return ${OCF_SUCCESS}
+}
+
+guestAgent_reload () {
+
+    local rc
+
+    proc="guestAgent:reload"
+    if [ ${OCF_RESKEY_dbg} = "true" ] ; then
+        ocf_log info "${proc}"
+    fi
+
+    guestAgent_stop
+    rc=$?
+    if [ $rc -eq ${OCF_SUCCESS} ] ; then
+        #sleep 1
+        guestAgent_start
+        rc=$?
+        if [ $rc -eq ${OCF_SUCCESS} ] ; then
+            msg="${proc}ed"
+            ocf_log info "${mgs}"
+        fi
+    fi
+
+    if [ ${rc} -ne ${OCF_SUCCESS} ] ; then
+        msg="${OCF_RESKEY_binary}: failed to restart rc=${rc}"
+        ocf_log info "${mgs}"
+    fi
+
+    return ${rc}
+}
+
+case ${__OCF_ACTION} in
+    meta-data)   meta_data
+                 exit ${OCF_SUCCESS}
+                 ;;
+    usage|help)  usage
+                 exit ${OCF_SUCCESS}
+                 ;;
+esac
+
+ocf_log info "guestAgent:${__OCF_ACTION} action"
+
+# Anything except meta-data and help must pass validation
+guestAgent_validate || exit $?
+
+case ${__OCF_ACTION} in
+    start)        guestAgent_start
+                  ;;
+    stop)         guestAgent_stop
+                  ;;
+    status)       guestAgent_status
+                  ;;
+    reload)       guestAgent_reload
+                  ;;
+    monitor)      guestAgent_monitor
+                  ;;
+    validate-all) guestAgent_validate
+                  ;;
+    *)            usage
+                  exit ${OCF_ERR_UNIMPLEMENTED}
+                  ;;
+esac

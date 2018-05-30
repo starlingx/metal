@@ -1,0 +1,24 @@
+[Unit]
+Description=Titanium Cloud Maintenance Process Monitor
+After=config.service
+# The following thirdparty service files are not modified by Titanium Cloud,
+# so add "After" clauses here rather than "Before=pmon.service" to those
+After=sshd.service ntpd.service acpid.service syslog-ng.service
+Before=hostw.service
+
+[Service]
+Type=forking
+ExecStart=/etc/rc.d/init.d/pmon start
+ExecStop=/etc/rc.d/init.d/pmon stop
+ExecReload=/etc/rc.d/init.d/pmon reload
+PIDFile=/var/run/pmond.pid
+KillMode=process
+
+# Failure handling
+TimeoutStartSec=10s
+TimeoutStopSec=10s
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

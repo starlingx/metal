@@ -1,0 +1,200 @@
+#! /bin/bash
+#
+# Copyright (c) 2015-2017 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+# Linux Standard Base (LSB) Error Codes
+SUCCESS=0
+GENERIC_ERROR=1
+INVALID_ARGS=2
+
+NOVA_CLEANUP_TAG=${NOVA_CLEANUP_TAG:-"NOVA_CLEANUP"}
+
+
+################################################################################
+# Log message to user.log
+################################################################################
+function log
+{
+    logger -p local1.info -t ${NOVA_CLEANUP_TAG} $@
+}
+
+
+################################################################################
+# Exit abnormally
+################################################################################
+function exit_with_error
+{
+    touch ${NOVA_CLEANUP_FAIL_FILE}
+    exit ${GENERIC_ERROR}
+}
+
+
+################################################################################
+# Run Nova-Cleanup
+################################################################################
+nova_clean_up()
+{
+    if [ -f ${NOVA_CLEANUP_FAIL_FILE} ]
+    then
+        rm -f ${NOVA_CLEANUP_FAIL_FILE}
+    fi
+
+    if [ ! -f "/etc/platform/.initial_config_complete" ]
+    then
+        log "Initial configuration is not complete, nothing to do"
+        return
+    fi
+
+    HOST_NAME=$(hostname)
+
+    timeout --signal KILL 15s /usr/bin/nfv-notify -n controller -p 30004 \
+        -t booting -d "{\"hostname\": \"${HOST_NAME}\"}"  > /dev/null 2>&1
+    RET=$?
+    if [ ${RET} -eq 0 ]
+    then
+        # Controller is done cleaning up
+        log "Notified controller, controller is done cleaning up"
+
+    elif [ ${RET} -eq 254 ]
+    then
+        # Controller notified, but is not yet done cleaning up
+        log "Notified controller, controller is not done cleaning up"
+        touch  ${NOVA_CLEANUP_FAIL_FILE}
+
+    else
+        log "Failed to notify controller, error=${RET}"
+        touch  ${NOVA_CLEANUP_FAIL_FILE}
+    fi
+}
+
+
+################################################################################
+# Main Entry
+################################################################################
+NOVA_RUN="/var/run/nova"
+
+NOVA_CLEANUP_FAIL_FILE="${NOVA_RUN}/.nova_cleanup_fail"
+NOVA_CLEANUP_DONE_FILE="${NOVA_RUN}/.nova_cleanup_done"
+
+NOVA_COMPUTE_PID_FILE="${NOVA_RUN}/nova-compute.pid"
+NOVA_CLEANUP_PID_FILE="${NOVA_RUN}/nova-cleanup.pid"
+
+NOVA_COMPUTE_PMOND_TARGET="/etc/nova/nova-compute.conf"
+NOVA_COMPUTE_PMOND_SYMLINK="/etc/pmon.d/nova-compute.conf"
+
+NOVA_CLEANUP_PMOND_TARGET="/etc/nova/nova-cleanup.conf"
+NOVA_CLEANUP_PMOND_SYMLINK="/etc/pmon.d/nova-cleanup.conf"
+
+case "$1" in
+    start)
+        log "Start"
+
+        mkdir -p ${NOVA_RUN}
+        chown nova:root ${NOVA_RUN}
+
+        echo "$$" > ${NOVA_CLEANUP_PID_FILE}
+        if [ -f /etc/centos-release -a ! -L ${NOVA_COMPUTE_PID_FILE} ]; then
+            ln -sf /sys/fs/cgroup/systemd/system.slice/nova-compute.service/tasks ${NOVA_COMPUTE_PID_FILE}
+        fi
+        sleep 5
+
+        # Try for CONNECT_DELAY_SECS seconds to reach the controller
+        MAX_CONNECT_WAIT=$((SECONDS+240))
+
+        FOUND=0
+        while [ ${SECONDS} -lt ${MAX_CONNECT_WAIT} ]
+        do
+            ping -c 1 controller > /dev/null 2>&1 ||  ping6 -c 1 controller > /dev/null 2>&1
+            if [ $? -eq 0 ]
+            then
+                log "Connected to controller"
+                FOUND=1
+                break
+            fi
+            sleep 1
+        done
+
+        if [ ${FOUND} -eq 0 ] 
+        then
+            # Controller is not yet available, just exit
+            log "Failed to connect to the controller"
+            exit ${GENERIC_ERROR}
+        fi
+
+        log "Connected to controller, starting cleanup"
+        while :
+        do
+            nova_clean_up
+            if [ ! -f ${NOVA_CLEANUP_FAIL_FILE} ] 
+            then
+                log "Cleanup complete"
+
+                if ! [ -e $NOVA_COMPUTE_PMOND_SYMLINK ]
+                then
+                    ln -s $NOVA_COMPUTE_PMOND_TARGET $NOVA_COMPUTE_PMOND_SYMLINK
+                    if [ $? -ne 0 ]
+                    then
+                        log "Failed to create nova-compute symbolic link"
+                        exit ${GENERIC_ERROR}
+                    fi
+                fi
+                
+                if [ -e $NOVA_CLEANUP_PMOND_SYMLINK ]
+                then
+                    rm $NOVA_CLEANUP_PMOND_SYMLINK
+                fi
+
+                log "PMOND symlinks setup complete"
+
+                touch ${NOVA_CLEANUP_DONE_FILE}
+
+                break
+            fi
+
+            log "Sleeping for 10 seconds"
+            sleep 10
+        done
+
+        # Start Nova-Compute here to speed up the recovery of the 
+        # compute, otherwise we will have to wait for pmond to start it.
+        log "Nova-Compute restart"
+
+        MAX_PID_WAIT=$((SECONDS+10))
+        timeout --signal KILL 10s /etc/init.d/nova-compute restart > /dev/null 2>&1
+
+        while ! [ -f ${NOVA_COMPUTE_PID_FILE} ]
+        do
+            log "Waiting for Nova-Compute to start"
+
+            if [ ${SECONDS} -gt ${MAX_PID_WAIT} ]
+            then
+                log "Timeout waiting for Nova-Compute pid"
+                exit ${GENERIC_ERROR}
+            fi
+            sleep 1
+        done
+
+        NOVA_COMPUTE_PID=$(head -1 ${NOVA_COMPUTE_PID_FILE})
+        log "Nova-Compute pid ${NOVA_COMPUTE_PID} started"
+
+        if [ -f ${NOVA_CLEANUP_PID_FILE} ]
+        then
+            rm ${NOVA_CLEANUP_PID_FILE}
+        fi
+
+        log "Finished"
+        ;;
+
+    stop)
+        ;;
+
+    *)
+        echo "Usage: $0 {start|stop}"
+        exit ${INVALID_ARGS}
+        ;;
+esac
+
+exit ${SUCCESS}

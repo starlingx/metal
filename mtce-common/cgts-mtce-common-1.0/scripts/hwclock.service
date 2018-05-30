@@ -1,0 +1,13 @@
+[Unit]
+Description=hwclock setup
+After=network.target acpid.service
+Before=config.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/etc/init.d/hwclock.sh start
+ExecStop=/etc/init.d/hwclock.sh stop
+
+[Install]
+WantedBy=multi-user.target

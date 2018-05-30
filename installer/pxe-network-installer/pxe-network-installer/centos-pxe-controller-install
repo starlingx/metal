@@ -1,0 +1,27 @@
+SERIAL 0 115200
+TIMEOUT 50
+DEFAULT menu.c32
+
+# Menu Configuration
+MENU WIDTH 80
+MENU MARGIN 10
+MENU PASSWORDMARGIN 3
+MENU ROWS 12
+MENU TABMSGROW 18
+MENU CMDLINEROW 18
+MENU ENDROW 24
+MENU PASSWORDROW 11
+MENU TIMEOUTROW 20
+
+PROMPT 0
+NOESCAPE 1
+NOCOMPLETE 1
+ALLOWOPTIONS 0
+
+LABEL 1
+  MENU LABEL ^1) Standard Controller
+  MENU DEFAULT
+  KERNEL rel-xxxSW_VERSIONxxx/installer-bzImage
+  APPEND initrd=rel-xxxSW_VERSIONxxx/installer-initrd bootifonly=1 devfs=nomount inst.repo=http://pxecontroller/feed/rel-xxxSW_VERSIONxxx/ inst.ks=http://pxecontroller/feed/rel-xxxSW_VERSIONxxx/net_controller_ks.cfg usbcore.autosuspend=-1 biosdevname=0 rd.net.timeout.dhcp=120 xxxAPPEND_OPTIONSxxx
+  IPAPPEND 2
+

@@ -1,0 +1,13 @@
+[Unit]
+Description=Titanium Cloud Maintenance Storage Goenable Ready
+After=config.service
+Before=pmon.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/etc/init.d/goenabledStorage start
+ExecStop=/etc/init.d/goenabledStorage stop
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,47 @@
+#!/bin/bash
+
+# Copyright (c) 2013-2016 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+#
+# This utility is primarily used by no reboot patching for process restart
+#
+# This script sends a jason string containing the the restart command
+# and ${1} as the specified process name to pmond over the loopback
+# interface on port 2117
+#
+# Linux Standard Base (LSB) Error Codes
+RETVAL=0
+GENERIC_ERROR=1
+INVALID_ARGS=2
+UNSUPPORTED_FEATURE=3
+NOT_INSTALLED=5
+NOT_RUNNING=7
+
+PROTOCOL="UDP4-DATAGRAM"
+ADDRESS="127.0.0.1"
+
+socat_exec=`(which socat) 2> /dev/null`
+
+process=${1}
+
+if [ -z ${socat_exec} ] ; then
+    logger "Error: $0 cannot find socat exec"
+    exit ${NOT_INSTALLED}
+fi
+
+if [ ! -z ${process} ] ; then
+    # hostwd is not a pmon monitored process
+    if [ "${process}" == "hostwd" ] ; then
+        systemctl restart hostw
+    else
+        port=$(cat /etc/mtc/pmond.conf | awk '{if ($1 == "pmon_cmd_port") { print $3; }}')
+        echo "{\"command\":\"restart\", \"process\":\"${process}\"}" | socat - ${PROTOCOL}:${ADDRESS}:${port}
+    fi
+else
+    logger "Error: $0 called with no process specified"
+    RETVAL=${INVALID_ARGS}
+fi
+
+exit ${RETVAL} 

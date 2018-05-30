@@ -1,0 +1,555 @@
+#!/bin/sh
+#
+# Copyright (c) 2013-2017 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+#
+# Support: www.windriver.com
+#
+# Purpose: This resource agent manages 
+#
+#     .... the Titanium Cloud Host Heartbeat Service Daemon
+#
+# RA Spec:
+#
+# http://www.opencf.org/cgi-bin/viewcvs.cgi/specs/ra/resource-agent-api.txt?rev=HEAD
+#
+#######################################################################
+# Initialization:
+
+: ${OCF_FUNCTIONS_DIR=${OCF_ROOT}/lib/heartbeat}
+. ${OCF_FUNCTIONS_DIR}/ocf-shellfuncs
+
+
+#######################################################################
+
+# Fill in some defaults if no values are specified
+OCF_RESKEY_binary_default="hbsAgent"
+OCF_RESKEY_config_default="/etc/mtc.ini"
+OCF_RESKEY_dbg_default="false"
+OCF_RESKEY_logging_default="true"
+OCF_RESKEY_user_default="admin"
+OCF_RESKEY_pid_default="/var/run/hbsAgent.pid"
+OCF_RESKEY_state_default="active"
+
+
+: ${OCF_RESKEY_binary=${OCF_RESKEY_binary_default}}
+: ${OCF_RESKEY_config=${OCF_RESKEY_config_default}}
+: ${OCF_RESKEY_logging=${OCF_RESKEY_logging_default}}
+: ${OCF_RESKEY_dbg=${OCF_RESKEY_dbg_default}}
+: ${OCF_RESKEY_user=${OCF_RESKEY_user_default}}
+: ${OCF_RESKEY_pid=${OCF_RESKEY_pid_default}}
+: ${OCF_RESKEY_state=${OCF_RESKEY_state_default}}
+
+mydaemon="/usr/local/bin/${OCF_RESKEY_binary}"
+statusfile="/var/run/${OCF_RESKEY_binary}.info"
+virtualhostfile="/var/run/virtual.host"
+facterexec="/usr/bin/facter"
+
+#######################################################################
+
+usage() {
+    cat <<UEND
+
+usage: $0 (start|stop|reload|status|monitor|validate-all|meta-data)
+
+$0 manages the Platform's Host Heartbeat (hbsAgent) process as an HA resource
+
+   The 'start' .....  operation starts the heartbeat service in the active state.
+   The 'stop' ......  operation stops the heartbeat service.
+   The 'reload' ....  operation stops and then starts the heartbeat service.
+   The 'status' ....  operation checks the status of the heartbeat service.
+   The 'monitor' .... operation indicates the in-service status of the heartbeat service.
+   The 'validate-all' operation reports whether the parameters are valid.
+   The 'meta-data' .. operation reports the hbsAgent's meta-data information.
+
+UEND
+}
+
+#######################################################################
+
+meta_data() {
+   if [ ${OCF_RESKEY_dbg} = "true" ] ; then
+        ocf_log info "hbsAgent:meta_data"
+   fi
+
+cat <<END
+<?xml version="1.0"?>
+<!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
+<resource-agent name="hbsAgent">
+<version>0.7</version>
+
+<longdesc lang="en">
+This 'hbsAgent_ra' is an OCF Compliant Resource Agent that manages start, stop
+and in-service monitoring of the Host Heartbeat Agent Process on Wind River's
+Titanium Cloud in an active mode.
+</longdesc>
+
+<shortdesc lang="en">
+Manages the Titanium Cloud's Heartbeat (hbsAgent) Daemon.
+</shortdesc>
+
+
+<parameters>
+
+<parameter name="state" unique="0" required="1">
+<longdesc lang="en">
+state = standby ... run heartbeat daemon in 'standby' mode (default)
+state = active  ... run heartbeat daemon in 'active' mode
+</longdesc>
+<shortdesc lang="en">Heartbeat Activity State Option</shortdesc>
+<content type="string" default="${OCF_RESKEY_state_default}"/>
+</parameter>
+
+
+<parameter name="logging" unique="0" required="1">
+<longdesc lang="en">
+This option is used to direct the hbsAgent dameon log stream.
+
+logging = true  ... /var/log/hbsAgent.log  (default)
+logging = false ... /dev/null
+
+See also debug option which sets the verbosity of logging.
+</longdesc>
+<shortdesc lang="en">Service Logging Control Option</shortdesc>
+<content type="boolean" default="${OCF_RESKEY_logging_default}"/>
+</parameter>
+
+
+<parameter name="dbg" unique="0" required="1">
+<longdesc lang="en">
+dbg = false  ... info, warn and err logs sent to output stream (default) 
+dbg = true   ... Additional debug logs are also sent to the output stream
+</longdesc>
+<shortdesc lang="en">Service Debug Control Option</shortdesc>
+<content type="boolean" default="${OCF_RESKEY_dbg_default}"/>
+</parameter>
+
+</parameters>
+
+
+<actions>
+<action name="start"        timeout="10s" />
+<action name="stop"         timeout="10s" />
+<action name="monitor"      timeout="10s" interval="300s" />
+<action name="meta-data"    timeout="10s" />
+<action name="validate-all" timeout="10s" />
+</actions>
+</resource-agent>
+END
+   return ${OCF_SUCCESS}
+}
+
+hbsAgent_validate() {
+
+    if [ ${OCF_RESKEY_dbg} = "true" ] ; then
+        ocf_log info "hbsAgent:validate"  
+    fi
+
+    check_binary "/usr/local/bin/${OCF_RESKEY_binary}"
+    check_binary "/usr/local/bin/mtcAgent"
+    check_binary pidof
+
+    if [ ! -f ${OCF_RESKEY_config} ] ; then
+        msg="${OCF_RESKEY_binary} ini file missing ${OCF_RESKEY_config}"
+        ocf_log err "${msg}"
+        return ${OCF_ERR_CONFIGURED}
+    fi
+
+    return ${OCF_SUCCESS}
+}
+
+hbsAgent_status () {
+
+    proc="hbsAgent:status"
+    if [ ${OCF_RESKEY_dbg} = "true" ] ; then
+        ocf_log info "${proc}"
+    fi
+
+    # remove the status file before we request a new
+    rm -f ${statusfile}
+
+    # Verify the pid file exists as part of status
+    for ((loop=0;loop<3;loop++)) {
+        if [ -f ${OCF_RESKEY_pid_default} ] ; then
+            break
+        else
+            sleep 1
+        fi
+    }
+
+    # See if the daemon is running
+    if [ -e ${OCF_RESKEY_pid} ] ; then
+
+        # get the pif from the pidfile
+        pid=`cat ${OCF_RESKEY_pid}`
+
+        # get the pid list
+        pids=`pidof ${OCF_RESKEY_binary}`
+
+        # get the number of pids as 'pidn'
+        pidn=`pidof ${OCF_RESKEY_binary} | wc -w`
+
+        # check for a pid list of more than one of a pid that
+        # does not match what is in the pidfile.
+        if [ "${pidn}" != "1" -o "${pids}" != "${pid}" ] ; then
+
+            # create a warning log indicating the actions about to be taken
+            ocf_log warn "${proc} Warning ; pid mismatch [${pid}:${pids}:${pidn}] ; killing those not in pidfile"
+
+            # handle the case where there are multiple processes running
+            if [ ${pidn} -gt 1 ] ; then
+
+                # loop over the list and kill all the processes whose
+                # pid does not match the pid in the pidfile.
+                ocf_log info "${proc} PID: ${pids}"
+                pidlist=(${pids})
+                for p in "${pidlist[@]}" ; do
+                    if [ "${p}" != "${pid}" ] ; then
+                        ocf_log info "${proc} killing duplicate instance [${p}]"
+                        kill -9 ${p}
+                    else
+                        ocf_log info "${proc} keeping pidfile   instance [${p}]"
+                    fi
+                done
+            else
+                # handle th case where the running pid and the pidfile are a mismatch
+                hbsAgent_stop
+                return ${OCF_NOT_RUNNING}
+            fi
+        fi
+    else
+        # check to see if the process is running without a PIDfile.
+        # Any monitored process that is running with no pidfile should
+        # be killed
+        pid=`pidof ${OCF_RESKEY_binary}`
+        if [ "$pid" != "" ] ; then
+            kill -0 ${pid} 2> /dev/null
+            if [ $? -eq 0 ] ; then
+                # if there is no pidfile but the process is running
+                # then proceed to kill all that are running and state
+                # there is no process running. This handles both the
+                # active and inactive casees
+                ocf_log err "${proc} is running [$pid] with no pidfile ; force killing all"
+                hbsAgent_stop
+            fi
+        fi
+        # this without the above 'if' taken is the typical inactive case success path
+        return ${OCF_NOT_RUNNING}
+    fi
+
+    kill -0 $pid 2> /dev/null
+    if [ $? -eq 0 ] ; then
+
+        log_sig="${OCF_RESKEY_binary} [$pid] In-Service Active Monitor Test"
+
+        # Ask the daemon to produce status
+        ocf_run kill -s USR1 $pid
+
+        # Wait for the response
+        for ((loop=0;loop<10;loop++)) {
+            sleep 1
+            if [ -f ${statusfile} ] ; then
+
+                ocf_log info "${log_sig} Passed ($loop)"
+                return ${OCF_SUCCESS}
+
+            elif [ $loop -eq 5 ] ; then
+
+                # send the signal again
+                ocf_run kill -s USR1 $pid
+
+                pid_stat=`cat /proc/${pid}/stat`
+                ocf_log notice "${log_sig} is slow to respond"
+                ocf_log notice "$pid_stat"
+
+            elif [ $loop -eq 8 ] ; then
+
+                pid_stat=`cat /proc/${pid}/stat`
+                ocf_log warn "${log_sig} is very slow to respond"
+                ocf_log warn "$pid_stat"
+
+            fi
+        }
+        log_procfs
+        ocf_log err "${log_sig} Failed"
+        return ${OCF_ERR_GENERIC}
+    fi
+    return ${OCF_NOT_RUNNING}
+}
+
+hbsAgent_monitor () {
+
+    proc="hbsAgent:monitor"
+
+    if [ ${OCF_RESKEY_dbg} = "true" ] ; then
+        ocf_log info "${proc}"
+    fi
+
+    # Uncomment if you want the monitor function to force-pass
+    # return ${OCF_SUCCESS}
+
+    if [ -e ${OCF_RESKEY_pid} ] ; then
+        pid=`cat ${OCF_RESKEY_pid}`
+        if [ "$pid" != "" ] ; then
+            kill -0 $pid 2> /dev/null
+            if [ $? -ne 0 ] ; then
+                if [ ${OCF_RESKEY_dbg} = "true" ] ; then
+                    ocf_log info "${proc} called while ${OCF_RESKEY_binary} not running."
+                fi
+                return ${OCF_NOT_RUNNING}
+            fi
+        fi
+    fi
+
+    hbsAgent_status
+    return $?
+}
+
+hbsAgent_start () {
+
+    local rc
+
+    start_proc="hbsAgent:start"
+    if [ ${OCF_RESKEY_dbg} = "true" ] ; then
+        ocf_log info "${start_proc}"
+    fi
+
+    # Uncomment if you want the start function to force-pass without starting
+    # return ${OCF_SUCCESS}
+
+    # if there is an instance running already then stop it.
+    # if it can't be stopped then return a failure.
+    pid=`pidof ${OCF_RESKEY_binary}`
+    if [ "$pid" != "" ] ; then
+        hbsAgent_stop
+        rc=$?
+        # if the stop failed then I fail the start ;
+        # not permitted to start a duplicate process
+        if [ ${rc} -ne ${OCF_SUCCESS} ] ; then
+            ocf_log info "${start_proc} failed ; was unable to stop all existing instances rc:${rc}"
+            return ${rc}
+        fi
+    fi
+
+    val=`${facterexec} is_virtual`
+    if [ ${val} = "true" ] ; then
+        echo "virtual host" > ${virtualhostfile}
+    fi
+
+    if [ ${OCF_RESKEY_state} = "active" ] ; then
+        RUN_OPT_STATE="-a"
+    else
+        RUN_OPT_STATE=""
+    fi
+
+    if [ ${OCF_RESKEY_dbg} = "true" ] ; then
+        RUN_OPT_DEBUG="-d debug"
+    else
+        RUN_OPT_DEBUG=""
+    fi
+
+    if [ ${OCF_RESKEY_logging} = "true" ] ; then
+        RUN_OPT_LOG="-l"
+    else
+        RUN_OPT_LOG=""
+    fi
+
+    ${mydaemon} ${RUN_OPT_STATE} ${RUN_OPT_LOG} ${RUN_OPT_DEBUG}
+    rc=$?
+
+    # verify it was started and set return code appropriately
+    if [ $rc -eq ${OCF_SUCCESS} ] ; then
+        for ((loop=0;loop<3;loop++)) {
+            if [ -f ${OCF_RESKEY_pid} ] ; then
+                break
+            else
+                ocf_log info "${start_proc} waiting ... loop=${loop}"
+                sleep 1
+            fi
+        }
+
+        pid=`cat ${OCF_RESKEY_pid}`
+        kill -0 $pid 2> /dev/null
+        if [ $? -ne 0 ] ; then
+            rc=${OCF_FAILED_MASTER}
+        else
+            if [ ! -f ${statusfile} ] ; then
+               ocf_log info "hbsAgent: Startup Health Test Failed - missing info"
+               rc = ${OCF_ERR_GENERIC}
+            fi
+        fi
+    else
+        ocf_log info "${start_proc} failed ${mydaemon} daemon rc=${rc}"
+        rc = ${OCF_ERR_GENERIC}
+    fi
+
+    # Record success or failure and return status
+    if [ ${rc} -eq $OCF_SUCCESS ] ; then
+        msg="${start_proc}ed pid=${pid}"
+        ocf_log info "${msg}"
+    else
+        msg="${start_proc} failed rc=${rc}"
+        ocf_log err "${msg}"
+        rc=${OCF_NOT_RUNNING}
+    fi
+    return $rc
+}
+
+hbsAgent_confirm_stop () {
+
+    proc="hbsAgent:confirm_stop"
+    if [ ${OCF_RESKEY_dbg} = "true" ] ; then
+        ocf_log info "${proc}"
+    fi
+
+    rc=0
+    pid=`pidof ${OCF_RESKEY_binary}`
+    kill -0 ${pid} 2> /dev/null
+    if [ $? -eq 0 ] ; then
+        ocf_log info "${proc} 'kill -9 ${pid}'"
+        kill -9 ${pid}
+        ocf_log info "${proc}ped (by emergency kill -9 ${pid})"
+        sleep 1
+    fi
+
+    pid=`pidof ${OCF_RESKEY_binary}`
+    kill -0 ${pid} 2> /dev/null
+    if [ $? -eq 0 ] ; then
+        msg="${start_proc} unable kill [$pid] instance of ${OCF_RESKEY_binary}"
+        ocf_log err "${msg}"
+        rc=1
+    fi
+
+    rm -f ${OCF_RESKEY_pid}
+    return $rc
+}
+
+hbsAgent_stop () {
+
+    proc="hbsAgent:stop"
+
+    # See if the process is running by pidfile
+
+    pid=`pidof ${OCF_RESKEY_binary}`
+    ocf_log info "${proc} [${pid}]"
+    kill -0 ${pid} 2> /dev/null
+    if [ $? -ne 0 ] ; then
+        ocf_log info "${proc} called while already stopped (no process)"
+        hbsAgent_confirm_stop
+        if [ $? -ne 0 ] ; then
+            return ${OCF_FAILED_MASTER}
+        else
+            return ${OCF_SUCCESS}
+        fi
+    fi
+
+    # try to kill 3 times before giving up
+    MAX=3
+    for ((loop=0;loop<$MAX;loop++)) {
+
+        # start with the pidfile
+        if [ -f ${OCF_RESKEY_pid} ] ; then
+
+            pid=`cat ${OCF_RESKEY_pid}`
+
+            # if pidfile is not empty then kill by -int
+            if [ "$pid" != "" ] ; then
+
+                kill -0 ${pid} 2> /dev/null
+                if [ $? -eq 0 ] ; then
+                    ocf_log info "${proc}ping [$pid] (by sigint on loop ${loop})"
+                    kill -int ${pid}
+                    sleep 1
+                fi
+            fi
+        fi
+
+        # break out if the process is stopped
+        pid=`pidof ${OCF_RESKEY_binary}`
+        kill -0 ${pid} 2> /dev/null
+        if [ $? -ne 0 ] ; then
+            break
+        fi
+    }
+
+    pid=`pidof ${OCF_RESKEY_binary}`
+    if [ "$pid" != "" ] ; then
+        #ocf_log info "${proc} [pid:$pid] going into confirm_stop"
+        hbsAgent_confirm_stop
+        rc=$?
+        pid=`pidof ${OCF_RESKEY_binary}`
+        #ocf_log info "${proc} [pid:$pid] coming from confirm_stop"
+        if [ rc -ne 0 ] ; then
+            return ${OCF_FAILED_MASTER}
+        else
+            return ${OCF_SUCCESS}
+        fi
+    else
+        return ${OCF_SUCCESS}
+    fi
+}
+
+hbsAgent_reload () {
+
+    local rc
+
+    proc="hbsAgent:reload"
+    if [ ${OCF_RESKEY_dbg} = "true" ] ; then
+        ocf_log info "${proc}"
+    fi
+
+    hbsAgent_stop
+    rc=$?
+    if [ $rc -eq ${OCF_SUCCESS} ] ; then
+        hbsAgent_start
+        rc=$?
+        if [ $rc -eq ${OCF_SUCCESS} ] ; then
+            msg="${proc}ed"
+            ocf_log info "${mgs}"
+        fi
+    fi
+
+    if [ ${rc} -ne ${OCF_SUCCESS} ] ; then
+        msg="${OCF_RESKEY_binary}: failed to restart rc=${rc}"
+        ocf_log info "${mgs}"
+    fi
+
+    return ${rc}
+}
+
+
+case ${__OCF_ACTION} in
+    meta-data)   meta_data
+                 exit ${OCF_SUCCESS}
+                 ;;
+    usage|help)  usage
+                 exit ${OCF_SUCCESS}
+                 ;;
+esac
+
+ocf_log info "hbsAgent:${__OCF_ACTION} action"
+
+# Anything except meta-data and help must pass validation
+hbsAgent_validate || exit $?
+
+case ${__OCF_ACTION} in
+
+    start)        hbsAgent_start
+                  ;;
+    stop)         hbsAgent_stop
+                  ;;
+    status)       hbsAgent_status
+                  ;;
+    reload)       hbsAgent_reload
+                  ;;
+    monitor)      hbsAgent_monitor
+                  ;;
+    validate-all) hbsAgent_validate
+                  ;;
+    *)            usage
+                  exit ${OCF_ERR_UNIMPLEMENTED}
+                  ;;
+esac

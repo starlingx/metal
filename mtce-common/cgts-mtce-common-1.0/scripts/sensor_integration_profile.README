@@ -1,0 +1,456 @@
+#################################################################################
+#
+# This is a sensor profile file for the following sever
+#
+# All commands are SMASH CLP commands
+#
+# The SMASH CLP Spec is here - http:/dmtf.org/standards/smash
+#
+#################################################################################
+
+[SERVER]
+
+targets  = Targets:SP:SYS
+name_cmd = show /SYS
+bmc_cmd  = show /SP
+name     = Quanta Computer
+bmc      = Quanta(TM) Embedded Lights Out Manager
+info     = show /SYS
+dump_cmd = show /SP           ; there is no dump, this just prints the bmc version
+
+#################################################################################
+#
+# A sensor profile file is ini/config format that organizes sensors in groups
+# using a heirarchy of [labels] and 'variables = value'
+#
+# [SERVER]
+#    targets
+#    name_cmd
+#    bmc_cmd
+#    name
+#    bmc
+#    dump_cmd
+#    group_types
+#
+## Detailed Explaination ...
+#
+# [SERVER]
+# dump_cmd = command to read all the sensors and server info
+# name_cmd = command to get the server name
+# bmc_cmd  = command to get the bmc name
+# name     = 'string name for the server'   ; server name if available
+# bmc      = 'string name for the bmc'      ; a string that can be queried from
+#                                             the bmc using the show command.
+# targets  = Targets:system1:map1           ; a list of SMASH command targets 
+#                                           ; delimited by :
+#
+# Example: show
+#
+#  Targets"
+#    system1"
+#    map1"
+#  Properties"
+#  Verbs"
+#    cd version exit show"
+#
+# group_types = COOLING,POWER,VOLTAGE,TEMPERATURE  ; comma delimited list of sensor type labels
+#
+# Generic commands used to pull data from the BMC
+#
+# [LOGS] - read the SEL 
+# 
+# [CMDS] - reset, power on and power off commands
+#
+#  reset = reset /SYS
+#  poweron = start /SYS
+#  poweroff = stop /SYS
+#
+# [INFO] - log board info like firmware versions, switch settings etc.
+#
+# [FIT]  - force failure of a specific sensor
+#
+#  hostname = compute-1
+#  sensor = fan1
+#  severity = critical
+#
+###############################################################################
+#
+# Next Level of Heirarch is each label in the group_types. 3 Examples are used
+#
+# [COOLING]                  ; [SERVER]:<group_types>
+#
+# groups = FANS1,FANS2       ; Here we have 2 group types FANS1 and FAN2
+#
+# [FANS1]
+#
+#   group      = server fans             ; the group name that shows in the GUI
+#   cmd        = show -a /system1/fan*   ; the smash command that reads the sensor
+#   sensortype = power                   ; or fan,temperature,voltage,etc
+#   datatype   = discrete                ; discrete or analog
+#   interval   = 100                     ; seconds
+#   sensors    = FAN1,FAN2,FAN3          ; abstract list of labels; one for each sensor
+#
+#   [FAN1]
+#     name = 
+#     cmd  = 
+#
+#   [FAN2]
+#     name = 
+#     cmd  = 
+#
+#   [FAN3]
+#     name = 
+#     cmd  = 
+#
+#  [FANS2]
+#  ... another group with same format as FANS1
+#
+#
+## sensor attributes for this group
+
+#
+#
+#
+#
+#### Next Group Type
+#
+# [POWER]
+# groups
+#
+# sensors
+# [VOLTAGE]
+# List of sensor types.
+#
+# Each group type contains one or more groups and one or more sensors.
+#
+# Here is the heirarchy model
+# - targets  - a key word list of targets delimited by ':'
+# - name     - string read from the target that represents the server
+# - bmc      - string read from the target that represents the bmc
+# - group_types[i] - list of functional group types
+#   - groups[j] - list of sensor groups within this type
+#     - group_name - list of sensor groups within this type
+#        - sensors[k] - list of sensors within this group
+#
+# Other key labels include
+#
+#
+#################################################################################
+
+# This file contains the sensor profile for the following SERVER name
+
+group_types = COOLING,POWER,TEMPERATURE,VOLTAGE
+
+# show commands for brief and detailed log dumps (if applicable)
+[LOGS]
+show_brief = na
+show_detail = na
+
+# Show commands for server information (if applicable)
+[INFO]
+cmds = 0
+
+[CMDS]
+reset = reset /SYS
+poweron = start /SYS
+poweroff = stop /SYS
+
+[FIT]
+hostname = none
+sensor = none
+severity = none
+
+##################################################################################
+# Server Power
+##################################################################################
+[POWER]
+# abstract labels for each group if this group type
+groups = POWER1
+
+[POWER1]
+# The name of the group that will show up in the GUI
+group = server power
+
+# sensor attributes for this group
+sensortype = power
+datatype   = discrete      
+interval   = 100             ; seconds
+
+# the command that will read the sensors in this group
+cmd = show /SYS/powerSupply
+
+# list of abstract labels for the sensors in this group
+sensors = PSU12,PSU1,PSU2
+
+# the individual sensors in this group
+[PSU12]
+name = PSU Redundancy
+
+[PSU1]
+name = PSU1 Status
+
+[PSU2]
+name = PSU2 Status
+
+##################################################################################
+# FAN sensor management
+##################################################################################
+[COOLING]
+# abstract labels for each group if this group type
+groups = FANS1,FANS2
+
+[FANS1]
+# The name of the group that will show up in the GUI
+group = server fans
+
+# sensor attributes for this group
+sensortype = fan
+datatype   = discrete      
+interval   = 120             ; seconds
+
+# the commands that will read the sensors in this group
+cmd = show /SYS/fan
+
+# TODO: the sensor reading rules
+ignore = na
+pass = ok
+minor = na
+major = nonCritical
+critical = critical
+
+# status output delimiter
+delimitor = =
+
+# list of abstract labels for the sensors in this group
+sensors = FANS1_1,FANS1_2,FANS1_3,FANS1_4,FANS1_5,FANS1_6,FANS1_7,FANS1_8,FANS1_9,FANS1_10,FANS1_11,FANS1_12
+
+# the individual sensors in this group
+[FANS1_1]
+name = Fan_SYS0_1
+
+[FANS1_2]
+name = Fan_SYS0_2
+
+[FANS1_3]
+name = Fan_SYS1_1
+
+[FANS1_4]
+name = Fan_SYS1_2
+
+[FANS1_5]
+name = Fan_SYS2_1
+parser_ut = 
+
+[FANS1_6]
+name = Fan_SYS2_2
+
+[FANS1_7]
+name = Fan_SYS3_1
+
+[FANS1_8]
+name = Fan_SYS3_2
+
+[FANS1_9]
+name = Fan_SYS4_1
+
+[FANS1_10]
+name = Fan_SYS4_2
+
+[FANS1_11]
+name = Fan_SYS5_1
+
+[FANS1_12]
+name = Fan_SYS5_2
+
+
+##############################
+# FANS2 Grouping
+##############################
+[FANS2]
+# The name of the group that will show up in the GUI
+group = power supply fans
+
+# sensor attributes for this group
+sensortype = fan
+datatype   = discrete      
+interval   = 120             ; seconds
+
+# the commands that will read the sensors in this group
+cmd = show /SYS/fan
+
+# TODO: the sensor reading rules
+ignore = na
+pass = ok
+minor = na
+major = nonCritical
+critical = critical
+
+# Status output delimiter
+delimitor = =
+
+# list of abstract labels for the sensors in this group
+sensors = FANS2_1,FANS2_2
+
+# the individual sensors in this group
+[FANS2_1]
+name = Fan_PSU1
+
+[FANS2_2]
+name = Fan_PSU2
+
+##################################################################################
+#
+# TEMPERATURE sensor management
+# -----------------------------
+#
+# sensors .. The list of sensor labels in this group delimited by space.
+#            Each sensor has its own label for unique name and thresholds
+#
+##################################################################################
+[TEMPERATURE]
+# abstract labels for each group if this group type
+groups = TEMPERATURE1
+
+# TEMPERATURE sensor group 1 (sensors that have similar attributes)
+[TEMPERATURE1]
+
+# The name of the group that will show up in the GUI
+group = server temperature
+
+# sensor attributes for this group
+sensortype = temperature
+datatype   = discrete      
+interval   = 34             ; seconds
+unit       = Celsius
+
+# the commands that will read the sensors in this group
+cmd = show /SYS/temperature
+
+# Status output delimitor
+delimitor = =
+
+# TODO: the sensor reading rules
+ignore = na
+pass = ok
+minor = na
+major = nonCritical
+critical = critical
+
+# list of abstract labels for the sensors in this group
+sensors = TEMP1,TEMP2,TEMP3,TEMP4,TEMP5,TEMP6,TEMP7,TEMP8,TEMP9,TEMP10,TEMP11,TEMP12,TEMP13,TEMP14,TEMP15,TEMP16,TEMP17,TEMP18,TEMP19,TEMP20,TEMP21,TEMP22,TEMP23,TEMP24
+
+# the individual sensors in this group
+[TEMP1]
+name = PCH Thermal Trip
+[TEMP2]
+name = MB Thermal Trip
+[TEMP3]
+name = Temp_CPU0
+[TEMP4]
+name = Temp_CPU1
+[TEMP5]
+name = Temp_VR_CPU0
+[TEMP6]
+name = Temp_VR_CPU1
+[TEMP7]
+name = Temp_DIMM_AB
+[TEMP8]
+name = Temp_DIMM_CD
+[TEMP9]
+name = Temp_DIMM_EF
+[TEMP10]
+name = Temp_DIMM_GH
+[TEMP11]
+name = Temp_VR_DIMM_AB
+[TEMP12]
+name = Temp_VR_DIMM_CD
+[TEMP13]
+name = Temp_VR_DIMM_EF
+[TEMP14]
+name = Temp_VR_DIMM_GH
+[TEMP15]
+name = Temp_Ambient_FP
+[TEMP16]
+name = Temp_PCI_Area
+[TEMP17]
+name = Temp_PCI_Inlet1
+[TEMP18]
+name = Temp_PCI_Inlet2
+[TEMP19]
+name = Temp_PCH
+[TEMP20]
+name = Temp_Outlet
+[TEMP21]
+name = Temp_HBA_LSI
+[TEMP22]
+name = Temp_OCP
+[TEMP23]
+name = Temp_PSU1
+[TEMP24]
+name = Temp_PSU2     
+
+##################################################################################
+#
+# VOLTAGE sensor management
+# -----------------------------
+#
+# groups ... Allows management of voltage sensors by group with similar
+#            characteristics.
+#
+##################################################################################
+
+[VOLTAGE]
+# abstract labels for each group if this group type
+groups = VOLTAGE1
+
+[VOLTAGE1]
+# The name of the group that will show up in the GUI
+group      = server voltage
+
+# sensor attributes for this group
+sensortype = voltage
+datatype   = discrete      
+interval   = 300             ; seconds
+
+# the commands that will read the sensors in this group
+cmd = show /SYS/voltage
+
+# TODO: the sensor reading rules
+ignore = na
+pass = ok
+minor = na
+major = nonCritical
+critical = critical
+
+# list of abstract labels for the sensors in this group
+sensors = VOLT1,VOLT2,VOLT3,VOLT4,VOLT5,VOLT6,VOLT7,VOLT8,VOLT9,VOLT10,VOLT11,VOLT12,VOLT13,VOLT14
+
+# the individual sensors in this group
+[VOLT1]
+name = Volt_VR_CPU0
+[VOLT2]
+name = Volt_VR_CPU1
+[VOLT3]
+name = Volt_P5V
+[VOLT4]
+name = Volt_P5V_AUX
+[VOLT5]
+name = Volt_P3V3
+[VOLT6]
+name = Volt_P1V05
+[VOLT7]
+name = Volt_P1V8_AUX
+[VOLT8]
+name = Volt_P12V
+[VOLT9]
+name = Volt_P3V3_AUX
+[VOLT10]
+name = Volt_VR_DIMM_AB
+[VOLT11]
+name = Volt_VR_DIMM_CD
+[VOLT12]
+name = Volt_VR_DIMM_EF
+[VOLT13]
+name = Volt_VR_DIMM_GH
+[VOLT14]
+name = Volt_P3V_BAT   

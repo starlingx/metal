@@ -1,0 +1,23 @@
+[Unit]
+Description=Titanium Cloud Maintenance Command Handler Client
+After=network.target syslog.service config.service
+Before=pmon.service
+
+[Service]
+Type=forking
+ExecStart=/etc/rc.d/init.d/mtcClient start
+ExecStop=/etc/rc.d/init.d/mtcClient stop
+ExecReload=/etc/rc.d/init.d/mtcClient reload
+PIDFile=/var/run/mtcClient.pid
+KillMode=process
+SendSIGKILL=no
+
+# Process recovery is handled by pmond if its running.
+# Delay 10 seconds to give pmond a chance to recover
+# before systemd kicks in to do it as a backup plan.
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+

@@ -1,0 +1,59 @@
+#!/bin/bash
+
+# Copyright (c) 2014 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+
+# We've been called because someone wants to dump the kernel debug trace file to
+# persistent storage.
+#
+
+# This uses the "flock" binary to ensure that exactly one copy of this script
+# runs on the system at a time.  Taken from the flock man page.
+# Basically it takes a nonblocking exclusive lock on the script itself.
+[ "${FLOCKER}" != "$0" ] && exec env FLOCKER="$0" flock -en "$0" "$0" "$@" || :
+
+
+# The expected behaviour is that the caller has disabled tracing already, but we
+# are expected to re-enable it after we're done copying the data.
+
+
+LOGFILE=kernel_trace_log
+
+
+# Disable tracing just in case the caller forgot to do it.
+echo 0 > /sys/kernel/debug/tracing/tracing_on
+
+# 
+cd /var/log
+
+if [ ! -d tracing ]
+then
+    # This is the first trace log, make the directory.
+    mkdir tracing
+else
+    # Handle log rotation.  We'll keep up to 5 trace logs.
+    for i in {4..0}
+    do
+        mv tracing/${LOGFILE}.$i tracing/${LOGFILE}.$((i+1))
+    done
+fi
+
+# Copy trace file and fsync it when done.
+cp /sys/kernel/debug/tracing/trace tracing/${LOGFILE}.0
+
+# Wipe the trace file.
+echo > /sys/kernel/debug/tracing/trace
+
+# Enable tracing.
+echo 1 > /sys/kernel/debug/tracing/tracing_on
+
+# Fsync the logged trace file. This uses a custom helper app.
+fsync tracing/${LOGFILE}.0
+
+# Fsync the directory to flush metadata.
+fsync tracing
+
+

@@ -1,0 +1,13 @@
+[Unit]
+Description=controller config emulation service
+After=network.target
+Before=sshd.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/etc/init.d/config start
+ExecStop=/etc/init.d/config stop
+
+[Install]
+WantedBy=multi-user.target

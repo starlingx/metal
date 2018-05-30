@@ -1,0 +1,54 @@
+#! /bin/sh
+#
+# Copyright (c) 2014 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+#
+# chkconfig: 2345 95 95
+#
+### BEGIN INIT INFO
+# Provides:          scheduler ftrace
+# Default-Start:     3 5
+# Default-Stop:      0 1 2 6
+# Short-Description: Start stop scheduler trace on cpu0 
+### END INIT INFO
+
+PATH=/sbin:/usr/sbin:/bin:/usr/bin:/usr/local/bin
+export PATH
+
+
+case "$1" in
+    start)
+        # Seems to default to enabled already, but enable it anyway.
+        echo 1 > /proc/sys/kernel/ftrace_enabled
+
+        cd /sys/kernel/debug/tracing
+
+        # This file doesn't exist in newer kernels.
+        echo 1 > tracing_enabled
+
+        # Enable the nop tracer.
+        echo nop > current_tracer
+
+        # Enable the ones we want.
+        echo "sched_switch sched_wakeup sched_wakeup_new" >> set_event
+
+        # Limit tracing to cpu0
+        echo 1 > tracing_cpumask
+
+        # Enable tracing
+        echo 1 > tracing_on
+        ;;
+
+    stop)
+        # Disable tracing
+        echo 0 > tracing_on
+
+        ;;
+
+    *)
+        echo "usage: $0 { start | stop }"
+        ;;
+esac

@@ -1,0 +1,129 @@
+#! /bin/sh
+#
+# Copyright (c) 2013-2014, 2016 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+
+. /etc/init.d/functions
+
+MTCCLIENT_NAME="mtcClient"
+MTCCLIENT="/usr/local/bin/${MTCCLIENT_NAME}"
+
+HBSCLIENT_NAME="hbsClient"
+HBSCLIENT="/usr/local/bin/${HBSCLIENT_NAME}"
+
+IFACE=""
+
+# Linux Standard Base (LSB) Error Codes
+RETVAL=0
+GENERIC_ERROR=1
+INVALID_ARGS=2
+UNSUPPORTED_FEATURE=3
+NOT_INSTALLED=5
+NOT_RUNNING=7
+
+if [ ! -e "$MTCCLIENT" ] ; then
+    logger "$MTCCLIENT is missing"
+    exit ${NOT_INSTALLED}
+fi
+
+if [ ! -e "$HBSCLIENT" ] ; then
+    logger "$HBSCLIENT is missing"
+    exit ${NOT_INSTALLED}
+fi
+
+
+
+PATH=/sbin:/usr/sbin:/bin:/usr/bin:/usr/local/bin
+export PATH
+
+case "$1" in
+    start)
+        # The mtcClient runs on all nodes
+        echo -n "Starting ${MTCCLIENT_NAME}: "
+        if [ -n "`pidof ${MTCCLIENT_NAME}`" ] ; then
+            echo -n "is already running "
+            RETVAL=0
+        else
+            start-stop-daemon --start -b -x ${MTCCLIENT} -- -l ${IFACE}
+            RETVAL=$?
+        fi
+        if [ ${RETVAL} -eq 0 ] ; then
+            pid=`pidof ${MTCCLIENT_NAME}`
+            echo "OK"
+            logger "${MTCCLIENT} (${pid})"
+        else
+            echo "FAIL"
+            RETVAL=${GENERIC_ERROR}
+        fi
+
+        # The heartbeat client runs on all nodes at nice -11
+        echo -n "Starting ${HBSCLIENT_NAME}: "
+        if [ -n "`pidof ${HBSCLIENT_NAME}`" ] ; then
+            echo -n "is already running "
+            RETVAL=0
+        else
+            start-stop-daemon --start -N -11 -b -x ${HBSCLIENT} -- -l ${IFACE}
+            RETVAL=$?
+        fi
+        if [ ${RETVAL} -eq 0 ] ; then
+            pid=`pidof ${HBSCLIENT_NAME}`
+            echo "OK"
+            logger "${HBSCLIENT} (${pid})"
+        else
+            echo "FAIL"
+            RETVAL=${GENERIC_ERROR}
+        fi
+        ;;
+
+    stop)
+        echo " "
+        echo -n "Stopping ${MTCCLIENT_NAME}: "
+        if [ -n "`pidof ${MTCCLIENT_NAME}`" ] ; then
+            killproc ${MTCCLIENT_NAME}
+        fi
+        if [ -n "`pidof ${MTCCLIENT_NAME}`" ] ; then
+            echo "FAIL"
+            RETVAL=${NOT_RUNNING}
+        else
+            echo "OK"
+        fi
+        rm -f /var/run/${MTCCLIENT_NAME}.pid
+
+
+        echo -n "Stopping ${HBSCLIENT_NAME}: "
+        if [ -n "`pidof ${HBSCLIENT_NAME}`" ] ; then
+            killproc ${HBSCLIENT_NAME}
+        fi
+        if [ -n "`pidof ${HBSCLIENT_NAME}`" ] ; then
+            echo "FAIL"
+            RETVAL=${NOT_RUNNING}
+        else
+            echo "OK"
+        fi
+        rm -f /var/run/${HBSCLIENT_NAME}.pid
+
+        ;;
+
+    restart)
+        $0 stop
+        sleep 1
+        $0 start
+        ;;
+
+    status)
+        RETVAL=0
+        ;;
+
+    condrestart)
+        $0 restart
+        ;;
+
+    *)
+        echo "usage: $0 { start | stop | status | restart | condrestart | status }"
+        ;;
+esac
+
+exit $RETVAL

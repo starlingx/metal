@@ -1,0 +1,52 @@
+#! /bin/sh
+#
+# Copyright (c) 2013-2014 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+#
+# chkconfig: 2345 98 2
+#
+### BEGIN INIT INFO
+# Provides:          goenabled
+# Default-Start:     3 5
+# Default-Stop:      0 1 2 6
+# Short-Description: Maintenance Client "Go Enable" script
+### END INIT INFO
+
+RETVAL=0
+
+case "$1" in
+    start)
+        echo "`date`: `hostname` : Go Enabled" > /var/run/goenabled
+        ;;
+
+    stop)
+        rm -f /var/run/goenabled
+        ;;
+
+    restart)
+        $0 stop
+        $0 start
+        ;;
+
+    status)
+        ;;
+
+    condrestart)
+        %0 restart
+        ;;
+
+    *)
+        echo "usage: $0 { start | stop | status | restart | condrestart | status }"
+        ;;
+esac
+
+exit $RETVAL
+
+
+
+
+
+exit 0

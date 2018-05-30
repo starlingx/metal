@@ -1,0 +1,59 @@
+#daily
+
+# Apply all these options to all the logs
+nodateext
+start 1
+compress
+notifempty
+missingok
+sharedscripts
+postrotate
+    systemctl reload syslog-ng > /dev/null 2>&1 || true
+endscript
+
+/var/log/mtcAgent.log
+{
+    size 100M
+    rotate 10
+}
+
+/var/log/hbsAgent.log
+{
+    size 20M
+    rotate 5
+}
+
+/var/log/mtcClient.log
+{
+    size 20M
+    rotate 5
+}
+
+/var/log/hbsClient.log
+{
+    size 20M
+    rotate 5
+}
+
+/var/log/mtclogd.log
+{
+    size 10M
+    rotate 5
+}
+
+/var/log/mtcAgent_api.log
+{
+    size 20M
+    rotate 5
+}
+
+/var/log/mtcAgent_event.log
+{
+    size 20M
+    rotate 5
+}
+/var/log/mtcAgent_alarm.log
+{
+    size 10M
+    rotate 5
+}

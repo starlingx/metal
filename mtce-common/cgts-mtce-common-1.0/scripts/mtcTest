@@ -1,0 +1,38 @@
+#! /bin/sh
+#
+# Copyright (c) 2013-2014 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+#
+
+banner="Host Services"
+
+case "$1" in
+    start)
+        logger "${banner} $1: OK"
+        ;;
+
+    stop)
+        logger "${banner} $1: OK"
+        ;;
+
+    restart)
+        $0 stop
+        $0 start
+        ;;
+
+    status)
+        logger "${banner} $1: OK"
+        ;;
+
+    condrestart)
+        $0 restart
+        ;;
+
+    *)
+        echo "usage: $0 { start | stop | status | restart | condrestart | status }"
+        ;;
+esac
+exit 0

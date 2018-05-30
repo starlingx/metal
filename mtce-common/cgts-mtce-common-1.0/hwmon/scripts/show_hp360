@@ -1,0 +1,78 @@
+#!/bin/bash
+
+#
+# Copyright (c) 2015 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+rc=0
+
+if [ "$1" == "/system1" -a "$2" == "name" ] ; then
+
+      echo ""
+      echo "status=0"
+      echo "status_tag=COMMAND COMPLETED"
+      echo "Wed Aug  5 11:56:35 2015"
+      echo ""
+      echo ""
+      echo ""
+      echo "/system1"
+      echo "  Properties"
+      echo "    name=ProLiant DL360 Gen9"
+      echo "  Verbs"
+      echo "    cd version exit show set"
+      echo ""
+      echo ""
+      echo ""
+
+elif [ "$0" == "/usr/sbin/stop" -a "$1" == "/system1" ] ; then
+
+     echo "Server powering off ......."
+     echo ""
+     shutdown -P -h -time now
+
+elif [ "$0" == "/usr/sbin/reset" -a "$1" == "/system1" ] ; then
+
+     echo "Server reset"
+     echo ""
+     reboot
+
+elif [ "$1" == "" ] ; then
+
+      echo ""
+      echo "status=0"
+      echo "status_tag=COMMAND COMPLETED"
+      echo "Tue Aug 18 16:44:29 2015"
+      echo ""
+      echo ""
+      echo ""
+      echo "/"
+      echo "  Targets"
+      echo "    system1"
+      echo "    map1"
+      echo "  Properties"
+      echo "  Verbs"
+      echo "    cd version exit show"
+      echo ""
+
+else
+
+      echo ""
+      echo "status=2"
+      echo "status_tag=COMMAND PROCESSING FAILED"
+      echo "error_tag=INVALID OPTION"
+      echo "Wed Aug  5 12:10:46 2015"
+      echo ""
+      echo ""
+      echo ""
+      echo ""
+      echo ""
+      echo ""
+   
+   rc=1
+
+fi
+
+exit $rc
+

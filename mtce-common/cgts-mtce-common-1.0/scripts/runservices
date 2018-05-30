@@ -1,0 +1,189 @@
+#!/bin/bash
+#
+# Copyright (c) 2013-2014, 2016 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+#
+# chkconfig: 2345 98 2
+#
+### BEGIN INIT INFO
+# Provides:          runservices
+# Default-Start:     3 5
+# Default-Stop:      0 1 2 6
+# Short-Description: Maintenance "Run Host Services" script
+### END INIT INFO
+
+RUNSERVICES_PATH=${RUNSERVICES_PATH:-"/etc/services.d"}
+RUNSERVICES_FILE=${RUNSERVICES_FILE:-"/var/run/runservices"}
+RUNSERVICES_LOG=${RUNSERVICES_LOG:-"/var/log/runservices.log"}
+RUNSERVICES_TAG=${RUNSERVICES_TAG:-"RUNSERVICES"}
+
+RETVAL=0
+
+################################################################################
+# Log message to syslog
+################################################################################
+function log
+{
+    logger -t ${RUNSERVICES_TAG} $@
+}
+
+################################################################################
+# Utility function to print the status of a command result
+################################################################################
+function print_status()
+{
+    if [ "$1" -eq "0" ]; then
+        echo "[  OK  ]"
+    else
+        echo "[FAILED]"
+    fi
+}
+
+################################################################################
+# Run runservices scripts to check system status
+################################################################################
+function runservices()
+{
+    if [ -d ${RUNSERVICES_PATH} ]; then
+        run-parts ${RUNSERVICES_PATH} -a ${1} 2>&1 | logger -t ${RUNSERVICES_TAG}
+        RET=${PIPESTATUS[0]}
+        if [ ${RET} -ne 0 ]; then
+            return ${RET}
+        fi
+    fi
+
+    return 0
+}
+
+
+################################################################################
+# Write runservices state file
+################################################################################
+function runservices_enable()
+{
+    echo "`date`: `hostname` : All host services passed !" > ${RUNSERVICES_FILE}
+    RET=$?
+    if [ ${RET} -ne 0 ]; then
+        log "Failed to write state file ${RUNSERVICES_FILE}"
+        return ${RET}
+    fi
+
+    log "enabled"
+
+    return 0
+}
+
+
+################################################################################
+# Remove runservices state file
+################################################################################
+function runservices_disable()
+{
+    rm -f ${RUNSERVICES_FILE}
+    RET=$?
+    if [ ${RET} -ne 0 ]; then
+        log "Failed to remove state file ${RUNSERVICES_FILE}"
+        return ${RET}
+    fi
+
+    log "disabled"
+
+    return 0
+}
+
+################################################################################
+# Start Action
+################################################################################
+function start()
+{
+    echo -n "Starting Host Services: "
+
+    runservices "start"
+    RETVAL=$?
+    if [ "$RETVAL" -ne "0" ]; then
+        log "Run Services check failed"
+        print_status $RETVAL
+        return
+    fi
+
+    runservices_enable
+    RETVAL=$?
+    if [ "$RETVAL" -ne "0" ]; then
+        log "One or more Host Services failed"
+        print_status $RETVAL
+        return
+    fi
+
+    print_status $RETVAL
+}
+
+################################################################################
+# Stop Action
+################################################################################
+function stop()
+{
+    echo -n "Stopping Host Services: "
+
+    runservices "stop"
+
+    runservices_disable
+    RETVAL=$?
+    if [ "$RETVAL" -ne "0" ]; then
+        log "Run Services stop failed"
+        print_status $RETVAL
+        return
+    fi
+
+    print_status $RETVAL
+}
+
+################################################################################
+# Status Action
+################################################################################
+function status()
+{
+    echo -n "Checking runservices: "
+
+    runservices_check
+    RETVAL=$?
+    if [ "$RETVAL" -ne "0" ]; then
+        print_status $RETVAL
+        return
+    fi
+
+    print_status $RETVAL
+}
+
+
+################################################################################
+# Main Entry
+################################################################################
+
+case "$1" in
+    start)
+        start
+        ;;
+
+    stop)
+        stop
+        ;;
+
+    restart)
+        stop
+        start
+        ;;
+
+    status)
+        status
+        ;;
+
+    *)
+        echo "usage: $0 { start | stop | status | restart }"
+        exit 1
+        ;;
+esac
+
+exit $RETVAL

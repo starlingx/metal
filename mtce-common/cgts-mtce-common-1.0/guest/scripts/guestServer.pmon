@@ -1,0 +1,25 @@
+[process]
+process  = guestServer
+service  = guestServer
+pidfile  = /var/run/guestServer.pid
+script   = /etc/init.d/guestServer
+style    = lsb            ; ocf or lsb
+severity = major          ; minor, major, critical
+restarts = 3              ; restart retries before error assertion
+interval = 3              ; number of seconds to wait between restarts
+debounce = 10             ; number of seconds that a process needs to remain
+                          ;   running before degrade is removed and retry count
+                          ;   is cleared.
+startuptime  = 1          ; Seconds to wait after process start before starting the debounce monitor
+mode  = passive           ; Monitoring mode: passive (default) or active
+                          ; passive: process death monitoring (default: always)
+                          ; active : heartbeat monitoring, i.e. request / response messaging 
+                          ; ignore : do not monitor or stop monitoring
+subfunction = compute     ; Optional label.
+                          ; Manage this process in the context of a combo host subfunction 
+                          ;   Choices: compute or storage. 
+                          ;    when specified pmond will wait for
+                          ;   /var/run/.compute_config_complete or
+                          ;   /var/run/.storage_config_complete 
+                          ; ... before managing this process with the specified subfunction
+                          ;   Excluding this label will cause this process to be managed by default on startup
