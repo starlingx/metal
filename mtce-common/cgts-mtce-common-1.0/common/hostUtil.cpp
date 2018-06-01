@@ -11,6 +11,17 @@
   */
 
 #include "hostUtil.h"
+#include "nodeBase.h"
+static char local_hostname[MAX_HOST_NAME_SIZE+1] = {0};
+
+const char* hostUtil_get_hostname()
+{
+    if(*local_hostname == '\0')
+    {
+        gethostname(local_hostname, MAX_HOST_NAME_SIZE);
+    }
+    return local_hostname;
+}
 
 string hostUtil_getServiceIp   ( mtc_service_enum service )
 {
@@ -38,6 +49,8 @@ string hostUtil_getServiceIp   ( mtc_service_enum service )
             break ;
         }
         case SERVICE_SMGR:
+            ip = hostUtil_get_hostname();
+            break;
         case SERVICE_VIM:
         {
             ip = "localhost" ;
