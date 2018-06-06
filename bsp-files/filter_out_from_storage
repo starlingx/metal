@@ -170,6 +170,7 @@ openstack-neutron
 openstack-neutron-common
 openstack-neutron-sriov-nic-agent
 openstack-neutron-ml2
+openstack-neutron-openvswitch
 openstack-nova-api
 openstack-nova-cells
 openstack-nova-common
