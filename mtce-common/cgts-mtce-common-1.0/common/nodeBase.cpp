@@ -705,3 +705,15 @@ bool is_host_services_cmd ( unsigned int cmd )
     }
     return (false);
 }
+
+/* Used to fill the mtce message buffer starting after supplied 'bytes' count */
+void zero_unused_msg_buf ( mtc_message_type & msg, int bytes)
+{
+    if ( bytes < (int)sizeof(msg) )
+    {
+        char * ptr = (char *)&msg ;
+        ptr += (bytes) ;
+        memset ( ptr, 0, sizeof(msg)-bytes);
+    }
+}
+

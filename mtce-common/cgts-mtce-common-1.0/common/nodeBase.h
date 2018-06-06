@@ -1226,6 +1226,8 @@ int daemon_log_message ( const char * hostname,
 
 bool is_host_services_cmd ( unsigned int cmd );
 
+void zero_unused_msg_buf ( mtc_message_type & msg, int bytes);
+
 /** Runtime Trace Log Utilities */
 void daemon_dump_membuf ( void );
 void daemon_dump_membuf_banner ( void );

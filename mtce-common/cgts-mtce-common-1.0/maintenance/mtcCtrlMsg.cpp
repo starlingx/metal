@@ -125,17 +125,8 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
                         int               iface)
 {
     mtc_message_type msg ;
-    std::list<string>::iterator  iter ;
-
     int bytes = 0    ;
     int rc    = PASS ;
-    string ip = "0.0.0.0" ;
-
-    MEMSET_ZERO (msg);
-
-    string hostaddr = "" ;
-    string hostname = "" ;
-
     if ( iface == INFRA_INTERFACE )
     {
         if ( ( obj_ptr ) &&
@@ -143,20 +134,15 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
              ( sock_ptr->mtc_agent_infra_rx_socket ))
         {
             bytes = sock_ptr->mtc_agent_infra_rx_socket->read((char*)&msg, sizeof(msg));
-            hostaddr = sock_ptr->mtc_agent_infra_rx_socket->get_src_str();
-            hostname = obj_ptr->get_hostname ( hostaddr ) ;
         }
         else
         {
-            ilog ("cannot receive from unprovisioned Infra socket\n");
             return ( FAIL_NO_INFRA_PROV );
         }
     }
     else
     {
         bytes = sock_ptr->mtc_agent_rx_socket->read((char*)&msg, sizeof(msg));
-        hostaddr = sock_ptr->mtc_agent_rx_socket->get_src_str();
-        hostname = obj_ptr->get_hostname ( hostaddr ) ;
     }
 
     if ( bytes <= 0 )
@@ -173,8 +159,23 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
         rx_error_count = 0 ;
     }
 
+    zero_unused_msg_buf (msg, bytes);
+
+    string hostaddr = "" ;
+    string hostname = "" ;
+    if ( iface == INFRA_INTERFACE )
+    {
+        hostaddr = sock_ptr->mtc_agent_infra_rx_socket->get_src_str();
+        hostname = obj_ptr->get_hostname ( hostaddr ) ;
+    }
+    else
+    {
+        hostaddr = sock_ptr->mtc_agent_rx_socket->get_src_str();
+        hostname = obj_ptr->get_hostname ( hostaddr ) ;
+    }
     if ( hostname.empty() )
     {
+        std::list<string>::iterator  iter ;
         iter = std::find (unknown_ip_list.begin(), unknown_ip_list.end(), hostaddr );
         if ( iter == unknown_ip_list.end() )
         {
@@ -541,6 +542,7 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
     if ( daemon_get_cfg_ptr()->debug_msg )
     {
         int count = 0 ;
+        std::list<string>::iterator  iter ;
         for ( iter  = unknown_ip_list.begin () ;
               iter != unknown_ip_list.end  () ;
               iter++ )
