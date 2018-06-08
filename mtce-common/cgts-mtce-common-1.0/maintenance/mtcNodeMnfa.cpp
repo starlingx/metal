@@ -112,6 +112,8 @@ void nodeLinkClass::mnfa_add_host ( struct nodeLinkClass::node * node_ptr , ifac
             added = true ;
             mnfa_awol_list.push_back(node_ptr->hostname);
             mnfa_awol_list.unique();
+            if ( node_ptr->task != MTC_TASK_RECOVERY_WAIT )
+                mtcInvApi_update_task ( node_ptr, MTC_TASK_RECOVERY_WAIT );
         }
         else if (( mnfa_active == false ) &&
                  ( mnfa_host_count[iface] >= mnfa_calculate_threshold( node_ptr->hostname )))
@@ -227,6 +229,9 @@ void nodeLinkClass::mnfa_enter ( void )
              ptr->mnfa_graceful_recovery = true ;
 
              mnfa_awol_list.push_back(ptr->hostname);
+             if ( ptr->task != MTC_TASK_RECOVERY_WAIT )
+                mtcInvApi_update_task ( ptr, MTC_TASK_RECOVERY_WAIT );
+
          }
          if (( ptr->next == NULL ) || ( ptr == tail ))
              break ;
