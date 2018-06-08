@@ -1516,7 +1516,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
            /* Purge this hosts work queues */
             mtcCmd_workQ_purge ( node_ptr );
             mtcCmd_doneQ_purge ( node_ptr );
-
+            node_ptr->mtcAlive_gate = false ;
             node_ptr->http_retries_cur = 0 ;
             node_ptr->unknown_health_reported = false ;
 
@@ -1601,6 +1601,8 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
 
             ilog ("%s requesting mtcAlive with %d sec timeout\n",
                       node_ptr->hostname.c_str(), loc_recovery_timeout);
+
+            send_mtc_cmd ( node_ptr->hostname, MTC_REQ_MTCALIVE, MGMNT_INTERFACE );
 
             recoveryStageChange ( node_ptr, MTC_RECOVERY__REQ_MTCALIVE_WAIT ) ;
 
