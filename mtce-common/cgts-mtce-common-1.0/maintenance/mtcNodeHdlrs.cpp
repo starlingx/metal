@@ -1605,6 +1605,9 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
              * it to compare as a dicision point later on in recovery handling */
             node_ptr->uptime_save = node_ptr->uptime ;
 
+            /* send mtcAlive requests */
+            start_offline_handler ( node_ptr );
+
             /* A host is considered failed if it goes away for more
              * than a Loss Of Communication Recovery Timeout specified as mtc.ini
              * configuration option 'loc_recovery_timeout' time in seconds. */
@@ -1630,6 +1633,8 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
                 ilog ("%s got requested mtcAlive%s\n",
                           node_ptr->hostname.c_str(),
                           node_ptr->was_dor_recovery_mode ? " (DOR)" : "" );
+
+                stop_offline_handler ( node_ptr );
 
                 /* Check to see if the host is/got configured correctly */
                 if ( (node_ptr->mtce_flags & MTC_FLAG__I_AM_CONFIGURED) == 0 )
@@ -1737,6 +1742,8 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
             /* A timer ring indicates that the host is not up */
             else if ( node_ptr->mtcTimer.ring == true )
             {
+                stop_offline_handler ( node_ptr );
+
                /* So now this means the node is failed
                 * we need to stop services and transition into
                 * a longer 'waiting' for the asynchronous mtcAlive
@@ -3107,7 +3114,7 @@ int nodeLinkClass::offline_handler ( struct nodeLinkClass::node * node_ptr )
         {
             node_ptr->mtcAlive_mgmnt = false ;
             node_ptr->mtcAlive_infra = false ;
-
+            node_ptr->offline_log_throttle = 0 ;
             node_ptr->offline_search_count = 0 ;
 
             mtcTimer_reset ( node_ptr->offline_timer );
@@ -3156,11 +3163,6 @@ int nodeLinkClass::offline_handler ( struct nodeLinkClass::node * node_ptr )
                     plog ("%s offline (external)\n", node_ptr->hostname.c_str());
                     node_ptr->offlineStage = MTC_OFFLINE__IDLE ;
                 }
-                else if ( node_ptr->operState == MTC_OPER_STATE__ENABLED )
-                {
-                    slog ("%s offline search while 'enabled' ; invalid\n", node_ptr->hostname.c_str());
-                    node_ptr->offlineStage = MTC_OFFLINE__IDLE ;
-                }
                 else if ( !node_ptr->mtcAlive_mgmnt && !node_ptr->mtcAlive_infra )
                 {
                     if ( ++node_ptr->offline_search_count > offline_threshold )
@@ -3192,10 +3194,11 @@ int nodeLinkClass::offline_handler ( struct nodeLinkClass::node * node_ptr )
                     node_ptr->mtcAlive_online = true ;
                     if ( node_ptr->mtcAlive_mgmnt || node_ptr->mtcAlive_infra )
                     {
-                        ilog ("%s still seeing mtcAlive (%c:%c)\n",
-                                  node_ptr->hostname.c_str(),
-                                  node_ptr->mtcAlive_mgmnt ? 'Y' : 'n',
-                                  node_ptr->mtcAlive_infra ? 'Y' : 'n');
+                        ilog_throttled ( node_ptr->offline_log_throttle, 10,
+                                         "%s still seeing mtcAlive (%c:%c)\n",
+                                         node_ptr->hostname.c_str(),
+                                         node_ptr->mtcAlive_mgmnt ? 'Y' : 'n',
+                                         node_ptr->mtcAlive_infra ? 'Y' : 'n');
                     }
                     else
                     {

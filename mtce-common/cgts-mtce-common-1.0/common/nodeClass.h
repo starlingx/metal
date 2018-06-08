@@ -315,8 +315,8 @@ private:
         bool mtcAlive_online  ; /* this is consumed by online and offline handler  */
         bool mtcAlive_offline ; /* this is consumed by reset progression handler   */
 
-        int  offline_search_count ; /* count back-2-back mtcAlive request misses */
-
+        int  offline_search_count ; /* count back-2-back mtcAlive request misses   */
+        int  offline_log_throttle ; /* throttle offline handler logs               */
         bool offline_log_reported ; /* prevents offline/online log flooding when   */
         bool  online_log_reported ; /*   availStatus switches between these states */
                                     /*   and failed                                */

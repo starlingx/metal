@@ -540,6 +540,7 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
     ptr->reboot_cmd_ack_mgmnt = false ;
     ptr->reboot_cmd_ack_infra = false ;
 
+    ptr->offline_log_throttle = 0     ;
     ptr->offline_log_reported = true  ;
     ptr->online_log_reported  = false ;
 
@@ -2448,6 +2449,7 @@ void nodeLinkClass::start_offline_handler ( struct nodeLinkClass::node * node_pt
               operState_enum_to_str(node_ptr->operState).c_str(),
               availStatus_enum_to_str(node_ptr->availStatus).c_str(),
               offlineStage_saved);
+    node_ptr->offline_log_throttle = 0;
 }
 
 void nodeLinkClass::stop_offline_handler ( struct nodeLinkClass::node * node_ptr )
@@ -2462,6 +2464,7 @@ void nodeLinkClass::stop_offline_handler ( struct nodeLinkClass::node * node_ptr
                   node_ptr->offlineStage);
         node_ptr->offlineStage = MTC_OFFLINE__IDLE ;
     }
+    node_ptr->offline_log_throttle = 0;
 }
 
 string nodeLinkClass::get_host ( string uuid )
