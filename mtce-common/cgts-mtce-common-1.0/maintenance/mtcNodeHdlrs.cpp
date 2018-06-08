@@ -1052,8 +1052,19 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                 }
                 else
                 {
-                    plog ("%s is MTCALIVE (uptime:%d)\n", node_ptr->hostname.c_str(), node_ptr->uptime );
-
+                    plog ("%s is MTCALIVE (uptime:%d secs)\n",
+                              node_ptr->hostname.c_str(), node_ptr->uptime );
+                    if ((NOT_THIS_HOST) &&
+                        ( node_ptr->uptime > ((unsigned int)(node_ptr->mtcalive_timeout*2))))
+                    {
+                        elog ("%s uptime is more than %d seconds ; host did not reboot\n",
+                                  node_ptr->hostname.c_str(),
+                                  (node_ptr->mtcalive_timeout*2));
+                        elog ("%s ... enable failed ; host needs to reboot\n",
+                                  node_ptr->hostname.c_str());
+                        enableStageChange(node_ptr, MTC_ENABLE__FAILURE);
+                        break ;
+                    }
                     /* Set the node mtcAlive timer to configured value.
                      * This will revert bact to normal timeout after any first
                      * unlock value that may be in effect. */
