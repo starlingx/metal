@@ -165,7 +165,7 @@ void daemon_exit ( void );
 #define MAX_API_LOG_LEN    (0x1000)
 #define MAX_FILENAME_LEN   (100)
 #define MAX_SYSTEM_CMD_LEN (200)
-
+#define HBS_PULSES_REQUIRED_FOR_RECOVERY (10)
 #define MAX_START_SERVICES_RETRY (20)
 
 #define DEFAULT_MTCALIVE_TIMEOUT    (1200)

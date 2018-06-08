@@ -132,33 +132,6 @@ void monitor_scheduling ( unsigned long long & this_time, unsigned long long & p
     prev_time = this_time ;
 }
 
-void nodeLinkClass::recalibrate_thresholds ( void )
-{
-    if ( hbsInv.hosts > hbs_config.hbs_calibrate_threshold )
-    {
-        hbsInv.hbs_pulse_period      = (hbsInv.hosts * hbs_config.hbs_calibrate_period_factor ) ;
-        hbsInv.hbs_minor_threshold   = (hbsInv.hosts * hbs_config.hbs_calibrate_minor_factor  ) ;
-        hbsInv.hbs_degrade_threshold = (hbsInv.hosts * hbs_config.hbs_calibrate_degrade_factor) ;
-        hbsInv.hbs_failure_threshold = (hbsInv.hosts * hbs_config.hbs_calibrate_fail_factor   ) ;
-    }
-    else
-    {
-        hbsInv.hbs_pulse_period      = hbs_config.hbs_pulse_period      ;
-        hbsInv.hbs_minor_threshold   = hbs_config.hbs_minor_threshold   ;
-        hbsInv.hbs_degrade_threshold = hbs_config.hbs_degrade_threshold ;
-        hbsInv.hbs_failure_threshold = hbs_config.hbs_failure_threshold ;
-    }
-
-    hbsInv.hbs_pulse_period_save = hbsInv.hbs_pulse_period ;
-
-    ilog ("Heartbeat Thresholds ; hosts:%d pulse:%d msecs - minor:%d degrade:%d failure:%d\n",
-           hbsInv.hosts,
-           hbsInv.hbs_pulse_period,
-           hbsInv.hbs_minor_threshold,
-           hbsInv.hbs_degrade_threshold,
-           hbsInv.hbs_failure_threshold);
-}
-
 /* Cleanup exit handler */
 void daemon_exit ( void )
 {
@@ -253,18 +226,18 @@ static int hbs_config_handler ( void * user,
 
     if (MATCH("agent", "hbs_minor_threshold"))
     {
-        config_ptr->hbs_minor_threshold = atoi(value);
+        config_ptr->hbs_minor_threshold =
         hbsInv.hbs_minor_threshold = atoi(value);
     }
     if (MATCH("agent", "heartbeat_degrade_threshold"))
     {
-        config_ptr->hbs_degrade_threshold = atoi(value);
+        config_ptr->hbs_degrade_threshold =
         hbsInv.hbs_degrade_threshold = atoi(value);
         config_ptr->mask |= CONFIG_AGENT_HBS_DEGRADE ;
     }
     if (MATCH("agent", "heartbeat_failure_threshold"))
     {
-        config_ptr->hbs_failure_threshold = atoi(value);
+        config_ptr->hbs_failure_threshold =
         hbsInv.hbs_failure_threshold = atoi(value);
         config_ptr->mask |= CONFIG_AGENT_HBS_FAILURE ;
     }
@@ -1387,14 +1360,12 @@ void daemon_service_run ( void )
 
                             /* clear any outstanding alarms on the ADD */
                             hbsAlarm_clear_all ( hostname );
-
-                            // hbsInv.recalibrate_thresholds ();
                         }
                         else if ( msg.cmd == MTC_CMD_DEL_HOST )
                         {
                             for ( int iface = 0 ; iface < MAX_IFACES ; iface++ )
                             {
-                                hbsInv.mon_host ( hostname, (iface_enum)iface, false );
+                                hbsInv.mon_host ( hostname, (iface_enum)iface, false, false );
                             }
 
                             hbsInv.del_host ( hostname );
@@ -1402,35 +1373,29 @@ void daemon_service_run ( void )
 
                             /* clear any outstanding alarms on the DEL */
                             hbsAlarm_clear_all ( hostname );
-
-                            hbsInv.print_node_info();
-
-                            // hbsInv.recalibrate_thresholds ();
                         }
                         else if ( msg.cmd == MTC_CMD_STOP_HOST )
                         {
                             for ( int iface = 0 ; iface < MAX_IFACES ; iface++ )
                             {
-                                hbsInv.mon_host ( hostname, (iface_enum)iface, false );
+                                hbsInv.mon_host ( hostname, (iface_enum)iface, false, true );
                             }
                             ilog ("%s stopping heartbeat service\n", hostname.c_str());
-                            hbsInv.print_node_info();
                         }
                         else if ( msg.cmd == MTC_CMD_START_HOST )
                         {
                             for ( int iface = 0 ; iface < MAX_IFACES ; iface++ )
                             {
-                                hbsInv.mon_host ( hostname, (iface_enum)iface, true );
+                                hbsInv.mon_host ( hostname, (iface_enum)iface, true, true );
                             }
                             ilog ("%s starting heartbeat service\n", hostname.c_str());
-                            hbsInv.print_node_info();
                         }
                         else if ( msg.cmd == MTC_RESTART_HBS )
                         {
                             for ( int iface = 0 ; iface < MAX_IFACES ; iface++ )
                             {
-                                hbsInv.mon_host ( hostname, (iface_enum)iface, false );
-                                hbsInv.mon_host ( hostname, (iface_enum)iface, true  );
+                                hbsInv.mon_host ( hostname, (iface_enum)iface, false, false );
+                                hbsInv.mon_host ( hostname, (iface_enum)iface, true, false  );
                             }
                             ilog ("%s restarting heartbeat service\n", hostname.c_str());
                             hbsInv.print_node_info();

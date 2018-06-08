@@ -515,8 +515,14 @@ private:
         /** Ongoing heartbeat count cleared on HBS_START reset */
         int  hbs_count [MAX_IFACES] ;
 
+        /** Keep track of the number of misses since heartbeat was started */
+        int  hbs_misses_count [MAX_IFACES];
+
         /** Immediate running count of consecutive heartbeat misses */
         int  b2b_misses_count [MAX_IFACES];
+
+        /** Number of consecutive pulses received since last miss */
+        int  b2b_pulses_count [MAX_IFACES];
 
         /** Maximum heartbeat misses since node was last brought into service */
         int  max_count [MAX_IFACES];
@@ -1929,7 +1935,7 @@ public:
     void manage_pulse_flags ( string & hostname, unsigned int flags );
 
     /** Control the heartbeat monitoring state of a host */
-    int mon_host ( const string & hostname, iface_enum iface, bool true_false );
+    int mon_host ( const string & hostname, iface_enum iface, bool true_false, bool send_clear );
 
     /** Return true if the pulse list is empty */
     bool pulse_list_empty ( iface_enum iface );
