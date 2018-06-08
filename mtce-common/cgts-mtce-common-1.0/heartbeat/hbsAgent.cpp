@@ -983,7 +983,7 @@ int send_event ( string & hostname, unsigned int event_cmd, iface_enum iface )
     event.num = 1 ;
     event.parm[0] = iface ;
 
-    print_mtc_message ( LOCALHOST, MTC_CMD_TX, event, LOCALHOST , false );
+    print_mtc_message ( hostname, MTC_CMD_TX, event, get_iface_name_str(iface) , false );
 
     /* remove the buffer as it is not needed for this message */
     bytes_to_send = ((sizeof(mtc_message_type))-(BUF_SIZE-hostname.length())) ;
