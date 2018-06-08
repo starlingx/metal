@@ -3459,6 +3459,11 @@ int nodeLinkClass::swact_handler  ( struct nodeLinkClass::node * node_ptr )
                 mtcTimer_start_msec ( node_ptr->mtcSwact_timer, mtcTimer_handler, SWACT_FAIL_MSEC_DELAY );
                 node_ptr->swactStage = MTC_SWACT__QUERY ;
             }
+
+            /* avoid leaks in failure cases */
+            mtcHttpUtil_free_conn  ( smgrEvent );
+            mtcHttpUtil_free_base  ( smgrEvent );
+
             break ;
         }
 
