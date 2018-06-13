@@ -46,6 +46,10 @@ glusterfs
 glusterfs-api
 glusterfs-client-xlators
 glusterfs-libs
+gnocchi-api
+gnocchi-metricd
+gnocchi-common
+gnocchi-statsd
 guest-scale-helper
 haproxy
 heartbeat

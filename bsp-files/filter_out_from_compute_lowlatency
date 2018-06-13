@@ -35,6 +35,10 @@ glance
 glance-api
 glance-registry
 glance-tests
+gnocchi-api
+gnocchi-metricd
+gnocchi-common
+gnocchi-statsd
 horizon
 horizon-standalone
 horizon-tests
