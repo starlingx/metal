@@ -337,8 +337,8 @@ int recv_from_guestAgent ( unsigned int cmd, char * buf_ptr )
                                state.c_str());
 
                         get_instInv_ptr()->add_inst ( uuid, instance );
-
-                        manage_reporting_state ( &instance, state );
+                        instInfo * instInfo_ptr = get_instInv_ptr()->get_inst ( uuid );
+                        manage_reporting_state ( instInfo_ptr, state );
                     }
                     if (daemon_get_cfg_ptr()->debug_level )
                         get_instInv_ptr()->print_instances();
