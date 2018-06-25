@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2016 Wind River Systems, Inc.
+ * Copyright (c) 2013-2018 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -485,6 +485,151 @@ ssize_t guestInstClass::write_inst ( instInfo * instInfo_ptr,
     return (len);
 }
 
+/*********************************************************************************
+ *
+ * Name       : process_msg   (guestInstClass::private)
+ *
+ * Purpose    : process delimited message
+ *
+ *********************************************************************************/
+void guestInstClass::process_msg(json_object *jobj_msg,
+                                 struct guestInstClass::inst * inst_ptr)
+{
+    int version;
+    string msg_type;
+    string log_err = "failed to parse ";
+    guestInstClass * obj_ptr = get_instInv_ptr();
+
+    //parse incoming msg
+    if (jobj_msg == NULL)
+    {
+        wlog("%s\n", log_err.c_str());
+        return;
+    }
+
+    if (jsonUtil_get_int(jobj_msg, GUEST_HEARTBEAT_MSG_VERSION, &version) != PASS)
+    {
+        // fail to parse the version
+        log_err.append(GUEST_HEARTBEAT_MSG_VERSION);
+        elog("%s\n", log_err.c_str());
+        obj_ptr->send_client_msg_nack(&inst_ptr->instance, log_err);
+        json_object_put(jobj_msg);
+        return;
+    }
+
+    if ( version < GUEST_HEARTBEAT_MSG_VERSION_CURRENT)
+    {
+       char log_err_str[100];
+       sprintf(log_err_str, "Bad version: %d, expect version: %d",
+             version, GUEST_HEARTBEAT_MSG_VERSION_CURRENT);
+       elog("%s\n", log_err_str);
+       log_err = log_err_str;
+       obj_ptr->send_client_msg_nack(&inst_ptr->instance, log_err);
+       json_object_put(jobj_msg);
+       return;
+    }
+
+    if (jsonUtil_get_string(jobj_msg, GUEST_HEARTBEAT_MSG_MSG_TYPE, &msg_type) != PASS)
+    {
+        // fail to parse the msg_type
+        log_err.append(GUEST_HEARTBEAT_MSG_MSG_TYPE);
+        elog("%s\n", log_err.c_str());
+        obj_ptr->send_client_msg_nack(&inst_ptr->instance, log_err);
+        json_object_put(jobj_msg);
+        return;
+    }
+
+    /* Enqueue the message to its instance message list */
+    inst_ptr->message_list.push_back(jobj_msg);
+}
+
+/*********************************************************************************
+ *
+ * Name       : parser   (guestInstClass::private)
+ *
+ * Purpose    : parse message segments and feed valid message to process_msg
+ *
+ *********************************************************************************/
+void guestInstClass::parser(char *buf,
+                            ssize_t len,
+                            json_tokener* tok,
+                            int newline_found,
+                            struct guestInstClass::inst * inst_ptr)
+{
+    json_object *jobj = json_tokener_parse_ex(tok, buf, len);
+    enum json_tokener_error jerr = json_tokener_get_error(tok);
+
+    if (jerr == json_tokener_success) {
+        process_msg(jobj, inst_ptr);
+        return;
+    }
+
+    else if (jerr == json_tokener_continue) {
+        // partial JSON is parsed , continue to read from socket.
+        if (newline_found) {
+            // if newline was found in the middle of the buffer, the message
+            // should be completed at this point. Throw out incomplete message
+            // by resetting tokener.
+            json_tokener_reset(tok);
+        }
+    }
+    else
+    {
+        // parsing error
+        json_tokener_reset(tok);
+    }
+}
+
+/*********************************************************************************
+ *
+ * Name       : handle_virtio_serial_msg   (guestInstClass::private)
+ *
+ * Purpose    : handle delimitation and assembly of message stream
+ *
+ * Description: Multiple messages from the host can be bundled together into a
+ *              single "read" so we need to check message boundaries and handle
+ *              breaking the message apart. Assume a valid message does not
+ *              contain newline '\n', and newline is added to the beginning and
+ *              end of each message by the sender to delimit the boundaries.
+ *
+ *********************************************************************************/
+void guestInstClass::handle_virtio_serial_msg(
+        char *buf,
+        ssize_t len,
+        json_tokener* tok,
+        struct guestInstClass::inst * inst_ptr)
+{
+    char *newline;
+    ssize_t len_head;
+
+next:
+    if (len <= 0)
+        return;
+
+    // search for newline as delimiter
+    newline = (char *)memchr((char *)buf, '\n', len);
+
+    if (newline) {
+        // split buffer to head and tail at the location of newline.
+        // feed the head to the parser and recursively process the tail.
+        len_head = newline-buf;
+
+        // parse head
+        if (len_head > 0)
+            parser(buf, len_head, tok, 1, inst_ptr);
+
+        // start of the tail: skip newline
+        buf += len_head+1;
+        // length of the tail: deduct 1 for the newline character
+        len -= len_head+1;
+
+        // continue to process the tail.
+        goto next;
+    }
+    else {
+         parser(buf, len, tok, 0, inst_ptr);
+    }
+}
 
 /*********************************************************************************
  *
@@ -505,8 +650,6 @@ void guestInstClass::readInst ( void )
    
     waitd.tv_sec  = 0;
     waitd.tv_usec = GUEST_SOCKET_TO;
-
-    struct json_object *jobj_msg = NULL;
 
     /* Initialize the master fd_set */
     FD_ZERO(&instance_readfds);
@@ -560,16 +703,13 @@ void guestInstClass::readInst ( void )
         /* Search through all the instances for watched channels */
         for ( struct inst * inst_ptr = inst_head ; inst_ptr != NULL ; inst_ptr = inst_ptr->next )
         {
-            mlog1 ("%s monitoring %d\n", inst_ptr->instance.inst.c_str(),
+            mlog2 ("%s monitoring %d\n", inst_ptr->instance.inst.c_str(),
                                          inst_ptr->instance.chan_fd );
 
             /* Service guestServer messages towards the local IP */
             if (FD_ISSET(inst_ptr->instance.chan_fd, &instance_readfds) ) 
             {
-                bool   message_present ;
-                int    count ;
-                string last_message_type ;
-                char   vm_message[GUEST_HEARTBEAT_MSG_MAX_MSG_SIZE] ;
+                char   buf[GUEST_HEARTBEAT_MSG_MAX_MSG_SIZE] ;
                 string name ;
 
                 if( inst_ptr->instance.inst.empty() )
@@ -577,14 +717,12 @@ void guestInstClass::readInst ( void )
                 else
                     name = inst_ptr->instance.inst ;
 
-                count = 0 ;
-                last_message_type = GUEST_HEARTBEAT_MSG_INIT_ACK ;
-                
-                do 
+                struct json_tokener* tok = json_tokener_new();
+
+                for ( int i = 0; i < INST_MSG_READ_COUNT; i++ )
                 {
-                    message_present = false ;
-                    rc = read ( inst_ptr->instance.chan_fd, vm_message, GUEST_HEARTBEAT_MSG_MAX_MSG_SIZE);
-                    mlog3 ("%s read channel: bytes:%d, fd:%d\n", name.c_str(), rc,inst_ptr->instance.chan_fd );
+                    rc = read ( inst_ptr->instance.chan_fd, buf, GUEST_HEARTBEAT_MSG_MAX_MSG_SIZE);
+                    mlog2 ("%s read channel: bytes:%d, fd:%d\n", name.c_str(), rc,inst_ptr->instance.chan_fd );
                     if ( rc < 0 )
                     {
                         if ( errno == EINTR )
@@ -632,67 +770,12 @@ void guestInstClass::readInst ( void )
                         else
                         {
                             inst_ptr->instance.failure_count = 0 ;
-                            jobj_msg = json_tokener_parse(vm_message);
-                            int version;
-                            string msg_type;
-                            string log_err = "failed to parse ";
-                            guestInstClass * obj_ptr = get_instInv_ptr();
-
-                            //parse incoming msg
-                            if (jobj_msg == NULL)
-                            {
-                                wlog("failed to parse msg\n");
-                                continue;
-                            }
-
-                            if (jsonUtil_get_int(jobj_msg, GUEST_HEARTBEAT_MSG_VERSION, &version) != PASS)
-                            {
-                                // fail to parse the version
-                                log_err.append(GUEST_HEARTBEAT_MSG_VERSION);
-                                elog("%s\n", log_err.c_str());
-                                obj_ptr->send_client_msg_nack(&inst_ptr->instance, log_err);
-                                json_object_put(jobj_msg);
-                                continue;
-                            }
-
-                            if ( version != GUEST_HEARTBEAT_MSG_VERSION_CURRENT)
-                            {
-                               char log_err_str[100];
-                               sprintf(log_err_str, "Bad version: %d, expect version: %d",
-                                     version, GUEST_HEARTBEAT_MSG_VERSION_CURRENT);
-                               elog("%s\n", log_err_str);
-                               log_err = log_err_str;
-                               obj_ptr->send_client_msg_nack(&inst_ptr->instance, log_err);
-                               json_object_put(jobj_msg);
-                               continue;
-                            }
-
-                            message_present = true ;
-                            if (jsonUtil_get_string(jobj_msg, GUEST_HEARTBEAT_MSG_MSG_TYPE, &msg_type) != PASS)
-                            {
-                                // fail to parse the msg_type
-                                log_err.append(GUEST_HEARTBEAT_MSG_MSG_TYPE);
-                                elog("%s\n", log_err.c_str());
-                                obj_ptr->send_client_msg_nack(&inst_ptr->instance, log_err);
-                                json_object_put(jobj_msg);
-                                continue;
-                            }
-
-                            mlog2 ("%s '%s' message\n", name.c_str(), msg_type.c_str());
-                   
-                            /* Try and purge out old init messages */
-                            if (!msg_type.compare(GUEST_HEARTBEAT_MSG_INIT) &&
-                                !msg_type.compare(last_message_type) )
-                            {
-                                inst_ptr->message_list.pop_back();
-                                ilog ("%s deleting stale init message\n", name.c_str());
-                            }
-                            /* Enqueue the message to its instance message list */
-                            inst_ptr->message_list.push_back(jobj_msg);
-                            last_message_type = msg_type ;
+                            mlog2 ("%s handling message buf: %s\n", name.c_str(), buf );
+                            handle_virtio_serial_msg(buf, rc, tok, inst_ptr);
                         }
                     }
-                } while ( ( message_present == true ) && ( ++count<10 ) ) ;
+                }
+                json_tokener_free(tok);
             }
             if (( inst_ptr->next == NULL ) || ( inst_ptr == inst_tail ))
                 break ;
