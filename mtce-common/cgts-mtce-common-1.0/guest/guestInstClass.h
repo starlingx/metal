@@ -197,7 +197,8 @@ class guestInstClass
     void send_client_msg_nack ( instInfo * instInfo_ptr,
                                 string log_err);
     void handle_parse_failure ( struct guestInstClass::inst * inst_ptr,
-                                const char *key);
+                                const char *key,
+                                struct json_object *jobj_msg);
 
     /* Called on controlle daemon exit */
     void free_instance_resources ( void );
