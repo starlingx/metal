@@ -1453,21 +1453,22 @@ void daemon_dump_info ( void )
 
     mtcTimer_mem_log ();
     mtcInv.print_node_info ();
-
     daemon_dump_membuf (); /* write mem_logs to log file and clear log list */
 
-    //mtcInv.doneQueue_dump_all ();
-    mtcInv.mtcCmd_doneQ_dump_all ();
-
-    daemon_dump_membuf (); /* write mem_logs to log file and clear log list */
-
-    //mtcInv.workQueue_dump_all ();
-    mtcInv.mtcCmd_workQ_dump_all ();
-
-    daemon_dump_membuf (); /* write mem_logs to log file and clear log list */
+    //
+    // These calls can lead to a segfault if the lists they are
+    // iterating over change as a result of a http reception interrupt.
+    //
+    // If these calls are to be re-enabled then there needs to be MUTEX.
+    //
+    // mtcInv.doneQueue_dump_all ();
+    // mtcInv.mtcCmd_doneQ_dump_all ();
+    // daemon_dump_membuf ();
+    // mtcInv.workQueue_dump_all ();
+    // mtcInv.mtcCmd_workQ_dump_all ();
+    // daemon_dump_membuf ();
 
     mtcInv.memDumpAllState ();
-
     daemon_dump_membuf (); /* write mem_logs to log file and clear log list */
 }
 
