@@ -1,6 +1,6 @@
-COPY_LIST="pxe-network-installer//* \
-           $CGCS_BASE/mwa-beas/bsp-files/grub.cfg \
-           $CGCS_BASE/mwa-beas/bsp-files/kickstarts/post_clone_iso_ks.cfg \
+COPY_LIST="pxe-network-installer/* \
+           $GIT_BASE/bsp-files/grub.cfg \
+           $GIT_BASE/bsp-files/kickstarts/post_clone_iso_ks.cfg \
            $SRC_BASE/cgcs-centos-repo/Binary/images/efiboot.img \
            /import/mirrors/CentOS/tis-installer/initrd.img-stx-0.2 \
            /import/mirrors/CentOS/tis-installer/squashfs.img-stx-0.2 \

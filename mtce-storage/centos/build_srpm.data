@@ -1,4 +1,4 @@
-SRC_DIR=$CGCS_BASE/mwa-beas/mtce-storage/cgts-mtce-storage-1.0/scripts
+SRC_DIR="$PKG_BASE/cgts-mtce-storage-1.0/scripts"
 COPY_LIST="$SRC_DIR/* \
            $PKG_BASE/LICENSE"
 TIS_PATCH_VER=3
