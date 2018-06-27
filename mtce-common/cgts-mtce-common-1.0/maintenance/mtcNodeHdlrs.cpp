@@ -3648,7 +3648,6 @@ int nodeLinkClass::swact_handler  ( struct nodeLinkClass::node * node_ptr )
              * the task and setting it back to the start. */
             if ( node_ptr->mtcSwact_timer.ring == true )
             {
-                mtcHttpUtil_free_conn ( nodeLinkClass::smgrEvent );
                 mtcInvApi_force_task ( node_ptr, "");
                 nodeLinkClass::smgrEvent.active = false ;
                 nodeLinkClass::smgrEvent.mutex  = false ;

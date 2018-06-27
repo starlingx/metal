@@ -1000,6 +1000,11 @@ int mtcHttpUtil_receive ( libEvent & event )
             break ;
         }
     }
+    if ( rc != RETRY )
+    {
+        mtcHttpUtil_free_conn  ( event );
+        mtcHttpUtil_free_base  ( event );
+    }
     return (rc);
 }
 
