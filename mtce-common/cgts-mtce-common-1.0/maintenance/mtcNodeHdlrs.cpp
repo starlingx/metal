@@ -600,7 +600,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                         this->autorecovery_disabled = true ;
                     }
 
-                    if ( CPE_SYSTEM )
+                    if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
                     {
                         /* Raise Critical Compute Function Alarm */
                         alarm_compute_failure ( node_ptr , FM_ALARM_SEVERITY_CRITICAL );
@@ -613,7 +613,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
             node_ptr->graceful_recovery_counter = 0 ;
             node_ptr->health_threshold_counter  = 0 ;
 
-            if ( CPE_SYSTEM )
+            if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
             {
                 node_ptr->inservice_failed_subf = true ;
                 subfStateChange ( node_ptr, MTC_OPER_STATE__DISABLED,
@@ -1262,20 +1262,22 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
             }
             else /* success path */
             {
-                /* heartbeat is only started now in a normal system. */
-                if (( LARGE_SYSTEM ) && ( NOT_THIS_HOST ))
+                /* Don't start the self heartbeat for the active controller.
+                 * Also, in AIO , hosts that have a controller function also
+                 * have a compute function and the heartbeat for those hosts
+                 * are started at the end of the subfunction handler. */
+                if (( THIS_HOST ) ||
+                   (( CPE_SYSTEM ) && ( is_controller(node_ptr)) ))
+                {
+                    enableStageChange ( node_ptr, MTC_ENABLE__STATE_CHANGE );
+                }
+                else
                 {
                     /* allow the fsm to wait for up to 1 minute for the
                      * hbsClient's ready event before starting heartbeat
                      * test. */
                     mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_MINS_1 );
                     enableStageChange ( node_ptr, MTC_ENABLE__HEARTBEAT_WAIT );
-                }
-                else
-                {
-                    /* The heartbeat soak will be started in the enable
-                     * subfunction handler in the combined system. */
-                    enableStageChange ( node_ptr, MTC_ENABLE__STATE_CHANGE );
                 }
             }
             break ;
@@ -1446,7 +1448,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
 
             enableStageChange ( node_ptr, MTC_ENABLE__START );
 
-            if ( CPE_SYSTEM )
+            if (( CPE_SYSTEM ) && ( is_controller(node_ptr)))
             {
                 ilog ("%s running compute sub-function enable handler\n", node_ptr->hostname.c_str());
                 mtcInvApi_update_task ( node_ptr, MTC_TASK_ENABLING_SUBF );
@@ -1749,7 +1751,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
                                            MTC_OPER_STATE__DISABLED,
                                            MTC_AVAIL_STATUS__FAILED );
 
-                if ( CPE_SYSTEM )
+                if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
                 {
                     subfStateChange ( node_ptr, MTC_OPER_STATE__DISABLED,
                                                MTC_AVAIL_STATUS__FAILED );
@@ -2140,7 +2142,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
             {
                 /* The active controller would never get/be here but
                  * if it did then just fall through to change state. */
-                if ( CPE_SYSTEM )
+                if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
                 {
                     /* Here we need to run the sub-fnction goenable and start
                      * host services if this is the other controller in a AIO
@@ -2368,7 +2370,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
         }
         case MTC_RECOVERY__STATE_CHANGE:
         {
-            if ( CPE_SYSTEM )
+            if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
             {
                 /* Set node as unlocked-enabled */
                 subfStateChange ( node_ptr, MTC_OPER_STATE__ENABLED,
@@ -2646,7 +2648,7 @@ int nodeLinkClass::disable_handler  ( struct nodeLinkClass::node * node_ptr )
                                            MTC_OPER_STATE__DISABLED,
                                            locked_status );
 
-                if ( CPE_SYSTEM )
+                if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
                 {
                     subfStateChange ( node_ptr, MTC_OPER_STATE__DISABLED,
                                                 locked_status );
@@ -3290,7 +3292,7 @@ int nodeLinkClass::online_handler ( struct nodeLinkClass::node * node_ptr )
 
                         /* otherwise change state */
                         mtcInvApi_update_state(node_ptr, MTC_JSON_INV_AVAIL,"offline" );
-                        if ( CPE_SYSTEM )
+                        if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
                         {
                             mtcInvApi_update_state(node_ptr, MTC_JSON_INV_AVAIL_SUBF,"offline" );
                         }
@@ -3331,7 +3333,7 @@ int nodeLinkClass::online_handler ( struct nodeLinkClass::node * node_ptr )
                                   node_ptr->hostname.c_str());
 
                         mtcInvApi_update_state ( node_ptr, MTC_JSON_INV_AVAIL, "online" );
-                        if ( CPE_SYSTEM )
+                        if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
                         {
                             mtcInvApi_update_state ( node_ptr, MTC_JSON_INV_AVAIL_SUBF, "online" );
                         }
@@ -5318,7 +5320,7 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
 
                 node_ptr->uuid.length() ? node_ptr->uuid.c_str() : "" );
 
-            if ( CPE_SYSTEM )
+            if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
             {
                 if ( daemon_is_file_present ( CONFIG_COMPLETE_COMPUTE ) == false )
                 {
@@ -5578,12 +5580,17 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
             if (( node_ptr->adminState == MTC_ADMIN_STATE__UNLOCKED ) &&
                 ( node_ptr->operState  == MTC_OPER_STATE__ENABLED ))
             {
-                if (( NOT_THIS_HOST ) && ( LARGE_SYSTEM ))
+                /* start the heartbeat service in all cases except for
+                 * THIS host and CPE controller hosts */
+                if ( NOT_THIS_HOST )
                 {
-                    send_hbs_command ( node_ptr->hostname, MTC_CMD_START_HOST );
+                    if (( LARGE_SYSTEM ) ||
+                        (( CPE_SYSTEM ) && ( is_controller(node_ptr) == false )))
+                    {
+                        send_hbs_command ( node_ptr->hostname, MTC_CMD_START_HOST );
+                    }
                 }
             }
-
             /* Only run hardware monitor if the bm ip is provisioned */
             if (( hostUtil_is_valid_bm_type  ( node_ptr->bm_type )) &&
                 ( hostUtil_is_valid_ip_addr  ( node_ptr->bm_ip )))
@@ -5627,19 +5634,11 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
             }
 
             /* Special Add handling for the AIO system */
-            if ( CPE_SYSTEM )
+            if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
             {
                 if (( node_ptr->adminState == MTC_ADMIN_STATE__UNLOCKED ) &&
                     ( node_ptr->operState  == MTC_OPER_STATE__ENABLED ))
                 {
-                    /* If AIO and unlocked-enabled and not this host then
-                     * start the heartbeat service
-                     * (inactive controller case) */
-                    if ( NOT_THIS_HOST )
-                    {
-                        send_hbs_command ( node_ptr->hostname, MTC_CMD_START_HOST );
-                    }
-
                     /* In AIO if in DOR mode and the host is unlocked enabled
                      * we need to run the subfunction handler and request
                      * to start host services. */
@@ -6353,7 +6352,7 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
              *     and we have only a single enabled controller (which must be this one)
              *     and the alarm is not already raised.
              **/
-            if ( CPE_SYSTEM )
+            if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
             {
                 if (( node_ptr->adminState == MTC_ADMIN_STATE__UNLOCKED ) &&
                     ( node_ptr->operState == MTC_OPER_STATE__ENABLED ) &&

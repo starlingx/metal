@@ -1629,29 +1629,43 @@ int run_hostservices_scripts ( unsigned int cmd )
      * one for controller and 1 for compute */
     if ( ctrl.system_type != SYSTEM_TYPE__NORMAL )
     {
+        string dir = "" ;
         if ( action == "stop" )
         {
             std::list<string> more_scripts ;
             if ( cmd == MTC_CMD_STOP_COMPUTE_SVCS )
             {
-                dir = SERVICES_DIR ;
-                dir.append("/controller");
+                /* only add the controller if we get a compute stop
+                 * and this host has a controller nodetype function */
+                if (ctrl.nodetype & CONTROLLER_TYPE)
+                {
+                    dir = SERVICES_DIR ;
+                    dir.append("/controller");
+                }
             }
-            else
+            else if ( cmd == MTC_CMD_STOP_CONTROL_SVCS )
             {
-                dir = SERVICES_DIR ;
-                dir.append("/compute");
+                /* add the compute stop if we get a controller stop
+                 * and this host has a compute nodetype function */
+                if (ctrl.nodetype & COMPUTE_TYPE)
+                {
+                    dir = SERVICES_DIR ;
+                    dir.append("/compute");
+                }
             }
 
-            if ( load_filenames_in_dir ( dir.data(), more_scripts ) != PASS )
+            if ( ! dir.empty() )
             {
-                ctrl.active_script_set = NO_SCRIPTS ;
-                return (FAIL_READ_FILES) ;
-            }
+                if ( load_filenames_in_dir ( dir.data(), more_scripts ) != PASS )
+                {
+                    ctrl.active_script_set = NO_SCRIPTS ;
+                    return (FAIL_READ_FILES) ;
+                }
 
-            if ( ! more_scripts.empty() )
-            {
-                scripts.merge(more_scripts);
+                if ( ! more_scripts.empty() )
+                {
+                    scripts.merge(more_scripts);
+                }
             }
         }
     }

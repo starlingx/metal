@@ -940,7 +940,7 @@ int nodeLinkClass::mtcInvApi_update_states_now ( struct nodeLinkClass::node * no
     else
         avail = " " ;
 
-    if ( CPE_SYSTEM )
+    if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
     {
         if ( ! oper_subf.empty() )
         {
@@ -982,7 +982,7 @@ int nodeLinkClass::mtcInvApi_update_states_now ( struct nodeLinkClass::node * no
         this->sysinvEvent.payload.erase(len-1,1);
         this->sysinvEvent.payload.append ( "]");
 
-        if ( CPE_SYSTEM )
+        if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
         {
             ilog ("%s %s-%s-%s %s-%s\n",
                       node_ptr->hostname.c_str(),
