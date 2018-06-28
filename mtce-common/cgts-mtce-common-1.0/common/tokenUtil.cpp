@@ -30,12 +30,308 @@
 #include "tokenUtil.h"      /* for ... this module header              */
 
 #define GET_SERVICE_LIST_LABEL ((const char *)"OS-KSADM:services")
+#define TOKEN_REFRESH_RETRY_DELAY (5)
 
 /* The static token used for authentication by any
  * daemon that includes this module */
 static keyToken_type      __token__ ;
 keyToken_type * tokenUtil_get_ptr   ( void ) { return &__token__ ; };
 keyToken_type   tokenUtil_get_token ( void ) { return __token__ ; };
+
+
+/* hold off for TOKEN_REFRESH_RETRY_DELAY seconds before trying again. */
+static int __retries = 0 ;
+static void __retry_holdoff( int delay )
+{
+    for ( int i = 0 ; i < delay ; i++ )
+    {
+        daemon_signal_hdlr ();
+        __retries++ ;
+        sleep (1);
+    }
+}
+
+/***************************************************************************
+ *
+ * Name       : tokenUtil_get_first
+ *
+ * Description: Get the first token. Should only be called at process startup
+ *              time before entering the main loop.
+ *
+ * Assumptions: The token request is non-blocking but this interface does not
+ *              return until a token has been acquired.
+ *              The signal handler is serviced.
+ *
+ * Behavior   : Issue non-blocking token request. If the request fails
+ *              immediately the the far end did not connect and we backoff
+ *              for RETRY_DELAY seconds. With a successful send we loop for
+ *              up to 2 seconds longer than the specified timeout, Any failure
+ *              results in a retry after RETRY_DELAY seconds.
+ *              Return as soon as we get a token.
+ *
+ * Returns    : nothing
+ *
+ ***************************************************************************/
+void tokenUtil_get_first ( libEvent & event, string & hostname )
+{
+    int rc         = FAIL  ; /* error staus local variable              */
+    bool got_token = false ; /* exit criteria when true                 */
+    bool blocking  = false ; /* token request is non_blocking           */
+    int  log_throttle = 0  ; /* control var to prevent log flooding     */
+
+    __retries = 0 ;          /* count how long it took to get the token */
+
+    dlog ("%s Requesting initial token\n", hostname.c_str());
+
+    do
+    {
+        log_throttle = 0 ;
+
+        __token__.token.clear(); /* start with an empty token */
+
+        /* Issue the token request in non-blocking form */
+        rc = tokenUtil_new_token ( event, hostname, blocking );
+
+#ifdef WANT_FIT_TESTING
+        string data = "" ;
+        if ( daemon_want_fit ( FIT_CODE__TOKEN , hostname, "fail_request", data ))
+            rc = atoi(data.data()) ;
+#endif
+
+        if ( rc == PASS )
+        {
+            for ( int i = 0 ; i < (HTTP_TOKEN_TIMEOUT+2) ; i++ )
+            {
+                daemon_signal_hdlr ();
+
+                /* Look for the response */
+                if ( event.base )
+                {
+                    /* look for the response */
+                    event_base_loop( event.base, EVLOOP_NONBLOCK );
+
+                    /* response is received once the active state is false */
+                    if ( event.active )
+                    {
+                        ilog_throttled ( log_throttle, 20,
+                              "%s waiting on token request completion loop:%d\n",
+                              hostname.c_str(), i);
+                        __retries++ ;
+                        sleep (1);
+                    }
+                    else
+                    {
+
+#ifdef WANT_FIT_TESTING
+                        string data = "" ;
+                        if ( daemon_want_fit ( FIT_CODE__TOKEN, hostname, "timeout", data ))
+                        {
+                            event.status = atoi(data.data());
+                            __token__.token.clear();
+                        }
+#endif
+
+                        if ( event.status == PASS )
+                        {
+                            ilog ("%s got token after %d seconds\n",
+                                      hostname.c_str(),
+                                      __retries );
+                            got_token = true ;
+                            break ; /* will exit below if there is a token */
+                        }
+                        else
+                        {
+                            /* report warning for timeout and error otherwise */
+                            if ( event.status == FAIL_TIMEOUT )
+                            {
+                                wlog ("%s token request timeout after %d seconds\n",
+                                          hostname.c_str(),
+                                          __retries);
+                            }
+                            else
+                            {
+                                elog ("%s token request failed after %d seconds (rc:%d)",
+                                          hostname.c_str(),
+                                          __retries,
+                                          event.status );
+                            }
+
+                            /* check connection pointers ; for debug and failure rca */
+                            if ( ( event.base == NULL ) || ( event.conn == NULL ))
+                            {
+                                wlog ("%s ... base:%p conn:%p retries:%d\n",
+                                          hostname.c_str(),
+                                          event.base,
+                                          event.conn,
+                                          __retries);
+                            }
+                            break ; /* will retry below */
+                        } /* end else status fail */
+                    } /* end else no active */
+                }
+                else
+                {
+                    /* should not get here with a null base pointer
+                     * but if we do then break and try again. */
+                    slog ("%s unexpected null event base (%d) - retrying\n",
+                              hostname.c_str(),
+                              __retries );
+
+                    break ; /* retry below */
+                }
+            }
+
+            /* Check for a response string */
+            if ( __token__.token.empty() )
+            {
+                elog ("%s no token ; %d second hold-off before retry\n",
+                          hostname.c_str(), TOKEN_REFRESH_RETRY_DELAY);
+                __retry_holdoff(TOKEN_REFRESH_RETRY_DELAY);
+            }
+        }
+        else
+        {
+            elog ("%s token request failed (rc:%d:%d) active:%d\n",
+                      hostname.c_str(),
+                      rc,
+                      event.status,
+                      event.active );
+
+            __retry_holdoff(TOKEN_REFRESH_RETRY_DELAY);
+        }
+
+        httpUtil_free_conn ( event );
+        httpUtil_free_base ( event );
+
+    } while (( __token__.token.empty() ) || ( got_token == false )) ;
+
+    dlog ("%s took %d seconds to get token\n", hostname.c_str(), __retries );
+
+    /* wait 5 seconds for sysinv to be ready if the number of retries > 1 */
+    if ( __retries > 1 )
+    {
+        __retry_holdoff (3);
+    }
+}
+
+/****************************************************************************
+ *
+ * Name       : tokenUtil_manage_token
+ *
+ * Purpose    : Manage token refresh and failure retries
+ *
+ * Description: There should always be an active token refresh timer running.
+ *              If there is none (swerr) then one is started.
+ *
+ *              Any maintenance daemon that needs to periodically refresh its
+ *              token must periodicslly call this API as part of its main loop.
+ *
+ *              All error conditions are handled with a small hold-off retry
+ *              by timer rater than inline wait like in get_first.
+ *
+ * Returns    : Nothing
+ *
+ ***************************************************************************/
+void tokenUtil_manage_token ( libEvent         & event,
+                              string           & hostname,
+                              int              & refresh_rate,
+                              struct mtc_timer & token_refresh_timer,
+                              void (*handler)(int, siginfo_t*, void*))
+{
+
+#ifdef WANT_FIT_TESTING
+    if ( daemon_want_fit ( FIT_CODE__TOKEN, hostname , "corrupt" ))
+        tokenUtil_fail_token ();
+#endif
+
+    if ( token_refresh_timer.ring == true )
+    {
+        bool blocking  = false ;        /* token request is non_blocking */
+        int        _rr = refresh_rate ; /* local copy of refresh rate   */
+
+        dlog ("%s renewing token\n", hostname.c_str());
+
+        /* this is a non-blocking call with the 'false' spec */
+        int rc = tokenUtil_new_token ( event, hostname, blocking );
+        if ( rc )
+        {
+            /* go for a retry by delayed refresh if the request fails */
+            __token__.delay = true ;
+        }
+
+#ifdef WANT_FIT_TESTING
+        else if ( daemon_want_fit ( FIT_CODE__TOKEN, hostname, "null_base" ))
+            httpUtil_free_base ( event );
+#endif
+
+        if ( __token__.delay == true )
+        {
+            __token__.delay = false ;
+            _rr = TOKEN_REFRESH_RETRY_DELAY ;
+        }
+        mtcTimer_start(token_refresh_timer,handler,_rr );
+    }
+    else if ( token_refresh_timer.active == false )
+    {
+        slog ("%s no active token refresh timer ; starting new\n", hostname.c_str());
+        mtcTimer_start(token_refresh_timer,handler,TOKEN_REFRESH_RETRY_DELAY);
+    }
+    else if ( __token__.delay == true )
+    {
+        ilog ( "Token Refresh in %d seconds\n", TOKEN_REFRESH_RETRY_DELAY );
+        mtcTimer_stop ( token_refresh_timer );
+
+        __token__.delay = false ;
+
+        /* force refresh of token in 5 seconds */
+        mtcTimer_start(token_refresh_timer,handler,TOKEN_REFRESH_RETRY_DELAY);
+    }
+    else if ( event.active == true )
+    {
+        /* Look for the response */
+        if ( event.base )
+        {
+            event_base_loop( event.base, EVLOOP_NONBLOCK );
+        }
+        else
+        {
+            /* should not get here. event active while base is null
+             *    try and recover from this error case. */
+            __token__.delay = true ;
+            event.active = false ;
+        }
+    }
+    else if ( event.base )
+    {
+
+#ifdef WANT_FIT_TESTING
+        string data = "" ;
+        if ( daemon_want_fit ( FIT_CODE__TOKEN, hostname, "refresh", data ))
+            __token__.token.clear();
+#endif
+
+        /* Check for a response string */
+        if ( __token__.token.empty() )
+        {
+            elog ("%s no token ; %d second hold-off before retry\n",
+                      hostname.c_str(), TOKEN_REFRESH_RETRY_DELAY );
+
+            /* force refresh of token in 5 seconds */
+            mtcTimer_reset(token_refresh_timer);
+            mtcTimer_start(token_refresh_timer,handler,TOKEN_REFRESH_RETRY_DELAY);
+        }
+
+        dlog ("%s freeing token event base and conn data\n", hostname.c_str());
+        httpUtil_free_conn ( event );
+        httpUtil_free_base ( event );
+    }
+
+#ifdef WANT_FIT_TESTING
+    if ( daemon_want_fit ( FIT_CODE__TOKEN, hostname, "cancel_timer" ))
+        mtcTimer_reset ( token_refresh_timer );
+#endif
+}
+
 
 void tokenUtil_log_refresh ( void )
 {
@@ -58,7 +354,7 @@ int tokenUtil_token_refresh ( libEvent & event, string hostname )
 
     if ( event.status != PASS )
     {
-        event.status = tokenUtil_new_token( event, hostname ); 
+        event.status = tokenUtil_new_token( event, hostname );
     }
     else
     {
@@ -148,7 +444,7 @@ string _get_keystone_prefix_path ( )
 int tokenUtil_handler ( libEvent & event )
 {
     jsonUtil_auth_type info  ;
-    
+
     string hn = event.hostname ;
     int    rc = event.status   ;
 
@@ -185,6 +481,7 @@ int tokenUtil_handler ( libEvent & event )
             token_ptr->token  = token_str ;
             token_ptr->url    = info.adminURL ;
             token_ptr->refreshed = true ;
+
         }
     }
     else if ( event.request == KEYSTONE_GET_ENDPOINT_LIST )
@@ -288,6 +585,7 @@ int tokenUtil_handler ( libEvent & event )
                event.information.c_str(),
                event.label.c_str());
         }
+        event.active = false ;
         return (event.status);
     }
     else if ( event.request == KEYSTONE_GET_SERVICE_LIST )
@@ -393,6 +691,7 @@ int tokenUtil_handler ( libEvent & event )
     {
         dlog ("%s Token Refresh O.K.\n", event.hostname.c_str());
     }
+    event.active = false ;
     return (rc);
 }
 
@@ -403,7 +702,7 @@ void tokenUtil_fail_token ( void )
 }
 
 /* fetches an authorization token as a blocking request */
-int tokenUtil_new_token ( libEvent & event, string hostname )
+int tokenUtil_new_token ( libEvent & event, string hostname, bool blocking )
 {
     ilog ("%s Requesting Authentication Token\n", hostname.c_str());
 
@@ -418,7 +717,8 @@ int tokenUtil_new_token ( libEvent & event, string hostname )
     dlog ("%s fetching new token\n", event.hostname.c_str());
 
     event.prefix_path = _get_keystone_prefix_path();
-    event.blocking    = true ;
+    event.blocking    = blocking ;
+    // event.blocking    = true ;
     event.request     = KEYSTONE_GET_TOKEN ;
     event.operation   = "get new" ;
     event.type        = EVHTTP_REQ_POST ;

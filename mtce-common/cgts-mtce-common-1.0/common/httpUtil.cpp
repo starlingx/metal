@@ -911,7 +911,7 @@ int httpUtil_api_request ( libEvent & event )
         event.status = RETRY ;
         if ( event.blocking == true )
         {
-            hlog ("%s Requested (blocking) (to:%d)\n", event.log_prefix.c_str(), event.timeout);
+            hlog ("%s Requested (blocking) (timeout:%d secs)\n", event.log_prefix.c_str(), event.timeout);
 
             /* Send the message with timeout */
             event_base_dispatch(event.base);
@@ -920,7 +920,7 @@ int httpUtil_api_request ( libEvent & event )
         }
         else if ( event.request == KEYSTONE_GET_TOKEN )
         {
-            httpUtil_event_info (event);
+            hlog ("%s Requested (non-blocking) (timeout:%d secs)\n", event.log_prefix.c_str(), event.timeout);
             event.active = true ;
             event.status = event_base_loop(event.base, EVLOOP_NONBLOCK);
             httpUtil_latency_log ( event, label.c_str(), __LINE__, MAX_DELAY_B4_LATENCY_LOG ); /* Should be immediate ; non blocking */
@@ -929,7 +929,7 @@ int httpUtil_api_request ( libEvent & event )
         }
         else
         {
-            hlog ("%s Requested (blocking) (to:%d)\n", event.log_prefix.c_str(), event.timeout );
+            hlog ("%s Requested (blocking) (timeout:%d secs)\n", event.log_prefix.c_str(), event.timeout );
             event_base_dispatch(event.base);
             httpUtil_latency_log ( event, label.c_str(), __LINE__, MAX_DELAY_B4_LATENCY_LOG ) ;
             goto httpUtil_api_request_done ;

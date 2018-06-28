@@ -35,8 +35,6 @@ int nodeLinkClass::fsm ( struct nodeLinkClass::node * node_ptr )
 {
     int rc = PASS ;
 
-    keyToken_type * __token_ptr = tokenUtil_get_ptr();
-
     if ( node_ptr == NULL )
     {
         slog ("Null Node Pointer\n");
@@ -91,35 +89,6 @@ int nodeLinkClass::fsm ( struct nodeLinkClass::node * node_ptr )
      *   with mtcAlive debouncing
      */
     nodeLinkClass::online_handler ( node_ptr );
-
-    if ( this->mtcTimer_token.ring == true )
-    {
-        dlog ("%s renewing token\n", my_hostname.c_str());
-
-        /* this is a blocking call */
-        tokenUtil_new_token ( tokenEvent, my_hostname );
-
-        if ( __token_ptr->delay == true )
-        {
-            __token_ptr->delay = false ;
-            mtcTimer_start( mtcTimer_token, mtcTimer_handler, 5 );
-        }
-        else
-        {
-            mtcTimer_start ( mtcTimer_token, mtcTimer_handler, token_refresh_rate );
-        }
-    }
-    else if ( __token_ptr->delay == true )
-    {
-        ilog ( "Token Refresh in 5 seconds\n" );
-        if ( mtcTimer_token.tid )
-             mtcTimer_stop ( mtcTimer_token );
-
-        __token_ptr->delay = false ;
-
-        /* force refresh of token in 5 seconds */
-        mtcTimer_start( mtcTimer_token, mtcTimer_handler, 5 );
-    }
 
     if ( node_ptr->adminAction == MTC_ADMIN_ACTION__DELETE )
     {

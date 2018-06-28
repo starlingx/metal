@@ -42,7 +42,8 @@ keyToken_type * tokenUtil_get_ptr      ( void );
 keyToken_type   tokenUtil_get_token    ( void );
 
 int             tokenUtil_handler      ( libEvent & event );
-int             tokenUtil_new_token    ( libEvent & event, string hostname     );
+int             tokenUtil_new_token    ( libEvent & event, string hostname, bool blocking=true );
+void            tokenUtil_get_first    ( libEvent & event, string & hostname   );
 int             tokenUtil_token_refresh( libEvent & event, string hostname     );
 int             tokenUtil_get_endpoints( libEvent & event, string service_uuid );
 string          tokenUtil_get_svc_uuid ( libEvent & event, string service_name );
@@ -50,9 +51,15 @@ string          tokenUtil_get_svc_uuid ( libEvent & event, string service_name )
 void            tokenUtil_fail_token   ( void );
 void            tokenUtil_log_refresh  ( void );
 
-int keystone_config_handler ( void * user, 
+int keystone_config_handler ( void * user,
                         const char * section,
                         const char * name,
                         const char * value);
+
+void tokenUtil_manage_token ( libEvent         & event,
+                              string           & hostname,
+                              int              & refresh_rate,
+                              struct mtc_timer & token_refresh_timer,
+                              void (*handler)(int, siginfo_t*, void*));
 
 #endif /* __INCLUDE_TOKENUTIL_H__ */

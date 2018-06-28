@@ -929,25 +929,9 @@ int _self_provision ( void )
         daemon_exit();
     }
 
-    /* Get an Authentication Token */
-    ilog ("%s Requesting initial token\n", mtcInv.my_hostname.c_str() );
-    do
-    {
-       rc = tokenUtil_new_token ( mtcInv.tokenEvent, mtcInv.my_hostname );
-       if ( rc )
-       {
-           elog ("Failed to get authentication token (%d)\n", rc );
-       }
-
-       /* Give system inventory some time after start-up.
-        * We see frequent first request failures requiring retry when this
-        * wait was inside the above if clause. Moving it here ensure there
-        * is always a small wait after the token fetch on process startup. */
-       daemon_signal_hdlr ();
-       sleep (5);
-       daemon_signal_hdlr ();
-
-    } while ( rc != PASS ) ;
+    /* Get the initial token.
+     * This call does not return until a token is received */
+    tokenUtil_get_first ( mtcInv.tokenEvent, mtcInv.my_hostname );
 
 #ifdef WANT_FIT_TESTING
     if ( daemon_want_fit ( FIT_CODE__CORRUPT_TOKEN, mtcInv.my_hostname ))
@@ -1296,6 +1280,7 @@ void daemon_service_run ( void )
     /* Run Maintenance service forever */
     for ( ; ; )
     {
+        daemon_signal_hdlr ();
         /**
          *  Can't just run 'mtcHttpSvr_look' off select as it is seen to miss events.
          *  Would like to use event_base_loopexit with event_base_loopcontinue
@@ -1304,11 +1289,11 @@ void daemon_service_run ( void )
          *  mtcHttpSvr_work ( mtce_event );
          **/
         mtcHttpSvr_look ( mtce_event );
+        tokenUtil_manage_token ( mtcInv.tokenEvent, mtcInv.my_hostname, mtcInv.token_refresh_rate, mtcInv.mtcTimer_token, mtcTimer_handler );
         tokenUtil_log_refresh ();
 
         if ( mtcInv_ptr->num_hosts () == 0 )
         {
-            // mtcHttpSvr_look ( mtce_event );
             sleep (1);
             continue ;
         }
