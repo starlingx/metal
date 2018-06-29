@@ -38,7 +38,7 @@ the kernel by going onto yow-cgts3-lx and using the command:
 sbverify --cert [CERT] vmlinuz
 
 The certificate specfied as the argument can be found in
-$MY_REPO/addons/wr-cgcs/layers/cgcs/recipes-extended/shim-unsigned/files/tis-shim.crt
+$MY_REPO/stx/stx-integ/extended/shim-unsigned/files/tis-shim.crt
 
 ===========
 initrd.img:

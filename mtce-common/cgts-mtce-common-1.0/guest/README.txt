@@ -4,10 +4,6 @@ provide a means of guest heartbeat orchistration under VIM (system management) c
 This module includes header files exported to the sysroot by the original cgts 
 release 1 heartbeat service for messaging structure definition.
 
-The original cgts release 1 heartbeat service source can be found here
-
-    $MY_REPO/addons/wr-cgcs/layers/middleware/vm-mgmt/recipes-common/heartbeat
-
 That original module builds a common heartbeat daemon capable of running on the
 controller, compute and within the vm. The controller version did nothing except
 for respond to heartbeats from the compute version. The compute instance was the
