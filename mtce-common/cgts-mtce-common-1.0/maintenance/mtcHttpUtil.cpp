@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016 Wind River Systems, Inc.
+ * Copyright (c) 2013-2018 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -775,11 +775,6 @@ int mtcHttpUtil_api_request ( libEvent & event )
     hdr_entry++;
 
     if (( event.request != KEYSTONE_TOKEN     ) &&
-        ( event.request != SMGR_QUERY_SWACT   ) && 
-        ( event.request != SMGR_START_SWACT   ) &&
-        ( event.request != SMGR_HOST_LOCKED   ) &&
-        ( event.request != SMGR_HOST_UNLOCKED ) &&
-        ( event.request != SMGR_HOST_DISABLED ) &&
         ( event.request != VIM_HOST_DISABLED  ) &&
         ( event.request != VIM_HOST_ENABLED   ) &&
         ( event.request != VIM_HOST_OFFLINE   ) &&
@@ -787,8 +782,7 @@ int mtcHttpUtil_api_request ( libEvent & event )
         ( event.request != VIM_DPORT_OFFLINE  ) &&
         ( event.request != VIM_DPORT_FAILED   ) &&
         ( event.request != VIM_DPORT_CLEARED  ) &&
-        ( event.request != VIM_DPORT_DEGRADED ) &&
-        ( event.request != SMGR_HOST_ENABLED  ))
+        ( event.request != VIM_DPORT_DEGRADED ))
     {
         hdrs.entry[hdr_entry].key   = "X-Auth-Token" ;
         hdrs.entry[hdr_entry].value = tokenUtil_get_ptr()->token ;
