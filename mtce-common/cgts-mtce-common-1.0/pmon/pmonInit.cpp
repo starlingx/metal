@@ -116,14 +116,15 @@ int pmon_process_config ( void * user,
     }
     if (MATCH("process", "service"))
     {
+        ptr->mask |= CONF_RECOVERY ;
         ptr->service = strdup(value);
         dlog1 ("Service    : %s\n", ptr->service );
         rc = PASS ;
     }
     else if (MATCH("process", "script"))
     {
-        ptr->mask |= CONF_SCRIPT ;
-        ptr->status_mask |= CONF_SCRIPT ;
+        ptr->mask |= CONF_RECOVERY ;
+        ptr->status_mask |= CONF_RECOVERY ;
         ptr->script = strdup(value);
         dlog1 ("Script     : %s\n", ptr->script );
     }
@@ -423,7 +424,7 @@ int socket_init ( void )
      * host watchdog process */
     if ( rc == PASS )
     {
-        rc = hostwd_port_init ( );
+        hostwd_port_init ( );
     }
 
     pmon_inbox_init ( );
@@ -500,22 +501,8 @@ int daemon_init ( string iface, string nodetype_str )
         pmon_timer_init ();
     }
 
-    /*
-     * Setup the recovery method based on the O/S
-     *
-     * WRL    - SYSVINIT
-     * CENTOS - SYSTEMD
-     *
-     **/
-    if ( daemon_is_file_present ( CENTOS_RELEASE_FILE ) )
-    {
-        pmon_ctrl.recovery_method = PMOND_RECOVERY_METHOD__SYSTEMD ;
-        pmon_ctrl.system_state = get_system_state();
-    }
-    else
-    {
-        pmon_ctrl.recovery_method = PMOND_RECOVERY_METHOD__SYSVINIT ;
-    }
+    pmon_ctrl.recovery_method = PMOND_RECOVERY_METHOD__SYSTEMD ;
+    pmon_ctrl.system_state = get_system_state();
     ilog ("Recovery Method: %s\n", pmon_ctrl.recovery_method ? "systemd via systemctl" : "sysvinit via script" );
     return (rc);
 }

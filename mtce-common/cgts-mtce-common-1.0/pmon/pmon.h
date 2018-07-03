@@ -194,6 +194,9 @@ typedef enum
    PMOND_RECOVERY_METHOD__SYSTEMD  = 1,
 } recovery_method_type ;
 
+#define SYSTEMD_SERVICE_FILE_DIR1  ((const char *)"/etc/systemd/system")
+#define SYSTEMD_SERVICE_FILE_DIR2  ((const char *)"/usr/lib/systemd/system")
+
 /*
  * Used to mark a configured process
  * This aids in freeing duped memory over a process re-config
@@ -267,7 +270,7 @@ int setup_signal_handler ( int rt_signal_num );
 
 /* Monitored Process Config Bit Mask */
 #define CONF_PROCESS    (0x0001)
-#define CONF_SCRIPT     (0x0002)
+#define CONF_RECOVERY   (0x0002)
 #define CONF_STYLE      (0x0004)
 #define CONF_PIDFILE    (0x0008)
 #define CONF_RESTARTS   (0x0010)
@@ -286,8 +289,8 @@ int setup_signal_handler ( int rt_signal_num );
 
 /* Monitored Passive Process Config Mask */
 #define CONF_MASK        (CONF_PROCESS   | \
-                          CONF_SCRIPT    | \
                           CONF_STYLE     | \
+                          CONF_RECOVERY  | \
                           CONF_PIDFILE   | \
                           CONF_SEVERITY  | \
                           CONF_RESTARTS  | \
@@ -302,8 +305,8 @@ int setup_signal_handler ( int rt_signal_num );
 
 /* Monitored Status Process Config Mask */
 #define CONF_STATUS_MON_MASK (CONF_PROCESS   | \
-                              CONF_SCRIPT    | \
                               CONF_STYLE     | \
+                              CONF_RECOVERY  | \
                               CONF_SEVERITY  | \
                               CONF_RESTARTS  | \
                               CONF_INTERVAL  | \

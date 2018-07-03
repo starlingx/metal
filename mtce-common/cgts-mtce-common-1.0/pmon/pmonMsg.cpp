@@ -78,53 +78,42 @@ int pulse_port_init ( void )
 }
 
 /* Setup the Unix Host Watchdog Socket */
-#define _THROTTLE_LEVEL (5)
 int hostwd_port_init ( void )
 {
-    int rc   = FAIL ;
-    int fail_count = 0 ;
     memset(&pmon_sock.hostwd_addr, 0, sizeof(pmon_sock.hostwd_addr));
-    while (rc == FAIL)
+    pmon_sock.hostwd_sock = socket(AF_UNIX, SOCK_DGRAM, 0);
+
+    if (pmon_sock.hostwd_sock <= 0)
     {
-        int len;
-        int connected;
-        pmon_sock.hostwd_sock = socket(AF_UNIX, SOCK_DGRAM, 0);
-
-        if (pmon_sock.hostwd_sock <= 0) {
-            if ( fail_count++ > _THROTTLE_LEVEL ) {
-                wlog("Could not connect to create hostwd socket - will retry\n");
-            }
-            sleep(1);
-            continue;
-        }
-
-        /* Set up the socket address */
-        memset (&pmon_sock.hostwd_addr, 0, sizeof(pmon_sock.hostwd_addr));
-        pmon_sock.hostwd_addr.sun_family = AF_UNIX;
-
-        /* Unix abstract namespace takes a string that starts with a NULL
-         * as the identifier.  Thus, we need a pointer to byte[1] of the
-         * sockaddr_un.sun_path (a char array)
-         */
-        strncpy( &(pmon_sock.hostwd_addr.sun_path[1]),
-                 HOSTW_UNIX_SOCKNAME,
-                 UNIX_PATH_MAX-1);
-        len = sizeof(pmon_sock.hostwd_addr);
-
-        connected = connect( pmon_sock.hostwd_sock, (sockaddr*) &pmon_sock.hostwd_addr,
-            len);
-        if (connected == -1) {
-            if ( fail_count++ > _THROTTLE_LEVEL ) {
-                wlog("Could not connect to hostwd port - will retry\n");
-            }
-            close(pmon_sock.hostwd_sock);
-            pmon_sock.hostwd_sock = 0;
-            sleep(1);
-        } else {
-            rc = PASS;
-        }
+        wlog("Could not connect to create hostwd socket - will retry\n");
+        pmon_sock.hostwd_sock = 0 ;
+        return (FAIL_SOCKET_CREATE);
     }
-    return (rc);
+
+    /* Set up the socket address */
+    memset (&pmon_sock.hostwd_addr, 0, sizeof(pmon_sock.hostwd_addr));
+    pmon_sock.hostwd_addr.sun_family = AF_UNIX;
+
+    /* Unix abstract namespace takes a string that starts with a NULL
+     * as the identifier.  Thus, we need a pointer to byte[1] of the
+     * sockaddr_un.sun_path (a char array)
+     */
+    strncpy( &(pmon_sock.hostwd_addr.sun_path[1]),
+             HOSTW_UNIX_SOCKNAME,
+             UNIX_PATH_MAX-1);
+    int len = sizeof(pmon_sock.hostwd_addr);
+    int connected = connect( pmon_sock.hostwd_sock, (sockaddr*) &pmon_sock.hostwd_addr,
+        len);
+    if (connected == -1)
+    {
+        wlog("Could not connect to hostwd port - will retry\n");
+        if ( pmon_sock.hostwd_sock )
+            close(pmon_sock.hostwd_sock);
+        pmon_sock.hostwd_sock = 0;
+        return (FAIL_CONNECT);
+    }
+    ilog ("connected to host watchdog\n");
+    return (PASS);
 }
 
 /* Build a message for host watchdog, and send it */
@@ -174,7 +163,13 @@ int pmon_send_hostwd ( void )
         {
             elog("Error sending  message to host watchdog -- error %d (%s)\n",
                 errno, strerror(errno));
+            if ( pmon_sock.hostwd_sock )
+            {
+                close(pmon_sock.hostwd_sock);
+                pmon_sock.hostwd_sock = 0;
+            }
             return (FAIL);
+
         }
     }
     return (FAIL);
