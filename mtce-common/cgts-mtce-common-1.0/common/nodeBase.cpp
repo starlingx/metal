@@ -255,12 +255,38 @@ const char * get_mtcNodeCommand_str ( int cmd )
 }
 
 
-void print_mtc_message ( string hostname, int direction, mtc_message_type & msg , const char * iface, bool force )
+void print_mtc_message ( string hostname,
+                         int direction,
+                         mtc_message_type & msg,
+                         const char * iface,
+                         bool force )
 {
+    /* Handle raw json string messages differently.
+     * Those messages just have a json string that starts at the header */
+    if ( msg.hdr[0] == '{' )
+    {
+        if ( force )
+        {
+            ilog ("%s %s (%s network) - %s\n",
+                      hostname.c_str(),
+                      direction ? "rx <-" : "tx ->" ,
+                      iface,
+                      msg.hdr);
+        }
+        else
+        {
+            mlog1 ("%s %s (%s network) - %s\n",
+                       hostname.c_str(),
+                       direction ? "rx <-" : "tx ->" ,
+                       iface,
+                       msg.hdr);
+        }
+        return ;
+    }
+
     string str = "-" ;
     if ( msg.buf[0] )
         str = msg.buf ;
-
     if ( force )
     {
         ilog ("%s %s %s (%s network) %d.%d %x:%x:%x.%x.%x.%x [%s] %s\n",

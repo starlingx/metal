@@ -68,9 +68,9 @@ string daemon_read_file    ( const char * filename );
 void daemon_logfile_close ( void );
 void daemon_logfile_open  ( void );
 
-void daemon_log ( const char * filename , const char * str );
-void daemon_log_value ( const char * filename , int val );
-void daemon_log_value ( const char * filename , const char * str, int val );
+int daemon_log ( const char * filename , const char * str );
+int daemon_log_value ( const char * filename , int val );
+int daemon_log_value ( const char * filename , const char * str, int val );
 
 /* reads the first line of a file and if it contains a string
  * that represents an integer value then return it */

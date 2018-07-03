@@ -1127,6 +1127,7 @@ void read_fs_file ( vector<string> & dynamic_resources )
  *****************************************************************************/
 void add_dynamic_fs_resource ( bool send_response )
 {
+#ifdef WANT_FS_MONITORING
     char resource[50];
     char temp_resource[50];
     char device [50];
@@ -1206,10 +1207,14 @@ void add_dynamic_fs_resource ( bool send_response )
             }
         }
     }
-
+#endif
     if (send_response)
     {
+#ifdef WANT_FS_MONITORING
         ilog ("sending response to dynamic FS add, to the rmon client\n");
+#else
+        ilog("dynamic filesystem monitoring moved to collectd\n");
+#endif
         /* let the rmon client know that we are done with the file */
         rmon_resource_response(_rmon_ctrl_ptr->clients);
     }
@@ -4650,6 +4655,8 @@ void rmon_service (rmon_ctrl_type * ctrl_ptr)
 
     ilog ("registered clients: %d\n", _rmon_ctrl_ptr->clients);
 
+#ifdef WANT_FS_MONITORING
+
     /* Initialize the resource specific configuration */
     for (int j=0; j<_rmon_ctrl_ptr->resources; j++)
     {
@@ -4669,6 +4676,9 @@ void rmon_service (rmon_ctrl_type * ctrl_ptr)
 
     /* add any dynamic resources from before */
     add_dynamic_fs_resource(false);
+#else
+    ilog("static filesystem monitoring moved to collectd\n");
+#endif
 
     /* Clear any stale dynamic alarms that can be caused by dynamic resources.                           */
 	/* An alarm become stale for example if it was raised against a local volumn group (lvg) and         */

@@ -421,11 +421,6 @@ install -m 700 -p -D %{_buildsubdir}/pmon/scripts/pmon-restart %{buildroot}/%{lo
 install -m 700 -p -D %{_buildsubdir}/pmon/scripts/pmon-start %{buildroot}/%{local_sbindir}/pmon-start
 install -m 700 -p -D %{_buildsubdir}/pmon/scripts/pmon-stop %{buildroot}/%{local_sbindir}/pmon-stop
 
-# test tools
-install -m 755 %{_buildsubdir}/hwmon/scripts/show_hp360 %{buildroot}/%{_sbindir}/show_hp360
-install -m 755 %{_buildsubdir}/hwmon/scripts/show_hp380 %{buildroot}/%{_sbindir}/show_hp380
-install -m 755 %{_buildsubdir}/hwmon/scripts/show_quanta %{buildroot}/%{_sbindir}/show_quanta
-
 # init script files
 install -m 755 -p -D %{_buildsubdir}/scripts/mtcClient %{buildroot}%{_sysconfdir}/init.d/mtcClient
 install -m 755 -p -D %{_buildsubdir}/scripts/hbsClient %{buildroot}%{_sysconfdir}/init.d/hbsClient
@@ -498,9 +493,6 @@ install -m 755 -d %{buildroot}%{_sysconfdir}/rmonapi.d
 install -m 755 -d %{buildroot}%{_sysconfdir}/rmonfiles.d
 install -m 755 -d %{buildroot}%{_sysconfdir}/rmon_interfaces.d
 install -m 644 -p -D %{_buildsubdir}/rmon/scripts/remotelogging_resource.conf %{buildroot}%{local_etc_rmond}/remotelogging_resource.conf
-install -m 644 -p -D %{_buildsubdir}/rmon/scripts/cpu_resource.conf %{buildroot}%{local_etc_rmond}/cpu_resource.conf
-install -m 644 -p -D %{_buildsubdir}/rmon/scripts/memory_resource.conf %{buildroot}%{local_etc_rmond}/memory_resource.conf
-install -m 644 -p -D %{_buildsubdir}/rmon/scripts/filesystem_resource.conf %{buildroot}%{local_etc_rmond}/filesystem_resource.conf
 install -m 644 -p -D %{_buildsubdir}/rmon/scripts/cinder_virtual_resource.conf %{buildroot}%{local_etc_rmond}/cinder_virtual_resource.conf
 install -m 644 -p -D %{_buildsubdir}/rmon/scripts/nova_virtual_resource.conf %{buildroot}%{local_etc_rmond}/nova_virtual_resource.conf
 install -m 644 -p -D %{_buildsubdir}/rmon/scripts/oam_resource.conf %{buildroot}%{_sysconfdir}/rmon_interfaces.d/oam_resource.conf
@@ -676,10 +668,7 @@ install -m 755 -d %{buildroot}/var/run
 %{local_etc_logrotated}/rmon.logrotate
 %{_unitdir}/rmon.service
 
-%{local_etc_rmond}/filesystem_resource.conf
-%{local_etc_rmond}/cpu_resource.conf
 %{local_etc_rmond}/remotelogging_resource.conf
-%{local_etc_rmond}/memory_resource.conf
 %{local_etc_rmond}/cinder_virtual_resource.conf
 %{local_etc_rmond}/nova_virtual_resource.conf
 
@@ -712,10 +701,6 @@ install -m 755 -d %{buildroot}/var/run
 %{_unitdir}/hwmon.service
 %{local_etc_logrotated}/hwmon.logrotate
 %{ocf_resourced}/platform/hwmon
-
-%{_sbindir}/show_hp380
-%{_sbindir}/show_hp360
-%{_sbindir}/show_quanta
 
 %{_sysconfdir}/init.d/hwmon
 %{local_bindir}/hwmond

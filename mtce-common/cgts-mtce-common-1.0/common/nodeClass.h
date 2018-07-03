@@ -585,6 +585,7 @@ private:
 
         /* Bit mask of degrade reasons */
         unsigned int degrade_mask ;
+        unsigned int degrade_mask_save ;
 
         /** Process Monitor Daemon Flag Missing count */
         int  pmon_missing_count ;
@@ -785,6 +786,7 @@ private:
     int insv_test_handler  ( struct nodeLinkClass::node * node_ptr );
     int stress_handler     ( struct nodeLinkClass::node * node_ptr );
     int bm_handler         ( struct nodeLinkClass::node * node_ptr );
+    int degrade_handler    ( struct nodeLinkClass::node * node_ptr );
     int uptime_handler     ( void );
 
     int host_services_handler ( struct nodeLinkClass::node * node_ptr );
@@ -1730,6 +1732,11 @@ public:
 
     /** Calculates and returns the mnfa threshold based on enabled hosts */
     int mnfa_calculate_threshold ( string hostname );
+
+    /* collectd event handler */
+    int collectd_notify_handler ( string & hostname,
+                                  string & resource,
+                                  string & state );
 
     /*****************************************
      ** Process Monitor Event Utilities API **
