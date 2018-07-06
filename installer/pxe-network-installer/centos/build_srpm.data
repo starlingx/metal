@@ -7,6 +7,6 @@ COPY_LIST="pxe-network-installer/* \
            /import/mirrors/CentOS/tis-installer/vmlinuz-stx-0.2 \
 "
 
-TIS_PATCH_VER=26
+TIS_PATCH_VER=27
 BUILD_IS_BIG=4
 BUILD_IS_SLOW=4

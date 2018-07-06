@@ -157,6 +157,9 @@ fi
 # We now require GPT partitions for all disks regardless of size
 APPEND_OPTIONS="$APPEND_OPTIONS inst.gpt"
 
+# Add k8s support for namespaces
+APPEND_OPTIONS="$APPEND_OPTIONS user_namespace.enable=1"
+
 if [ -n "$security_profile" ]
 then
     APPEND_OPTIONS="$APPEND_OPTIONS security_profile=$security_profile"
