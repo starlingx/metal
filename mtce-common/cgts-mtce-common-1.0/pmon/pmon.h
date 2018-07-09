@@ -445,6 +445,7 @@ typedef struct
     /** holds the alarm severity state of CLEAR, MINOR, MAJOR, CRITICAL    */
     EFmAlarmSeverityT alarm_severity ;
     bool          restart      ;
+    bool          registered   ; /**< true if pid is registered with kernel  */
     bool          failed       ;
     bool          ignore       ; /**< ignore this process ; debug purposes   */
     bool          stopped      ; /**< process was stopped by command         */

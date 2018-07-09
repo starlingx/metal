@@ -379,10 +379,7 @@ void load_processes ( void )
      */
     for ( int i = 0 ; i < _pmon_ctrl_ptr->processes ; i++ )
     {
-        if ( process_config[i].pt_ptr->tid )
-        {
-             mtcTimer_stop ( process_config[i].pt_ptr );
-        }
+        mtcTimer_reset ( process_config[i].pt_ptr );
         close_process_socket ( &process_config[i] );
     }
 
@@ -925,13 +922,13 @@ bool kill_running_process ( int pid )
         if ( result == 0 )
         {
             char * proc_name_ptr = &unknown_process[0] ;
-
-            result = kill ( pid, SIGKILL );
             process_config_type * ptr = find_parent_process ( pid ) ;
             if ( ptr )
             {
+               daemon_remove_file ( ptr->pidfile );
                proc_name_ptr = (char*)ptr->process ;
             }
+            result = kill ( pid, SIGKILL );
             if ( ptr && ( result == 0 ) )
             {
                 if ( daemon_is_file_present ( ptr->pidfile ) )
@@ -947,13 +944,9 @@ bool kill_running_process ( int pid )
             }
             else
             {
-                wlog ("%s kill failed or process not running  (%d)\n", proc_name_ptr, pid );
+                ilog ("%s kill failed (%d)\n", proc_name_ptr, pid );
             }
         }
-    }
-    else
-    {
-        wlog ("%s cannot kill pid %d\n", unknown_process, pid);
     }
     return (rc);
 }
@@ -1095,13 +1088,21 @@ int unregister_process ( process_config_type * ptr )
         info.events = PMON_EVENT_FLAGS ;
         if ( prctl (PR_DO_NOTIFY_TASK_STATE, &info ))
         {
-             wlog ("%s failed to unregister process %d\n", ptr->process, ptr->pid );
+            if ( errno != ESRCH )
+            {
+                wlog ("%s unregister pid:%d (%d:%s)\n",
+                          ptr->process,
+                          ptr->pid,
+                          errno,
+                          strerror(errno) );
+            }
         }
         else
         {
              ilog ("%s unregistered   (%d)\n", ptr->process, ptr->pid );
         }
     }
+    ptr->registered = false ;
     return (PASS);
 }
 
@@ -1120,7 +1121,7 @@ int register_process ( process_config_type * ptr )
             info.events = PMON_EVENT_FLAGS;
             if ( prctl (PR_DO_NOTIFY_TASK_STATE, &info ) )
             {
-                elog ("%s failed to register pid:%d (%d) (%s)\n", ptr->process, pid, errno, strerror(errno));
+                elog ("%s failed to register pid:%d (%d:%s)\n", ptr->process, pid, errno, strerror(errno));
                 if ( errno == EINVAL )
                 {
                     _pmon_ctrl_ptr->event_mode = false ;
@@ -1135,6 +1136,7 @@ int register_process ( process_config_type * ptr )
             {
                 ilog ("%s Registered (%d)\n", ptr->process , pid );
                 ptr->failed = false ;
+                ptr->registered = true ;
                 passiveStageChange ( ptr, PMON_STAGE__MANAGE ) ;
                 if ( ptr->active_monitoring == false )
                 {
@@ -1148,6 +1150,10 @@ int register_process ( process_config_type * ptr )
         {
             wlog ("%s Registered (%d) in polling mode\n",
                       ptr->process , pid);
+
+            /* prevent infinite reg retry in polling mode */
+            ptr->registered = true ;
+
             if ( process_running ( ptr ) == false )
             {
                 ptr->failed = true ;
@@ -1192,24 +1198,13 @@ int respawn_process ( process_config_type * ptr )
     int  rc      = PASS  ;
     bool restart = false ;
 
+    unregister_process ( ptr );
     if ( process_running ( ptr ) == true )
     {
         ilog ("%s restart of running process\n", ptr->process );
         restart = true ;
+        kill_running_process ( ptr->pid );
     }
-
-    /* Handle the case where the process is running but the known pid suggests its not.
-     * Do this by quering by processname and if it returns a valid PID then kill it before
-     * we start managing its death */
-    pid = get_pid_by_name_pipe ( ptr->process ) ;
-    if ( pid )
-    {
-        /* Note: We could just go with this new PID ; update the struct and such
-         *       but that could be a bit risky ; instead we kill and restart. */
-        kill_running_process ( pid );
-    }
-
-    unregister_process ( ptr );
 
     ptr->restarts_cnt++ ;
 
@@ -1306,7 +1301,7 @@ int respawn_process ( process_config_type * ptr )
 
     gettime ( ptr->time_start );
 
-    ilog ("%s Spawn      (%d) fork\n", ptr->process, ptr->child_pid );
+    ilog ("%s Spawn      (%d)\n", ptr->process, ptr->child_pid );
 
     return (PASS);
 }
@@ -1906,10 +1901,7 @@ void pmon_service ( pmon_ctrl_type * ctrl_ptr )
                     ilog ("Setting config reload flag\n");
 
                     /* Hijack the audit timer for the next period for config reload */
-                    if ( pmonTimer_degrade.tid )
-                    {
-                        mtcTimer_stop (pmonTimer_degrade);
-                    }
+                    mtcTimer_reset (pmonTimer_degrade);
                     if ( daemon_is_file_present ( PATCHING_IN_PROG_FILE ) == true )
                     {
                         _pmon_ctrl_ptr->patching_in_progress = true ;
@@ -2035,6 +2027,25 @@ void pmon_service ( pmon_ctrl_type * ctrl_ptr )
                 {
                     elog ("%s Failed Active Monitoring ... recovering.\n", process_config[i].process );
                     manage_process_failure ( &process_config[i]) ;
+                }
+            }
+
+            /* Audit to ensure that running processes are
+             * registered with the kernel */
+            if (( process_config[i].registered == false ) &&
+                ( _pmon_ctrl_ptr->event_mode ) &&
+                ( process_config[i].restart == false ) &&
+                ( process_config[i].failed == false ) &&
+                ( process_config[i].ignore == false ))
+            {
+                int pid = get_process_pid ( &process_config[i] );
+                if ( pid )
+                {
+                    if ( kill (pid, 0 ) == 0 )
+                    {
+                        process_config[i].pid = pid ;
+                        register_process ( &process_config[i] );
+                    }
                 }
             }
         }

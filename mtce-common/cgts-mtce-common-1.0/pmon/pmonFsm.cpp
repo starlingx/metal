@@ -194,10 +194,7 @@ int pmon_active_handler ( process_config_type * ptr )
         }
         case ACTIVE_STAGE__GAP_SETUP:
         {
-            if ( ptr->pt_ptr->tid )
-            {
-                mtcTimer_stop ( ptr->pt_ptr );
-            }
+            mtcTimer_reset ( ptr->pt_ptr );
             mtcTimer_start ( ptr->pt_ptr, pmon_timer_handler, ptr->period );
             activeStageChange ( ptr, ACTIVE_STAGE__GAP_WAIT );
             break ;
@@ -216,8 +213,7 @@ int pmon_active_handler ( process_config_type * ptr )
             ptr->active_failed = true ;
             ptr->afailed_count++ ;
             ptr->b2b_miss_count = 0 ;
-            if ( ptr->pt_ptr->tid )
-                mtcTimer_stop ( ptr->pt_ptr );
+            mtcTimer_reset ( ptr->pt_ptr );
 
             manage_process_failure ( ptr );
 
@@ -569,16 +565,17 @@ int pmon_passive_handler ( process_config_type * ptr )
             respawn_process ( ptr ) ;
 
             /* Start the monitor debounce timer. */
-            if ( ptr->pt_ptr->tid ) mtcTimer_stop ( ptr->pt_ptr );
-            mtcTimer_start  ( ptr->pt_ptr, pmon_timer_handler, ptr->startuptime );
+            mtcTimer_reset ( ptr->pt_ptr );
+            mtcTimer_start ( ptr->pt_ptr, pmon_timer_handler, ptr->startuptime );
             passiveStageChange ( ptr, PMON_STAGE__MONITOR_WAIT ) ;
 
             /* Don't wait for the debounce timer to take this process out of 'commanded restart' mode.
              * Do it now, otherwise tight patch loop stress testing might fail */
             if ( ptr->restart == true )
             {
-                ilog ("%s exit manual restart request mode\n", ptr->process )
+                ilog ("%s Restarted\n", ptr->process )
                 ptr->restart = false ;
+                ptr->registered = false ;
             }
             break ;
         }
@@ -972,12 +969,7 @@ int pmon_status_handler ( process_config_type * ptr )
             // a ring when the command execute successfully or returns a failure
             if ( (ptr->pt_ptr->ring == true) || (ptr->status != PASS ) )
             {
-                // Stop timer if we had one
-                if ( ptr->pt_ptr->tid )
-                {
-                    dlog ("%s stop the status command timer %p\n", ptr->process, ptr->pt_ptr->tid );
-                    mtcTimer_stop( ptr->pt_ptr);
-                }
+                mtcTimer_reset( ptr->pt_ptr);
                 ptr->pt_ptr->ring = false;
 
                 if (( !ptr->sigchld_rxed ) || ( !ptr->child_pid ) || (ptr->status != PASS))
@@ -1056,12 +1048,7 @@ int pmon_status_handler ( process_config_type * ptr )
             // a ring when the command execute successfully or returns a failure
             if ( (ptr->pt_ptr->ring == true) || (ptr->status != PASS) )
             {
-                // stop timer if we had one
-                if ( ptr->pt_ptr->tid )
-                {
-                    dlog ("%s stop the start command timer %p\n", ptr->process, ptr->pt_ptr->tid );
-                    mtcTimer_stop( ptr->pt_ptr);
-                }
+                mtcTimer_reset( ptr->pt_ptr);
                 ptr->pt_ptr->ring = false;
 
                 // If the status had failed then ptr->status_failed will be set to true. Status failure
