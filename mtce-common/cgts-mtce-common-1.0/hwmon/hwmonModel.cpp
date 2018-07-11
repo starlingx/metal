@@ -95,15 +95,6 @@ int hwmonHostClass::ipmi_create_sensor_model ( struct hwmonHostClass::hwmon_host
                 ilog ("%s provisioning Quanta server using %s\n",
                           host_ptr->hostname.c_str(), QUANTA_SENSOR_PROFILE_FILE );
 
-// HP:  Why IMPI sensor model is using smashLoad_Server_info ??
-// EM:  To maintain legacy mode for Nokia, don't change this (for now):q
-//
-//                if (ini_parse ( QUANTA_SENSOR_PROFILE_FILE, smashLoad_server_info, &host_ptr->profile_config ) < 0)
-//                {
-//                    elog ("Can't load '%s'\n", QUANTA_SENSOR_PROFILE_FILE );
-//                    return (FAIL_LOAD_INI);
-//                }
-
                 profile_groups = load_profile_groups ( host_ptr, &group_array[0], MAX_HOST_GROUPS, error );
                 if (( error == false ) && ( profile_groups == host_ptr->groups ))
                 {
