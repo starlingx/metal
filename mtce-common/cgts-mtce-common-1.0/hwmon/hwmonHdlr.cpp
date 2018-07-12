@@ -2462,7 +2462,7 @@ bool hwmonHostClass::manage_startup_states ( struct hwmonHostClass::hwmon_host *
 
              else if ( critl == true )
              {
-                 clear_degraded_state ( sensor_ptr );
+                 set_degraded_state ( sensor_ptr );
                  set_alarmed_severity ( sensor_ptr, FM_ALARM_SEVERITY_CRITICAL);
                  hwmonAlarm_critical ( host_ptr->hostname, HWMON_ALARM_ID__SENSOR, sensor_ptr->sensorname, REASON_DEGRADED );
              }
