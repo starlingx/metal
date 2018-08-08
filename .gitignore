@@ -21,3 +21,6 @@ develop-eggs
 dist
 eggs
 sdist
+
+# Docs Contrib Guide
+doc/build/
