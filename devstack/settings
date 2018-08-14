@@ -1,0 +1,47 @@
+#!/bin/bash
+# Devstack settings
+
+# This plugin is to enable StarlingX stx-metal services and follows the
+# devstack plugin contract:
+# https://docs.openstack.org/devstack/latest/plugins.html#plugin-sh-contract
+#
+# Services can be seperatly enabled by node personality or components
+# unless they are coupled in functionality(e.g. mtcAgent/mtcClient).
+# Other flocks services sysinv/fm/sm/nfv required to bring up full
+# functionality maintenance services.
+#
+# Current configuration supports All-in-One simplex mode.
+
+STX_METAL_NAME=stx-metal
+
+######### Plugin Specific ##########
+# Enable service for node type
+enable_service $STX_METAL_NAME mtce-compute mtce-control mtce-storage
+
+# TODO:remove the services enabled by default once
+# stx-metal is completely enabled
+# Enable service for components
+enable_service hbs mtce pmon rmon hwmon mtclog mtcalarm fsmon
+
+# Be careful to enable hostw, it will restart your host
+# if some config is not correct
+#enable_service hostw
+
+if is_service_enabled mtce-compute; then
+    # stx-update
+    enable_service tsconfig
+fi
+# run_process checks whether the service name is enabled or not
+if is_service_enabled hbs; then
+    # enable hbsAgent/hbsClient service as part of hbs service
+    enable_service hbsAgent
+    enable_service hbsClient
+fi
+if is_service_enabled mtce; then
+    # enable mtcAgent/mtcClient service as part of mtce service
+    enable_service mtcAgent
+    enable_service mtcClient
+fi
+
+# Initial source of lib script
+source $DEST/stx-metal/devstack/lib/stx-metal

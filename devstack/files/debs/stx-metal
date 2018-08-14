@@ -1,0 +1,7 @@
+cppcheck
+libevent-2.0
+libevent-dev
+libjson0
+libjson0-dev
+resource-agents
+facter
