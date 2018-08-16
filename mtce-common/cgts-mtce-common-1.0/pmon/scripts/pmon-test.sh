@@ -38,6 +38,8 @@
 # neutron-sriov-nic-agent         restart PASSED [11092]:[30551]
 # nova-compute                    restart PASSED [14776]:[1109]
 # ntpd                            does not support restart
+# ptp4l                           does not support restart
+# phc2sys                         does not support restart
 # rmond                           restart PASSED [13893]:[5129]
 # sm-api                          restart PASSED [8896]:[8460]
 # skipping 'sm' process
