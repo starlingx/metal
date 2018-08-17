@@ -1,7 +1,0 @@
-cgcs/recipes-installer|installer
-cgcs/common-bsp/files|bsp-files
-cgcs/recipes-devtools/platform-kickstarts|kickstart
-cgcs/middleware/mtce/recipes-common/cgts-mtce-common|mtce-common
-cgcs/middleware/mtce/recipes-compute/cgts-mtce-compute|mtce-compute
-cgcs/middleware/mtce/recipes-control/cgts-mtce-control|mtce-control
-cgcs/middleware/mtce/recipes-storage/cgts-mtce-storage|mtce-storage
