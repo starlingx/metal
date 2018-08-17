@@ -119,6 +119,7 @@ python-django
 python-django-appconf
 python-django-compressor
 python-django-openstack-auth
+python-fmclient
 python-glance
 python2-gunicorn
 python-heatclient
@@ -134,6 +135,7 @@ python-pytz
 python-swiftclient
 python-wsme
 fm-mgr
+fm-rest-api
 snmp-ext
 sm
 sm-api
