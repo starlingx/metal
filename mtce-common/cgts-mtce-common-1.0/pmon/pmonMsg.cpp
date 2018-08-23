@@ -717,7 +717,7 @@ void pmon_service_inbox ( void )
                             else
                             {
                                 process_config_type * ptr = get_process_config_ptr ( process );
-                                ilog ("%s process 'restart' request\n", process.c_str());
+                                dlog ("%s process 'restart' request\n", process.c_str());
                                 if ( ptr != NULL )
                                 {
                                     if ( strcmp ( ptr->mode, "status" ) == 0 )
