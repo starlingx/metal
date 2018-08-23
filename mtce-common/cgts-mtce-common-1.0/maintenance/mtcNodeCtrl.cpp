@@ -1248,7 +1248,7 @@ void daemon_service_run ( void )
     }
 #endif
 
-    if ( ts.tv_sec < MTC_MINS_20 )
+    if ( ts.tv_sec < MTC_MINS_15 )
     {
         /* CPE DOR window is much greater in CPE since heartbeat
          * cannot start until the inactive CPE has run both manifests */

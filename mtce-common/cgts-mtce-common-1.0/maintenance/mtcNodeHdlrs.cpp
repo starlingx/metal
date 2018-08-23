@@ -5607,7 +5607,7 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
                 if ( NOT_THIS_HOST )
                 {
                     if (( LARGE_SYSTEM ) ||
-                        (( CPE_SYSTEM ) && ( is_controller(node_ptr) == false )))
+                        (( CPE_SYSTEM ) && ( this->dor_mode_active == false )))
                     {
                         send_hbs_command ( node_ptr->hostname, MTC_CMD_START_HOST );
                     }
