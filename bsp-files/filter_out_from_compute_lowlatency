@@ -270,3 +270,8 @@ platform-kickstarts
 python-3parclient
 python-lefthandclient
 memcached
+openstack-swift-object
+openstack-swift-account
+openstack-swift-container
+openstack-swift-proxy
+
