@@ -267,6 +267,7 @@ python-ryu-common
 platform-kickstarts
 python-3parclient
 python-lefthandclient
+screen
 memcached
 openstack-swift-object
 openstack-swift-account
