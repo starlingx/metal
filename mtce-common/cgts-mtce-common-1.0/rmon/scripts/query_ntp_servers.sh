@@ -35,7 +35,7 @@
 #       10.10.10.42;10.10.10.43;10.10.10.44;
 #       10.10.10.43;
 #
-#  This temporary file is re-created everytime the this script is run. It is used by 
+#  This temporary file is re-created everytime the this script is run. It is used by
 #  caller of the script to get more detail regarding the NTP servers status.
 #
 #  This script will only be run on the controller nodes.
@@ -51,15 +51,15 @@ NTP_SOME_REACHABLE_NONE_SELECTED=4
 # is it the ip address of a controller node
 isController ()
 {
-   host=$1
-   res=$(echo $(grep $host /etc/hosts) | grep controller)
+    host=$1
+    res=$(echo $(grep $host /etc/hosts) | grep controller)
 
-   if [[ "$res" != "" ]] ; then
-      logger -p info -t $0 "$host is a controller"
-      return 1
-   else
-      return 0
-   fi
+    if [[ "$res" != "" ]] ; then
+        logger -p info -t $0 "$host is a controller"
+        return 1
+    else
+        return 0
+    fi
 }
 
 # loop through all the ntpq servers listed as IPs and get the controller's
@@ -71,14 +71,14 @@ getControllerIP ()
     do
         server=$(echo $line | awk '{print $1;}')
         if [[ "$line" != " "* ]] ; then
-           # if the first char is not a space then remove it e.g +159.203.31.244
-           server=$(echo $server| cut -c 2-)
+            # if the first char is not a space then remove it e.g +159.203.31.244
+            server=$(echo $server| cut -c 2-)
         fi
 
         res=$(echo $(grep $server /etc/hosts) | grep controller)
         if [[ "$res" != "" ]] ; then
-           echo $server
-           return
+            echo $server
+            return
         fi
     done < <(echo "$servers")
 
@@ -98,8 +98,8 @@ bad_server_count=0
 
 # exit if there is no servers provisioned
 if [ $server_count -eq 0 ]; then
-   logger -p info -t $0 "No NTP servers are provisioned (1)"
-   exit $NTP_NOT_PROVISIONED
+    logger -p info -t $0 "No NTP servers are provisioned (1)"
+    exit $NTP_NOT_PROVISIONED
 fi
 
 # query the ntp servers with ntpq
@@ -132,14 +132,14 @@ while read line
 do
     server=$(echo $line | awk '{print $1;}')
     if [[ "$line" != " "* ]] ; then
-       # if the first char is not a space then remove it e.g +159.203.31.244
-       server=$(echo $server| cut -c 2-)
+        # if the first char is not a space then remove it e.g +159.203.31.244
+        server=$(echo $server| cut -c 2-)
     fi
 
     # add provisioned ntp server to temp file if not the controller
     isController $server
     if [[ "$?" == 0 ]]; then
-       echo -n $server";" >> $ntpq_server_info
+        echo -n $server";" >> $ntpq_server_info
     fi
 done < <(echo "$server_list")
 
@@ -152,18 +152,18 @@ server_list=$(echo $server_list | grep -v $controller_host_ip)
 # list all non reachable ntp servers and save in temp file
 while read line
 do
-  if [[ "$line" != "*"* ]] && [[ "$line" != "+"* ]] ;then
+    if [[ "$line" != "*"* ]] && [[ "$line" != "+"* ]] ;then
 
-    server=$(echo $line | awk '{print $1;}')
-    if [[ "$line" != " "* ]] ; then
-       # if the first char is not a space then remove it e.g +159.203.31.244
-       server=$(echo $server| cut -c 2-)
+        server=$(echo $line | awk '{print $1;}')
+        if [[ "$line" != " "* ]] ; then
+            # if the first char is not a space then remove it e.g +159.203.31.244
+            server=$(echo $server| cut -c 2-)
+        fi
+
+        # add the non reachable external ntp servers to temp file
+        ((bad_server_count++))
+        echo -n $server";" >> $ntpq_server_info
     fi
-
-    # add the non reachable external ntp servers to temp file
-    ((bad_server_count++))
-    echo -n $server";" >> $ntpq_server_info
-  fi
 done < <(echo "$server_list")
 IFS=$SAVEIFS
 
@@ -177,31 +177,31 @@ logger -p info -t $0 Total number of unreachable servers $bad_server_count
 selected=$(echo "$server_list" | grep -c  '^*')
 
 if [ "$bad_server_count" -eq 0 ];then
-  if [ $selected -eq 0 ]; then
-    logger -p info -t $0 "All external NTP servers are reachable but none is selected (4)"
-    exit $NTP_SOME_REACHABLE_NONE_SELECTED
-  else
-    logger -p info -t $0 "All external NTP servers are reachable and one is selected (0)"
-    exit $NTP_OK
-  fi
+    if [ $selected -eq 0 ]; then
+        logger -p info -t $0 "All external NTP servers are reachable but none is selected (4)"
+        exit $NTP_SOME_REACHABLE_NONE_SELECTED
+    else
+        logger -p info -t $0 "All external NTP servers are reachable and one is selected (0)"
+        exit $NTP_OK
+    fi
 fi
 
 # it does not matter if the peer controller is the server selected, if all the
 # external NTP servers are not reachable then we return NTP_NONE_REACHABLE
 if [ "$bad_server_count" -eq "$server_count" ];then
-  logger -p info -t $0 "None of the external NTP servers are reachable (2)"
-  exit $NTP_NONE_REACHABLE
+    logger -p info -t $0 "None of the external NTP servers are reachable (2)"
+    exit $NTP_NONE_REACHABLE
 fi
 
 if [ "$bad_server_count" -lt "$server_count" ];then
-  if [ $selected -eq 0 ]; then
-    # this will happen if the peer controller is the selected server
-    logger -p info -t $0 "Some external NTP servers are reachable but none is selected (4)"
-    exit $NTP_SOME_REACHABLE_NONE_SELECTED
-  else
-    logger -p info -t $0 "Some external NTP servers are not reachable and one selected (3)"
-    exit $NTP_SOME_REACHABLE
-  fi
+    if [ $selected -eq 0 ]; then
+        # this will happen if the peer controller is the selected server
+        logger -p info -t $0 "Some external NTP servers are reachable but none is selected (4)"
+        exit $NTP_SOME_REACHABLE_NONE_SELECTED
+    else
+        logger -p info -t $0 "Some external NTP servers are not reachable and one selected (3)"
+        exit $NTP_SOME_REACHABLE
+    fi
 fi
 
 logger -p err -t $0 "Should not exit here"

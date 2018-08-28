@@ -131,7 +131,7 @@ count=$((count + 1))
 echo $banner
 echo "$count Delete Host Services"
 echo $banner
-curl -i -X DELETE -H 'Content-Type: application/json' -H 'Accept: application/json' -H 'User-Agent: vim/1.0' http://localhost:2410/v1/hosts/$hostuuid  
+curl -i -X DELETE -H 'Content-Type: application/json' -H 'Accept: application/json' -H 'User-Agent: vim/1.0' http://localhost:2410/v1/hosts/$hostuuid
 
 count=$((count + 1))
 

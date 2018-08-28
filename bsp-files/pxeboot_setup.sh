@@ -8,64 +8,64 @@ WORKING_DIR=""
 COPY_DIR=""
 ISODIR=$(dirname `readlink -f $0`)
 
-usage() { 
-	echo "Usage: $0 -u <http base URL> [-t <tftp pxeboot directory>] or [-w <working directory>]" 1>&2; 
-	exit 0;
+usage() {
+    echo "Usage: $0 -u <http base URL> [-t <tftp pxeboot directory>] or [-w <working directory>]" 1>&2;
+    exit 0;
 }
 
 while getopts ":u:t:w:" opt; do
-	case "$opt" in
-	u) 
-		BASE_URL=${OPTARG}
-		;;
-	t)  
-		TFTP_DIR=${OPTARG}
-		;;
-	w)  
-		WORKING_DIR=${OPTARG}
-		;;
-	*) 
-		usage
-		;;
-	esac
+    case "$opt" in
+    u)
+        BASE_URL=${OPTARG}
+        ;;
+    t)
+        TFTP_DIR=${OPTARG}
+        ;;
+    w)
+        WORKING_DIR=${OPTARG}
+        ;;
+    *)
+        usage
+        ;;
+    esac
 done
 
 shift $((OPTIND-1))
 
 if [ -z "$BASE_URL" ]; then
-	echo "HTTP base URL is required: -u <http base URL>" 
-	exit 0
+    echo "HTTP base URL is required: -u <http base URL>"
+    exit 0
 fi
 
 if [ -z "$TFTP_DIR" ] && [ -z "$WORKING_DIR" ]; then
-	echo "Either tftp pxeboot directory or working directory has to be specified:"
-	echo "-t <tftp pxeboot directory> or -w <working directory>"
-	exit 0
+    echo "Either tftp pxeboot directory or working directory has to be specified:"
+    echo "-t <tftp pxeboot directory> or -w <working directory>"
+    exit 0
 elif [ -n "$TFTP_DIR" ]; then
-	if [ -n "$WORKING_DIR" ]; then
-		echo "tftp pxeboot directory is supplied, working directory will be ignored."
-	fi
-	COPY_DIR=$TFTP_DIR
+    if [ -n "$WORKING_DIR" ]; then
+        echo "tftp pxeboot directory is supplied, working directory will be ignored."
+    fi
+    COPY_DIR=$TFTP_DIR
 elif [ -n "$WORKING_DIR" ]; then
-	COPY_DIR=$WORKING_DIR
+    COPY_DIR=$WORKING_DIR
 fi
 
 if [ ! -d ${COPY_DIR} ] ; then
-	if [ -w "$(dirname $COPY_DIR)" ]; then
-		echo "Create ${COPY_DIR}"
-		mkdir ${COPY_DIR}
-		chmod +w ${COPY_DIR}
-		if [ $? -ne 0 ]; then
-			echo "Can't create ${COPY_DIR}"
-			exit 1
-		fi
-	else
-		echo "$COPY_DIR parent directory is not writeable."
-		exit 0
-	fi
+    if [ -w "$(dirname $COPY_DIR)" ]; then
+        echo "Create ${COPY_DIR}"
+        mkdir ${COPY_DIR}
+        chmod +w ${COPY_DIR}
+        if [ $? -ne 0 ]; then
+            echo "Can't create ${COPY_DIR}"
+            exit 1
+        fi
+    else
+        echo "$COPY_DIR parent directory is not writeable."
+        exit 0
+    fi
 else
-	echo "$COPY_DIR already exists"
-	exit 0
+    echo "$COPY_DIR already exists"
+    exit 0
 fi
 
 #Copy the vmlinuz and initrd files to the destination directory
@@ -104,8 +104,8 @@ rm -Rf ${COPY_DIR}/EFI/BOOT
 rm -Rf ${COPY_DIR}/pxeboot
 
 if [ -n "$TFTP_DIR" ]; then
-	#Create pxelinux.cfg directory and default link
-	mkdir ${TFTP_DIR}/pxelinux.cfg
-	chmod 755 ${TFTP_DIR}/pxelinux.cfg 
-	ln -s ../pxeboot.cfg ${TFTP_DIR}/pxelinux.cfg/default
-fi 
+    #Create pxelinux.cfg directory and default link
+    mkdir ${TFTP_DIR}/pxelinux.cfg
+    chmod 755 ${TFTP_DIR}/pxelinux.cfg
+    ln -s ../pxeboot.cfg ${TFTP_DIR}/pxelinux.cfg/default
+fi

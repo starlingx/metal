@@ -4,3 +4,7 @@
       jobs:
         - openstack-tox-pep8:
             voting: false
+        - openstack-tox-linters
+    gate:
+      jobs:
+        - openstack-tox-linters

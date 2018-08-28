@@ -57,14 +57,14 @@ pattern=() # Stores a string indicating the present pattern
 
 
 function trapCalled {
-	echo $'\nReceived trap signal' >&2
-	exit
+    echo $'\nReceived trap signal' >&2
+    exit
 }
 
 trap trapCalled SIGHUP SIGINT SIGTERM
 
 function helpMessage {
-	echo "--------------------------------------------------------------------------------------"
+    echo "--------------------------------------------------------------------------------------"
     echo "Memory Leak And Information Tracking Tool"
     echo ""
     echo "Usage:"
@@ -82,7 +82,7 @@ function helpMessage {
     echo "      /procs/<pid>/smaps"
     echo ""
     echo "      Error logs can be found in /tmp/memchk_err.log"
-	echo "      Standard output can be found in /tmp/memchk_out.log"
+    echo "      Standard output can be found in /tmp/memchk_out.log"
     echo ""
     echo ""
     echo "Examples:"
@@ -92,33 +92,33 @@ function helpMessage {
     echo "sudo memchk -t 3600 --C pmond rmond hwmond          ... Check PSS and RSS values of pmond, rmond and hwmond every 3600s (1h)"
     echo "sudo memchl --C pmond rmond hwmond                  ... Check PSS and RSS values of commands using default period of 3600s (1h)"
     echo "--------------------------------------------------------------------------------------"
-	exit 0
+    exit 0
 }
 
 # Prints information on suspected leaking process
 function memLeak {
-	printf "\n" >&2
-	printf '%0.1s' "*"{1..150} >&2
-	# Iterates over all keys in the array.
-	for proc in ${!leaking[@]}
-	do
-		printf "\nPossible mem leak in: %s PID: %s Current RSS: %s Orig RSS: %s Current PSS: %s Orig PSS: %s\n" \
-		${leaking[proc]} $proc ${rss[proc]} ${firstR[proc]} ${lastP[proc]} ${firstP[proc]} >&2
-	done
-	printf '%0.1s' "*"{1..150} >&2
-	printf "\n" >&2
+    printf "\n" >&2
+    printf '%0.1s' "*"{1..150} >&2
+    # Iterates over all keys in the array.
+    for proc in ${!leaking[@]}
+    do
+        printf "\nPossible mem leak in: %s PID: %s Current RSS: %s Orig RSS: %s Current PSS: %s Orig PSS: %s\n" \
+        ${leaking[proc]} $proc ${rss[proc]} ${firstR[proc]} ${lastP[proc]} ${firstP[proc]} >&2
+    done
+    printf '%0.1s' "*"{1..150} >&2
+    printf "\n" >&2
 }
 
 if [ $UID -ne 0 ]; then
-  echo $'\nWarning: Memchk must be run as \'root\' user to access PSS memory information'
-  echo $'Use the -h option for help\n'
-  exit 1
+    echo $'\nWarning: Memchk must be run as \'root\' user to access PSS memory information'
+    echo $'Use the -h option for help\n'
+    exit 1
 fi
 
 if [ $# -eq 0 ]; then
-	echo $'\nNo commands specified\nPlease try again and enter a command whose memory you would like to monitor'
-	echo $'Use the -h option for help\n'
-	exit 1
+    echo $'\nNo commands specified\nPlease try again and enter a command whose memory you would like to monitor'
+    echo $'Use the -h option for help\n'
+    exit 1
 fi
 
 exec > >(tee /tmp/NEWmemchk_out.log) 2> >(tee /tmp/NEWmemchk_err.log >&2)
@@ -138,16 +138,16 @@ while [[ $# > 0 ]]; do
         shift
         ;;
 
-		--C)
-		shift
-		if [ "$#" -eq "0" ]; then
-			printf "Error: No commands specified.\n"
-			exit 1
-		fi
-		for c in "$@"; do
-			commands+=("$1")
-			shift
-		done
+        --C)
+        shift
+        if [ "$#" -eq "0" ]; then
+            printf "Error: No commands specified.\n"
+            exit 1
+        fi
+        for c in "$@"; do
+            commands+=("$1")
+            shift
+        done
         ;;
 
         -h|--help)
@@ -164,58 +164,62 @@ done
 
 # Makes sure period has a positive value
 if [ "$period" -le "0" ]; then
-	period=3600
-	printf "You have entered an invalid period. Period has been set to 3600 seconds.\n"
+    period=3600
+    printf "You have entered an invalid period. Period has been set to 3600 seconds.\n"
 # The rate of kB/h has been hard-coded into the table, if values greater than or equal to 1 hour are used, the table
 # will not show an accurate representation in the change in usage over time. There are various accuracy issues in
 # modifying the code to display data to match your chosen period. Consider this and modify accordingly.
 elif [ "$period" -lt "3600" ]; then
-	printf "\nWARNING: You have chosen a period that is less than 1 hour. The rate of change in the table is displayed in kB/h, keep this in mind when reviewing results.\n"
+    printf "\nWARNING: You have chosen a period that is less than 1 hour. The rate of change in the table is displayed in kB/h, keep this in mind when reviewing results.\n"
 fi
 
 while true; do
-	# Prints header for columns
-	printf "\n%15s | %8s | Leak | %10s | %13s | %8s | %8s | %8s | %13s | %8s | %8s | %8s | Period: %-${#period}ss\n" \
-			"Cmd" "PID" "Trend" "Change in RSS" "RSS" "Orig RSS" "Prev RSS"  "Change in PSS" "PSS" "Orig PSS" "Prev PSS" "$period" >&1
-	padding=$(printf '%0.1s' "-"{1..180})
-	printf '%*.*s' 0 $((156 + ${#period} )) "$padding" # Prints line of hyphens of variable size depending on the number of characters in period.
-	# Cycles through each of the originally entered commands. This list does not change.
-	for cmd in ${commands[@]}
-	do
-		# Finds all the PIDs associated with each command (commands may have more than one instance)
-		procs="$(pgrep $cmd)"
+    # Prints header for columns
+    printf "\n%15s | %8s | Leak | %10s | %13s | %8s | %8s | %8s | %13s | %8s | %8s | %8s | Period: %-${#period}ss\n" \
+            "Cmd" "PID" "Trend" "Change in RSS" "RSS" "Orig RSS" "Prev RSS"  "Change in PSS" "PSS" "Orig PSS" "Prev PSS" "$period" >&1
+    padding=$(printf '%0.1s' "-"{1..180})
+    printf '%*.*s' 0 $((156 + ${#period} )) "$padding" # Prints line of hyphens of variable size depending on the number of characters in period.
+    # Cycles through each of the originally entered commands. This list does not change.
+    for cmd in ${commands[@]}
+    do
+        # Finds all the PIDs associated with each command (commands may have more than one instance)
+        procs="$(pgrep $cmd)"
 
-		# The number of processes may change on each loop. Keep this in mind if expanding or reusing this script.
-		for pid in ${procs[@]}
-		do
-			# In smaps the PSS value is located 3 lines below the line containing the process name. This works by setting
-			# the awk variable comm to contain the same value as cmd, the file is then searched for the string pattern
-			# contained in comm (cmd) and the PSS value associated with each instance of comm is summed and then printed.
-			pss=$(awk -v comm="$cmd" '$0 ~ comm {getline;getline;getline;sum += $2;} END {print sum}' /proc/"$pid"/smaps)
-			# obtains the RSS value of the indicated process
-			rssCurrent=$(ps -p "$pid" --no-header -o rss)
-			lastR[pid]="${rss[pid]}"
+        # The number of processes may change on each loop. Keep this in mind if expanding or reusing this script.
+        for pid in ${procs[@]}
+        do
+            # In smaps the PSS value is located 3 lines below the line containing the process name. This works by setting
+            # the awk variable comm to contain the same value as cmd, the file is then searched for the string pattern
+            # contained in comm (cmd) and the PSS value associated with each instance of comm is summed and then printed.
+            pss=$(awk -v comm="$cmd" '$0 ~ comm {getline;getline;getline;sum += $2;} END {print sum}' /proc/"$pid"/smaps)
+            # obtains the RSS value of the indicated process
+            rssCurrent=$(ps -p "$pid" --no-header -o rss)
+            lastR[pid]="${rss[pid]}"
 
-			# Child processes may exist ephemerally, as a result they may be added to our list of PIDs, but no longer
-			# exist when we try to read their associated files in /proc/. This makes sure the file exists and that the
-			# parent process is 1. If the parent process ID is not 1 then the process in question is a child proceess
-			# and we do not care about its memory usage (for the purposes of this specific script). The continue
-			# statement will return us to the for-loop and begin running for the next pid.
-			if [ -f "/proc/$pid/status" ] && [ "$(awk '$0 ~ "PPid:" {print $2}' /proc/"$pid"/status)" -ne "1" ]; then continue; fi
+            # Child processes may exist ephemerally, as a result they may be added to our list of PIDs, but no longer
+            # exist when we try to read their associated files in /proc/. This makes sure the file exists and that the
+            # parent process is 1. If the parent process ID is not 1 then the process in question is a child proceess
+            # and we do not care about its memory usage (for the purposes of this specific script). The continue
+            # statement will return us to the for-loop and begin running for the next pid.
+            if [ -f "/proc/$pid/status" ] && [ "$(awk '$0 ~ "PPid:" {print $2}' /proc/"$pid"/status)" -ne "1" ];then
+                continue;
+            fi
 
-			# This checks that neither rssCurrent nor pss have empty values due to a child process being generated
-			# and then killed off before its values could be read. Root occasionally generates a child process of
-			# one of the monitored commands so the above if-statement doesn't exclude it because the PPID is 1.
-			if [ -z "$rssCurrent" ] || [ -z "$pss" ]; then continue; fi
+            # This checks that neither rssCurrent nor pss have empty values due to a child process being generated
+            # and then killed off before its values could be read. Root occasionally generates a child process of
+            # one of the monitored commands so the above if-statement doesn't exclude it because the PPID is 1.
+            if [ -z "$rssCurrent" ] || [ -z "$pss" ]; then
+                continue;
+            fi
 
-			# Sets initial values for PSS and RSS. NA is set instead of 0 because using numbers could lead to false
-			# or inaccurate information. It also previously allowed one to see when child processes were spawned.
-			if [ "$flag" -ne "1" ]; then
-				firstP[pid]="$pss"
-				lastP[pid]="NA"
-				rss[pid]="$rssCurrent"
-				firstR[pid]="${rss[pid]}"
-				lastR[pid]="NA"
+            # Sets initial values for PSS and RSS. NA is set instead of 0 because using numbers could lead to false
+            # or inaccurate information. It also previously allowed one to see when child processes were spawned.
+            if [ "$flag" -ne "1" ]; then
+                firstP[pid]="$pss"
+                lastP[pid]="NA"
+                rss[pid]="$rssCurrent"
+                firstR[pid]="${rss[pid]}"
+                lastR[pid]="NA"
                 s1[pid]=""
                 s2[pid]=""
                 trend[pid]=0
@@ -224,30 +228,36 @@ while true; do
                 stable[pid]=0
                 count[pid]=0
                 baseline[pid]=0
-			fi
+            fi
 
-			# In the event of a memory leak (the RSS value increasing), an X is placed in the 'Leak' column of the
-			# printed table. The PID of the process is also added to an array to be sent to the memLeak function
-			# once all of the commands' processes have been checked. A flag indicating that a possible leak has
-			# been detected is also set.
-			if [ "${rss[pid]}" -lt "$rssCurrent" ]; then
-				lastR[pid]="${rss[pid]}"
-				rss[pid]="$rssCurrent"
-				leaking[pid]="$cmd"
-				leak[pid]="X"
-				let leakFlag=1
-			fi
+            # In the event of a memory leak (the RSS value increasing), an X is placed in the 'Leak' column of the
+            # printed table. The PID of the process is also added to an array to be sent to the memLeak function
+            # once all of the commands' processes have been checked. A flag indicating that a possible leak has
+            # been detected is also set.
+            if [ "${rss[pid]}" -lt "$rssCurrent" ]; then
+                lastR[pid]="${rss[pid]}"
+                rss[pid]="$rssCurrent"
+                leaking[pid]="$cmd"
+                leak[pid]="X"
+                let leakFlag=1
+            fi
 
-			# Calculates the changes in PSS and RSS usage over time. If this is the first run and there is no
-			# previous value with which to compare against, delta is set to 0, where delta is the change over
-			# time.
-			if [ "${lastP[pid]}" = "NA" ]; then changeP[$pid]=0; deltaP=0.000;
-			else changeP[pid]="$((changeP[$pid] + $pss - lastP[$pid]))";  deltaP=$(awk -v chP="${changeP[$pid]}" -v hrs="${hours}" -v t="${period}" 'BEGIN {printf "%.3f", (chP/(hrs*t))*3600; exit(0)}');
-			fi
+            # Calculates the changes in PSS and RSS usage over time. If this is the first run and there is no
+            # previous value with which to compare against, delta is set to 0, where delta is the change over
+            # time.
+            if [ "${lastP[pid]}" = "NA" ]; then
+                changeP[$pid]=0; deltaP=0.000;
+            else
+                changeP[pid]="$((changeP[$pid] + $pss - lastP[$pid]))";
+                deltaP=$(awk -v chP="${changeP[$pid]}" -v hrs="${hours}" -v t="${period}" 'BEGIN {printf "%.3f", (chP/(hrs*t))*3600; exit(0)}');
+            fi
 
-			if [ "${lastR[pid]}" = "NA" ]; then changeR[$pid]=0; deltaR=0.000;
-			else changeR[pid]="$((changeR[$pid] + rss[$pid] - lastR[$pid]))"; deltaR=$(awk -v chR="${changeR[$pid]}" -v hrs="${hours}" -v t="${period}" 'BEGIN {printf "%.3f", (chR/(hrs*t))*3600; exit(0)}');
-			fi
+            if [ "${lastR[pid]}" = "NA" ]; then
+                changeR[$pid]=0; deltaR=0.000;
+            else
+                changeR[pid]="$((changeR[$pid] + rss[$pid] - lastR[$pid]))";
+                deltaR=$(awk -v chR="${changeR[$pid]}" -v hrs="${hours}" -v t="${period}" 'BEGIN {printf "%.3f", (chR/(hrs*t))*3600; exit(0)}');
+            fi
 
             # The below if-else block seeks to determine gradual sustained patterns of RSS usage over time to determine if the memory usage is gradually
             # increasing throughout the lifespan of the process (possible memory leak) or not. Non-gradual usage changes can be due to dynamic reallocation
@@ -279,80 +289,82 @@ while true; do
             # A trend cannot change immediately from increasing to decreasing. This is done to avoid representing erratic behaviour as a long-term pattern.
             # An increasing or decreasing trend must change to 'none' -- no trend observed -- before the opposite trend can be declared.
             # The baseline average is the RSS values for a PID from each sample added together and divided by the number of samples that have taken place.
-			let count[pid]+=1
-			let baseline[pid]+="$rssCurrent"
+            let count[pid]+=1
+            let baseline[pid]+="$rssCurrent"
             avg=$(awk -v b="${baseline[pid]}" -v c="${count[pid]}" 'BEGIN {printf "%.0f", (b/c); exit(0)}')
-			if [ "${trend[pid]}" -ge "3" ]; then
-				if [ "${rss[pid]}" -gt "$avg" ] && ([ "${s1[pid]}" = "increasing" ] || ([ "${s1[pid]}" != "decreasing" ] && [ "${s2[pid]}" != "decreasing" ]) && [ "${stable[pid]}" -ne "3" ]); then
-					if [ "${s1[pid]}" != "increasing" ]; then
-						s2[pid]="${s1[pid]}"
-						s1[pid]="increasing"
-					fi
-				elif [ "${rss[pid]}" -eq "$avg" ]; then
-					if [ "${s1[pid]}" != "stable" ]; then
-						stable[pid]=0
-						s2[pid]="${s1[pid]}"
-						s1[pid]="stable"
-					fi
+            if [ "${trend[pid]}" -ge "3" ]; then
+                if [ "${rss[pid]}" -gt "$avg" ] && ([ "${s1[pid]}" = "increasing" ] || ([ "${s1[pid]}" != "decreasing" ] && [ "${s2[pid]}" != "decreasing" ]) && [ "${stable[pid]}" -ne "3" ]); then
+                    if [ "${s1[pid]}" != "increasing" ]; then
+                        s2[pid]="${s1[pid]}"
+                        s1[pid]="increasing"
+                    fi
+                elif [ "${rss[pid]}" -eq "$avg" ]; then
+                    if [ "${s1[pid]}" != "stable" ]; then
+                        stable[pid]=0
+                        s2[pid]="${s1[pid]}"
+                        s1[pid]="stable"
+                    fi
                     let stable[pid]+=1
-					let stable[pid]+=1
-				elif [ "${rss[pid]}" -lt "$avg" ] && ([ "${s1[pid]}" = "decreasing" ] || ([ "${s1[pid]}" != "increasing" ] && [ "${s2[pid]}" != "increasing" ]) && [ "${stable[pid]}" -ne "3" ]); then
-					if [ "${s1[pid]}" != "decreasing" ]; then
-						s2[pid]="${s1[pid]}"
-						s1[pid]="decreasing"
-					fi
-				else
-					s1[pid]=""
-					s2[pid]=""
-					trend[pid]=0
-					increasing[pid]=0
-					decreasing[pid]=0
-					stable[pid]=0
-				fi
+                    let stable[pid]+=1
+                elif [ "${rss[pid]}" -lt "$avg" ] && ([ "${s1[pid]}" = "decreasing" ] || ([ "${s1[pid]}" != "increasing" ] && [ "${s2[pid]}" != "increasing" ]) && [ "${stable[pid]}" -ne "3" ]); then
+                    if [ "${s1[pid]}" != "decreasing" ]; then
+                        s2[pid]="${s1[pid]}"
+                        s1[pid]="decreasing"
+                    fi
+                else
+                    s1[pid]=""
+                    s2[pid]=""
+                    trend[pid]=0
+                    increasing[pid]=0
+                    decreasing[pid]=0
+                    stable[pid]=0
+                fi
             # This else-block is used to establish whether or not a trend has been established. It waits for a pattern of the RSS value of a PID to increase,
             # decrease, or remain stable relative to the baseline average three times in a row before it will declare that a trend exists. This is to avoid
             # viewing erratic increases and decreases in RSS as gradual increases or decreases in the system's (process') RSS usage.
-			else
+            else
                 if [ "${count[pid]}" -gt "0" ]; then
-    				if [ "${rss[pid]}" -gt "$avg" ]; then
-    					let trend[pid]+=1
-    					let increasing[pid]+=1
-    					s1[pid]="increasing"
-    				elif [ "${rss[pid]}" -eq "$avg" ]; then
-    					let trend[pid]+=1
-    					let stable[pid]+=1
-    					s1[pid]="stable"
-    				elif [ "${rss[pid]}" -lt "$avg" ]; then
-    					let trend[pid]+=1
-    					let decreasing[pid]+=1
-    					s1[pid]="decreasing"
-    				fi
-    				if [ "${increasing[pid]}" -gt "0" ] && [ "${decreasing[pid]}" -gt "0" ]; then
-    					increasing[pid]=0
-    					decreasing[pid]=0
-    					stable[pid]=0
-    					trend[pid]=0
-    				fi
+                    if [ "${rss[pid]}" -gt "$avg" ]; then
+                        let trend[pid]+=1
+                        let increasing[pid]+=1
+                        s1[pid]="increasing"
+                    elif [ "${rss[pid]}" -eq "$avg" ]; then
+                        let trend[pid]+=1
+                        let stable[pid]+=1
+                        s1[pid]="stable"
+                    elif [ "${rss[pid]}" -lt "$avg" ]; then
+                        let trend[pid]+=1
+                        let decreasing[pid]+=1
+                        s1[pid]="decreasing"
+                    fi
+                    if [ "${increasing[pid]}" -gt "0" ] && [ "${decreasing[pid]}" -gt "0" ]; then
+                        increasing[pid]=0
+                        decreasing[pid]=0
+                        stable[pid]=0
+                        trend[pid]=0
+                    fi
                 fi
-			fi
+            fi
 
-			if [ "${trend[pid]}" -ge "3" ]; then pattern[pid]="${s1[pid]}"; else pattern[pid]="none"; fi # Sets the trend variable for printing if a trend exists
-
-
-
-			printf "\n%15s | %8s |  %2s  | %10s | %8s kB/h | %8s | %8s | %8s | %8s kB/h | %8s | %8s | %8s |" \
-					$cmd $pid "${leak[pid]}" "${pattern[pid]}" $deltaR ${rss[pid]} ${firstR[pid]} ${lastR[pid]} $deltaP $pss ${firstP[pid]} ${lastP[pid]} >&1
-
-			lastP[pid]="$pss"
-			leak[pid]="" # Resets the indicator in the 'Leak' column
+            if [ "${trend[pid]}" -ge "3" ]; then
+                pattern[pid]="${s1[pid]}";
+            else
+                pattern[pid]="none";
+            fi # Sets the trend variable for printing if a trend exists
+            printf "\n%15s | %8s |  %2s  | %10s | %8s kB/h | %8s | %8s | %8s | %8s kB/h | %8s | %8s | %8s |" \
+                $cmd $pid "${leak[pid]}" "${pattern[pid]}" $deltaR ${rss[pid]} ${firstR[pid]} ${lastR[pid]} $deltaP $pss ${firstP[pid]} ${lastP[pid]} >&1
+            lastP[pid]="$pss"
+            leak[pid]="" # Resets the indicator in the 'Leak' column
         done
     done
 
-	if [ "$leakFlag" -eq "1" ]; then memLeak leaking[@]; fi # Calls the mem leak function if flag is set
-	unset leaking[@] # Clear the array holding PIDs of processes with potential leaks
-	let leakFlag=0
-	let hours+=1 # Hour count[pid]er used in calculating delta
-	let flag=1 # Flag indicating that first run has completed so we no longer have to set values of 'NA'
-	echo $'\n'
-	sleep "$period"
+    if [ "$leakFlag" -eq "1" ]; then
+        memLeak leaking[@];
+    fi # Calls the mem leak function if flag is set
+    unset leaking[@] # Clear the array holding PIDs of processes with potential leaks
+    let leakFlag=0
+    let hours+=1 # Hour count[pid]er used in calculating delta
+    let flag=1 # Flag indicating that first run has completed so we no longer have to set values of 'NA'
+    echo $'\n'
+    sleep "$period"
 done

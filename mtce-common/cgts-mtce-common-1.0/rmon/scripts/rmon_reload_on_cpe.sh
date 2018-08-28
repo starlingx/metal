@@ -10,27 +10,27 @@ source "/etc/init.d/log_functions.sh"
 # is it a compute subfunction on a CPE system
 isCompute ()
 {
-   [ -f /etc/platform/platform.conf ] || return 0 
-   res=$(grep "subfunction" /etc/platform/platform.conf | grep "controller,compute" | wc -l)
+    [ -f /etc/platform/platform.conf ] || return 0
+    res=$(grep "subfunction" /etc/platform/platform.conf | grep "controller,compute" | wc -l)
 
-   if [ "$res" -eq 0 ] ; then
-      return 0
-   else
-      return 1
-   fi
+    if [ "$res" -eq 0 ] ; then
+        return 0
+    else
+        return 1
+    fi
 }
 
 # only reload rmon if it is a CPE system
 isCompute
 
 if [[ "$?" -eq 0 ]]; then
-   log "Cannot run on a non CPE system."
-   exit 0
+    log "Cannot run on a non CPE system."
+    exit 0
 fi
 
 if [ ! -f /var/run/.compute_config_complete ]; then
-   log "Cannot run prior to compute configuration complete."
-   exit 0
+    log "Cannot run prior to compute configuration complete."
+    exit 0
 fi
 
 #################################################################################################

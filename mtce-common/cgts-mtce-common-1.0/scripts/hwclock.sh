@@ -3,7 +3,7 @@
 #
 ### BEGIN INIT INFO
 # Provides:          hwclock
-# Required-Start:    
+# Required-Start:
 # Required-Stop:     $local_fs
 # Default-Start:     S
 # Default-Stop:      0 6
@@ -29,64 +29,56 @@
 
 [ "$UTC" = "yes" ] && tz="--utc" || tz="--localtime"
 case "$1" in
-        start)
-                if [ "$VERBOSE" != no ]
-                then
-                        echo "System time was `date`."
-                        echo "Setting the System Clock using the Hardware Clock as reference..."
-                fi
+    start)
+        if [ "$VERBOSE" != no ] ;then
+            echo "System time was `date`."
+            echo "Setting the System Clock using the Hardware Clock as reference..."
+        fi
 
-		if [ "$HWCLOCKACCESS" != no ]
-		then
-			if [ -z "$TZ" ]
-			then
-	                   hwclock $tz --hctosys
-			else
-			   TZ="$TZ" hwclock $tz --hctosys
-			fi
-		fi
+        if [ "$HWCLOCKACCESS" != no ] ;then
+            if [ -z "$TZ" ] ;then
+                hwclock $tz --hctosys
+            else
+                TZ="$TZ" hwclock $tz --hctosys
+            fi
+        fi
 
-                if [ "$VERBOSE" != no ]
-                then
-                        echo "System Clock set. System local time is now `date`."
-                fi
-                ;;
-        stop|restart|reload|force-reload)
-		#
-		# Updates the Hardware Clock with the System Clock time.
-		# This will *override* any changes made to the Hardware Clock.
-		#
-		# WARNING: If you disable this, any changes to the system
-		#          clock will not be carried across reboots.
-		#
-		if [ "$VERBOSE" != no ]
-		then
-			echo "Saving the System Clock time to the Hardware Clock..."
-		fi
-		if [ "$HWCLOCKACCESS" != no ]
-		then
-			hwclock $tz --systohc
-		fi
-		if [ "$VERBOSE" != no ]
-		then
-			echo "Hardware Clock updated to `date`."
-		fi
-                exit 0
-                ;;
-	show)
-		if [ "$HWCLOCKACCESS" != no ]
-		then
-			hwclock $tz --show
-		fi
-		;;
-	status)
-		stiatus hwclock
-		exit $?
-		;;
-        *)
-                echo "Usage: hwclock.sh {start|stop|status|show|reload|restart}" >&2
-		echo "       start sets kernel (system) clock from hardware (RTC) clock" >&2
-		echo "       stop and reload set hardware (RTC) clock from kernel (system) clock" >&2
-                exit 1
-                ;;
+        if [ "$VERBOSE" != no ]; then
+            echo "System Clock set. System local time is now `date`."
+        fi
+        ;;
+    stop|restart|reload|force-reload)
+        #
+        # Updates the Hardware Clock with the System Clock time.
+        # This will *override* any changes made to the Hardware Clock.
+        #
+        # WARNING: If you disable this, any changes to the system
+        #          clock will not be carried across reboots.
+        #
+        if [ "$VERBOSE" != no ]; then
+            echo "Saving the System Clock time to the Hardware Clock..."
+        fi
+        if [ "$HWCLOCKACCESS" != no ]; then
+            hwclock $tz --systohc
+        fi
+        if [ "$VERBOSE" != no ]; then
+            echo "Hardware Clock updated to `date`."
+        fi
+        exit 0
+        ;;
+    show)
+        if [ "$HWCLOCKACCESS" != no ]; then
+            hwclock $tz --show
+        fi
+        ;;
+    status)
+        stiatus hwclock
+        exit $?
+        ;;
+    *)
+        echo "Usage: hwclock.sh {start|stop|status|show|reload|restart}" >&2
+        echo "       start sets kernel (system) clock from hardware (RTC) clock" >&2
+        echo "       stop and reload set hardware (RTC) clock from kernel (system) clock" >&2
+        exit 1
+        ;;
 esac

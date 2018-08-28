@@ -16,18 +16,18 @@ set -x
 echo "$(date): Starting execution: $0 $@"
 
 cleanup() {
-  rm -rf $TMP_RPM
+    rm -rf $TMP_RPM
 }
 rollback() {
-  rm -rf $FEED_DIR
+    rm -rf $FEED_DIR
 }
 
 error() {
-  local parent_lineno="$1"
-  local err_code="${2}"
-  echo "Error executing import script at line: ${parent_lineno} with error code: ${err_code}"
-  rollback
-  exit "${err_code}"
+    local parent_lineno="$1"
+    local err_code="${2}"
+    echo "Error executing import script at line: ${parent_lineno} with error code: ${err_code}"
+    rollback
+    exit "${err_code}"
 }
 
 trap 'error ${LINENO} $?' ERR

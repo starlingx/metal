@@ -14,8 +14,7 @@
 #    -o /pxeboot/pxelinux.cfg/01-08-00-27-3e-f8-05 -b sda -r sda -t -c ttyS0,115200
 #
 
-function usage()
-{
+function usage {
     cat >&2 <<EOF
 $0: This utility is used to generate a node-specific pxeboot.cfg file
 
@@ -37,33 +36,28 @@ EOF
 
 declare text_install="inst.text"
 
-function generate_config()
-{
+function generate_config {
     input=$1
     output=$2
 
-    if [ ! -f "$input" ]
-    then
+    if [ ! -f "$input" ]; then
         logger --stderr -t $0 "Error: Input file $input does not exist"
         exit 1
     fi
 
-    if [ ! -w $(dirname $output) ]
-    then
+    if [ ! -w $(dirname $output) ]; then
         logger --stderr -t $0 "Error: Destination directory $(dirname $output) not writeable"
         exit 1
     fi
 
-    if [ -e $output -a ! -w $output ]
-    then
+    if [ -e $output -a ! -w $output ]; then
         logger --stderr -t $0 "Error: Destination file $output_file_efi exists and is not writeable"
         exit 1
     fi
 
     sed -e "s#xxxAPPEND_OPTIONSxxx#$APPEND_OPTIONS#" $input > $output
 
-    if [ $? -ne 0 -o ! -f $output ]
-    then
+    if [ $? -ne 0 -o ! -f $output ]; then
         logger --stderr -t $0 "Error: Failed to generate pxeboot file $output"
         exit 1
     fi
@@ -126,12 +120,11 @@ done
 
 # Validate parameters
 if [ -z "$input_file" \
-     -o -z "$input_file_efi" \
-     -o -z "$output_file" \
-     -o -z "$output_file_efi" \
-     -o -z "$boot_device" \
-     -o -z "$rootfs_device" ]
-then
+        -o -z "$input_file_efi" \
+        -o -z "$output_file" \
+        -o -z "$output_file_efi" \
+        -o -z "$boot_device" \
+        -o -z "$rootfs_device" ]; then
     logger --stderr -t $0 "Error: One or more mandatory options not specified: $@"
     usage
     exit 1
@@ -139,18 +132,15 @@ fi
 
 APPEND_OPTIONS="boot_device=$boot_device rootfs_device=$rootfs_device"
 
-if [ -n "$text_install" ]
-then
+if [ -n "$text_install" ]; then
     APPEND_OPTIONS="$APPEND_OPTIONS $text_install"
 fi
 
-if [ -n "$console" ]
-then
+if [ -n "$console" ]; then
     APPEND_OPTIONS="$APPEND_OPTIONS console=$console"
 fi
 
-if [ -n "$tisnotify" ]
-then
+if [ -n "$tisnotify" ]; then
     APPEND_OPTIONS="$APPEND_OPTIONS tisnotify=$tisnotify"
 fi
 
@@ -160,13 +150,11 @@ APPEND_OPTIONS="$APPEND_OPTIONS inst.gpt"
 # Add k8s support for namespaces
 APPEND_OPTIONS="$APPEND_OPTIONS user_namespace.enable=1"
 
-if [ -n "$security_profile" ]
-then
+if [ -n "$security_profile" ]; then
     APPEND_OPTIONS="$APPEND_OPTIONS security_profile=$security_profile"
 fi
 
-if [ -n "$kernal_extra_args" ]
-then
+if [ -n "$kernal_extra_args" ]; then
     APPEND_OPTIONS="$APPEND_OPTIONS $kernal_extra_args"
 fi
 
@@ -174,9 +162,8 @@ generate_config $input_file $output_file
 
 # for extended security profile UEFI boot only,
 # a tboot option will be passed to target boot option menu
-if [ "$security_profile" == "extended" -a -n "$tboot" ]
-then
-   APPEND_OPTIONS="$APPEND_OPTIONS tboot=$tboot"
+if [ "$security_profile" == "extended" -a -n "$tboot" ]; then
+    APPEND_OPTIONS="$APPEND_OPTIONS tboot=$tboot"
 fi
 
 generate_config $input_file_efi $output_file_efi
