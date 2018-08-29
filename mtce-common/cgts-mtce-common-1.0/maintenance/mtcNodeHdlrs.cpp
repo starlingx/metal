@@ -1690,11 +1690,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
                         /* Go to the goEnabled stage */
                         recoveryStageChange ( node_ptr, MTC_RECOVERY__GOENABLED_TIMER );
 
-                        if ( node_ptr->alarms[MTC_ALARM_ID__ENABLE] != FM_ALARM_SEVERITY_CRITICAL )
-                        {
-                            mtcAlarm_critical ( node_ptr->hostname, MTC_ALARM_ID__ENABLE );
-                            node_ptr->alarms[MTC_ALARM_ID__ENABLE] = FM_ALARM_SEVERITY_CRITICAL ;
-                        }
+                        alarm_enabled_failure(node_ptr);
                         break ;
                     }
                 }
@@ -1732,11 +1728,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
                     /* Go to the goEnabled stage */
                     recoveryStageChange ( node_ptr, MTC_RECOVERY__GOENABLED_TIMER );
 
-                    if ( node_ptr->alarms[MTC_ALARM_ID__ENABLE] != FM_ALARM_SEVERITY_CRITICAL )
-                    {
-                        mtcAlarm_critical ( node_ptr->hostname, MTC_ALARM_ID__ENABLE );
-                        node_ptr->alarms[MTC_ALARM_ID__ENABLE] = FM_ALARM_SEVERITY_CRITICAL ;
-                    }
+                    alarm_enabled_failure (node_ptr);
                 }
             }
             /* A timer ring indicates that the host is not up */
@@ -1780,11 +1772,8 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
                 /* Inform the VIM that this host has failed */
                 mtcVimApi_state_change ( node_ptr, VIM_HOST_FAILED, 3 );
 
-                if ( node_ptr->alarms[MTC_ALARM_ID__ENABLE] != FM_ALARM_SEVERITY_CRITICAL )
-                {
-                    mtcAlarm_critical ( node_ptr->hostname, MTC_ALARM_ID__ENABLE );
-                    node_ptr->alarms[MTC_ALARM_ID__ENABLE] = FM_ALARM_SEVERITY_CRITICAL ;
-                }
+                alarm_enabled_failure(node_ptr);
+
                 /* Clear all degrade flags except for the HWMON one */
                 clear_host_degrade_causes ( node_ptr->degrade_mask );
                 node_ptr->degraded_resources_list.clear();

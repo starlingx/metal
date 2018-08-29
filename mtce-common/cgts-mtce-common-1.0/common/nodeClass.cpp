@@ -218,7 +218,6 @@ nodeLinkClass::nodeLinkClass()
     this->controller_mtcalive_timeout = 0;
     this->goenabled_timeout           = 0;
     this->loc_recovery_timeout        = 0;
-    this->mnfa_recovery_timeout       = 0;
     this->node_reinstall_timeout      = 0;
     this->token_refresh_rate          = 0;
     this->autorecovery_enabled        = false ;
@@ -270,16 +269,16 @@ nodeLinkClass::nodeLinkClass()
     active_controller_hostname.clear() ;
     inactive_controller_hostname.clear() ;
 
+    /* MNFA Activity Controls */
+    mnfa_threshold  = 2 ; /* 2 hosts    */
+    mnfa_timeout    = 0 ; /* no timeout */
+
     /* Start with no failures */
     mnfa_awol_list.clear();
     mnfa_host_count[MGMNT_IFACE] = 0 ;
     mnfa_host_count[INFRA_IFACE] = 0 ;
     mnfa_occurances = 0 ;
     mnfa_active     = false ;
-    mnfa_threshold_type    = MNFA_NUMBER ;
-    mnfa_threshold_percent = 5 ;
-    mnfa_threshold_number  = 3 ;
-    mnfa_threshold = mnfa_threshold_number ;
 
     mgmnt_link_up_and_running = false ;
     infra_link_up_and_running = false ;
@@ -4303,16 +4302,15 @@ void nodeLinkClass::hbs_minor_clear ( struct nodeLinkClass::node * node_ptr, ifa
     {
         /* clear it - possibly temporarily */
         node_ptr->hbs_minor[iface] = false ;
-        
+
         /* manage counts over heartbeat failure */
         if ( mnfa_host_count[iface] )
         {
-            /* If we are mnfa_active AND now below the threshold 
+            /* If we are mnfa_active AND now below the threshold
              * then trigger mnfa_exit */
-            if (( --mnfa_host_count[iface] < mnfa_calculate_threshold( node_ptr->hostname ) ) &&
+            if (( --mnfa_host_count[iface] < mnfa_threshold) &&
                    ( mnfa_active == true ))
             {
-    
                 wlog ("%s MNFA exit with graceful recovery (%s:%d)\n",
                           node_ptr->hostname.c_str(),
                           get_iface_name_str(iface),
@@ -4468,6 +4466,8 @@ void nodeLinkClass::manage_heartbeat_failure ( string hostname, iface_enum iface
     }
     else
     {
+        alarm_enabled_failure (node_ptr);
+
         mnfa_add_host ( node_ptr , iface );
 
         if ( mnfa_active == false )
@@ -4481,17 +4481,13 @@ void nodeLinkClass::manage_heartbeat_failure ( string hostname, iface_enum iface
             {
                 node_ptr->heartbeat_failed[MGMNT_IFACE] = true ;
             }
-            if ( mnfa_host_count[iface] < mnfa_calculate_threshold( hostname ))
+            if (mnfa_host_count[iface] < this->mnfa_threshold)
             {
-
                 elog ("%s %s network heartbeat failure\n", hostname.c_str(), get_iface_name_str(iface));
 
                 nodeLinkClass::set_availStatus ( hostname, MTC_AVAIL_STATUS__FAILED );
-                if ( node_ptr->alarms[MTC_ALARM_ID__ENABLE] != FM_ALARM_SEVERITY_CRITICAL )
-                {
-                    mtcAlarm_critical ( node_ptr->hostname, MTC_ALARM_ID__ENABLE );
-                    node_ptr->alarms[MTC_ALARM_ID__ENABLE] = FM_ALARM_SEVERITY_CRITICAL;
-                }
+
+                alarm_enabled_failure (node_ptr);
 
                 if (( node_ptr->adminAction != MTC_ADMIN_ACTION__ENABLE ) &&
                     ( node_ptr->adminAction != MTC_ADMIN_ACTION__UNLOCK ))
@@ -8296,19 +8292,12 @@ void nodeLinkClass::mem_log_dor ( struct nodeLinkClass::node * node_ptr )
 void nodeLinkClass::mem_log_mnfa ( void )
 {
     char str[MAX_MEM_LOG_DATA] ;
-
-    int temp = mnfa_threshold_number ;
-    if ( mnfa_threshold_type == MNFA_PERCENT )
-        temp = mnfa_threshold_percent ;
-
-    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s MNFA: Mode:%s:%d State:%s Hosts:%d:%d Cases:%d Threshold:%d\n", 
+    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s MNFA: State:%s Hosts:%d:%d Threshold:%d Occurances:%d\n",
                 my_hostname.c_str(),
-                mnfa_threshold_type ? "Percent" : "Number",
-                temp,
                 mnfa_active ? "ACTIVE" : "inactive",
                 mnfa_host_count[MGMNT_IFACE],
                 mnfa_host_count[INFRA_IFACE],
-                mnfa_calculate_threshold( "" ),
+                mnfa_threshold,
                 mnfa_occurances);
     mem_log (str);
 }
@@ -8316,7 +8305,7 @@ void nodeLinkClass::mem_log_mnfa ( void )
 void nodeLinkClass::mem_log_general_mtce_hosts ( void )
 {
     char str[MAX_MEM_LOG_DATA] ;
-    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s EnableHosts -> Cont:%d Comp:%d Stor:%d StorType:%d\n", 
+    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s EnableHosts -> Cont:%d Comp:%d Stor:%d StorType:%d\n",
                 my_hostname.c_str(),
                 num_controllers_enabled(),
                 enabled_compute_nodes(),

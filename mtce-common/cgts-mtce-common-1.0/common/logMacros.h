@@ -147,21 +147,6 @@ typedef struct
 
     int   latency_thld          ; /**< scheduling latency threshold in msec b4 log */
 
-    /** Multi Node Failure Avoidance Controls                                 */
-    char * mnfa_threshold_type     ; /**< value used in multi node failure
-                                          avoidance calculation ;
-                                          'number' / 'percent'age of hosts */
-    int    mnfa_threshold_percent  ; /**< number of hosts simultaneously
-                                          failing heartbeat                */
-    int    mnfa_threshold_number   ; /**< percentage of pool
-                                          simultanepously failing heartbeat*/
-    int    mnfa_recovery_threshold ; /**< Multi-Node-Failure Avoidance Recovery Threshold
-                                          Similar to the LOC above for graceful recovery
-                                          hosts that have LOC for longer than this time in
-                                          seconds are failed and sent into the enable_handler
-                                          FSM while those that recover before this period are
-                                          sent into the graceful recovery_handler FSM. */
-
     /** Configurable Timeouts ; unit is 'seconds'                             */
     int   controller_mtcalive_timeout  ; /**< mtcAlive wait timeout           */
     int   compute_mtcalive_timeout     ; /**< mtcAlive wait timeout           */
@@ -172,7 +157,6 @@ typedef struct
     int   sysinv_noncrit_timeout       ; /**< sysinv nonc request timeout     */
     int   work_queue_timeout           ; /**< end of action workq complete TO */
     int   loc_recovery_timeout         ; /**< loss of comms recovery timeout  */
-    int   mnfa_recovery_timeout        ; /**< mnfa recovery timeout           */
     int   node_reinstall_timeout       ; /**< node reinstall timeout          */
     int   dor_mode_timeout             ; /**< dead office recovery timeout    */
     int   dor_recovery_timeout_ext     ; /**< dor recovery timeout extension  */

@@ -295,18 +295,6 @@ static int mtc_config_handler ( void * user,
         config_ptr->mask |= CONFIG_AGENT_API_RETRIES ;
         mtcInv.api_retries = config_ptr->api_retries ;
     }
-    else if (MATCH("agent", "mnfa_threshold_type"))
-    {
-        config_ptr->mnfa_threshold_type = strdup(value);
-    }
-    else if (MATCH("agent", "mnfa_threshold_percent"))
-    {
-        config_ptr->mnfa_threshold_percent = atoi(value);
-    }
-    else if (MATCH("agent", "mnfa_threshold_number"))
-    {
-        config_ptr->mnfa_threshold_number = atoi(value);
-    }
     else if (MATCH("timeouts", "failsafe_shutdown_delay"))
     {
         config_ptr->failsafe_shutdown_delay = atoi(value);
@@ -335,6 +323,55 @@ static int mtc_config_handler ( void * user,
     return (FAIL);
 }
 
+static int mtc_ini_handler   ( void * user,
+                         const char * section,
+                         const char * name,
+                         const char * value)
+{
+    UNUSED(user);
+
+    if (MATCH("agent", "mnfa_threshold"))
+    {
+        mtcInv.mnfa_threshold = atoi(value);
+        ilog ("MNFA Threshd: %d\n", mtcInv.mnfa_threshold);
+    }
+    else if (MATCH("timeouts", "mnfa_timeout"))
+    {
+        int old = mtcInv.mnfa_timeout ;
+        mtcInv.mnfa_timeout = atoi(value);
+        if ( mtcInv.mnfa_timeout == 0 )
+        {
+            ilog ("MNFA Timeout: Never\n");
+        }
+        else
+        {
+            ilog ("MNFA Timeout: %3d secs\n", mtcInv.mnfa_timeout );
+        }
+
+        /* handle a change in mnfa timeout while MNFA is active */
+        if (( mtcInv.mnfa_active  == true ) &&
+            ( mtcInv.mnfa_timeout != old ))
+        {
+            mtcTimer_reset ( mtcInv.mtcTimer_mnfa );
+            if (( old == 0 ) || mtcInv.mnfa_timeout != 0 )
+            {
+                wlog ("MNFA Auto-Recovery in %d seconds\n",
+                       mtcInv.mnfa_timeout);
+
+                mtcTimer_start ( mtcInv.mtcTimer_mnfa,
+                                 mtcTimer_handler,
+                                 mtcInv.mnfa_timeout);
+            }
+            else if ( mtcInv.mnfa_timeout == 0 )
+            {
+                ilog ("MNFA timer set to no-timeout ; previous %d sec timer cancelled", old );
+            }
+        }
+    }
+    return (PASS);
+}
+
+
 /* Read and process mtc.ini file settings into the daemon configuration */
 int daemon_configure ( void )
 {
@@ -347,6 +384,12 @@ int daemon_configure ( void )
     if (ini_parse(MTCE_CONF_FILE, mtc_config_handler, &mtc_config) < 0)
     {
         elog ("Can't load '%s'\n", MTCE_CONF_FILE );
+        return (FAIL_LOAD_INI);
+    }
+
+    if (ini_parse(MTCE_INI_FILE, mtc_ini_handler, &mtc_config) < 0)
+    {
+        elog ("Can't load '%s'\n", MTCE_INI_FILE );
         return (FAIL_LOAD_INI);
     }
 
@@ -406,13 +449,11 @@ int daemon_configure ( void )
         mtcInv.goenabled_timeout = DEFAULT_GOENABLE_TIMEOUT ;
 
     mtcInv.loc_recovery_timeout  = mtc_config.loc_recovery_timeout ;
-    mtcInv.mnfa_recovery_timeout = mtc_config.mnfa_recovery_timeout ;
 
     if ( mtc_config.node_reinstall_timeout )
         mtcInv.node_reinstall_timeout = mtc_config.node_reinstall_timeout ;
     else
         mtcInv.node_reinstall_timeout = MTC_REINSTALL_TIMEOUT_DEFAULT ;
-
 
     if ( mtc_config.dor_mode_timeout <= 0 )
     {
@@ -421,25 +462,6 @@ int daemon_configure ( void )
                DEFAULT_DOR_MODE_TIMEOUT);
 
         mtc_config.dor_mode_timeout = DEFAULT_DOR_MODE_TIMEOUT ;
-    }
-
-    /* validate and auto correct manage multi node failure avoidance thresholds */
-    if (( mtc_config.mnfa_threshold_type != NULL ) &&
-        ( !strncmp (mtc_config.mnfa_threshold_type, "percent", strlen("percent"))))
-    {
-        if ( mtc_config.mnfa_threshold_percent > 100 )
-        {
-             mtc_config.mnfa_threshold_percent = 100 ;
-        }
-        mtcInv.mnfa_threshold_type = MNFA_PERCENT ;
-        ilog ("mnfAvoidance: %d%c\n", mtc_config.mnfa_threshold_percent, '%' );
-        mtcInv.mnfa_threshold_percent = mtc_config.mnfa_threshold_percent ;
-    }
-    else
-    {
-        mtcInv.mnfa_threshold_type = MNFA_NUMBER ;
-        ilog ("mnfAvoidance: %d hosts\n", mtc_config.mnfa_threshold_number );
-        mtcInv.mnfa_threshold_number = mtc_config.mnfa_threshold_number ;
     }
 
     if ( mtc_config.swact_timeout )

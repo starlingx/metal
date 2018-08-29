@@ -46,7 +46,6 @@ void daemon_config_default ( daemon_config_type* config_ptr )
     config_ptr->sysinv_api_bind_ip    = strdup("none");
     config_ptr->mode                  = strdup("none");
     config_ptr->fit_host              = strdup("none");
-    config_ptr->mnfa_threshold_type   = strdup("none");
     config_ptr->multicast             = strdup("none");
 
     config_ptr->debug_all    = 0 ;
@@ -174,14 +173,6 @@ int timeout_config_handler (       void * user,
         config_ptr->loc_recovery_timeout = atoi(value);
         ilog ("LOC  Timeout: %3d secs\n", config_ptr->loc_recovery_timeout );
     }
-    else if (MATCH("timeouts", "mnfa_recovery_timeout"))
-    {
-        config_ptr->mnfa_recovery_timeout = atoi(value);
-        if (( config_ptr->mnfa_recovery_timeout > 300 ) ||
-            ( config_ptr->mnfa_recovery_timeout == 0 ))
-              config_ptr->mnfa_recovery_timeout = 5 ;
-        ilog ("MNFA Timeout: %3d secs\n", config_ptr->mnfa_recovery_timeout );
-    }
     else if (MATCH("timeouts", "node_reinstall_timeout"))
     {
         config_ptr->node_reinstall_timeout = atoi(value);
@@ -238,7 +229,7 @@ void daemon_dump_cfg ( void )
 
     ilog ("Configuration Settings\n------------------------------\n");
     if ( ptr->scheduling_priority ) { ilog ("scheduling_priority   = %d\n", ptr->scheduling_priority   ); }
-    
+
     if ( ptr->infra_degrade_only )    { ilog ("infra_degrade_only    = %s\n", ptr->infra_degrade_only ? "Yes" : "No" );}
     if ( ptr->need_infra_poll_audit ) { ilog ("need_infra_poll_audit = %s\n", ptr->need_infra_poll_audit ? "Yes" : "No" );}
     if ( ptr->active )                { ilog ("active                = %s\n", ptr->active ? "Yes" : "No"  );}
@@ -254,7 +245,6 @@ void daemon_dump_cfg ( void )
     if ( strcmp(ptr->infra_iface, "none" )) { ilog ("infra_iface           = %s\n", ptr->infra_iface    );}
     if ( strcmp(ptr->multicast, "none"   )) { ilog ("multicast             = %s\n", ptr->multicast );}
 
-    
     if ( ptr->ha_port        ) { ilog ("ha_port               = %d\n", ptr->ha_port               );}
     if ( ptr->vim_cmd_port   ) { ilog ("vim_cmd_port          = %d\n", ptr->vim_cmd_port          );}
     if ( ptr->vim_event_port ) { ilog ("vim_event_port        = %d\n", ptr->vim_event_port        );}
@@ -286,7 +276,7 @@ void daemon_dump_cfg ( void )
     if ( ptr->hwmon_cmd_port       ) { ilog ("hwmon_cmd_port        = %d\n", ptr->hwmon_cmd_port       );}
     if ( ptr->hbs_to_mtc_event_port) { ilog ("hbs_to_mtc_event_port = %d\n", ptr->hbs_to_mtc_event_port);}
     if ( ptr->inv_event_port       ) { ilog ("inv_event_port        = %d\n", ptr->inv_event_port       );}
-    
+
     /* rmond */
     if ( ptr->per_node     ) { ilog ("per_node              = %d\n", ptr->per_node             );}
     if ( ptr->audit_period ) { ilog ("audit_period          = %d\n", ptr->audit_period         );}
@@ -316,10 +306,6 @@ void daemon_dump_cfg ( void )
     if ( ptr->stall_rec_thld    ) { ilog ("stall_rec_thld        = %d\n", ptr->stall_rec_thld       );}
 
     /* mtcAgent */
-    if ( ptr->mnfa_threshold_type        ) { ilog ("mnfa_threshold_type   = %s\n", ptr->mnfa_threshold_type         );}
-    if ( ptr->mnfa_threshold_percent     ) { ilog ("mnfa_threshold_percent= %d\n", ptr->mnfa_threshold_percent      );}
-    if ( ptr->mnfa_threshold_number      ) { ilog ("mnfa_threshold_number = %d\n", ptr->mnfa_threshold_number       );}
-    if ( ptr->mnfa_recovery_threshold    ) { ilog ("mnfa_recovery_threshod= %d\n", ptr->mnfa_recovery_threshold     );}
     if ( ptr->controller_mtcalive_timeout) { ilog ("controller_mtcalive_to= %d\n", ptr->controller_mtcalive_timeout );}
     if ( ptr->compute_mtcalive_timeout   ) { ilog ("compute_mtcalive_to   = %d\n", ptr->compute_mtcalive_timeout    );}
     if ( ptr->goenabled_timeout          ) { ilog ("goenabled_timeout     = %d\n", ptr->goenabled_timeout           );}
@@ -328,7 +314,6 @@ void daemon_dump_cfg ( void )
     if ( ptr->sysinv_noncrit_timeout     ) { ilog ("sysinv_noncrit_timeout= %d\n", ptr->sysinv_noncrit_timeout      );}
     if ( ptr->work_queue_timeout         ) { ilog ("work_queue_timeout    = %d\n", ptr->work_queue_timeout          );}
     if ( ptr->loc_recovery_timeout       ) { ilog ("loc_recovery_timeout  = %d\n", ptr->loc_recovery_timeout        );}
-    if ( ptr->mnfa_recovery_timeout      ) { ilog ("mnfa_recovery_timeout = %d\n", ptr->mnfa_recovery_timeout       );}
     if ( ptr->node_reinstall_timeout     ) { ilog ("node_reinstall_timeout= %d\n", ptr->node_reinstall_timeout      );}
     if ( ptr->uptime_period              ) { ilog ("uptime_period         = %d\n", ptr->uptime_period               );}
     if ( ptr->online_period              ) { ilog ("online_period         = %d\n", ptr->online_period               );}

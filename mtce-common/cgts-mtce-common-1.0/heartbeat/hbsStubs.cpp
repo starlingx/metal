@@ -270,12 +270,6 @@ int daemon_log_message ( const char * hostname,
     return(PASS);
 }
 
-
-int  nodeLinkClass::mnfa_calculate_threshold ( string hostname )
-{
-    UNUSED(hostname);
-    return(PASS) ;
-}
 void nodeLinkClass::mnfa_add_host     ( struct nodeLinkClass::node * node_ptr, iface_enum iface )
 { node_ptr = node_ptr ; iface = iface ; }
 void nodeLinkClass::mnfa_recover_host ( struct nodeLinkClass::node * node_ptr )

@@ -41,48 +41,6 @@ void log_mnfa_pool ( std::list<string> & mnfa_awol_list )
     ilog ("MNFA POOL:%s\n", pool_list.c_str());
 }
 
-/*******************************************************************************
- *
- * Name       : mnfa_calculate_threshold
- *
- * Description: Calculates and returns the mnfa threshold based
- *              on enabled hosts.
- *
- * Auto corrects the value to a min number.
- *
- * Calculate the multi-node failure avoidance handling threshold
- * This is the number of hosts than need to fail simultaneously
- * in order to trigger mode ; i.e. mnfa_active=true
- *
- *******************************************************************************/
-int nodeLinkClass::mnfa_calculate_threshold ( string hostname )
-{
-    int mnfa_enabled_nodes = enabled_nodes ();
-
-    /* Calculate the threshold */
-    if ( mnfa_threshold_type == MNFA_PERCENT )
-        mnfa_threshold = mnfa_enabled_nodes / mnfa_threshold_percent ;
-    else
-        mnfa_threshold = mnfa_threshold_number ;
-
-    /* Don't allow the multi-node failure avoidance
-     * to ever be 1 or we would never fail a host */
-    if ( mnfa_threshold < mnfa_threshold_number )
-    {
-        ilog ("%s MNFA threshold rounded to %d from %d\n",
-               hostname.c_str(),
-               mnfa_threshold_number,
-               mnfa_enabled_nodes / mnfa_threshold_percent );
-        mnfa_threshold = mnfa_threshold_number ;
-    }
-
-    if ( mnfa_awol_list.size() )
-    {
-        log_mnfa_pool ( mnfa_awol_list );
-    }
-    return (mnfa_threshold);
-}
-
 /*****************************************************************************
  *
  * Name       : mnfa_add_host
@@ -105,6 +63,8 @@ void nodeLinkClass::mnfa_add_host ( struct nodeLinkClass::node * node_ptr , ifac
         /* if we are active then add the node to the awol list */
         if ( mnfa_active == true )
         {
+            alarm_enabled_failure (node_ptr);
+
             /* once we are mnfa_active we need to give all the
              * hbs_minor=true hosts a graceful recovery token
              * mnfa_graceful_recovery = true and add to the awol list */
@@ -116,7 +76,7 @@ void nodeLinkClass::mnfa_add_host ( struct nodeLinkClass::node * node_ptr , ifac
                 mtcInvApi_update_task ( node_ptr, MTC_TASK_RECOVERY_WAIT );
         }
         else if (( mnfa_active == false ) &&
-                 ( mnfa_host_count[iface] >= mnfa_calculate_threshold( node_ptr->hostname )))
+                 ( mnfa_host_count[iface] >= this->mnfa_threshold))
         {
             enter = true ;
         }
@@ -133,6 +93,11 @@ void nodeLinkClass::mnfa_add_host ( struct nodeLinkClass::node * node_ptr , ifac
                  mnfa_host_count[INFRA_IFACE],
                  get_iface_name_str(INFRA_IFACE),
                  node_ptr->hbs_minor_count[INFRA_IFACE]);
+
+        if ( mnfa_awol_list.size() )
+        {
+            log_mnfa_pool ( mnfa_awol_list );
+        }
 
         if ( enter == true )
         {
@@ -196,7 +161,7 @@ void nodeLinkClass::mnfa_recover_host ( struct nodeLinkClass::node * node_ptr )
  *     mnfa_graceful_recovery token
  *
  *  5. Start the MNFA Auto-Recovery timer with time based on the config
- *     setting mnfa_recovery_timeout
+ *     setting mnfa_timeout
  *
  ****************************************************************************/
 void nodeLinkClass::mnfa_enter ( void )
@@ -211,8 +176,7 @@ void nodeLinkClass::mnfa_enter ( void )
       * previous mnfa but the failure case occurs again. If that
       * happens we need to cancel the timer that will issue
       * the period recovery command. */
-     if ( mtcTimer_mnfa.tid )
-         mtcTimer_stop ( mtcTimer_mnfa );
+     mtcTimer_reset ( mtcTimer_mnfa );
 
      /* Loop through inventory and recover each host that
       * remains in the hbs_minor state.
@@ -232,6 +196,7 @@ void nodeLinkClass::mnfa_enter ( void )
              if ( ptr->task != MTC_TASK_RECOVERY_WAIT )
                 mtcInvApi_update_task ( ptr, MTC_TASK_RECOVERY_WAIT );
 
+             alarm_enabled_failure (ptr);
          }
          if (( ptr->next == NULL ) || ( ptr == tail ))
              break ;
@@ -239,14 +204,20 @@ void nodeLinkClass::mnfa_enter ( void )
 
      mnfa_awol_list.unique();
 
-     /* Start the timer that will eventually send the MTC_RECOVER_HBS command */
-     wlog ("MNFA Auto-Recovery in %d seconds\n",       mnfa_recovery_timeout);
-     mtcTimer_start ( mtcTimer_mnfa, mtcTimer_handler, mnfa_recovery_timeout);
+     if ( this->mnfa_timeout )
+     {
+         wlog ("MNFA Auto-Recovery in %d seconds\n",       this->mnfa_timeout);
+         mtcTimer_start ( mtcTimer_mnfa, mtcTimer_handler, this->mnfa_timeout);
+     }
+     if ( mnfa_awol_list.size() )
+     {
+         log_mnfa_pool ( mnfa_awol_list );
+     }
 }
 
 /****************************************************************************
  *
- * Name       : mnfa_enter
+ * Name       : mnfa_exit
  *
  * Description: Perform the operations required to exit mnfa mode
  * These include ...
@@ -266,7 +237,7 @@ void nodeLinkClass::mnfa_enter ( void )
  *     hosts that remain in the hbs_minor state.
  *
  * if ( force == true )
- *    The mnfa_recovery_timeout has expired
+ *    The mnfa_timeout has expired
  *    All hosts in the awol list are forced failed and into the
  *       enable_handler FSM.
  * else
@@ -279,18 +250,20 @@ void nodeLinkClass::mnfa_exit ( bool force )
 {
     if ( mnfa_active == true )
     {
-        wlog ("MNFA EXIT <-- Exiting Multi-Node Failure Avoidance %s\n",
-                     force ? "(Auto-Recover)" : "");
-
-        mtcAlarm_log ( active_controller_hostname , MTC_LOG_ID__EVENT_MNFA_EXIT );
         mnfa_occurances++ ;
         mnfa_active = false ;
-
         if ( force == true )
         {
             elog ("... MNFA %d sec timeout - forcing full enable on ... \n",
-                       mnfa_recovery_timeout);
+                       this->mnfa_timeout);
+        }
 
+        wlog ("MNFA EXIT <-- Exiting Multi-Node Failure Avoidance %s\n",
+                     force ? "(Auto-Recover)" : "");
+        mtcAlarm_log ( active_controller_hostname , MTC_LOG_ID__EVENT_MNFA_EXIT );
+
+        if ( mnfa_awol_list.size() )
+        {
             log_mnfa_pool ( mnfa_awol_list );
         }
 
@@ -342,8 +315,7 @@ void nodeLinkClass::mnfa_exit ( bool force )
         }
 
         /* Stop the ... failure -> full enable ... window timer if it is active */
-        if ( mtcTimer_mnfa.tid )
-            mtcTimer_stop ( mtcTimer_mnfa );
+        mtcTimer_reset ( mtcTimer_mnfa );
 
         /* Start the timer that will eventually send the MTC_RECOVER_HBS command */
         mtcTimer_start ( mtcTimer_mnfa, mtcTimer_handler, MTC_MNFA_RECOVERY_TIMER );
