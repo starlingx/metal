@@ -6,7 +6,7 @@ Copyright (c) 2018 Wind River Systems, Inc.
 SPDX-License-Identifier: Apache-2.0
 
 """
-
+from __future__ import print_function
 import getopt
 import os
 import platform
@@ -15,8 +15,8 @@ import sys
 import xml.etree.ElementTree as ElementTree
 
 def usage():
-    print "Usage: %s --groups <groups.xml> --pkgdir <pkgdir>" \
-              % os.path.basename(sys.argv[0])
+    print("Usage: %s --groups <groups.xml> --pkgdir <pkgdir>" \
+              % os.path.basename(sys.argv[0]))
     exit(1)
 
 def add_text_tag_to_xml(parent,
