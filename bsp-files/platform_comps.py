@@ -9,15 +9,16 @@ SPDX-License-Identifier: Apache-2.0
 from __future__ import print_function
 import getopt
 import os
-import platform
 import subprocess
 import sys
 import xml.etree.ElementTree as ElementTree
 
+
 def usage():
-    print("Usage: %s --groups <groups.xml> --pkgdir <pkgdir>" \
-              % os.path.basename(sys.argv[0]))
+    print("Usage: %s --groups <groups.xml> --pkgdir <pkgdir>"
+          % os.path.basename(sys.argv[0]))
     exit(1)
+
 
 def add_text_tag_to_xml(parent,
                         name,
@@ -93,7 +94,7 @@ def main():
         usage()
 
     pkgdir = None
-    groups_file =  None
+    groups_file = None
 
     # Filters are colocated with this script
     filter_dir = os.path.dirname(sys.argv[0])
@@ -108,18 +109,23 @@ def main():
         usage()
 
     # Get the pkglist
-    cmd = "find %s -name '*.rpm' | xargs rpm -qp --queryformat '%%{NAME}\n'" % pkgdir
+    cmd = "find %s -name '*.rpm' \
+    | xargs rpm -qp --queryformat '%%{NAME}\n'" % pkgdir
     rpmlist = subprocess.check_output(cmd, shell=True).split()
 
     tree = ElementTree.parse(groups_file)
     comps = tree.getroot()
     comps.tail = '\n'
 
-    add_group(comps, 'controller', rpmlist, filter_dir, 'filter_out_from_controller')
-    add_group(comps, 'controller-compute', rpmlist, filter_dir, 'filter_out_from_smallsystem')
-    add_group(comps, 'controller-compute-lowlatency', rpmlist, filter_dir, 'filter_out_from_smallsystem_lowlatency')
+    add_group(comps, 'controller', rpmlist,
+              filter_dir, 'filter_out_from_controller')
+    add_group(comps, 'controller-compute', rpmlist,
+              filter_dir, 'filter_out_from_smallsystem')
+    add_group(comps, 'controller-compute-lowlatency', rpmlist,
+              filter_dir, 'filter_out_from_smallsystem_lowlatency')
     add_group(comps, 'compute', rpmlist, filter_dir, 'filter_out_from_compute')
-    add_group(comps, 'compute-lowlatency', rpmlist, filter_dir, 'filter_out_from_compute_lowlatency')
+    add_group(comps, 'compute-lowlatency', rpmlist,
+              filter_dir, 'filter_out_from_compute_lowlatency')
     add_group(comps, 'storage', rpmlist, filter_dir, 'filter_out_from_storage')
 
     add_group(comps, 'controller')
@@ -134,4 +140,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
