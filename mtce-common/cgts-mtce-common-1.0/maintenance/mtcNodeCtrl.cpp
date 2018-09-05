@@ -330,15 +330,67 @@ static int mtc_ini_handler   ( void * user,
 {
     UNUSED(user);
 
-    if (MATCH("agent", "mnfa_threshold"))
+    if (MATCH("agent", "heartbeat_failure_action"))
     {
+        string cur_action = "" ;
+        string new_action = "" ;
+
+        /* prevent memory leak over a reconfig */
+        if ( mtc_config.hbs_failure_action )
+        {
+            cur_action = mtc_config.hbs_failure_action ;
+            free(mtc_config.hbs_failure_action);
+        }
+        new_action = mtc_config.hbs_failure_action = strdup(value);
+        mtcInv.hbs_failure_action = get_hbs_failure_action(mtc_config);
+        if (( !cur_action.empty() ) && ( cur_action != new_action))
+        {
+            mtc_alarm_id_enum alarm_id = MTC_LOG_ID__CONFIG_HB_ACTION_FAIL ;
+            if ( mtcInv.hbs_failure_action == HBS_FAILURE_ACTION__NONE )
+                alarm_id = MTC_LOG_ID__CONFIG_HB_ACTION_NONE ;
+            else if ( mtcInv.hbs_failure_action == HBS_FAILURE_ACTION__ALARM )
+                alarm_id = MTC_LOG_ID__CONFIG_HB_ACTION_ALARM ;
+            else if ( mtcInv.hbs_failure_action == HBS_FAILURE_ACTION__DEGRADE )
+                alarm_id = MTC_LOG_ID__CONFIG_HB_ACTION_DEGRADE ;
+
+            /* re-use cur_action to build the action change string from it */
+            cur_action.append(" to ");
+            cur_action.append(new_action);
+            mtcAlarm_log ( mtcInv.my_hostname, alarm_id, cur_action );
+        }
+        if (( mtcInv.mnfa_active == true ) &&
+            (( mtcInv.hbs_failure_action == HBS_FAILURE_ACTION__NONE ) ||
+             ( mtcInv.hbs_failure_action == HBS_FAILURE_ACTION__ALARM )))
+        {
+            mtcInv.mnfa_cancel ();
+        }
+    }
+    else if (MATCH("agent", "mnfa_threshold"))
+    {
+        int old = mtcInv.mnfa_threshold ;
         mtcInv.mnfa_threshold = atoi(value);
+        if (( old != 0 ) && ( old != mtcInv.mnfa_threshold ))
+        {
+            string cur_threshold = ""   ;
+            cur_threshold.append(itos(old));
+            cur_threshold.append(" to ");
+            cur_threshold.append(itos(mtcInv.mnfa_threshold));
+            mtcAlarm_log ( mtcInv.my_hostname, MTC_LOG_ID__CONFIG_MNFA_THRESHOLD, cur_threshold );
+        }
         ilog ("MNFA Threshd: %d\n", mtcInv.mnfa_threshold);
     }
     else if (MATCH("timeouts", "mnfa_timeout"))
     {
         int old = mtcInv.mnfa_timeout ;
         mtcInv.mnfa_timeout = atoi(value);
+        if ( old != mtcInv.mnfa_timeout )
+        {
+            string cur_timeout = ""   ;
+            cur_timeout.append(itos(old));
+            cur_timeout.append(" to ");
+            cur_timeout.append(itos(mtcInv.mnfa_timeout));
+            mtcAlarm_log ( mtcInv.my_hostname, MTC_LOG_ID__CONFIG_MNFA_TIMEOUT, cur_timeout );
+        }
         if ( mtcInv.mnfa_timeout == 0 )
         {
             ilog ("MNFA Timeout: Never\n");

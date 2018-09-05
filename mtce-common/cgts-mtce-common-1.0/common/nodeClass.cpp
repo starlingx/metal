@@ -258,7 +258,7 @@ nodeLinkClass::nodeLinkClass()
     hbs_minor_threshold   = HBS_MINOR_THRESHOLD ;
     hbs_degrade_threshold = HBS_DEGRADE_THRESHOLD ;
     hbs_failure_threshold = HBS_FAILURE_THRESHOLD ;
-
+    hbs_failure_action = HBS_FAILURE_ACTION__FAIL ;
     hbs_silent_fault_detector = 0 ;
     hbs_silent_fault_logged   = false ;
 
@@ -653,14 +653,14 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
     ptr->vimEvent.buf    = NULL ;
     ptr->httpReq.buf     = NULL ;
 
-
+    /* log throttles */
     ptr->stall_recovery_log_throttle = 0 ;
     ptr->stall_monitor_log_throttle = 0 ;
     ptr->unexpected_pulse_log_throttle = 0 ;
     ptr->lookup_mismatch_log_throttle = 0 ;
-
     ptr->log_throttle = 0 ;
     ptr->no_work_log_throttle = 0 ;
+    ptr->no_rri_log_throttle = 0 ;
 
     ptr->degrade_mask = ptr->degrade_mask_save = DEGRADE_MASK_NONE ;
 
@@ -1615,13 +1615,15 @@ int nodeLinkClass::alarm_config_clear ( struct nodeLinkClass::node * node_ptr )
 }
 
 /* Generate a log and a critical alarm if the node enable failed */
-int nodeLinkClass::alarm_enabled_failure ( struct nodeLinkClass::node * node_ptr )
+int nodeLinkClass::alarm_enabled_failure ( struct nodeLinkClass::node * node_ptr, bool want_degrade )
 {
-    if ( (node_ptr->degrade_mask & DEGRADE_MASK_ENABLE) == 0 )
+    if ( want_degrade )
     {
-        node_ptr->degrade_mask |= DEGRADE_MASK_ENABLE ;
+        if ( (node_ptr->degrade_mask & DEGRADE_MASK_ENABLE) == 0 )
+        {
+            node_ptr->degrade_mask |= DEGRADE_MASK_ENABLE ;
+        }
     }
-
     if ( node_ptr->alarms[MTC_ALARM_ID__ENABLE] != FM_ALARM_SEVERITY_CRITICAL )
     {
         elog ("%s critical enable failure\n", node_ptr->hostname.c_str());
@@ -4466,7 +4468,10 @@ void nodeLinkClass::manage_heartbeat_failure ( string hostname, iface_enum iface
     }
     else
     {
-        alarm_enabled_failure (node_ptr);
+        //bool want_degrade = true ;
+        //if ( this->hbs_failure_action == HBS_FAILURE_ACTION__ALARM )
+        //    want_degrade = false ;
+        // alarm_enabled_failure (node_ptr, want_degrade);
 
         mnfa_add_host ( node_ptr , iface );
 
@@ -4486,8 +4491,6 @@ void nodeLinkClass::manage_heartbeat_failure ( string hostname, iface_enum iface
                 elog ("%s %s network heartbeat failure\n", hostname.c_str(), get_iface_name_str(iface));
 
                 nodeLinkClass::set_availStatus ( hostname, MTC_AVAIL_STATUS__FAILED );
-
-                alarm_enabled_failure (node_ptr);
 
                 if (( node_ptr->adminAction != MTC_ADMIN_ACTION__ENABLE ) &&
                     ( node_ptr->adminAction != MTC_ADMIN_ACTION__UNLOCK ))
@@ -4526,11 +4529,31 @@ void nodeLinkClass::manage_heartbeat_clear ( string hostname, iface_enum iface )
         for ( int i = 0 ; i < MAX_IFACES ; i++ )
         {
             node_ptr->heartbeat_failed[i] = false ;
+            if ( i == MGMNT_IFACE )
+            {
+                node_ptr->alarms[HBS_ALARM_ID__HB_MGMNT] = FM_ALARM_SEVERITY_CLEAR ;
+                node_ptr->degrade_mask &= ~DEGRADE_MASK_HEARTBEAT_MGMNT ;
+            }
+            if ( i == INFRA_IFACE )
+            {
+                node_ptr->alarms[HBS_ALARM_ID__HB_INFRA] = FM_ALARM_SEVERITY_CLEAR ;
+                node_ptr->degrade_mask &= ~DEGRADE_MASK_HEARTBEAT_INFRA ;
+            }
         }
     }
     else
     {
         node_ptr->heartbeat_failed[iface] = false ;
+        if ( iface == MGMNT_IFACE )
+        {
+            node_ptr->alarms[HBS_ALARM_ID__HB_MGMNT] = FM_ALARM_SEVERITY_CLEAR ;
+            node_ptr->degrade_mask &= ~DEGRADE_MASK_HEARTBEAT_MGMNT ;
+        }
+        else if ( iface == INFRA_IFACE )
+        {
+            node_ptr->alarms[HBS_ALARM_ID__HB_INFRA] = FM_ALARM_SEVERITY_CLEAR ;
+            node_ptr->degrade_mask &= ~DEGRADE_MASK_HEARTBEAT_INFRA ;
+        }
     }
 }
 
@@ -4576,7 +4599,7 @@ void nodeLinkClass::manage_heartbeat_degrade ( string hostname, iface_enum iface
         }
 
         mnfa_add_host ( node_ptr, iface );
- 
+
         if ( nodeLinkClass::get_operState ( hostname ) == MTC_OPER_STATE__ENABLED )
         {
             if ( iface == MGMNT_IFACE )
@@ -7074,7 +7097,7 @@ void nodeLinkClass::manage_autorecovery ( struct nodeLinkClass::node * node_ptr 
             }
             else
             {
-                alarm_enabled_failure ( node_ptr ) ;
+                alarm_enabled_failure ( node_ptr , true ) ;
             }
 
             allStateChange  ( node_ptr, node_ptr->adminState,
@@ -7155,7 +7178,7 @@ void nodeLinkClass::force_full_enable ( struct nodeLinkClass::node * node_ptr )
     plog ("%s Forcing Full Enable Sequence\n", node_ptr->hostname.c_str());
 
     /* Raise Critical Enable Alarm */
-    alarm_enabled_failure ( node_ptr );
+    alarm_enabled_failure ( node_ptr, true );
 
     allStateChange      ( node_ptr, node_ptr->adminState, MTC_OPER_STATE__DISABLED, MTC_AVAIL_STATUS__FAILED );
     enableStageChange   ( node_ptr, MTC_ENABLE__FAILURE    );
@@ -7359,7 +7382,18 @@ bool nodeLinkClass::get_hbs_monitor_state ( string & hostname, int iface )
         node_ptr = nodeLinkClass::getNode ( hostname );
         if ( node_ptr != NULL )
         {
+            int rri_max = this->hosts ;
             state = node_ptr->monitor[iface] ;
+            if ( state == true )
+            {
+                wlog_throttled (node_ptr->no_rri_log_throttle, rri_max,
+                                "%s Not Offering RRI (%d)\n",
+                                hostname.c_str(), this->hosts );
+            }
+            else
+            {
+                node_ptr->no_rri_log_throttle = 0 ;
+            }
         }
     }
     return (state);
@@ -7539,6 +7573,31 @@ int nodeLinkClass::create_pulse_list ( iface_enum iface )
     return (pulses[iface]);
 }
 
+/** Clear heartbeat stats in support of failed heartbeat restart */
+void nodeLinkClass::hbs_clear_all_stats ( void )
+{
+    ilog ("clearing all hearbeat stats\n");
+    for (  struct node * ptr = head ; ptr != NULL ; ptr = ptr->next )
+    {
+        for ( int iface = 0 ; iface < MAX_IFACES ; iface++ )
+        {
+            ptr->max_count[iface] = 0 ;
+            ptr->hbs_count[iface] = 0 ;
+            ptr->hbs_misses_count[iface] = 0 ;
+            ptr->b2b_pulses_count[iface] = 0 ;
+            ptr->b2b_misses_count[iface] = 0 ;
+            ptr->hbs_minor_count[iface] = 0 ;
+            ptr->hbs_degrade_count[iface] = 0 ;
+            ptr->hbs_failure_count[iface] = 0 ;
+            ptr->hbs_minor[iface] = false ;
+            ptr->hbs_degrade[iface] = false ;
+            ptr->hbs_failure[iface] = false ;
+            ptr->heartbeat_failed[iface] = false ;
+        }
+        if (( ptr->next == NULL ) || ( ptr == tail ))
+            break ;
+    }
+}
 
 /** Build the Reasource Reference Array */ 
 void nodeLinkClass::build_rra ( void )
@@ -7717,7 +7776,7 @@ int nodeLinkClass::remPulse ( struct node * node_ptr, iface_enum iface, bool cle
                      * if this interfaces failed and has not yet received the
                      * required number of back to back pulses needed for recovery */
                     clear_b2b_misses_count = false ;
-                    ilog ("%s %s heartbeat failure recovery (%d of %d)\n",
+                    dlog ("%s %s heartbeat failure recovery (%d of %d)\n",
                                  node_ptr->hostname.c_str(),
                                  get_iface_name_str(iface),
                                  ptr->b2b_pulses_count[iface],
@@ -7870,8 +7929,8 @@ int nodeLinkClass::remPulse ( struct node * node_ptr, iface_enum iface, bool cle
 }
 
 /** This utility will try and remove a pluse from the pulse
- *  linked list first by index and then by hostname. 
- *  
+ *  linked list first by index and then by hostname.
+ *
  *  By index does not require a lookup whereas hostname does */
 int nodeLinkClass::remove_pulse ( string & hostname, iface_enum iface, int index, unsigned int flags )
 {
@@ -7889,10 +7948,7 @@ int nodeLinkClass::remove_pulse ( string & hostname, iface_enum iface, int index
     {
         if ( hostname.compare("localhost") )
         {
-            if ( get_hbs_monitor_state ( hostname , iface ) == true )
-            {
-                wlog ("%s Not Offering RRI\n", hostname.c_str());
-            }
+            get_hbs_monitor_state ( hostname , iface ) ;
         }
         else
         {
@@ -7914,7 +7970,7 @@ void nodeLinkClass::clear_pulse_list ( iface_enum iface )
    }
    pulse_list[iface].head_ptr = NULL ;
    pulse_list[iface].tail_ptr = NULL ;
-   
+
    if ( ptr != NULL )
    {
        ptr->linknum[iface] = 0    ;
@@ -7928,6 +7984,15 @@ void nodeLinkClass::manage_heartbeat_alarm ( struct nodeLinkClass::node * node_p
 {
     if ( this->heartbeat != true )
         return ;
+
+    if ( this->hbs_failure_action == HBS_FAILURE_ACTION__NONE )
+    {
+        dlog ("%s dropping heartbeat alarm request (%s:%s) ; action none\n",
+                  node_ptr->hostname.c_str(),
+                  alarmUtil_getSev_str(sev).c_str(),
+                  get_iface_name_str(iface) );
+        return ;
+    }
 
     bool make_alarm_call = false ;
     alarm_id_enum id ;
@@ -8025,7 +8090,7 @@ int nodeLinkClass::lost_pulses ( iface_enum iface )
                 {
                     if ( pulse_ptr->b2b_misses_count[iface] == hbs_failure_threshold )
                     {
-                        ilog ("%-13s %s Pulse Miss (%d) (log throttled to every %d)\n", 
+                        ilog ("%s %s Pulse Miss (%d) (log throttled to every %d)\n",
                                                      pulse_ptr->hostname.c_str(),
                                                      get_iface_name_str(iface),
                                                      pulse_ptr->b2b_misses_count[iface],
@@ -8034,7 +8099,7 @@ int nodeLinkClass::lost_pulses ( iface_enum iface )
                     /* Once the misses exceed 25 then throttle the logging to avoid flooding */
                     if ( (pulse_ptr->b2b_misses_count[iface] & 0xfff) == 0 )
                     {
-                        ilog ("%-13s %s Pulse Miss (%d)\n", pulse_ptr->hostname.c_str(),
+                        ilog ("%s %s Pulse Miss (%d)\n", pulse_ptr->hostname.c_str(),
                                                      get_iface_name_str(iface),
                                                      pulse_ptr->b2b_misses_count[iface] );
                     }
@@ -8043,27 +8108,27 @@ int nodeLinkClass::lost_pulses ( iface_enum iface )
                 {
                     if ( pulse_ptr->b2b_misses_count[iface] > hbs_failure_threshold )
                     {
-                        ilog ("%-13s %s Pulse Miss (%3d) (in failure)\n", pulse_ptr->hostname.c_str(),
+                        ilog ("%s %s Pulse Miss (%3d) (in failure)\n", pulse_ptr->hostname.c_str(),
                                                                     get_iface_name_str(iface),
                                                                     pulse_ptr->b2b_misses_count[iface] );
                     }
                     else if ( pulse_ptr->b2b_misses_count[iface] > hbs_degrade_threshold )
                     {
-                        ilog ("%-13s %s Pulse Miss (%3d) (max:%3d) (in degrade)\n", pulse_ptr->hostname.c_str(),
+                        ilog ("%s %s Pulse Miss (%3d) (max:%3d) (in degrade)\n", pulse_ptr->hostname.c_str(),
                                                                     get_iface_name_str(iface),
                                                                     pulse_ptr->b2b_misses_count[iface],
                                                                     pulse_ptr->max_count[iface]);
                     }
                     else if ( pulse_ptr->b2b_misses_count[iface] > hbs_minor_threshold )
                     {
-                        ilog ("%-13s %s Pulse Miss (%3d) (max:%3d) (in minor)\n",   pulse_ptr->hostname.c_str(),
+                        ilog ("%s %s Pulse Miss (%3d) (max:%3d) (in minor)\n",   pulse_ptr->hostname.c_str(),
                                                                     get_iface_name_str(iface),
                                                                     pulse_ptr->b2b_misses_count[iface] ,
                                                                     pulse_ptr->max_count[iface]);
                     }
                     else
                     {
-                        ilog ("%-13s %s Pulse Miss (%3d) (max:%3d)\n", pulse_ptr->hostname.c_str(),
+                        ilog ("%s %s Pulse Miss (%3d) (max:%3d)\n", pulse_ptr->hostname.c_str(),
                                                          get_iface_name_str(iface),
                                                          pulse_ptr->b2b_misses_count[iface],
                                                          pulse_ptr->max_count[iface]);
@@ -8072,7 +8137,7 @@ int nodeLinkClass::lost_pulses ( iface_enum iface )
             }
             else
             {
-                dlog ("%-13s %s Pulse Miss (%d)\n", pulse_ptr->hostname.c_str(),
+                dlog ("%s %s Pulse Miss (%d)\n", pulse_ptr->hostname.c_str(),
                                                  get_iface_name_str(iface),
                                                  pulse_ptr->b2b_misses_count[iface] );
             }

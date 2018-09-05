@@ -409,17 +409,24 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
                 mtcTimer_reset ( node_ptr->mtcTimer );
             }
 
-            plog ("%s Starting %d sec Heartbeat Soak (with%s)\n",
+            /* Start Monitoring heartbeat */
+            send_hbs_command ( node_ptr->hostname, MTC_CMD_START_HOST );
+
+            if ( this->hbs_failure_action == HBS_FAILURE_ACTION__NONE )
+            {
+                enableStageChange ( node_ptr, MTC_ENABLE__STATE_CHANGE );
+            }
+            else
+            {
+                plog ("%s Starting %d sec Heartbeat Soak (with%s)\n",
                       name.c_str(),
                       MTC_HEARTBEAT_SOAK_BEFORE_ENABLE,
                       node_ptr->hbsClient_ready ? " ready event" : "out ready event"  );
 
-            /* Start Monitoring Services - heartbeat, process and hardware */
-            send_hbs_command   ( node_ptr->hostname, MTC_CMD_START_HOST );
-
-            /* allow heartbeat to run for 10 seconds before we declare enable */
-            mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_HEARTBEAT_SOAK_BEFORE_ENABLE );
-            enableStageChange ( node_ptr, MTC_ENABLE__HEARTBEAT_SOAK );
+                /* allow heartbeat to run for 10 seconds before we declare enable */
+                mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_HEARTBEAT_SOAK_BEFORE_ENABLE );
+                enableStageChange ( node_ptr, MTC_ENABLE__HEARTBEAT_SOAK );
+            }
             break ;
         }
         case MTC_ENABLE__HEARTBEAT_SOAK:

@@ -359,6 +359,7 @@ int  mtcAlarm_critical_log ( string hostname, mtc_alarm_id_enum id ) { UNUSED(ho
 int  mtcAlarm_major_log    ( string hostname, mtc_alarm_id_enum id ) { UNUSED(hostname); id = id ; return (PASS); }
 int  mtcAlarm_minor_log    ( string hostname, mtc_alarm_id_enum id ) { UNUSED(hostname); id = id ; return (PASS); }
 int  mtcAlarm_warning_log  ( string hostname, mtc_alarm_id_enum id ) { UNUSED(hostname); id = id ; return (PASS); }
-int  mtcAlarm_log          ( string hostname, mtc_alarm_id_enum id ) { UNUSED(hostname); id = id ; return (PASS); }
+int  mtcAlarm_log          ( string hostname, mtc_alarm_id_enum id, string str )
+{ UNUSED(hostname); id = id ; UNUSED(str) ; return (PASS); }
 
 string mtcAlarm_getId_str ( mtc_alarm_id_enum id ) { id = id ; return ("stub"); }

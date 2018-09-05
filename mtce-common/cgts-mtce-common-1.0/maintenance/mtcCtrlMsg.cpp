@@ -947,8 +947,12 @@ int service_events ( nodeLinkClass * obj_ptr, mtc_socket_type * sock_ptr )
 
             if ( msg.cmd == MTC_EVENT_HEARTBEAT_DEGRADE_SET )
             {
-                /* Assert the degrade condition with the 'false' (i.e. not clear)*/
-                obj_ptr->manage_heartbeat_degrade ( hostname, iface, false );
+                if (( obj_ptr->hbs_failure_action == HBS_FAILURE_ACTION__FAIL ) ||
+                    ( obj_ptr->hbs_failure_action == HBS_FAILURE_ACTION__DEGRADE ))
+                {
+                    /* Assert the degrade condition with the 'false' (i.e. not clear)*/
+                    obj_ptr->manage_heartbeat_degrade ( hostname, iface, false );
+                }
             }
             else
             {
@@ -985,7 +989,23 @@ int service_events ( nodeLinkClass * obj_ptr, mtc_socket_type * sock_ptr )
             }
             string hostname = &msg.buf[0] ;
             print_mtc_message ( hostname, MTC_CMD_RX, msg, get_iface_name_str(MGMNT_INTERFACE), false );
-            obj_ptr->manage_heartbeat_failure ( hostname, iface, false );
+
+            /* If heartbeat failure action is fail then call the fail handler */
+            if ( obj_ptr->hbs_failure_action == HBS_FAILURE_ACTION__FAIL )
+                obj_ptr->manage_heartbeat_failure ( hostname, iface, false );
+
+            /* If heartbeat failure action is degrade then call the degrade handler */
+            else if ( obj_ptr->hbs_failure_action == HBS_FAILURE_ACTION__DEGRADE )
+                obj_ptr->manage_heartbeat_degrade ( hostname, iface, false );
+
+            /* Otherwise the action must be alarm only or none ; both of which
+             * are already handled by the hbsAgent, so do nothing */
+            else
+            {
+                dlog ("%s heartbeat loss event dropped (%s)\n",
+                          hostname.c_str(),
+                          get_iface_name_str(iface));
+            }
         }
     }
     else if ( msg.cmd == MTC_EVENT_PMOND_CLEAR )

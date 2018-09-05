@@ -27,6 +27,6 @@ using namespace std;
 #define INFRA_NAME ((const char *)"Infrastructure")
 #define PMON_NAME ((char *)"pmond")
 
-void hbsAlarm_clear_all ( string hostname );
+void hbsAlarm_clear_all ( string hostname, bool infra );
 
 #endif /* __HBSALARM_H__ */

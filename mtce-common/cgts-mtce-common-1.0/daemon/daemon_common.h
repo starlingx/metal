@@ -174,6 +174,23 @@ int client_timeout_handler (       void * user,
                              const char * name,
                              const char * value);
 
+/* User selectable heartbeat failure actions */
+typedef enum
+{
+    HBS_FAILURE_ACTION__NONE    = 0, /* no heartbeat tally */
+    HBS_FAILURE_ACTION__ALARM   = 1, /* alarm only         */
+    HBS_FAILURE_ACTION__DEGRADE = 2, /* degrade and alarm  */
+    HBS_FAILURE_ACTION__FAIL    = 3, /* fail and alarm     */
+} hbs_failure_action_enum ;
+
+#define HBS_FAILURE_ACTION__NONE_STR    ((const char *)("none"))
+#define HBS_FAILURE_ACTION__ALARM_STR   ((const char *)("alarm"))
+#define HBS_FAILURE_ACTION__DEGRADE_STR ((const char *)("degrade"))
+#define HBS_FAILURE_ACTION__FAIL_STR    ((const char *)("fail"))
+
+hbs_failure_action_enum
+get_hbs_failure_action ( daemon_config_type & config );
+
 /** Test Head Entry */
 int daemon_run_testhead ( void );
 /**

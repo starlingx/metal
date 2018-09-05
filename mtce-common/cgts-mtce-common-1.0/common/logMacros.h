@@ -44,12 +44,7 @@ typedef struct
     int   hbs_minor_threshold   ; /**< heartbeat miss minor threshold         */
     int   hbs_degrade_threshold ; /**< heartbeat miss degrade threshold       */
     int   hbs_failure_threshold ; /**< heartbeat miss failure threshold       */
-
-    int   hbs_calibrate_threshold     ; /**< number of hosts where threshold calibration begins to take effect */
-    int   hbs_calibrate_period_factor ; /**< hbs_pulse_period      = hbs_pulse_period * hosts */
-    int   hbs_calibrate_minor_factor  ; /**< hbs_minor_threshold   = threshold factor * hosts */
-    int   hbs_calibrate_degrade_factor; /**< hbs_degrade_threshold = threshold factor * hosts */
-    int   hbs_calibrate_fail_factor   ; /**< hbs_failure_threshold = threshold factor * hosts */
+    char* hbs_failure_action    ; /**< action to take on host heartbeat falure*/
 
     char* mgmnt_iface           ; /**< management interface name pointer      */
     char* infra_iface           ; /**< infrastructure interface name pointer  */
