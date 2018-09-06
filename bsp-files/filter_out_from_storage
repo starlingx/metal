@@ -197,6 +197,7 @@ patch-alarm
 patching-controller
 pbr
 pecan
+platform-util-controller
 postgresql
 postgresql-client
 postgresql-contrib
