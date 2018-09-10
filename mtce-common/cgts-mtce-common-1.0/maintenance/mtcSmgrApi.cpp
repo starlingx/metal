@@ -58,6 +58,8 @@ void nodeLinkClass::mtcSmgrApi_handler ( struct evhttp_request *req, void *arg )
 
 mtcSmgrApi_handler_out:
 
+    mtcHttpUtil_log_event ( smgrEvent );
+
     if ( smgrEvent.blocking == true )
     {
         mtcHttpUtil_free_conn  ( smgrEvent );
@@ -120,6 +122,15 @@ int nodeLinkClass::mtcSmgrApi_request ( struct nodeLinkClass::node * node_ptr, m
         elog ("%s failed to allocate libEvent memory (%d)\n", node_ptr->hostname.c_str(), rc );
         return (rc);
     }
+
+#ifdef WANT_FIT_TESTING
+    string value = "" ;
+    if ( daemon_want_fit ( FIT_CODE__FAIL_SWACT, node_ptr->hostname, "port", value ))
+    {
+        smgrEvent.port = atoi(value.data());
+    }
+#endif
+
     /* Set the common context of this new operation */
     smgrEvent.status   = RETRY ;
     smgrEvent.hostname = node_ptr->hostname ;
@@ -143,7 +154,13 @@ int nodeLinkClass::mtcSmgrApi_request ( struct nodeLinkClass::node * node_ptr, m
         ilog ("%s sending 'query services' request to HA Service Manager\n",
                   smgrEvent.hostname.c_str());
 
-        return ( mtcHttpUtil_api_request ( smgrEvent )) ;
+        rc = mtcHttpUtil_api_request ( smgrEvent ) ;
+        if ( rc )
+        {
+            elog ("%s mtcHttpUtil_api_request (rc:%d)\n",
+                     node_ptr->hostname.c_str(), rc );
+        }
+        return ( rc ) ;
     }
     else if ( operation == CONTROLLER_SWACT )
     {
