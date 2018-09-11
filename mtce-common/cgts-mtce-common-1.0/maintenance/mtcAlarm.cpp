@@ -128,7 +128,7 @@ void mtcAlarm_init ( void )
               "If manual or auto-recovery is consistently unable to recover host to the unlocked-enabled "
               "state contact next level of support or lock and replace failing Host.");
 
-    /** Board Management Controller Access Alarm ************************************/
+    /** Init Board Management Controller Access Alarm Entry ******************/
 
     ptr = &alarm_list[MTC_ALARM_ID__BM];
     memset  (&ptr->alarm, 0, (sizeof(SFmAlarmDataT)));
@@ -154,7 +154,7 @@ void mtcAlarm_init ( void )
     snprintf( ptr->alarm.proposed_repair_action, FM_MAX_BUFFER_LENGTH,
               "Check Host's board management config and connectivity.");
 
-    /** Controller Failure Alarm ****************************************************/
+    /** Init Controller Failure Alarm Entry **********************************/
 
     ptr = &alarm_list[MTC_ALARM_ID__CH_CONT];
     memset  (&ptr->alarm, 0, (sizeof(SFmAlarmDataT)));
@@ -184,7 +184,7 @@ void mtcAlarm_init ( void )
               "running on this host. If lock action fails then contact next level "
               "of support to investigate and recover.");
 
-    /** Compute Failure Alarm ****************************************************/
+    /** Init Compute Failure Alarm Entry *************************************/
 
     ptr = &alarm_list[MTC_ALARM_ID__CH_COMP];
     memset  (&ptr->alarm, 0, (sizeof(SFmAlarmDataT)));
@@ -213,7 +213,7 @@ void mtcAlarm_init ( void )
               "and Switch Activity (Swact) to it as soon as possible. If the alarm "
               "persists then Lock/Unlock host to recover its local compute service.");
 
-    /** Add Event Log ****************************************************/
+    /** Init Event Log Entry *************************************************/
 
     ptr = &alarm_list[MTC_LOG_ID__EVENT];
     memset  (&ptr->alarm, 0, (sizeof(SFmAlarmDataT)));
@@ -236,6 +236,103 @@ void mtcAlarm_init ( void )
     ptr->alarm.alarm_state        = FM_ALARM_STATE_MSG      ; /* Dynamic */
 
     snprintf ( ptr->alarm.proposed_repair_action, FM_MAX_BUFFER_LENGTH, "%s", "");
+
+    /** Init Command Log Entry ***********************************************/
+
+    ptr = &alarm_list[MTC_LOG_ID__COMMAND];
+    memset  (&ptr->alarm, 0, (sizeof(SFmAlarmDataT)));
+    snprintf(&ptr->alarm.alarm_id[0], FM_MAX_BUFFER_LENGTH, "%s", COMMAND_LOG_ID);
+
+    ptr->name = "Maintenance Command" ;
+
+    ptr->minor_reason =
+    ptr->major_reason =
+    ptr->critl_reason =
+    ptr->clear_reason = "";
+
+    ptr->alarm.alarm_type         = FM_ALARM_TYPE_UNKNOWN  ;
+    ptr->alarm.probable_cause     = FM_ALARM_CAUSE_UNKNOWN ;
+    ptr->alarm.inhibit_alarms     = FM_FALSE ;
+    ptr->alarm.service_affecting  = FM_FALSE ;
+    ptr->alarm.suppression        = FM_FALSE ;
+
+    ptr->alarm.severity           = FM_ALARM_SEVERITY_CLEAR ; /* Dynamic */
+    ptr->alarm.alarm_state        = FM_ALARM_STATE_MSG      ; /* Dynamic */
+
+    snprintf ( ptr->alarm.proposed_repair_action, FM_MAX_BUFFER_LENGTH, "%s", "");
+
+    /** Init Config Log Entry  ***********************************************/
+
+    ptr = &alarm_list[MTC_LOG_ID__CONFIG];
+    memset  (&ptr->alarm, 0, (sizeof(SFmAlarmDataT)));
+    snprintf(&ptr->alarm.alarm_id[0], FM_MAX_BUFFER_LENGTH, "%s", CONFIG_LOG_ID);
+
+    ptr->name = "Maintenance Config" ;
+
+    ptr->minor_reason =
+    ptr->major_reason =
+    ptr->critl_reason =
+    ptr->clear_reason = "";
+
+    ptr->alarm.alarm_type         = FM_ALARM_TYPE_UNKNOWN  ;
+    ptr->alarm.probable_cause     = FM_ALARM_CAUSE_UNKNOWN ;
+    ptr->alarm.inhibit_alarms     = FM_FALSE ;
+    ptr->alarm.service_affecting  = FM_FALSE ;
+    ptr->alarm.suppression        = FM_FALSE ;
+
+    ptr->alarm.severity           = FM_ALARM_SEVERITY_CLEAR ; /* Dynamic */
+    ptr->alarm.alarm_state        = FM_ALARM_STATE_MSG      ; /* Dynamic */
+
+    snprintf ( ptr->alarm.proposed_repair_action, FM_MAX_BUFFER_LENGTH, "%s", "");
+
+    /** Init State Change Log Entry ******************************************/
+
+    ptr = &alarm_list[MTC_LOG_ID__STATECHANGE];
+    memset  (&ptr->alarm, 0, (sizeof(SFmAlarmDataT)));
+    snprintf(&ptr->alarm.alarm_id[0], FM_MAX_BUFFER_LENGTH, "%s", STATECHANGE_LOG_ID);
+
+    ptr->name = "Maintenance State Change" ;
+
+    ptr->minor_reason =
+    ptr->major_reason =
+    ptr->critl_reason =
+    ptr->clear_reason = "";
+
+    ptr->alarm.alarm_type         = FM_ALARM_TYPE_UNKNOWN  ;
+    ptr->alarm.probable_cause     = FM_ALARM_CAUSE_UNKNOWN ;
+    ptr->alarm.inhibit_alarms     = FM_FALSE ;
+    ptr->alarm.service_affecting  = FM_FALSE ;
+    ptr->alarm.suppression        = FM_FALSE ;
+
+    ptr->alarm.severity           = FM_ALARM_SEVERITY_CLEAR ; /* Dynamic */
+    ptr->alarm.alarm_state        = FM_ALARM_STATE_MSG      ; /* Dynamic */
+
+    snprintf ( ptr->alarm.proposed_repair_action, FM_MAX_BUFFER_LENGTH, "%s", "");
+
+    /** Init Service Status Log Entry ****************************************/
+
+    ptr = &alarm_list[MTC_LOG_ID__SERVICESTATUS];
+    memset  (&ptr->alarm, 0, (sizeof(SFmAlarmDataT)));
+    snprintf(&ptr->alarm.alarm_id[0], FM_MAX_BUFFER_LENGTH, "%s", SERVICESTATUS_LOG_ID);
+
+    ptr->name = "Maintenance Service Status Change" ;
+
+    ptr->minor_reason =
+    ptr->major_reason =
+    ptr->critl_reason =
+    ptr->clear_reason = "";
+
+    ptr->alarm.alarm_type         = FM_ALARM_TYPE_UNKNOWN  ;
+    ptr->alarm.probable_cause     = FM_ALARM_CAUSE_UNKNOWN ;
+    ptr->alarm.inhibit_alarms     = FM_FALSE ;
+    ptr->alarm.service_affecting  = FM_FALSE ;
+    ptr->alarm.suppression        = FM_FALSE ;
+
+    ptr->alarm.severity           = FM_ALARM_SEVERITY_CLEAR ; /* Dynamic */
+    ptr->alarm.alarm_state        = FM_ALARM_STATE_MSG      ; /* Dynamic */
+
+    snprintf ( ptr->alarm.proposed_repair_action, FM_MAX_BUFFER_LENGTH, "%s", "");
+
 }
 
 string _getIdentity ( mtc_alarm_id_enum id )
@@ -251,6 +348,7 @@ string _getIdentity ( mtc_alarm_id_enum id )
         case MTC_LOG_ID__EVENT:       return (EVENT_LOG_ID);
         case MTC_LOG_ID__COMMAND:     return (COMMAND_LOG_ID);
         case MTC_LOG_ID__STATECHANGE: return (STATECHANGE_LOG_ID);
+        case MTC_LOG_ID__CONFIG:      return (CONFIG_LOG_ID);
         default: return ("200.000");
     }
 }
@@ -493,7 +591,7 @@ int  mtcAlarm_warning_log  ( string hostname, mtc_alarm_id_enum id )
 }
 
 /** Create a neutral customer log */
-int  mtcAlarm_log  ( string hostname, mtc_alarm_id_enum id )
+int  mtcAlarm_log  ( string hostname, mtc_alarm_id_enum id, string str )
 {
     if ( id < MTC_ALARM_ID__END )
     {
@@ -750,6 +848,39 @@ int  mtcAlarm_log  ( string hostname, mtc_alarm_id_enum id )
                        "board management controller has been 're-provisioned'" );
             found = true ;
         }
+        else if (( id == MTC_LOG_ID__CONFIG_HB_ACTION_FAIL ) ||
+                 ( id == MTC_LOG_ID__CONFIG_HB_ACTION_DEGRADE ) ||
+                 ( id == MTC_LOG_ID__CONFIG_HB_ACTION_ALARM ) ||
+                 ( id == MTC_LOG_ID__CONFIG_HB_ACTION_NONE ))
+        {
+            alarm_list[index].instc_prefix = "config=heartbeat_failure_action" ;
+            snprintf ( alarm_list[index].alarm.reason_text,
+                       FM_MAX_BUFFER_LENGTH, "%s %s %s",
+                       hostname.data(),
+                       "platform maintenance service parameter 'heartbeat failure action' changed from",
+                       str.data());
+            found = true ;
+        }
+        else if ( id == MTC_LOG_ID__CONFIG_MNFA_TIMEOUT )
+        {
+            alarm_list[index].instc_prefix = "config=mnfa_timeout" ;
+            snprintf ( alarm_list[index].alarm.reason_text,
+                       FM_MAX_BUFFER_LENGTH, "%s %s %s",
+                       hostname.data(),
+                       "platform maintenance service parameter 'mnfa_timeout' changed from",
+                       str.data());
+            found = true ;
+        }
+        else if ( id == MTC_LOG_ID__CONFIG_MNFA_THRESHOLD )
+        {
+            alarm_list[index].instc_prefix = "config=mnfa_threshold" ;
+            snprintf ( alarm_list[index].alarm.reason_text,
+                       FM_MAX_BUFFER_LENGTH, "%s %s %s",
+                       hostname.data(),
+                       "platform maintenance service parameter 'mnfa_threshold' changed from",
+                       str.data());
+            found = true ;
+        }
 
         if ( found == true )
         {
@@ -758,11 +889,6 @@ int  mtcAlarm_log  ( string hostname, mtc_alarm_id_enum id )
             string identity = _getIdentity(index);
             string instance = _getInstance(index);
             instance.append(alarm_list[index].instc_prefix);
-            //wlog ("%s '%s' log (%s.%s)\n",
-            //          hostname.c_str(),
-            //          alarm_list[index].alarm.reason_text,
-            //          identity.c_str(),
-            //          instance.c_str());
 
             /* Want to make this log a critical */
             if ( id == MTC_LOG_ID__STATUSCHANGE_REINSTALL_FAILED )

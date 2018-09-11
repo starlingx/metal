@@ -195,6 +195,48 @@ int timeout_config_handler (       void * user,
     return (PASS);
 }
 
+/* ***********************************************************************
+ *
+ * Name        : get_hbs_failure_action
+ *
+ * Desctription: Convert already loaded heartbeat failure action config
+ *               string into its equivalent enumerated type.
+ *               See code comments below for more detail.
+ *
+ * Assumptions : Both mtcAgent and hbsAgent need this conversion.
+ *
+ * Returns     : Converted enum value ; error/default is 'fail' action
+ *
+ * ***********************************************************************/
+hbs_failure_action_enum get_hbs_failure_action (
+        daemon_config_type & config )
+{
+    /* push the Heartbeat Failure Action character array into string
+     * for easy/safe compare */
+    string hbs_failure_action = config.hbs_failure_action ;
+
+    /* default action is 'fail' */
+    hbs_failure_action_enum action_enum = HBS_FAILURE_ACTION__FAIL ;
+
+    /* look for 'none' action - hbsAgent only cares about this one
+     * so that it knows to clear or not to raise any alarms for heartbeat
+     * failures ; or degrades for that matter */
+    if ( hbs_failure_action == HBS_FAILURE_ACTION__NONE_STR )
+        action_enum = HBS_FAILURE_ACTION__NONE ;
+
+    /* look for degrade action - alarms are still managed in this mode */
+    else if ( hbs_failure_action == HBS_FAILURE_ACTION__DEGRADE_STR )
+        action_enum = HBS_FAILURE_ACTION__DEGRADE ;
+
+    /* look for 'alarm' action - no host degrade in this case */
+    else if ( hbs_failure_action == HBS_FAILURE_ACTION__ALARM_STR )
+        action_enum = HBS_FAILURE_ACTION__ALARM ;
+
+    ilog("HBS Action  : %s\n", config.hbs_failure_action );
+    return (action_enum);
+}
+
+
 /* System Inventory Config Reader */
 int sysinv_config_handler (       void * user,
                             const char * section,

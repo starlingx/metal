@@ -47,6 +47,7 @@
 #define COMMAND_LOG_ID       ((const char *)"200.021")
 #define STATECHANGE_LOG_ID   ((const char *)"200.022")
 #define SERVICESTATUS_LOG_ID ((const char *)"200.023") /* log used to report service failure events against   */
+#define CONFIG_LOG_ID        ((const char *)"200.024")
 
 /**
  *  TODO: This class is more of a place holder for

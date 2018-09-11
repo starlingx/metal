@@ -526,7 +526,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
             node_ptr->cmdRsp_status = 0 ;
 
             /* Raise Critical Enable Alarm */
-            alarm_enabled_failure ( node_ptr );
+            alarm_enabled_failure ( node_ptr, true );
 
             /* Handle active controller failures */
             if ( THIS_HOST )
@@ -774,7 +774,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                     }
                     else
                     {
-                        alarm_enabled_failure ( node_ptr );
+                        alarm_enabled_failure ( node_ptr , true );
 
                         if ( node_ptr->availStatus != MTC_AVAIL_STATUS__FAILED )
                         {
@@ -1095,7 +1095,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                 elog ("%s Timeout waiting for MTCALIVE\n", node_ptr->hostname.c_str());
 
                 /* raise an alarm for the enable failure */
-                alarm_enabled_failure ( node_ptr );
+                alarm_enabled_failure ( node_ptr , true );
 
                 /* go back and issue reboot again */
                 enableStageChange ( node_ptr, MTC_ENABLE__RESET_PROGRESSION );
@@ -1190,7 +1190,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                 node_ptr->mtcTimer.ring = false ;
 
                 /* raise an alarm for the enable failure */
-                alarm_enabled_failure ( node_ptr );
+                alarm_enabled_failure ( node_ptr , true );
 
                 /* go back and issue reboot again */
                 enableStageChange ( node_ptr, MTC_ENABLE__FAILURE );
@@ -1309,18 +1309,29 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                 mtcTimer_reset ( node_ptr->mtcTimer );
             }
 
-            plog ("%s Starting %d sec Heartbeat Soak (with%s)\n",
-                      node_ptr->hostname.c_str(),
-                      MTC_HEARTBEAT_SOAK_BEFORE_ENABLE,
-                      node_ptr->hbsClient_ready ? " ready event" : "out ready event"  );
-
             /* Start Monitoring Services - heartbeat, process and hardware */
-            send_hbs_command   ( node_ptr->hostname, MTC_CMD_START_HOST );
+            send_hbs_command ( node_ptr->hostname, MTC_CMD_START_HOST );
 
-            /* allow heartbeat to run for 10 seconds before we declare enable */
-            mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_HEARTBEAT_SOAK_BEFORE_ENABLE );
-            enableStageChange ( node_ptr, MTC_ENABLE__HEARTBEAT_SOAK );
+            if ( this->hbs_failure_action == HBS_FAILURE_ACTION__NONE )
+            {
+                /* Skip over the heartbeat soak if the failuer handlig is
+                 * none because in that case heartbeating is disabled and
+                 * would just be a waste of startup time. */
+                enableStageChange ( node_ptr, MTC_ENABLE__STATE_CHANGE );
+            }
+            else
+            {
+                plog ("%s Starting %d sec Heartbeat Soak (with%s)\n",
+                          node_ptr->hostname.c_str(),
+                          MTC_HEARTBEAT_SOAK_BEFORE_ENABLE,
+                          node_ptr->hbsClient_ready ? " ready event" : "out ready event"  );
 
+
+                /* allow heartbeat to run for MTC_HEARTBEAT_SOAK_BEFORE_ENABLE
+                 * seconds before we declare enable */
+                mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_HEARTBEAT_SOAK_BEFORE_ENABLE );
+                enableStageChange ( node_ptr, MTC_ENABLE__HEARTBEAT_SOAK );
+            }
             break ;
         }
         case MTC_ENABLE__HEARTBEAT_SOAK:
@@ -1524,6 +1535,15 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
 
         case MTC_RECOVERY__START:
         {
+            if ( this->hbs_failure_action != HBS_FAILURE_ACTION__FAIL )
+            {
+                wlog ("%s heartbeat failure recovery action is not fail\n",
+                          node_ptr->hostname.c_str());
+                mtcInvApi_update_task ( node_ptr, "" );
+                adminActionChange ( node_ptr, MTC_ADMIN_ACTION__NONE );
+                break ;
+            }
+
            /* Purge this hosts work queues */
             mtcCmd_workQ_purge ( node_ptr );
             mtcCmd_doneQ_purge ( node_ptr );
@@ -1690,7 +1710,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
                         /* Go to the goEnabled stage */
                         recoveryStageChange ( node_ptr, MTC_RECOVERY__GOENABLED_TIMER );
 
-                        alarm_enabled_failure(node_ptr);
+                        alarm_enabled_failure(node_ptr, true );
                         break ;
                     }
                 }
@@ -1728,7 +1748,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
                     /* Go to the goEnabled stage */
                     recoveryStageChange ( node_ptr, MTC_RECOVERY__GOENABLED_TIMER );
 
-                    alarm_enabled_failure (node_ptr);
+                    alarm_enabled_failure (node_ptr, true );
                 }
             }
             /* A timer ring indicates that the host is not up */
@@ -1772,7 +1792,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
                 /* Inform the VIM that this host has failed */
                 mtcVimApi_state_change ( node_ptr, VIM_HOST_FAILED, 3 );
 
-                alarm_enabled_failure(node_ptr);
+                alarm_enabled_failure(node_ptr, true );
 
                 /* Clear all degrade flags except for the HWMON one */
                 clear_host_degrade_causes ( node_ptr->degrade_mask );
@@ -2351,21 +2371,31 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
                 mtcTimer_reset ( node_ptr->mtcTimer );
             }
 
-            plog ("%s Starting %d sec Heartbeat Soak (with%s)\n",
-                      node_ptr->hostname.c_str(),
-                      MTC_HEARTBEAT_SOAK_BEFORE_ENABLE,
-                      node_ptr->hbsClient_ready ? " ready event" : "out ready event"  );
-
             /* Enable the heartbeat service for Graceful Recovery */
-            send_hbs_command   ( node_ptr->hostname, MTC_CMD_START_HOST );
+            send_hbs_command ( node_ptr->hostname, MTC_CMD_START_HOST );
 
-            /* allow heartbeat to run for 10 seconds before we declare enable */
-            mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_HEARTBEAT_SOAK_BEFORE_ENABLE );
+            if ( this->hbs_failure_action == HBS_FAILURE_ACTION__NONE )
+            {
+                /* Skip over the heartbeat soak if the failuer handlig is
+                 * none because in that case heartbeating is disabled and
+                 * would just be a waste of recovery time. */
+                recoveryStageChange ( node_ptr, MTC_RECOVERY__STATE_CHANGE );
+            }
+            else
+            {
+                plog ("%s Starting %d sec Heartbeat Soak (with%s)\n",
+                          node_ptr->hostname.c_str(),
+                          MTC_HEARTBEAT_SOAK_BEFORE_ENABLE,
+                          node_ptr->hbsClient_ready ? " ready event" : "out ready event"  );
 
-            /* if heartbeat is not working then we will
-             * never get here and enable the host */
-            recoveryStageChange ( node_ptr, MTC_RECOVERY__HEARTBEAT_SOAK );
 
+                /* allow heartbeat to run for 10 seconds before we declare enable */
+                mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_HEARTBEAT_SOAK_BEFORE_ENABLE );
+
+                /* if heartbeat is not working then we will
+                 * never get here and enable the host */
+                recoveryStageChange ( node_ptr, MTC_RECOVERY__HEARTBEAT_SOAK );
+            }
             break ;
         }
         case MTC_RECOVERY__HEARTBEAT_SOAK:
@@ -4667,7 +4697,7 @@ int nodeLinkClass::powercycle_handler ( struct nodeLinkClass::node * node_ptr )
                     if ( node_ptr->adminState == MTC_ADMIN_STATE__UNLOCKED )
                     {
                         ilog ("%s failing host for powercycle\n", node_ptr->hostname.c_str() );
-                        alarm_enabled_failure ( node_ptr );
+                        alarm_enabled_failure ( node_ptr , true );
 
                         /* Set node as unlocked-disabled-failed */
                         allStateChange ( node_ptr, MTC_ADMIN_STATE__UNLOCKED,

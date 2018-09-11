@@ -72,6 +72,8 @@ using namespace std;
 static string unexpected_pulse_list[MAX_IFACES] = { "" , "" } ;
 static string arrival_histogram[MAX_IFACES]     = { "" , "" } ;
 
+static std::list<string> hostname_inventory ;
+
 /** This heartbeat service inventory is tracked by
   * the same nodeLinkClass that maintenance uses.
   *
@@ -87,8 +89,6 @@ int module_init ( void )
 {
    return (PASS);
 }
-
-static unsigned int    my_nodetype= CGTS_NODE_NULL ;
 
 void daemon_sigchld_hdlr ( void )
 {
@@ -107,11 +107,18 @@ daemon_config_type * daemon_get_cfg_ptr () { return &hbs_config ; }
  * @see hbsBase.h for hbs_socket_type struct format.
  */
 static hbs_socket_type hbs_sock   ;
-
 msgSock_type * get_mtclogd_sockPtr ( void )
 {
     return (&hbs_sock.mtclogd);
 }
+
+/**
+ * Module Control Struct - The allocated struct
+ * @see hbsBase.h for hbs_ctrl_type struct format.
+ */
+static hbs_ctrl_type hbs_ctrl ;
+hbs_ctrl_type * get_hbs_ctrl_ptr () { return &hbs_ctrl ; }
+
 
 #define SCHED_MONITOR__MAIN_LOOP ((const char *) "---> scheduling latency : main loop :")
 #define SCHED_MONITOR__RECEIVER  ((const char *) "---> scheduling latency : rx pulses :")
@@ -241,25 +248,31 @@ static int hbs_config_handler ( void * user,
         hbsInv.hbs_failure_threshold = atoi(value);
         config_ptr->mask |= CONFIG_AGENT_HBS_FAILURE ;
     }
-    if (MATCH("agent", "hbs_calibrate_threshold"))
+    if (MATCH("agent", "heartbeat_failure_action"))
     {
-        config_ptr->hbs_calibrate_threshold = atoi(value);
-    }
-    if (MATCH("agent", "hbs_calibrate_period_factor"))
-    {
-        config_ptr->hbs_calibrate_period_factor = atoi(value);
-    }
-    if (MATCH("agent", "hbs_calibrate_minor_factor"))
-    {
-        config_ptr->hbs_calibrate_minor_factor = atoi(value);
-    }
-    if (MATCH("agent", "hbs_calibrate_degrade_factor"))
-    {
-        config_ptr->hbs_calibrate_degrade_factor = atoi(value);
-    }
-    if (MATCH("agent", "hbs_calibrate_fail_factor"))
-    {
-        config_ptr->hbs_calibrate_fail_factor = atoi(value);
+        hbs_failure_action_enum current_action = hbsInv.hbs_failure_action ;
+        /*
+         * 1. free previous memory from strdup on reconfig
+         * 2. get the new value string
+         * 3. convert it to an enum
+         * 4. if failure action is 'none' then set the clear_alarms audit bool
+         *    telling the main loop to clear all heartbeat related alarms.
+         * 5. clear all stats if the action is changed from none to other.
+         *
+         * Note: The none action prevents any new alarms from being raised.
+         */
+        if ( config_ptr->hbs_failure_action )
+            free(config_ptr->hbs_failure_action);
+        config_ptr->hbs_failure_action = strdup(value);
+
+        /* get the configured action */
+        hbsInv.hbs_failure_action = get_hbs_failure_action(hbs_config);
+
+        if ( current_action != hbsInv.hbs_failure_action )
+        {
+            hbs_ctrl.clear_alarms = true ;
+            hbsInv.hbs_clear_all_stats();
+        }
     }
     if (MATCH("agent", "multicast"))
     {
@@ -334,6 +347,7 @@ int daemon_configure ( void )
 
     /* Read the ini */
     hbs_config.mask = 0 ;
+    get_debug_options ( MTCE_CONF_FILE, &hbs_config );
     if (ini_parse(MTCE_CONF_FILE, hbs_config_handler, &hbs_config) < 0)
     {
         elog("Can't load '%s'\n", MTCE_CONF_FILE );
@@ -345,8 +359,6 @@ int daemon_configure ( void )
         elog("Can't load '%s'\n", MTCE_CONF_FILE );
         return (FAIL_LOAD_INI);
     }
-
-    get_debug_options ( MTCE_CONF_FILE, &hbs_config );
 
     /* Verify loaded config against an expected mask
      * as an ini file fault detection method */
@@ -362,15 +374,13 @@ int daemon_configure ( void )
         hbsInv.hbs_minor_threshold = hbsInv.hbs_degrade_threshold ;
     }
 
-    // hbsInv.recalibrate_thresholds ();
-
     /* Log the startup settings */
     ilog("Realtime Pri: RR/%i \n", hbs_config.scheduling_priority );
     ilog("Pulse Period: %i msec\n",   hbsInv.hbs_pulse_period );
     ilog("Minor   Thld: %i misses\n", hbsInv.hbs_minor_threshold );
     ilog("Degrade Thld: %i misses\n", hbsInv.hbs_degrade_threshold );
     ilog("Failure Thld: %i misses\n", hbsInv.hbs_failure_threshold );
-    ilog("Multicast: %s\n", hbs_config.multicast );
+    ilog("Multicast   : %s\n", hbs_config.multicast );
 
     hbs_config.mgmnt_iface = daemon_get_iface_master ( hbs_config.mgmnt_iface );
     ilog("Mgmnt iface : %s\n", hbs_config.mgmnt_iface );
@@ -1014,11 +1024,18 @@ int daemon_init ( string iface, string nodetype )
 
     /* Not used by this service */
     UNUSED(nodetype);
+
     /* Initialize socket construct and pointer to it */
-    memset ( &hbs_sock,   0, sizeof(hbs_sock));
+    MEMSET_ZERO ( hbs_sock );
+
+    /* Initialize the hbs control struct */
+    MEMSET_ZERO ( hbs_ctrl );
 
     /* initialize the timer */
     mtcTimer_init ( hbsTimer, "controller", "heartbeat" );
+
+    /* start with no inventory */
+    hostname_inventory.clear();
 
     /* Assign interface to config */
     hbs_config.mgmnt_iface = (char*)iface.data() ;
@@ -1032,8 +1049,8 @@ int daemon_init ( string iface, string nodetype )
     hbsInv.system_type = daemon_system_type ();
 
     /* convert node type to integer */
-    my_nodetype = get_host_function_mask ( nodetype ) ;
-    ilog ("Node Type   : %s (%d)\n", nodetype.c_str(), my_nodetype );
+    hbs_ctrl.nodetype = get_host_function_mask ( nodetype ) ;
+    ilog ("Node Type   : %s (%d)\n", nodetype.c_str(), hbs_ctrl.nodetype );
 
     /* Bind signal handlers */
     if ( daemon_signal_init () != PASS )
@@ -1134,7 +1151,7 @@ void daemon_service_run ( void )
     /* CGTS 4114: Small Footprint: Alarm 200.005 remains active after connectivity restored
      *
      * Clear self alarms */
-    hbsAlarm_clear_all ( hbsInv.my_hostname );
+    hbsAlarm_clear_all ( hbsInv.my_hostname, hbsInv.infra_network_provisioned );
 
     /* add this host as inventory to hbsAgent
      * Although this host is not monitored for heartbeat,
@@ -1254,6 +1271,29 @@ void daemon_service_run ( void )
             }
         }
 
+        /* audit for forced alarms clear due to ...
+         *
+         * 1. heartbeat failure action being set to none
+         * 2. ... future
+         *
+         */
+        if ( hbs_ctrl.clear_alarms == true )
+        {
+            if ( goenabled == true )
+            {
+                std::list<string>::iterator hostname_ptr ;
+                ilog ("clearing all heartbeat alarms for all hosts due to 'none' action");
+                for ( hostname_ptr  = hostname_inventory.begin();
+                      hostname_ptr != hostname_inventory.end() ;
+                      hostname_ptr++ )
+                {
+                    hbsAlarm_clear_all ( hostname_ptr->data(), hbsInv.infra_network_provisioned );
+                    hbsInv.manage_heartbeat_clear ( hostname_ptr->data(), MAX_IFACES );
+                }
+                hbs_ctrl.clear_alarms = false ;
+            }
+        }
+
         /***************** Service Sockets ********************/
 
         /* Initialize the master fd_set and clear socket list */
@@ -1356,10 +1396,15 @@ void daemon_service_run ( void )
                             inv.name = hostname ;
                             inv.nodetype = msg.parm[0];
                             hbsInv.add_heartbeat_host ( inv ) ;
+                            hostname_inventory.push_back ( hostname );
                             ilog ("%s added to heartbeat service (%d)\n", hostname.c_str(), inv.nodetype );
 
                             /* clear any outstanding alarms on the ADD */
-                            hbsAlarm_clear_all ( hostname );
+                            if ( hbsInv.hbs_failure_action != HBS_FAILURE_ACTION__NONE )
+                            {
+                                hbsAlarm_clear_all ( hostname,
+                                hbsInv.infra_network_provisioned );
+                            }
                         }
                         else if ( msg.cmd == MTC_CMD_DEL_HOST )
                         {
@@ -1367,12 +1412,16 @@ void daemon_service_run ( void )
                             {
                                 hbsInv.mon_host ( hostname, (iface_enum)iface, false, false );
                             }
-
+                            hostname_inventory.remove ( hostname );
                             hbsInv.del_host ( hostname );
                             ilog ("%s deleted from heartbeat service\n", hostname.c_str());
 
                             /* clear any outstanding alarms on the DEL */
-                            hbsAlarm_clear_all ( hostname );
+                            if ( hbsInv.hbs_failure_action != HBS_FAILURE_ACTION__NONE )
+                            {
+                                hbsAlarm_clear_all ( hostname,
+                                        hbsInv.infra_network_provisioned );
+                            }
                         }
                         else if ( msg.cmd == MTC_CMD_STOP_HOST )
                         {
@@ -1482,6 +1531,13 @@ void daemon_service_run ( void )
             hbsInv.hbs_state_change = true ;
             ilog ("Heartbeat Enabled by %s link up event\n", hbs_config.mgmnt_iface );
             counter = 1 ;
+        }
+
+        else if ( hbsInv.hbs_failure_action == HBS_FAILURE_ACTION__NONE )
+        {
+            wlog_throttled (counter, 100000, "Heartbeat disabled by 'none' action\n");
+            usleep (50000) ;
+            continue ;
         }
 
         /* Send a log indicating the main loop has recognized

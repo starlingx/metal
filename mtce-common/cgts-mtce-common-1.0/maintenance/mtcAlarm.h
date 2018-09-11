@@ -25,52 +25,63 @@ using namespace std;
 /** Maintenance Alarm Abstract Reference IDs */
 typedef enum
 {
-    MTC_ALARM_ID__LOCK              = 0,
-    MTC_ALARM_ID__CONFIG            = 1,
-    MTC_ALARM_ID__ENABLE            = 2,
-    MTC_ALARM_ID__BM                = 3,
-    MTC_ALARM_ID__CH_CONT           = 4, /* Combo Host Controller Failure - with Active Compute */
-    MTC_ALARM_ID__CH_COMP           = 5, /* Combo Host Compute Failure - on last Controller     */
+    MTC_ALARM_ID__LOCK,
+    MTC_ALARM_ID__CONFIG,
+    MTC_ALARM_ID__ENABLE,
+    MTC_ALARM_ID__BM,
+    MTC_ALARM_ID__CH_CONT, /* Combo Host Controller Failure - with Active Compute */
+    MTC_ALARM_ID__CH_COMP, /* Combo Host Compute Failure - on last Controller     */
 
-    MTC_LOG_ID__EVENT               = 6,
-    MTC_LOG_ID__COMMAND             = 7,
-    MTC_LOG_ID__STATECHANGE         = 8,
-    MTC_ALARM_ID__LAST              = 9,
+    MTC_LOG_ID__EVENT,
+    MTC_LOG_ID__COMMAND,
+    MTC_LOG_ID__CONFIG,
+    MTC_LOG_ID__STATECHANGE,
+    MTC_LOG_ID__SERVICESTATUS,
+    MTC_ALARM_ID__LAST,
 
-    MTC_LOG_ID__EVENT_ADD                = 10,
-    MTC_LOG_ID__EVENT_RESTART            = 11,
-    MTC_LOG_ID__EVENT_DISCOVERED         = 12,
-    MTC_LOG_ID__EVENT_MNFA_ENTER         = 13,
-    MTC_LOG_ID__EVENT_MNFA_EXIT          = 14,
+    MTC_LOG_ID__EVENT_ADD,
+    MTC_LOG_ID__EVENT_RESTART,
+    MTC_LOG_ID__EVENT_DISCOVERED,
+    MTC_LOG_ID__EVENT_MNFA_ENTER,
+    MTC_LOG_ID__EVENT_MNFA_EXIT,
 
-    MTC_LOG_ID__COMMAND_DELETE           = 19,
-    MTC_LOG_ID__COMMAND_UNLOCK           = 20,
-    MTC_LOG_ID__COMMAND_FORCE_LOCK       = 21,
-    MTC_LOG_ID__COMMAND_SWACT            = 22,
-    MTC_LOG_ID__COMMAND_REINSTALL        = 23,
-    MTC_LOG_ID__COMMAND_BM_PROVISIONED   = 24,
-    MTC_LOG_ID__COMMAND_BM_DEPROVISIONED = 25,
-    MTC_LOG_ID__COMMAND_BM_REPROVISIONED = 26,
+    MTC_LOG_ID__COMMAND_DELETE,
+    MTC_LOG_ID__COMMAND_UNLOCK,
+    MTC_LOG_ID__COMMAND_FORCE_LOCK,
+    MTC_LOG_ID__COMMAND_SWACT,
+    MTC_LOG_ID__COMMAND_REINSTALL,
+    MTC_LOG_ID__COMMAND_BM_PROVISIONED,
+    MTC_LOG_ID__COMMAND_BM_DEPROVISIONED,
+    MTC_LOG_ID__COMMAND_BM_REPROVISIONED,
 
-    MTC_LOG_ID__COMMAND_AUTO_REBOOT      = 30,
-    MTC_LOG_ID__COMMAND_MANUAL_REBOOT    = 31,
-    MTC_LOG_ID__COMMAND_AUTO_RESET       = 32,
-    MTC_LOG_ID__COMMAND_MANUAL_RESET     = 33,
-    MTC_LOG_ID__COMMAND_AUTO_POWER_ON    = 34,
-    MTC_LOG_ID__COMMAND_MANUAL_POWER_ON  = 35,
-    MTC_LOG_ID__COMMAND_AUTO_POWER_OFF   = 36,
-    MTC_LOG_ID__COMMAND_MANUAL_POWER_OFF = 37,
+    MTC_LOG_ID__CONFIG_HB_ACTION_FAIL,
+    MTC_LOG_ID__CONFIG_HB_ACTION_DEGRADE,
+    MTC_LOG_ID__CONFIG_HB_ACTION_ALARM,
+    MTC_LOG_ID__CONFIG_HB_ACTION_NONE,
+    MTC_LOG_ID__CONFIG_HB_PERIOD,
+    MTC_LOG_ID__CONFIG_HB_DEGRADE_THRESHOLD,
+    MTC_LOG_ID__CONFIG_HB_FAILURE_THRESHOLD,
+    MTC_LOG_ID__CONFIG_MNFA_TIMEOUT,
+    MTC_LOG_ID__CONFIG_MNFA_THRESHOLD,
 
-    
-    MTC_LOG_ID__STATUSCHANGE_ENABLED     = 40,
-    MTC_LOG_ID__STATUSCHANGE_DISABLED    = 41,
-    MTC_LOG_ID__STATUSCHANGE_ONLINE      = 42,
-    MTC_LOG_ID__STATUSCHANGE_OFFLINE     = 43,
-    MTC_LOG_ID__STATUSCHANGE_FAILED      = 44,
-    MTC_LOG_ID__STATUSCHANGE_REINSTALL_FAILED   = 45,
-    MTC_LOG_ID__STATUSCHANGE_REINSTALL_COMPLETE = 46,
+    MTC_LOG_ID__COMMAND_AUTO_REBOOT,
+    MTC_LOG_ID__COMMAND_MANUAL_REBOOT,
+    MTC_LOG_ID__COMMAND_AUTO_RESET,
+    MTC_LOG_ID__COMMAND_MANUAL_RESET,
+    MTC_LOG_ID__COMMAND_AUTO_POWER_ON,
+    MTC_LOG_ID__COMMAND_MANUAL_POWER_ON,
+    MTC_LOG_ID__COMMAND_AUTO_POWER_OFF,
+    MTC_LOG_ID__COMMAND_MANUAL_POWER_OFF,
 
-    MTC_ALARM_ID__END = 50
+    MTC_LOG_ID__STATUSCHANGE_ENABLED,
+    MTC_LOG_ID__STATUSCHANGE_DISABLED,
+    MTC_LOG_ID__STATUSCHANGE_ONLINE,
+    MTC_LOG_ID__STATUSCHANGE_OFFLINE,
+    MTC_LOG_ID__STATUSCHANGE_FAILED,
+    MTC_LOG_ID__STATUSCHANGE_REINSTALL_FAILED,
+    MTC_LOG_ID__STATUSCHANGE_REINSTALL_COMPLETE,
+
+    MTC_ALARM_ID__END
 
 } mtc_alarm_id_enum ;
 
@@ -109,6 +120,6 @@ int  mtcAlarm_minor_log    ( string hostname, mtc_alarm_id_enum id );
 int  mtcAlarm_warning_log  ( string hostname, mtc_alarm_id_enum id );
 
 /** Create a maintenance log */
-int  mtcAlarm_log          ( string hostname, mtc_alarm_id_enum id );
+int  mtcAlarm_log  ( string hostname, mtc_alarm_id_enum id, string str = "");
 
 #endif /* __MTCALARM_H__ */

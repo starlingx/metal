@@ -56,6 +56,13 @@ const char rsp_msg_header   [HBS_HEADER_SIZE+1] = {"cgts pulse rsp:"};
 
 #define HBS_MAX_MSG (HBS_HEADER_SIZE+MAX_CHARS_HOSTNAME)
 
+/* Heartbeat control structure */
+typedef struct
+{
+    unsigned int nodetype     ;
+    bool         clear_alarms ;
+} hbs_ctrl_type ;
+
 /* A heartbeat service message
  * if this structire is changed then
  * hbs_pulse_request needs to be looked at

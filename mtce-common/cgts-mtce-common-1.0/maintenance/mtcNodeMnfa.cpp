@@ -31,14 +31,45 @@ void log_mnfa_pool ( std::list<string> & mnfa_awol_list )
 {
     std::list<string>::iterator mnfa_awol_ptr  ;
     string pool_list = "" ;
+    if ( mnfa_awol_list.size() )
+    {
+        for ( mnfa_awol_ptr = mnfa_awol_list.begin() ;
+              mnfa_awol_ptr != mnfa_awol_list.end() ;
+              mnfa_awol_ptr++ )
+        {
+            pool_list.append (" ");
+            pool_list.append (mnfa_awol_ptr->data());
+        }
+        ilog ("MNFA POOL:%s\n", pool_list.c_str());
+    }
+}
+
+/*****************************************************************************
+ *
+ * Name       : add_host_to_awol_list
+ *
+ * Description: Add a hostname to the awol list if its not already in the list
+ *
+ * Returns    : true if added
+ *              false if not added because it is already in the list.
+ *
+ *****************************************************************************/
+
+static bool add_host_to_awol_list ( string hostname, std::list<string> & mnfa_awol_list )
+{
+    std::list<string>::iterator mnfa_awol_ptr  ;
     for ( mnfa_awol_ptr = mnfa_awol_list.begin() ;
           mnfa_awol_ptr != mnfa_awol_list.end() ;
           mnfa_awol_ptr++ )
     {
-        pool_list.append (" ");
-        pool_list.append (mnfa_awol_ptr->data());
+        if ( *(mnfa_awol_ptr) == hostname )
+        {
+            /* already in list */
+            return false ;
+        }
     }
-    ilog ("MNFA POOL:%s\n", pool_list.c_str());
+    mnfa_awol_list.push_back(hostname);
+    return true ;
 }
 
 /*****************************************************************************
@@ -51,6 +82,14 @@ void log_mnfa_pool ( std::list<string> & mnfa_awol_list )
  *****************************************************************************/
 void nodeLinkClass::mnfa_add_host ( struct nodeLinkClass::node * node_ptr , iface_enum iface )
 {
+    if (( this->hbs_failure_action == HBS_FAILURE_ACTION__ALARM ) ||
+        ( this->hbs_failure_action == HBS_FAILURE_ACTION__NONE ))
+    {
+        /* Do nothing for the 'alarm only' or 'none' action.
+         * Alarming is handled by the hbsAgent already */
+        return ;
+    }
+
     if ( node_ptr->hbs_minor[iface] == false )
     {
         bool enter = false ;
@@ -63,15 +102,12 @@ void nodeLinkClass::mnfa_add_host ( struct nodeLinkClass::node * node_ptr , ifac
         /* if we are active then add the node to the awol list */
         if ( mnfa_active == true )
         {
-            alarm_enabled_failure (node_ptr);
-
             /* once we are mnfa_active we need to give all the
              * hbs_minor=true hosts a graceful recovery token
              * mnfa_graceful_recovery = true and add to the awol list */
             node_ptr->mnfa_graceful_recovery = true ;
             added = true ;
-            mnfa_awol_list.push_back(node_ptr->hostname);
-            mnfa_awol_list.unique();
+            add_host_to_awol_list (node_ptr->hostname, mnfa_awol_list );
             if ( node_ptr->task != MTC_TASK_RECOVERY_WAIT )
                 mtcInvApi_update_task ( node_ptr, MTC_TASK_RECOVERY_WAIT );
         }
@@ -94,10 +130,7 @@ void nodeLinkClass::mnfa_add_host ( struct nodeLinkClass::node * node_ptr , ifac
                  get_iface_name_str(INFRA_IFACE),
                  node_ptr->hbs_minor_count[INFRA_IFACE]);
 
-        if ( mnfa_awol_list.size() )
-        {
-            log_mnfa_pool ( mnfa_awol_list );
-        }
+        log_mnfa_pool ( mnfa_awol_list );
 
         if ( enter == true )
         {
@@ -191,28 +224,20 @@ void nodeLinkClass::mnfa_enter ( void )
               * recovery token mnfa_graceful_recovery = true
               * basically a get out of double reset free card */
              ptr->mnfa_graceful_recovery = true ;
-
-             mnfa_awol_list.push_back(ptr->hostname);
+             add_host_to_awol_list (ptr->hostname, mnfa_awol_list );
              if ( ptr->task != MTC_TASK_RECOVERY_WAIT )
                 mtcInvApi_update_task ( ptr, MTC_TASK_RECOVERY_WAIT );
-
-             alarm_enabled_failure (ptr);
          }
          if (( ptr->next == NULL ) || ( ptr == tail ))
              break ;
      }
-
-     mnfa_awol_list.unique();
 
      if ( this->mnfa_timeout )
      {
          wlog ("MNFA Auto-Recovery in %d seconds\n",       this->mnfa_timeout);
          mtcTimer_start ( mtcTimer_mnfa, mtcTimer_handler, this->mnfa_timeout);
      }
-     if ( mnfa_awol_list.size() )
-     {
-         log_mnfa_pool ( mnfa_awol_list );
-     }
+     log_mnfa_pool ( mnfa_awol_list );
 }
 
 /****************************************************************************
@@ -262,10 +287,7 @@ void nodeLinkClass::mnfa_exit ( bool force )
                      force ? "(Auto-Recover)" : "");
         mtcAlarm_log ( active_controller_hostname , MTC_LOG_ID__EVENT_MNFA_EXIT );
 
-        if ( mnfa_awol_list.size() )
-        {
-            log_mnfa_pool ( mnfa_awol_list );
-        }
+        log_mnfa_pool ( mnfa_awol_list );
 
         /* Loop through inventory and recover each host that
          * remains in the hbs_minor state.
@@ -327,5 +349,46 @@ void nodeLinkClass::mnfa_exit ( bool force )
 
     mnfa_host_count[MGMNT_IFACE] = 0 ;
     mnfa_host_count[INFRA_IFACE] = 0 ;
+    mnfa_awol_list.clear();
+}
+
+/****************************************************************************
+ *
+ * Name       : mnfa_cancel
+ *
+ * Description: Cancel MNFA if its active.
+ *
+ ****************************************************************************/
+void nodeLinkClass::mnfa_cancel ( void )
+{
+    if ( this->mnfa_active )
+    {
+        wlog ("MNFA CANCEL --> Cancelling Multi-Node Failure Avoidance\n");
+
+        mtcTimer_reset ( this->mtcTimer_mnfa );
+
+        /* Loop through MNFA Pool.
+         * Clear MNFA attributes from hosts in the pool. */
+        std::list<string>::iterator mnfa_awol_ptr  ;
+        for ( mnfa_awol_ptr = mnfa_awol_list.begin() ;
+              mnfa_awol_ptr != mnfa_awol_list.end() ;
+              mnfa_awol_ptr++ )
+        {
+            struct node * node_ptr = nodeLinkClass::getNode ( *(mnfa_awol_ptr) );
+            if ( node_ptr != NULL )
+            {
+                node_ptr->degrade_mask &= ~DEGRADE_MASK_HEARTBEAT_MGMNT ;
+                node_ptr->degrade_mask &= ~DEGRADE_MASK_HEARTBEAT_INFRA ;
+                node_ptr->hbs_minor[INFRA_IFACE] = false ;
+                node_ptr->hbs_minor[MGMNT_IFACE] = false ;
+                node_ptr->mnfa_graceful_recovery = false ;
+                mtcInvApi_update_task ( node_ptr, "" );
+            }
+        }
+        send_hbs_command ( this->my_hostname, MTC_RECOVER_HBS );
+        this->mnfa_host_count[MGMNT_IFACE] = 0 ;
+        this->mnfa_host_count[INFRA_IFACE] = 0 ;
+        this->mnfa_active = false ;
+    }
     mnfa_awol_list.clear();
 }

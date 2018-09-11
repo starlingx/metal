@@ -542,6 +542,9 @@ private:
         /** Resource reference identifier, aka resource reference array index */
         int  rri     ;
 
+        /** variable used to throttle the rri log */
+        int  no_rri_log_throttle ;
+
         /** @} private_Heartbeat_variables */
 
         /**
@@ -1023,7 +1026,7 @@ private:
     int lazy_graceful_fs_reboot ( struct nodeLinkClass::node * node_ptr );
 
     int alarm_enabled_clear   ( struct nodeLinkClass::node * node_ptr, bool force );
-    int alarm_enabled_failure ( struct nodeLinkClass::node * node_ptr );
+    int alarm_enabled_failure ( struct nodeLinkClass::node * node_ptr, bool want_degrade );
 
     int alarm_insv_clear      ( struct nodeLinkClass::node * node_ptr, bool force );
     int alarm_insv_failure    ( struct nodeLinkClass::node * node_ptr );
@@ -1296,6 +1299,9 @@ public:
     /** The number of heartbeat misses that result in a failed state   */
     int  hbs_failure_threshold ;
 
+    /** enumerated failure action code ; fail, degrade, alarm, none */
+    hbs_failure_action_enum hbs_failure_action ;
+
     /** Running Resource Reference Identifier */
     int  rrri ;
 
@@ -1427,6 +1433,7 @@ public:
      *  node failure avoidance threshold and until there are no more
      *  in service trouble hosts */
     bool mnfa_active ;
+    void mnfa_cancel( void );
 
     std::list<string>           mnfa_awol_list ;
     void                        mnfa_timeout_handler ( void );
@@ -1526,6 +1533,10 @@ public:
 //#ifdef WANT_HBS
     /** Add a host to the Node list */
     int add_heartbeat_host ( const node_inv_type &inv );
+
+    /** Clear heartbeat stats for all hosts */
+    void hbs_clear_all_stats ( void ) ;
+
 // #endif
 
     void host_print (  struct nodeLinkClass::node * node_ptr );
