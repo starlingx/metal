@@ -393,8 +393,15 @@ int daemon_configure ( void )
     get_infra_iface (&hbs_config.infra_iface );
     if ( strlen(hbs_config.infra_iface) )
     {
-        hbsInv.infra_network_provisioned = true ;
-        ilog ("Infra iface : %s\n", hbs_config.infra_iface );
+        if (!strcmp(hbs_config.infra_iface, hbs_config.mgmnt_iface))
+        {
+            hbsInv.infra_network_provisioned = false ;
+        }
+        else
+        {
+            hbsInv.infra_network_provisioned = true ;
+            ilog ("Infra iface : %s\n", hbs_config.infra_iface );
+        }
     }
 
     ilog("Infra RxPort: %d\n", hbs_config.hbs_agent_infra_port );

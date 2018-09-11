@@ -268,8 +268,14 @@ int msgClassAddr::getAddressFromInterface(const char* interface, char* address, 
     get_infra_iface(&infra_iface_name);
     if (infra_iface_name && strlen(infra_iface_name)) {
         if (!strcmp(interface, infra_iface_name)) {
-            // requesting address for the infra interface
-            interface_type = INFRA_IFACE;
+            if (!strcmp(infra_iface_name, daemon_mgmnt_iface().data())) {
+                // infra and mgmt interface name are the same
+                interface_type = MGMNT_IFACE;
+            }
+            else {
+                // requesting address for the infra interface
+                interface_type = INFRA_IFACE;
+            }
         }
         free (infra_iface_name);
     }

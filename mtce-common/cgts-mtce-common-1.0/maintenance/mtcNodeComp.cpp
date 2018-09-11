@@ -333,6 +333,11 @@ void setup_mgmnt_rx_socket ( void )
 
 void setup_infra_rx_socket ( void )
 {
+    if ( ctrl.infra_iface_provisioned == false )
+    {
+        return ;
+    }
+
     dlog ("setup of infra RX\n");
     /* Fetch the infrastructure interface name.
      * calls daemon_get_iface_master inside so the
@@ -343,7 +348,6 @@ void setup_infra_rx_socket ( void )
         /* Only get the infrastructure network address if it is provisioned */ 
         if ( get_iface_address  ( mtc_config.infra_iface, ctrl.address_infra, false ) == PASS )
         {
-            ctrl.infra_iface_provisioned = true ;
             ilog ("Infra iface : %s\n", mtc_config.infra_iface );
             ilog ("Infra addr  : %s\n", ctrl.address_infra.c_str());
         }
@@ -352,7 +356,7 @@ void setup_infra_rx_socket ( void )
     {
         _close_infra_rx_socket ();
 
-        /* Only set up the socket if an infra interface is provisioned */ 
+        /* Only set up the socket if an infra interface is provisioned */
         mtc_sock.mtc_client_infra_rx_socket = new msgClassRx(ctrl.address_infra.c_str(),mtc_sock.mtc_cmd_port, IPPROTO_UDP, ctrl.infra_iface.data(), false );
 
         /* update health of socket */
@@ -403,12 +407,12 @@ void setup_mgmnt_tx_socket ( void )
 
 void setup_infra_tx_socket ( void )
 {
-    ilog ("setup of infra TX\n");
     if ( ctrl.infra_iface_provisioned == false )
     {
         return ;
     }
 
+    dlog ("setup of infra TX\n");
     _close_infra_tx_socket ();
     mtc_sock.mtc_client_infra_tx_socket = new msgClassTx(CONTROLLER_NFS,mtc_sock.mtc_agent_port, IPPROTO_UDP, mtc_config.infra_iface);
 
@@ -523,19 +527,29 @@ int mtc_socket_init ( void )
     setup_mgmnt_rx_socket ();
 
     /************************************************************/
-    /* Setup the Infra Interface Receive Socket                 */
-    /************************************************************/
-    setup_infra_rx_socket () ;
-
-    /************************************************************/
     /* Setup the Mgmnt Interface Transmit messaging to mtcAgent */
     /************************************************************/
     setup_mgmnt_tx_socket ();
 
-    /*************************************************************/
-    /* Setup the Infra Interface Transmit Messaging to mtcAgent  */
-    /*************************************************************/
-    setup_infra_tx_socket () ;
+    /* Manage Infrastructure network setup */
+    string infra_iface_name = daemon_infra_iface();
+    string mgmnt_iface_name = daemon_mgmnt_iface();
+    if ( !infra_iface_name.empty() )
+    {
+        if ( infra_iface_name != mgmnt_iface_name )
+        {
+            ctrl.infra_iface_provisioned = true ;
+            /************************************************************/
+            /* Setup the Infra Interface Receive Socket                 */
+            /************************************************************/
+            setup_infra_rx_socket () ;
+
+            /*************************************************************/
+            /* Setup the Infra Interface Transmit Messaging to mtcAgent  */
+            /*************************************************************/
+            setup_infra_tx_socket () ;
+        }
+    }
 
     /*************************************************************/
     /* Setup and Open the active monitoring socket               */
@@ -1048,7 +1062,6 @@ void daemon_service_run ( void )
     string resource_name;
 
     int rc = PASS ;
-    int infra_retry_count = 0 ;
     int file_not_present_count = 0 ;
 
     /* Start mtcAlive message timer */
@@ -1074,13 +1087,12 @@ void daemon_service_run ( void )
             FD_SET(mtc_sock.mtc_client_rx_socket->getFD(), &mtc_sock.readfds);
         }
 
-        if ( !ctrl.address_infra.empty() )
+        if (( ctrl.infra_iface_provisioned == true ) &&
+            ( mtc_sock.mtc_client_infra_rx_socket ) &&
+            ( mtc_sock.mtc_client_infra_rx_socket->return_status==PASS ))
         {
-            if ( mtc_sock.mtc_client_infra_rx_socket && mtc_sock.mtc_client_infra_rx_socket->return_status==PASS )
-            {
-                socks.push_front (mtc_sock.mtc_client_infra_rx_socket->getFD());
-                FD_SET(mtc_sock.mtc_client_infra_rx_socket->getFD(), &mtc_sock.readfds);
-            }
+            socks.push_front (mtc_sock.mtc_client_infra_rx_socket->getFD());
+            FD_SET(mtc_sock.mtc_client_infra_rx_socket->getFD(), &mtc_sock.readfds);
         }
 
         mtc_sock.amon_socket = active_monitor_get_sel_obj ();
@@ -1100,7 +1112,7 @@ void daemon_service_run ( void )
         /* Initialize the timeval struct to wait for 50 mSec */
         mtc_sock.waitd.tv_sec  = 0;
         mtc_sock.waitd.tv_usec = SOCKET_WAIT;
-      
+
         /* Call select() and wait only up to SOCKET_WAIT */
         socks.sort();
 
@@ -1114,7 +1126,7 @@ void daemon_service_run ( void )
 #endif
 
         rc = select( socks.back()+1,
-                    &mtc_sock.readfds, NULL, NULL, 
+                    &mtc_sock.readfds, NULL, NULL,
                     &mtc_sock.waitd);
 
         /* If the select time out expired then  */
@@ -1133,12 +1145,13 @@ void daemon_service_run ( void )
              {
                  mtc_service_command ( sock_ptr, MGMNT_INTERFACE );
              }
-             if ((mtc_sock.mtc_client_infra_rx_socket && mtc_sock.mtc_client_infra_rx_socket->return_status==PASS) && FD_ISSET(mtc_sock.mtc_client_infra_rx_socket->getFD(), &mtc_sock.readfds))
+             if (( ctrl.infra_iface_provisioned == true ) &&
+                 ( !ctrl.address_infra.empty() ) &&
+                 ( mtc_sock.mtc_client_infra_rx_socket ) &&
+                 ( mtc_sock.mtc_client_infra_rx_socket->return_status==PASS) &&
+                 ( FD_ISSET(mtc_sock.mtc_client_infra_rx_socket->getFD(), &mtc_sock.readfds)))
              {
-                 if ( !ctrl.address_infra.empty() )
-                 {
-                     mtc_service_command ( sock_ptr, INFRA_INTERFACE );
-                 }
+                 mtc_service_command ( sock_ptr, INFRA_INTERFACE );
              }
              if ( FD_ISSET(mtc_sock.amon_socket, &mtc_sock.readfds))
              {
@@ -1180,26 +1193,6 @@ void daemon_service_run ( void )
                }
             }
         }
-
-        /* retry getting the infra ip address if its not already provisioned */
-        if ( ctrl.infra_iface_provisioned == false )
-        {
-            if ( infra_retry_count++ > 100 )
-            {
-                if ( strlen(mtc_config.infra_iface) )
-                {
-                    ilog ("Retrying Interface %s\n", mtc_config.infra_iface )
-                    /* Only get the infrastructure network address if it is provisioned */
-                    rc = get_iface_address  ( mtc_config.infra_iface, ctrl.address_infra, false );
-                    if ( rc == PASS )
-                    {
-                        ctrl.infra_iface_provisioned = true ;
-                    }
-                }
-                infra_retry_count = 0 ;
-            }
-        }
-
 
         if (( ctrl.active_script_set == GOENABLED_MAIN_SCRIPTS ) ||
             ( ctrl.active_script_set == GOENABLED_SUBF_SCRIPTS ))
@@ -1385,10 +1378,17 @@ void daemon_service_run ( void )
             }
 
             send_mtcAlive_msg ( sock_ptr, ctrl.who_i_am, MGMNT_INTERFACE );
-            send_mtcAlive_msg ( sock_ptr, ctrl.who_i_am, INFRA_INTERFACE );
+            if (( ctrl.infra_iface_provisioned == true ) &&
+                ( mtc_sock.mtc_client_infra_rx_socket != NULL ) &&
+                ( mtc_sock.mtc_client_infra_rx_socket->sock_ok() == true ))
+            {
+                send_mtcAlive_msg ( sock_ptr, ctrl.who_i_am, INFRA_INTERFACE );
+            }
 
             /* Re-Start mtcAlive message timer */
             mtcTimer_start ( ctrl.timer, timer_handler, MTC_ALIVE_TIMER );
+
+            dlog3 ("Infra is %senabled", ctrl.infra_iface_provisioned ? "" : "NOT ");
 
             if ( daemon_is_file_present ( MTC_CMD_FIT__DIR ) )
             {

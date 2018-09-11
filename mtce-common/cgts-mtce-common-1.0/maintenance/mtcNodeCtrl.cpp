@@ -610,7 +610,14 @@ int daemon_configure ( void )
             ilog ("Infra iface : %s\n", mtc_config.infra_iface );
             ilog ("Infra addr  : %s\n", infra_ip.c_str());
         }
-        mtcInv.infra_network_provisioned = true ;
+        if (!strcmp(mtc_config.infra_iface, mtc_config.mgmnt_iface))
+        {
+            mtcInv.infra_network_provisioned = false ;
+        }
+        else
+        {
+            mtcInv.infra_network_provisioned = true ;
+        }
     }
 
     /* Log the startup settings */
