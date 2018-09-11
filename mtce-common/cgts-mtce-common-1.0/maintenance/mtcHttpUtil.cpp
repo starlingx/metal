@@ -260,7 +260,7 @@ int mtcHttpUtil_request_old ( libEvent & event,
                               void(*hdlr)(struct evhttp_request *, void *))
 {
     int rc = PASS ;
-    
+
     /* make a new request and bind the event handler to it */
     event.req = evhttp_request_new( hdlr , event.base );
     if ( ! event.req )
@@ -275,7 +275,7 @@ int mtcHttpUtil_request_new ( libEvent & event,
                               void(*hdlr)(struct evhttp_request *, void *))
 {
     int rc = PASS ;
-    
+
     /* make a new request and bind the event handler to it */
     event.req = evhttp_request_new( hdlr , &event );
     if ( ! event.req )
@@ -374,15 +374,15 @@ int mtcHttpUtil_header_add ( libEvent * ptr, http_headers_type * hdrs_ptr )
 
     if ( hdrs_ptr->entries > MAX_HEADERS )
     {
-        elog ("%s Too many headers (%d:%d)\n", 
+        elog ("%s Too many headers (%d:%d)\n",
                   ptr->hostname.c_str(), MAX_HEADERS, hdrs_ptr->entries );
         return FAIL ;
     }
     for ( int i = 0 ; i < hdrs_ptr->entries ; i++ )
     {
         /* Add the header */
-        rc = evhttp_add_header( ptr->req->output_headers, 
-                                hdrs_ptr->entry[i].key.c_str() ,  
+        rc = evhttp_add_header( ptr->req->output_headers,
+                                hdrs_ptr->entry[i].key.c_str() ,
                                 hdrs_ptr->entry[i].value.c_str());
         if ( rc )
         {
@@ -391,12 +391,12 @@ int mtcHttpUtil_header_add ( libEvent * ptr, http_headers_type * hdrs_ptr )
                    hdrs_ptr->entry[i].value.c_str());
             rc = FAIL ;
             break ;
-        }  
+        }
     }
     return (rc);
 }
 
-//int mtcHttpUtil_request_make ( libEvent        * ptr, 
+//int mtcHttpUtil_request_make ( libEvent        * ptr,
 //                               enum evhttp_cmd_type   type,
 //                                             string   path )
 //{
@@ -451,7 +451,7 @@ int mtcHttpUtil_status ( libEvent & event )
         }
         default:
         {
-            hlog3 ("%s Status: %d\n", event.hostname.c_str(), event.status );
+            wlog ("%s Status: %d\n", event.hostname.c_str(), event.status );
             rc = event.status ;
             break;
         }
@@ -476,16 +476,16 @@ int mtcHttpUtil_status ( libEvent & event )
 int mtcHttpUtil_api_request ( libEvent & event )
 
 {
-    http_headers_type    hdrs ;
+    http_headers_type hdrs ;
     int hdr_entry   = 0    ;
     int    rc       = FAIL ;
     void(*handler)(struct evhttp_request *, void *) = NULL ;
- 
+
     /* Default to PUT */
     event.type = EVHTTP_REQ_PUT ;
 
-    if (( event.request == SERVICE_NONE ) || 
-        ( event.request >= SERVICE_LAST )) 
+    if (( event.request == SERVICE_NONE ) ||
+        ( event.request >= SERVICE_LAST ))
     {
         slog ("Invalid request %d\n", event.request);
         event.status = FAIL_BAD_PARM ;
@@ -577,7 +577,7 @@ int mtcHttpUtil_api_request ( libEvent & event )
 
         event.payload.append (",\"task\":\"\"");
         event.payload.append (",\"action\":\"none\"");
-        
+
         event.payload.append (",\"personality\":\"");
         event.payload.append ( event.inv_info.type );
         event.payload.append ("\"");
@@ -593,9 +593,9 @@ int mtcHttpUtil_api_request ( libEvent & event )
         event.payload.append (",\"availability\":\"");
         event.payload.append ( event.inv_info.avail );
         event.payload.append ("\"");
-    
+
         event.payload.append (",\"bm_ip\":\"\"");
-    
+
         if ( !event.inv_info.name.compare("controller-0") )
         {
             event.payload.append (",\"invprovision\":\"provisioned\"");
@@ -662,7 +662,7 @@ int mtcHttpUtil_api_request ( libEvent & event )
         event.timeout = HTTP_VIM_TIMEOUT ;
     }
 
-    else if (( event.request == SMGR_QUERY_SWACT   ) || 
+    else if (( event.request == SMGR_QUERY_SWACT   ) ||
              ( event.request == SMGR_START_SWACT   ) ||
              ( event.request == SMGR_HOST_LOCKED   ) ||
              ( event.request == SMGR_HOST_UNLOCKED ) ||
@@ -719,7 +719,7 @@ int mtcHttpUtil_api_request ( libEvent & event )
         jlog ("%s Address : %s\n", event.hostname.c_str(), event.token.url.c_str());
     }
 
-    if (( event.type != EVHTTP_REQ_GET ) && 
+    if (( event.type != EVHTTP_REQ_GET ) &&
         ( event.type != EVHTTP_REQ_DELETE ))
     {
         /* Add payload to the output buffer but only for PUT, POST and PATCH requests */
@@ -730,15 +730,15 @@ int mtcHttpUtil_api_request ( libEvent & event )
         }
         if ( daemon_get_cfg_ptr()->debug_json )
         {
-            if ((!string_contains(event.payload,"token")) && 
+            if ((!string_contains(event.payload,"token")) &&
                 (!string_contains(event.payload,"assword")))
             {
-                jlog ("%s Payload : %s\n", event.hostname.c_str(), 
+                jlog ("%s Payload : %s\n", event.hostname.c_str(),
                                            event.payload.c_str() );
             }
             else
             {
-                jlog ("%s Payload : ... contains private content ...\n", 
+                jlog ("%s Payload : ... contains private content ...\n",
                           event.hostname.c_str());
 
             }
@@ -754,7 +754,7 @@ int mtcHttpUtil_api_request ( libEvent & event )
     hdrs.entry[hdr_entry].value = "admin";
     hdr_entry++;
 
-    if (( event.type != EVHTTP_REQ_GET ) && 
+    if (( event.type != EVHTTP_REQ_GET ) &&
         ( event.type != EVHTTP_REQ_DELETE ))
     {
         hdrs.entry[hdr_entry].key   = "Content-Length" ;
@@ -765,7 +765,7 @@ int mtcHttpUtil_api_request ( libEvent & event )
     hdrs.entry[hdr_entry].key   = "User-Agent" ;
     hdrs.entry[hdr_entry].value = "mtce/1.0" ;
     hdr_entry++;
-           
+
     hdrs.entry[hdr_entry].key   = "Content-Type" ;
     hdrs.entry[hdr_entry].value = "application/json" ;
     hdr_entry++;
@@ -800,13 +800,13 @@ int mtcHttpUtil_api_request ( libEvent & event )
         event.status = FAIL_HEADER_ADD ;
         goto mtcHttpUtil_api_request_done ;
     }
-    
+
     /* get some timestamps and log the request */
-    snprintf (&event.req_str[0], MAX_API_LOG_LEN-1, 
+    snprintf (&event.req_str[0], MAX_API_LOG_LEN-1,
               "\n%s [%5d] %s %s '%s' seq:%d -> Address : %s:%d %s %s ... %s",
-              pt(), getpid(), 
+              pt(), getpid(),
               event.hostname.c_str(),
-              event.service.c_str(),              
+              event.service.c_str(),
               event.operation.c_str(),
               event.sequence, event.ip.c_str(), event.port,
               getHttpCmdType_str( event.type ),
@@ -842,10 +842,10 @@ int mtcHttpUtil_api_request ( libEvent & event )
             event.log_prefix.append (" ");
             event.log_prefix.append (event.operation) ;
             hlog ("%s Requested (blocking) (to:%d)\n", event.log_prefix.c_str(), event.timeout);
-            
+
             /* Send the message with timeout */
             event_base_dispatch(event.base);
-            
+
             goto mtcHttpUtil_api_request_done ;
         }
         else if (( event.request == SYSINV_UPDATE ) ||
@@ -865,13 +865,50 @@ int mtcHttpUtil_api_request ( libEvent & event )
         {
             if ( event.operation.compare(SYSINV_OPER__UPDATE_UPTIME) )
             {
-                hlog ("%s Dispatched (to:%d)\n", event.log_prefix.c_str(), event.timeout); 
+                hlog ("%s Dispatched (to:%d)\n", event.log_prefix.c_str(), event.timeout);
             }
 
-            /* TODO: Set a command timer to free up the resources 
-             *       and deal with the error if the handler never runs */
+            /*
+             * non-blocking event_base_loop can return ...
+             *
+             *  0 - command complete ; data available
+             *  1 - command dispatched but not complete ; no data available
+             * -1 - error in dispatch ; check errno
+             *
+             */
             event.active = true ;
-            return (event_base_loop(event.base, EVLOOP_NONBLOCK));
+            rc = event_base_loop(event.base, EVLOOP_NONBLOCK);
+
+#ifdef WANT_FIT_TESTING
+            string value = "" ;
+            if ( daemon_want_fit ( FIT_CODE__FAIL_SWACT, event.hostname, "query", value ))
+            {
+                if ( value == "-1" )
+                    rc = -1 ;
+                else
+                    rc = atoi(value.data());
+            }
+#endif
+            if (( rc == 0 ) || // Dispatched and done with Data ready
+                ( rc == 1 ))   // Dispatched but no response yet
+            {
+                if (( event.request == SMGR_QUERY_SWACT ) ||
+                    ( event.request == SMGR_START_SWACT ))
+                {
+                    ilog ("%s dispatched%s\n",
+                              event.log_prefix.c_str(),
+                              rc ? "" : " ; data ready" );
+                }
+                rc = PASS ;
+            }
+            else
+            {
+                elog ("%s command dispatch failed (%d)\n",
+                          event.log_prefix.c_str(), errno );
+                event.active = false ;
+                rc = FAIL_REQUEST ;
+            }
+            return (rc);
         }
         else
         {
@@ -881,7 +918,7 @@ int mtcHttpUtil_api_request ( libEvent & event )
             event.log_prefix.append (event.service) ;
             event.log_prefix.append (" ");
             event.log_prefix.append (event.operation) ;
-            slog ("%s Requested (blocking) (to:%d) ----------------------------------------\n", event.log_prefix.c_str(), event.timeout ); 
+            slog ("%s Requested (blocking) (to:%d) ----------------------------------------\n", event.log_prefix.c_str(), event.timeout );
 
             event_base_dispatch(event.base);
 
@@ -890,10 +927,10 @@ int mtcHttpUtil_api_request ( libEvent & event )
     }
     else
     {
-        elog ("%s Call to 'evhttp_make_request' failed (rc:%d)\n", 
+        elog ("%s Call to 'evhttp_make_request' failed (rc:%d)\n",
                   event.hostname.c_str(), rc);
     }
-    
+
     return (FAIL_MAKE_REQUEST);
 
 mtcHttpUtil_api_request_done:

@@ -1344,8 +1344,8 @@ int  daemon_load_fit ( void )
     {
         daemon_log_value   ( "/var/run/fit/fithits", "hits =", __fit_info.hits );
         daemon_remove_file ( "/var/run/fit/fitdone" );
-        daemon_rename_file ( FIT__INFO_FILEPATH, FIT__INFO_FILENAME, FIT__INFO_FILENAME_RENAMED );
     }
+    daemon_rename_file ( FIT__INFO_FILEPATH, FIT__INFO_FILENAME, FIT__INFO_FILENAME_RENAMED );
 
 #endif
     return (PASS);
