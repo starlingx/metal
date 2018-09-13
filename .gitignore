@@ -24,3 +24,6 @@ sdist
 
 # Docs Contrib Guide
 doc/build/
+
+# Release Notes Management
+releasenotes/build
