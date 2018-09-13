@@ -27,3 +27,6 @@ doc/build/
 
 # Release Notes Management
 releasenotes/build
+
+# API Reference Guide
+api-ref/build/
