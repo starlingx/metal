@@ -2,14 +2,12 @@
 # If these have dependencies, they will be pulled in automatically
 #
 
-# cgts-mtce-common
-cgts-mtce-common
-cgts-mtce-common-pmon
-cgts-mtce-common-rmon
-cgts-mtce-common-hwmon
-cgts-mtce-common-guestAgent
-cgts-mtce-common-guestServer
-cgts-mtce-common-hostw
+# mtce
+mtce
+mtce-pmon
+mtce-rmon
+mtce-hwmon
+mtce-hostw
 
 # cgts-mtce-compute
 cgts-mtce-compute

@@ -1,5 +1,5 @@
 Metadata-Version: 1.1
-Name: cgts-mtce-common
+Name: mtce-common
 Version: 1.0
 Summary: Titanium Cloud Platform Common Node Maintenance Package
 Home-page:
@@ -7,10 +7,7 @@ Author: Windriver
 Author-email: info@windriver.com
 License: Apache-2.0
 
-Description: Maintenance common package containing host maintenace and heartbeat
-             agent/client daemons as well as the hardware and process monitor
-             daemons, hardware watchdog process, guest heartbeat agent/client
-             daemons, resource and file system daemons as well as initialization
-             and support files for each.
+Description: Maintenance common package containing shared utility code between
+             mtce and mtce-guest.
 
 Platform: UNKNOWN
