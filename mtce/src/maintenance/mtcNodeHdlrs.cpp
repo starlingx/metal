@@ -3418,7 +3418,7 @@ int nodeLinkClass::online_handler ( struct nodeLinkClass::node * node_ptr )
 #define SWACT_FAIL_THRESHOLD    (3)
 #define SWACT_RETRY_THRESHOLD  (10)
 #define SWACT_FAIL_MSEC_DELAY (250)
-#define SWACT_RECV_MSEC_DELAY  (50)
+#define SWACT_RECV_RETRY_DELAY  (1)
 #define SWACT_POLL_DELAY       (10)
 #define SWACT_TIMEOUT_DELAY    (50)
 
@@ -3507,7 +3507,7 @@ int nodeLinkClass::swact_handler  ( struct nodeLinkClass::node * node_ptr )
                      * delay a bit and check for the response */
                     nodeLinkClass::smgrEvent.cur_retries = 0 ;
                     nodeLinkClass::smgrEvent.fails   = 0 ;
-                    mtcTimer_start_msec ( node_ptr->mtcSwact_timer, mtcTimer_handler, SWACT_RECV_MSEC_DELAY );
+                    mtcTimer_start ( node_ptr->mtcSwact_timer, mtcTimer_handler, SWACT_RECV_RETRY_DELAY );
                     node_ptr->swactStage = MTC_SWACT__QUERY_RECV ;
                 }
             }
@@ -3530,7 +3530,11 @@ int nodeLinkClass::swact_handler  ( struct nodeLinkClass::node * node_ptr )
                     }
                     else
                     {
-                        mtcTimer_start_msec ( node_ptr->mtcSwact_timer, mtcTimer_handler, SWACT_RECV_MSEC_DELAY );
+                        wlog ("%s Swact Query Request Receive Retry (%d of %d)\n",
+                                node_ptr->hostname.c_str(),
+                                nodeLinkClass::smgrEvent.cur_retries,
+                                SWACT_RETRY_THRESHOLD);
+                        mtcTimer_start ( node_ptr->mtcSwact_timer, mtcTimer_handler, SWACT_RECV_RETRY_DELAY );
                         break ;
                     }
                 }
@@ -3605,7 +3609,7 @@ int nodeLinkClass::swact_handler  ( struct nodeLinkClass::node * node_ptr )
                 nodeLinkClass::smgrEvent.status  = PASS ;
                 nodeLinkClass::smgrEvent.fails   = 0 ;
                 nodeLinkClass::smgrEvent.cur_retries = 0 ;
-                mtcTimer_start_msec ( node_ptr->mtcSwact_timer, mtcTimer_handler, SWACT_RECV_MSEC_DELAY );
+                mtcTimer_start ( node_ptr->mtcSwact_timer, mtcTimer_handler, SWACT_RECV_RETRY_DELAY );
                 node_ptr->swactStage = MTC_SWACT__SWACT_RECV ;
             }
             break ;
@@ -3627,7 +3631,11 @@ int nodeLinkClass::swact_handler  ( struct nodeLinkClass::node * node_ptr )
                     }
                     else
                     {
-                        mtcTimer_start_msec ( node_ptr->mtcSwact_timer, mtcTimer_handler, SWACT_RECV_MSEC_DELAY );
+                        wlog ("%s Swact Request Receive Retry (%d of %d)\n",
+                                  node_ptr->hostname.c_str(),
+                                  nodeLinkClass::smgrEvent.cur_retries,
+                                  SWACT_RETRY_THRESHOLD );
+                        mtcTimer_start ( node_ptr->mtcSwact_timer, mtcTimer_handler, SWACT_RECV_RETRY_DELAY );
                         break ;
                     }
                 }
