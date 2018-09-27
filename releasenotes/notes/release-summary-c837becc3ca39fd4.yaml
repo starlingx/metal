@@ -1,3 +1,28 @@
 ---
 prelude: >
-    These release notes cover the initial release of StarlingX.
+    The StarlingX Metal project is a new repository that manages lifecycle of
+    Host and its operation and administration, it also provides Host fault
+    monitoring, alarming and initiates fault recovery.
+features:
+  - |
+    Manages the life cycle of the host.
+  - |
+    Detects and automatically handles host failures and initiates recovery.
+  - |
+    Monitor & Alarm & Recover:
+
+    - Cluster connectivity, critical process failures.
+    - Resource utilization thresholds, interface states.
+    - H/W fault / sensors, host watchdog.
+    - Activity progress reporting (e.g. booting, testing).
+  - |
+    Interfaces with board management (BMC) for out of band reset, power-on/off
+    and H/W sensor monitoring.
+  - |
+    Publishes host state with other StarlingX Components.
+  - |
+    Exposes a set of administrative commands for the user to manage the host
+    via REST API:
+
+    - Lock/unlock, reboot, reset, re-install, SWACT.
+    - Out-of-Band via BMC: Reboot, reset, power on/off.
