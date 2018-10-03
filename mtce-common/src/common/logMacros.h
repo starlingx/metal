@@ -114,6 +114,8 @@ typedef struct
     int   event_port            ; /**< daemon specific event tx port          */
     int   cmd_port              ; /**< daemon specific command rx port        */
     int   sensor_port           ; /**< sensor read value port                 */
+    int   sm_server_port            ; /**< port mtce uses to receive data from SM */
+    int   sm_client_port            ; /**< port mtce uses to send SM data         */
     int   start_delay           ; /**< startup delay, added for pmon          */
     int   api_retries           ; /**< api retries before failure             */
     int   hostwd_failure_threshold ; /**< allowed # of missed pmon/hostwd messages */
@@ -241,6 +243,19 @@ extern char *program_invocation_short_name;
 #define elog(format, args...) { \
     if ( ltc() ) { printf ( "%s [%d.%05d] %s %s %-3s %-18s(%4d) %-24s:Error : " format, pt(), getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; } \
     else { syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s:Error : " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; } \
+}
+
+/** Error logger macro with throttling */
+#define elog_throttled(cnt,max,format,args...) { \
+    if ( ++cnt == 1 ) \
+    { \
+        if (ltc()) {   printf ( "%s [%d.%05d] %s %s %-3s %-18s(%4d) %-24s:Error : " format, pt(), getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; } \
+        else { syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s:Error : " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; } \
+    } \
+    if ( cnt >= max ) \
+    { \
+        cnt = 0 ; \
+    } \
 }
 
 /** Warning logger macro */
@@ -387,7 +402,9 @@ extern char *program_invocation_short_name;
 
 #define flog(format, args...)  { if(daemon_get_cfg_ptr()->debug_fsm)     syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s: FSM  : " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
 #define tlog(format, args...)  { if(daemon_get_cfg_ptr()->debug_timer)   syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s: Timer: " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
+
 #define clog(format, args...)  { if(daemon_get_cfg_ptr()->debug_state)   syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s:Change: " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
+#define clog1(format, args...) { if(daemon_get_cfg_ptr()->debug_state&2)  syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s:Chang2: " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
 
 #define log_event(format, args...)  { syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s: Event: " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
 #define log_stress(format, args...) { syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s:Stress: " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }

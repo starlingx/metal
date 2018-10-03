@@ -4,10 +4,10 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-SRCS = hbsAlarm.cpp hbsClient.cpp hbsAgent.cpp hbsPmon.cpp hbsStubs.cpp
+SRCS = hbsAlarm.cpp hbsClient.cpp hbsAgent.cpp hbsPmon.cpp hbsUtil.cpp hbsCluster.cpp hbsStubs.cpp
 OBJS = $(SRCS:.cpp=.o)
 
-LDLIBS = -lstdc++ -ldaemon -lcommon -lthreadUtil -lpthread -lfmcommon -lalarm -lrt -lamon -lcrypto -luuid
+LDLIBS = -lstdc++ -ldaemon -lcommon -lthreadUtil -lpthread -lfmcommon -lalarm -lrt -lamon -lcrypto -luuid -ljson-c
 INCLUDES = -I. -I/usr/include/mtce-daemon -I/usr/include/mtce-common
 INCLUDES += -I../common -I../alarm -I../maintenance -I../public
 
@@ -31,8 +31,8 @@ endif
 all: static_analysis common agent client
 
 build: static_analysis $(OBJS)
-	$(CXX) $(CCFLAGS) hbsAlarm.o hbsAgent.o hbsStubs.o ../common/nodeClass.o -L../public -L../alarm $(LDLIBS) -o hbsAgent
-	$(CXX) $(CCFLAGS) hbsClient.o hbsPmon.o -L../public -L../alarm $(LDLIBS) -o hbsClient
+	$(CXX) $(CCFLAGS) hbsAlarm.o hbsAgent.o hbsUtil.o hbsCluster.o hbsStubs.o ../common/nodeClass.o -L../public -L../alarm $(LDLIBS) -o hbsAgent
+	$(CXX) $(CCFLAGS) hbsClient.o hbsPmon.o hbsUtil.o -L../public -L../alarm $(LDLIBS) -o hbsClient
 
 common:
 	( cd ../common ; make clean ; make lib VER=$(VER) VER_MJR=$(VER_MJR))

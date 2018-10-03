@@ -1940,7 +1940,7 @@ public:
     void manage_pulse_flags ( string & hostname, unsigned int flags );
 
     /** Control the heartbeat monitoring state of a host */
-    int mon_host ( const string & hostname, iface_enum iface, bool true_false, bool send_clear );
+    int mon_host ( const string & hostname, bool true_false, bool send_clear );
 
     /** Return true if the pulse list is empty */
     bool pulse_list_empty ( iface_enum iface );
@@ -1956,7 +1956,7 @@ public:
      * that exceed preset thresholds.
      *
      */
-    int lost_pulses ( iface_enum iface );
+    int lost_pulses ( iface_enum iface, bool & storage_0_responding );
 
     bool monitored_pulse ( string hostname , iface_enum iface );
 

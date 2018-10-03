@@ -249,6 +249,44 @@ int jsonUtil_get_key_val ( char   * json_str_ptr,
     return (PASS);
 }
 
+int jsonUtil_get_key_val_int ( char   * json_str_ptr,
+                               string   key,
+                               int    & value )
+{
+    /* init to null to avoid trap on early cleanup call with
+     * bad non-null default pointer value */
+    struct json_object *raw_obj  = (struct json_object *)(NULL);
+
+    if ((json_str_ptr == NULL) || ( *json_str_ptr == '\0' ) || ( ! strncmp ( json_str_ptr, "(null)" , 6 )))
+    {
+        elog ("Cannot tokenize a null json string\n");
+        elog ("... json string: %s\n", json_str_ptr );
+        return (FAIL);
+    }
+
+    size_t len_before = strlen (json_str_ptr);
+
+    jlog2 ("String: %s\n", json_str_ptr );
+
+    raw_obj = json_tokener_parse( json_str_ptr );
+    if ( raw_obj )
+    {
+        value = jsonUtil_get_key_value_int ( raw_obj, key.data() ) ;
+        jlog1 ("%s:%d\n", key.c_str(), value);
+    }
+    else
+    {
+        size_t len_after = strlen (json_str_ptr);
+
+        elog ("Unable to tokenize string (before:%ld after:%ld);\n", len_before, len_after);
+        elog ("... json string: %s\n", json_str_ptr );
+    }
+
+    if (raw_obj)
+        json_object_put(raw_obj);
+
+    return (PASS);
+}
 
 /** This utility freads the passed in inventory GET request
   * response json character string and performes the following

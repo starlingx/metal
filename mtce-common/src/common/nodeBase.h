@@ -23,7 +23,9 @@ using namespace std;
 #include "returnCodes.h"
 #include "nodeTimers.h"
 
+#ifndef ALIGN_PACK
 #define ALIGN_PACK(x) __attribute__((packed)) x
+#endif
 
 /* Out-Of-Service Stress tests */
 #define WANT_SYSINV_API_STRESS          0x00000001
@@ -359,7 +361,11 @@ void daemon_exit ( void );
 
 #define CONTROLLER_0 ((const char *)"controller-0")
 #define CONTROLLER_1 ((const char *)"controller-1")
+#define CONTROLLER_2 ((const char *)"controller-2")
 #define CONTROLLER   ((const char *)"controller")
+
+#define STORAGE_0   ((const char *)"storage-0")
+#define STORAGE_1   ((const char *)"storage-1")
 
 /* The infrastructure networking floating IP
  *

@@ -20,7 +20,6 @@
  *       daemon_files_init
  *       daemon_configure
  *       daemon_signal_init
- *       hbs_message_init
  *       hbs_socket_init
  *
  *    daemon_service_run
@@ -59,7 +58,7 @@ using namespace std;
 #include "daemon_option.h" /* Common options  for daemons                  */
 #include "nodeTimers.h"    /* for ... maintenance timers                   */
 #include "nodeMacro.h"     /* for ... CREATE_NONBLOCK_INET_UDP_RX_SOCKET   */
-#include "nlEvent.h"       /* for ... open_netlink_socket                */
+#include "nlEvent.h"       /* for ... open_netlink_socket                  */
 #include "hbsBase.h"       /* Heartbeat Base Header File                   */
 
 extern "C"
@@ -95,8 +94,9 @@ typedef struct
     std::list<procList>::iterator proc_ptr ;
 } stallMon_type ;
 
-
+static char pulse_resp_tx_hdr [HBS_MAX_MSG];
 static char   my_hostname [MAX_HOST_NAME_SIZE+1];
+static char   my_hostname_length ;
 static string my_macaddr = "" ;
 static string my_address = "" ;
 static unsigned int    my_nodetype= CGTS_NODE_NULL ;
@@ -360,6 +360,12 @@ static int hbs_config_handler ( void * user,
         config_ptr->pmon_pulse_port = atoi(value);
         config_ptr->mask |= CONFIG_CLIENT_PULSE_PORT ;
     }
+#ifdef WANT_CLUSTER_DEBUG
+    else if (MATCH("agent", "sm_client_port"))
+    {
+        config_ptr->sm_client_port = atoi(value);
+    }
+#endif
     else
     {
         return (PASS);
@@ -445,20 +451,6 @@ int daemon_configure ( void )
 /****************************/
 /* Initialization Utilities */
 /****************************/
-
-/* Initialize the unicast pulse response message  */
-/* One time thing ; tx same message all the time. */
-int hbs_message_init ( void )
-{
-    /* Build the transmit pulse response message for each interface */
-    for ( int i = 0 ; i < MAX_IFACES ; i++ )
-    {
-        memset ( &hbs_sock.tx_mesg[i], 0, sizeof (hbs_message_type));
-        memcpy ( &hbs_sock.tx_mesg[i].m[0], &rsp_msg_header[0], HBS_HEADER_SIZE );
-        memcpy ( &hbs_sock.tx_mesg[i].m[HBS_HEADER_SIZE], my_hostname, strlen(my_hostname));
-    }
-    return (PASS);
-}
 
 /* Initialize pulse messaging for the specified interface
  * This is called by a macro defined in hbsBase.h */
@@ -621,6 +613,11 @@ int hbs_socket_init ( void )
         return (FAIL_SOCKET_NOBLOCK);
     }
 
+#ifdef WANT_CLUSTER_DEBUG
+    hbs_sock.sm_client_sock = new msgClassRx(LOOPBACK_IP,hbs_config.sm_client_port,IPPROTO_UDP);
+    if ( rc ) return (rc) ;
+    hbs_sock.sm_client_sock->sock_ok(true);
+#endif
     return (PASS);
 }
 
@@ -648,7 +645,7 @@ int get_pmon_pulses ( void )
             if ( !strncmp ( &msg.hdr[0] , get_pmond_pulse_header(), MSG_HEADER_SIZE ))
             {
                 pulses++ ;
-                mlog ("Pmon Pulse (%s) (%d)\n", msg.hdr, pulses );
+                mlog1 ("Pmon Pulse (%s) (%d)\n", msg.hdr, pulses );
             }
             else
             {
@@ -710,91 +707,86 @@ static unsigned int my_rri = 0 ;
 static int rx_error_count[MAX_IFACES] = {0,0} ;
 static int tx_error_count[MAX_IFACES] = {0,0} ;
 
+#define ERROR_LOG_THRESHOLD (200)
+
 int _service_pulse_request ( iface_enum iface , unsigned int flags )
 {
-    unsigned int s  = 0 ; /* Sequence number       */
-    int          n  = 0 ; /* message size          */
-    int          rc = 0 ;
-
     if (( iface != MGMNT_IFACE ) && ( iface != INFRA_IFACE ))
         return (FAIL_BAD_CASE);
 
-    memset (   (char*) &hbs_sock.rx_mesg[iface], 0, sizeof(hbs_message_type));
     if ( ! hbs_sock.rx_sock[iface] )
     {
-        elog ("cannot receive from null rx_mesg[%s] socket\n", get_iface_name_str(iface) );
+        elog_throttled ( rx_error_count[iface], ERROR_LOG_THRESHOLD,
+                         "cannot receive from null rx_mesg[%s] socket\n",
+                         get_iface_name_str(iface) );
         return (FAIL_TO_RECEIVE);
     }
-    else if ( hbs_sock.rx_sock[iface]->sock_ok() == false )
+    else if ( ! hbs_sock.tx_sock[iface] )
     {
-        elog ("cannot receive from failed rx_mesg[%s] socket\n", get_iface_name_str(iface) );
+        elog_throttled ( tx_error_count[iface], ERROR_LOG_THRESHOLD,
+                         "cannot send to null mesg[%s] socket\n",
+                         get_iface_name_str(iface) );
+        return (FAIL_TO_TRANSMIT);
+    }
+    else if ( ! hbs_sock.rx_sock[iface]->sock_ok() )
+    {
+        elog_throttled ( rx_error_count[iface], ERROR_LOG_THRESHOLD,
+                         "cannot receive from failed rx_mesg[%s] socket\n",
+                         get_iface_name_str(iface) );
         return (FAIL_TO_RECEIVE);
     }
-
-    n = hbs_sock.rx_sock[iface]->read((char*)&hbs_sock.rx_mesg[iface], sizeof(hbs_message_type));
-
-    if( n < HBS_HEADER_SIZE )
+    else if ( ! hbs_sock.tx_sock[iface]->sock_ok() )
     {
-        rx_error_count[iface]++ ;
+        elog_throttled ( tx_error_count[iface], ERROR_LOG_THRESHOLD,
+                         "cannot send to failed mesg[%s] socket\n",
+                         get_iface_name_str(iface) );
+        return (FAIL_TO_TRANSMIT);
+    }
 
-        /* throtle the log so that if they come back-to-back we avoid flooding */
-        if ( n == -1 )
+    // MEMSET_ZERO(hbs_sock.rx_mesg[iface]);
+    int rx_bytes = hbs_sock.rx_sock[iface]->read((char*)&hbs_sock.rx_mesg[iface], sizeof(hbs_message_type));
+    if ( rx_bytes < HBS_HEADER_SIZE )
+    {
+        if ( rx_bytes == -1 )
         {
-            if ( rx_error_count[iface] > 1 )
-            {
-                wlog_throttled ( rx_error_count[iface], 500, "%s receive error (%d:%m)\n", get_iface_name_str(iface), errno );
-            }
+            wlog_throttled ( rx_error_count[iface], ERROR_LOG_THRESHOLD,
+                             "%s receive error (%d:%m)\n",
+                             get_iface_name_str(iface), errno );
         }
         else
         {
-            wlog_throttled ( rx_error_count[iface], 500, "%s message underrun (expected %ld but got %d)\n",
-                             get_iface_name_str(iface), sizeof(hbs_message_type), n );
-        }
-        if ( rx_error_count[iface] == 100 )
-        {
-            wlog ( "%s is getting a lot of receive errors (%d:%m)\n", get_iface_name_str(iface), errno );
+            wlog_throttled ( rx_error_count[iface], ERROR_LOG_THRESHOLD,
+                             "%s message underrun (expected %ld but got %d)\n",
+                             get_iface_name_str(iface),
+                             sizeof(hbs_message_type), rx_bytes );
         }
         return (FAIL_TO_RECEIVE);
     }
 
-    /* Clear the error count since we got a good receive */
-    rx_error_count[iface] = 0 ;
-
-#ifdef WANT_NO_SELF_HEARTBEAT_REPLY
-    /* Don't reply to the heartbeat if the request came from myself */
-    if ( ! strncmp ( my_address.data(),
-                     hbs_sock.rx_sock[iface]->get_dst_addr()->toString(),
-                     MAX_CHARS_IN_IP_ADDR ))
+    daemon_config_type * cfg_ptr = daemon_get_cfg_ptr();
+    if ( cfg_ptr->debug_msg )
     {
-        ilog ("%s Refusing to send heartbeat response to self\n", hbs_sock.rx_sock[iface]->get_dst_addr()->toString());
-        return (PASS);
+        mlog ("\n");
+        mlog ("%s Pulse Req: %s:%5d: %d:%s RRI:%d\n",
+                  get_iface_name_str(iface),
+                  hbs_sock.rx_sock[iface]->get_dst_addr()->toString(),
+                  hbs_sock.rx_sock[iface]->get_dst_addr()->getPort(),
+                  hbs_sock.rx_mesg[iface].s,
+                  hbs_sock.rx_mesg[iface].m,
+                  hbs_sock.rx_mesg[iface].c);
     }
-#else
-    /* We use this to monitor pmond on active controller */
-#endif
 
-    /* Save the sequence number */
-    s = hbs_sock.rx_mesg[iface].s ;
-
-    mlog ("\n");
-    mlog ("%s Pulse Req: %s:%5d: %d: :%s RRI:%d\n", get_iface_name_str(iface),
-              hbs_sock.rx_sock[iface]->get_dst_addr()->toString(),
-              hbs_sock.rx_sock[iface]->get_dst_addr()->getPort(),
-                      hbs_sock.rx_mesg[iface].s,
-                      hbs_sock.rx_mesg[iface].m,
-                      hbs_sock.rx_mesg[iface].c);
-
+    /* verify the message header */
     if ( strncmp ( (const char *)&hbs_sock.rx_mesg[iface].m, (const char *)&req_msg_header, HBS_HEADER_SIZE ))
     {
-        wlog_throttled ( rx_error_count[iface], 200, "%s Invalid header (%d:%s)\n",
-                get_iface_name_str(iface),
-                hbs_sock.rx_mesg[iface].s,
-                hbs_sock.rx_mesg[iface].m );
-
-        mlog ("Detected: %d <%s>\n", HBS_HEADER_SIZE,hbs_sock.rx_mesg[iface].m);
-        mlog ("Expected: %d <%s>\n", HBS_HEADER_SIZE,req_msg_header);
+        wlog_throttled ( rx_error_count[iface], ERROR_LOG_THRESHOLD,
+                         "%s Invalid header (%d:%s)\n",
+                         get_iface_name_str(iface),
+                         hbs_sock.rx_mesg[iface].s,
+                         hbs_sock.rx_mesg[iface].m );
         return (FAIL_MSG_HEADER) ;
     }
+
 
     /* Manage the Resource Reference Index (RRI) "lookup clue" */
     if ( ! strncmp ( &hbs_sock.rx_mesg[iface].m[HBS_HEADER_SIZE], &my_hostname[0], MAX_CHARS_HOSTNAME ))
@@ -807,32 +799,31 @@ int _service_pulse_request ( iface_enum iface , unsigned int flags )
     }
 
     /* Add my RRI to the response message */
-    hbs_sock.tx_mesg[iface].c = my_rri ;
+    hbs_sock.rx_mesg[iface].c = my_rri ;
 
-    /* Clear struct */
-    hbs_sock.tx_mesg[iface].s = s     ;
-    hbs_sock.tx_mesg[iface].f = flags ;
+    /* Manage OOB flags */
+    hbs_sock.rx_mesg[iface].f = flags ;
     if ( pmonPulse_counter )
     {
-        hbs_sock.tx_mesg[iface].f |= ( PMOND_FLAG ) ;
+        hbs_sock.rx_mesg[iface].f |= ( PMOND_FLAG ) ;
     }
     if ( infra_network_provisioned == true )
     {
-        hbs_sock.tx_mesg[iface].f |= INFRA_FLAG ;
+        hbs_sock.rx_mesg[iface].f |= INFRA_FLAG ;
     }
 
-    n = (int)sizeof(hbs_message_type) ;
-
-    if ( ! hbs_sock.tx_sock[iface] )
+#define WANT_CLUSTER_INFO_LOG
+#ifdef WANT_CLUSTER_INFO_LOG
+    /* Log the received cluster info */
+    if ( hbs_sock.rx_mesg[iface].v >= HBS_MESSAGE_VERSION )
     {
-        elog ("cannot send to null tx_mesg[%s] socket\n", get_iface_name_str(iface) );
-        return (FAIL_TO_TRANSMIT);
+        char str[100] ;
+        // hbs_cluster_log (hbs_sock.rx_mesg[iface].cluster, hbs_sock.rx_mesg[iface].s );
+        snprintf ( &str[0], 100, " seq %6d with %d bytes from %s ", hbs_sock.rx_mesg[iface].s, rx_bytes, get_iface_name_str(iface));
+        string hostname = my_hostname ;
+        hbs_cluster_log ( hostname, hbs_sock.rx_mesg[iface].cluster, str );
     }
-    else if ( hbs_sock.tx_sock[iface]->sock_ok() == false )
-    {
-        elog ("cannot send to failed tx_mesg[%s] socket\n", get_iface_name_str(iface) );
-        return (FAIL_TO_TRANSMIT);
-    }
+#endif
 
 #ifdef WANT_PULSE_RESPONSE_FIT
     if (( iface == INFRA_IFACE ) && ( daemon_is_file_present ( MTC_CMD_FIT__NO_INFRA_RSP )))
@@ -848,44 +839,69 @@ int _service_pulse_request ( iface_enum iface , unsigned int flags )
     }
 #endif
 
-    /* Send pulse response message with sequence number, flags and resource referecen index */
-    rc = hbs_sock.tx_sock[iface]->reply(hbs_sock.rx_sock[iface],(char*)&hbs_sock.tx_mesg[iface], n);
-    if ( rc == -1 )
+    int rc = PASS ;
+
+    /* replace the request header with the response header */
+    memcpy ( &hbs_sock.rx_mesg[iface].m[0], &pulse_resp_tx_hdr[0], HBS_MAX_MSG );
+
+    /* Deal with the cluster info if it exists.
+     * ... Introduced in messaging version 1 */
+    if ( hbs_sock.rx_mesg[iface].v >= HBS_MESSAGE_VERSION )
     {
-        elog ("Failed to sendto socket %d through %s:%d len:%d (%s) (%d:%s)\n",
-                    hbs_sock.tx_sock[iface]->getFD(),
-                    hbs_sock.tx_sock[iface]->get_dst_addr()->toString(),
-                    hbs_sock.tx_sock[iface]->get_dst_addr()->getPort(),
-                    hbs_sock.tx_sock[iface]->get_dst_addr()->getSockLen(),
-                    get_iface_name_str(iface), errno, strerror(errno));
+        if ( hbs_sock.rx_mesg[iface].cluster.version < MTCE_HBS_CLUSTER_VERSION )
+        {
+            ilog ("Bad cluster verison (%d)", hbs_sock.rx_mesg[iface].cluster.version);
+        }
+        // if ( hbs_sock.rx_mesg[iface].cluster.revision != MTCE_HBS_CLUSTER_REVISION )
+        // {
+        //     ilog ("Bad cluster revision (%d)", hbs_sock.rx_mesg[iface].cluster.revision);
+        // }
+
+        /* Add peer controller cluster data to this controller's response */
+        // hbs_cluster_loop(hbs_sock.rx_mesg[iface]);
     }
-    else if ( rc != n)
+
+    /* send pulse response message */
+    int tx_bytes = hbs_sock.tx_sock[iface]->reply(hbs_sock.rx_sock[iface],(char*)&hbs_sock.rx_mesg[iface], rx_bytes);
+    if ( tx_bytes == -1 )
     {
-        /* Avoid log flooding
-        elog ("unicast send failed. (%d)\n", rc); */
-        wlog_throttled ( tx_error_count[iface], 200,
-                         "%s Pulse Rsp: %d:%d bytes < %d:%s > to <%s>\n",
-                         get_iface_name_str(iface), n, rc,
-                         hbs_sock.tx_mesg[iface].s,
-                        &hbs_sock.tx_mesg[iface].m[0],
+        elog_throttled ( tx_error_count[iface], ERROR_LOG_THRESHOLD,
+                         "pulse tx failed %d:%s:%d len:%d (%s) (%d:%s)\n",
+                         hbs_sock.tx_sock[iface]->getFD(),
+                         hbs_sock.tx_sock[iface]->get_dst_addr()->toString(),
+                         hbs_sock.tx_sock[iface]->get_dst_addr()->getPort(),
+                         hbs_sock.tx_sock[iface]->get_dst_addr()->getSockLen(),
+                         get_iface_name_str(iface), errno, strerror(errno));
+    }
+    else if ( tx_bytes != rx_bytes)
+    {
+        wlog_throttled ( tx_error_count[iface], ERROR_LOG_THRESHOLD,
+                         "%s Pulse Rsp: %d:%d bytes < %d:%s >",
+                         get_iface_name_str(iface), rx_bytes, tx_bytes,
+                         hbs_sock.rx_mesg[iface].s,
                         &hbs_sock.rx_mesg[iface].m[0]);
-        return (rc);
+        rc = FAIL_DATA_SIZE ;
     }
     else
     {
-        mlog ("%s Pulse Rsp: %s:%5d: %d:%d:%s RRI:%d (%d)\n",
+        mlog ("%s Pulse Rsp: %s:%5d: %d:%d:%s RRI:%d (%d:%d:%d)\n",
                 get_iface_name_str(iface),
                 hbs_sock.tx_sock[iface]->get_dst_addr()->toString(),
                 hbs_sock.tx_sock[iface]->get_dst_addr()->getPort(),
-                             hbs_sock.tx_mesg[iface].s,
-                             hbs_sock.tx_mesg[iface].f,
-                             hbs_sock.tx_mesg[iface].m,
-                             hbs_sock.tx_mesg[iface].c,
-                             pmonPulse_counter);
-        /* Clear the error count since we got a good transmit */
-        tx_error_count[iface] = 0 ;
+                             hbs_sock.rx_mesg[iface].s,
+                             hbs_sock.rx_mesg[iface].f,
+                             hbs_sock.rx_mesg[iface].m,
+                             hbs_sock.rx_mesg[iface].c,
+                             pmonPulse_counter, rx_bytes, tx_bytes);
     }
-    return PASS;
+
+    /* Clear the error count since we got a good receive */
+    if ( rx_error_count[iface] )
+        rx_error_count[iface] = 0 ;
+    if ( tx_error_count[iface] )
+        tx_error_count[iface] = 0 ;
+
+    return rc ;
 }
 
 #ifdef WANT_FIT_TESTING
@@ -968,6 +984,9 @@ int daemon_init ( string iface, string nodeType_str )
     /* Initialize socket construct and pointer to it */
     memset ( &hbs_sock, 0, sizeof(hbs_sock));
 
+    /* init the utility module */
+    hbs_utils_init ();
+
     /* Defaults */
     hbs_config.stall_pmon_thld   = -1 ;
     hbs_config.stall_mon_period  = MTC_HRS_8 ;
@@ -1025,12 +1044,6 @@ int daemon_init ( string iface, string nodeType_str )
         rc = FAIL_DAEMON_CONFIG ;
     }
 
-    /* Init the heartbeat transmit pulse response message */
-    else if ( hbs_message_init () != PASS )
-    {
-         elog ("Failed to initialize pulse response message\n");
-         rc = FAIL_MESSAGE_INIT ;
-    }
     /* Setup the heartbeat service messaging sockets */
     else if ( hbs_socket_init () != PASS )
     {
@@ -1119,6 +1132,11 @@ void daemon_service_run ( void )
     ilog ("Sending Heartbeat Ready Event\n");
     hbs_send_event ( MTC_EVENT_MONITOR_READY );
 
+    my_hostname_length = strlen(my_hostname) ;
+    memset ( &pulse_resp_tx_hdr[0], 0, HBS_MAX_MSG );
+    memcpy ( &pulse_resp_tx_hdr[0], &rsp_msg_header[0], HBS_HEADER_SIZE );
+    memcpy ( &pulse_resp_tx_hdr[HBS_HEADER_SIZE], my_hostname, my_hostname_length );
+
     /* Run heartbeat service forever or until stop condition */
     for ( ;  ; )
     {
@@ -1153,7 +1171,9 @@ void daemon_service_run ( void )
         FD_SET(hbs_sock.pmon_pulse_sock->getFD(),&hbs_sock.readfds);
         FD_SET(hbs_sock.amon_socket,    &hbs_sock.readfds);
         FD_SET(hbs_sock.netlink_sock,   &hbs_sock.readfds);
-
+#ifdef WANT_CLUSTER_DEBUG
+        FD_SET(hbs_sock.sm_client_sock->getFD(), &hbs_sock.readfds);
+#endif
         rc = select( socks.back()+1,
                      &hbs_sock.readfds, NULL, NULL,
                      &hbs_sock.waitd);
@@ -1176,6 +1196,19 @@ void daemon_service_run ( void )
         /* Only service sockets for the rc > 0 case */
         else if ( rc )
         {
+#ifdef WANT_CLUSTER_DEBUG
+            if ( hbs_sock.sm_client_sock && FD_ISSET(hbs_sock.sm_client_sock->getFD(), &hbs_sock.readfds ) )
+            {
+                mtce_hbs_cluster_type msg ;
+                /* Receive event messages */
+                memset ( &msg , 0, sizeof(mtce_hbs_cluster_type));
+                int bytes = hbs_sock.sm_client_sock->read((char*)&msg, sizeof(mtce_hbs_cluster_type));
+                if ( bytes )
+                {
+                    hbs_cluster_dump (msg);
+                }
+            }
+#endif
             if (hbs_sock.rx_sock[MGMNT_IFACE]&&FD_ISSET(hbs_sock.rx_sock[MGMNT_IFACE]->getFD(), &hbs_sock.readfds))
             {
                 /* Receive pulse request and send a response */

@@ -23,6 +23,7 @@ SRCS += mtcKeyApi.cpp
 SRCS += mtcCmdHdlr.cpp
 SRCS += mtcNodeMnfa.cpp
 SRCS += mtcVimApi.cpp
+SRCS += mtcStubs.cpp
 
 COMPUTE_OBJS  = mtcNodeComp.o
 COMPUTE_OBJS += mtcCompMsg.o

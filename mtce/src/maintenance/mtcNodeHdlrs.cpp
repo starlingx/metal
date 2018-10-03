@@ -1935,8 +1935,10 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
                  * the host has not reset yet we have disabled services
                  * then now we need to reset the host to prevet VM duplication
                  * by forcing a full enable */
-                if (( node_ptr->uptime_save != 0 ) &&
-                    ( node_ptr->uptime >= node_ptr->uptime_save ))
+                if ((( node_ptr->uptime_save != 0 ) &&
+                     ( node_ptr->uptime >= node_ptr->uptime_save )) ||
+                    (( node_ptr->uptime_save == 0 ) &&
+                     ( node_ptr->uptime > MTC_MINS_15 )))
                 {
                     ilog ("%s regained MTCALIVE from host that did not reboot (uptime:%d)\n",
                                   node_ptr->hostname.c_str(), node_ptr->uptime );

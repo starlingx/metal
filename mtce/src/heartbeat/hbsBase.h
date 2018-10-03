@@ -27,6 +27,8 @@
 #include <signal.h>
 #include <list>
 #include "msgClass.h"
+#include "mtceHbsCluster.h"
+#include "hbsCluster.h"
 
 /**
  * @addtogroup hbs_base
@@ -37,6 +39,8 @@
 #undef __AREA__
 #endif
 #define __AREA__ "hbs"
+
+// #define WANT_CLUSTER_DEBUG
 
 #define ALIGN_PACK(x) __attribute__((packed)) x
 
@@ -56,15 +60,18 @@ const char rsp_msg_header   [HBS_HEADER_SIZE+1] = {"cgts pulse rsp:"};
 
 #define HBS_MAX_MSG (HBS_HEADER_SIZE+MAX_CHARS_HOSTNAME)
 
+#define HBS_MESSAGE_VERSION (1) // 0 -> 1 with intro of cluster info
+
 /* Heartbeat control structure */
 typedef struct
 {
     unsigned int nodetype     ;
     bool         clear_alarms ;
 } hbs_ctrl_type ;
+hbs_ctrl_type * get_hbs_ctrl_ptr ( void );
 
 /* A heartbeat service message
- * if this structire is changed then
+ * if this structure is changed then
  * hbs_pulse_request needs to be looked at
  */
 typedef struct
@@ -76,7 +83,7 @@ typedef struct
     unsigned int   s ;
 
     /* Fast Lookup Clue Info */
-    unsigned int   c ;
+    unsigned int c  ;
 
     /* Status Flags
      * ------------
@@ -88,6 +95,16 @@ typedef struct
 
     /** message version number */
     unsigned int   v ;
+
+    /** Heartbeat cluster information that is put into heartbeat messages.
+     *
+     *  Pulse Request :   To hbsClient: Only 1 controller with up to 2 network types history.
+     *  Pulse Response: From hbsClient: Can include up to 2 controllers with 2 networks each.
+     *
+     *  This addition requires message verison increment.
+     *
+     **/
+    mtce_hbs_cluster_type cluster ;
 
 } ALIGN_PACK(hbs_message_type) ;
 
@@ -103,6 +120,12 @@ typedef struct
 
     /** Heartbeat Service Event Transmit Interface - hbsClient -> mtcAgent  */
     msgClassSock*      hbs_ready_tx_sock;
+
+    /** Heartbeat Service SM Transmit Interface - hbsAgent -> sm  */
+    msgClassSock*      sm_client_sock;
+
+    /** Heartbeat Service SM Receive Interface - sm -> hbsAgent  */
+    msgClassSock*      sm_server_sock;
 
     /** PMON Pulse Receive Interface - pmond -> hbsClient                   */
     msgClassSock*      pmon_pulse_sock;
@@ -166,6 +189,9 @@ int  hbs_refresh_pids    ( std::list<procList> & proc_list );
 int  hbs_process_monitor ( std::list<procList> & pmon_list );
 int  hbs_self_recovery   ( unsigned int cmd );
 
+/* returns this controller's number ; 0 or 1 */
+unsigned int hbs_get_controller_number ( void );
+
 /* Setup the pulse messaging interfaces
  * 'p' is a boot that indicates if the infrastructure network is provisioned
  * 'p' = true means it is provisioned */
@@ -183,6 +209,93 @@ int  hbs_self_recovery   ( unsigned int cmd );
         } \
     } \
 }
+
+/*********** Common Heartbeat Utilities in hbsUtil.cpp ***************/
+
+/* module init */
+void   hbs_utils_init           ( void );
+
+/* network enum to name lookup */
+string hbs_cluster_network_name ( mtce_hbs_network_enum network );
+
+/* Produce formatted clog's that characterize current and changing cluster
+ * history for a given network. Each log is controller/network specific. */
+void   hbs_cluster_log          ( string & hostname, mtce_hbs_cluster_type & cluster, string prefix );
+
+/* Initialize the specified history array */
+void   hbs_cluster_history_init ( mtce_hbs_cluster_history_type & history );
+
+/* Clear all history in the cluster vault */
+void   hbs_cluster_history_clear( mtce_hbs_cluster_type & cluster );
+
+
+/******** Heartbeat Agent Cluster Functions in hbsCluster.cpp ********/
+
+/* Set the cluster vault to default state.
+ * Called upon daemon init or heartbeat period change. */
+void hbs_cluster_init ( unsigned short period );
+
+/* Calculate number of bytes that is unused in the cluster data structure.
+ * Primarily to know how many history elements are missing. */
+unsigned short hbs_cluster_unused_bytes ( void );
+
+/* Add and delete hosts from the monitored list.
+ * Automatically adjusts the numbers in the cluster vault. */
+void hbs_cluster_add  ( string & hostname );
+void hbs_cluster_del  ( string & hostname );
+
+/* Report status of storgate-0 */
+void hbs_cluster_storage0_status ( iface_enum iface , bool responding );
+
+/* Look for and clog changes in cluster state */
+int  hbs_cluster_cmp  ( hbs_message_type & msg );
+
+/* Manage the enabled state of the controllers */
+void hbs_manage_controller_state ( string & hostname, bool enabled );
+
+/* Set the number of monitored hosts and this controller's
+ * number in the cluster vault. */
+void hbs_cluster_nums ( unsigned short this_controller,
+                        unsigned short monitored_networks );
+
+/* Copy/Save the peer controller's cluster info from the hbsClient's
+ * pulse response into the cluster vault so its there and ready for
+ * an SM cluster_info request. */
+int  hbs_cluster_save (               string & hostname,
+                        mtce_hbs_network_enum  network,
+                            hbs_message_type & msg );
+
+/*
+ * Called by the hbsAgent pulse receiver to create a network specific
+ * history update entry consisting of
+ *
+ *  1. the number of monitored hosts
+ *  2. how many of those that responded in the last heartbeat period.
+ *  3. threshold storage-0 responding count and manage that state in that
+ *     networks history header.
+ */
+void hbs_cluster_update ( iface_enum iface,
+                          unsigned short not_responding_hosts,
+                          bool storage_0_responding );
+
+/* Called by the hbsAgent pulse transmitter to append this controllers
+ * running cluster view in the next multicast pulse request.
+ * The hbsClient is expected to loop this data and any other like data from
+ * the other controller back in its response. */
+void hbs_cluster_append ( hbs_message_type & msg );
+
+/* Produce formatted clog's that characterize current and changing cluster
+ * history for a given network. Each log is controller/network specific. */
+void hbs_cluster_log  ( string & hostname, string prefix );
+
+/* Service SM cluster info request */
+void hbs_sm_handler ( void );
+
+/* send the cluster vault to SM */
+void hbs_cluster_send ( msgClassSock * sm_client_sock, int reqid );
+
+/* print the contents of the vault */
+void hbs_cluster_dump ( mtce_hbs_cluster_type & vault );
 
 /**
  * @} hbs_base
