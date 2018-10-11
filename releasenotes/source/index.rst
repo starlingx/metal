@@ -5,3 +5,5 @@ stx-metal Release Notes
    :maxdepth: 2
 
    unreleased
+
+:ref:`search`

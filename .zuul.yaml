@@ -16,4 +16,6 @@
         - openstack-tox-pep8
     post:
       jobs:
+        - publish-stx-api-ref
         - publish-stx-tox
+        - publish-stx-releasenotes
