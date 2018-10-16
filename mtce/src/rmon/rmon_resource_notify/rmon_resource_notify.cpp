@@ -192,6 +192,8 @@ int main ( int argc, char *argv[] )
     memset(&type[0], 0, sizeof(type));
     memset(&device[0], 0, sizeof(device));
     memset(&volume_group[0], 0, sizeof(volume_group));
+    memset(&dynamic_res[0], 0, sizeof(dynamic_res));
+    memset(&resource_name[0], 0, sizeof(resource_name));
 
     fl.l_whence = SEEK_SET; 
     fl.l_start  = 0;        
