@@ -93,7 +93,7 @@
 #define FAIL_INVALID_DATA     (71)
 #define FAIL_BAD_STATE        (72)
 #define FAIL_KEY_VALUE_PARSE  (73)
-#define FAIL____UNUSED____74  (74)
+#define FAIL_DATA_SIZE        (74)
 #define FAIL_NOT_FOUND        (75)
 #define FAIL_WORKQ_TIMEOUT    (76)
 #define FAIL_HTTP_DELETE      (77)

@@ -41,6 +41,7 @@ using namespace std;
 #include "hbsBase.h"       /* Heartbeat Base Header File                 */
 #include "hbsAlarm.h"      /* for ... hbsAlarm_clear_all                 */
 #include "alarm.h"         /* for ... alarm send message to mtcalarmd    */
+#include "jsonUtil.h"      /* for ... jsonUtil_get_key_val            */
 
 /**************************************************************
  *            Implementation Structure
@@ -68,6 +69,8 @@ using namespace std;
 /* Number of back to back interface errors before the interface is re-initialized. */
 #define INTERFACE_ERRORS_FOR_REINIT (8)
 
+#define MAX_LEN 1000
+
 /* Historical String data for mem_logs */
 static string unexpected_pulse_list[MAX_IFACES] = { "" , "" } ;
 static string arrival_histogram[MAX_IFACES]     = { "" , "" } ;
@@ -89,6 +92,8 @@ int module_init ( void )
 {
    return (PASS);
 }
+
+static unsigned int controller_number = 0 ;
 
 void daemon_sigchld_hdlr ( void )
 {
@@ -184,14 +189,16 @@ void daemon_exit ( void )
                              CONFIG_AGENT_HBS_DEGRADE     |\
                              CONFIG_AGENT_HBS_FAILURE     |\
                              CONFIG_AGENT_MULTICAST       |\
-                             CONFIG_SCHED_PRIORITY  |\
+                             CONFIG_SCHED_PRIORITY        |\
                              CONFIG_MTC_TO_HBS_CMD_PORT   |\
                              CONFIG_HBS_TO_MTC_EVENT_PORT |\
                              CONFIG_AGENT_HBS_MGMNT_PORT  |\
                              CONFIG_AGENT_HBS_INFRA_PORT  |\
                              CONFIG_CLIENT_HBS_MGMNT_PORT |\
                              CONFIG_CLIENT_MTCALARM_PORT  |\
-                             CONFIG_CLIENT_HBS_INFRA_PORT )
+                             CONFIG_CLIENT_HBS_INFRA_PORT |\
+                             CONFIG_AGENT_SM_SERVER_PORT      |\
+                             CONFIG_AGENT_SM_CLIENT_PORT)
 
 /* Startup config read */
 static int hbs_config_handler ( void * user,
@@ -203,6 +210,8 @@ static int hbs_config_handler ( void * user,
 
     if (MATCH("agent", "heartbeat_period"))
     {
+        int curr_period = hbsInv.hbs_pulse_period ;
+
         config_ptr->hbs_pulse_period = atoi(value);
         hbsInv.hbs_pulse_period = atoi(value);
         hbsInv.hbs_state_change = true ;
@@ -227,9 +236,13 @@ static int hbs_config_handler ( void * user,
                 }
             }
         }
+        hbsInv.hbs_pulse_period_save = hbsInv.hbs_pulse_period ;
+        if ( curr_period != hbsInv.hbs_pulse_period )
+        {
+            /* initialize cluster info */
+            hbs_cluster_init ( hbsInv.hbs_pulse_period );
+        }
     }
-
-    hbsInv.hbs_pulse_period_save = hbsInv.hbs_pulse_period ;
 
     if (MATCH("agent", "hbs_minor_threshold"))
     {
@@ -311,6 +324,16 @@ static int hbs_config_handler ( void * user,
     {
         config_ptr->hbs_agent_mgmnt_port = atoi(value);
         config_ptr->mask |= CONFIG_AGENT_HBS_MGMNT_PORT ;
+    }
+    else if (MATCH("agent", "sm_server_port"))
+    {
+        config_ptr->sm_server_port = atoi(value);
+        config_ptr->mask |= CONFIG_AGENT_SM_SERVER_PORT ;
+    }
+    else if (MATCH("agent", "sm_client_port"))
+    {
+        config_ptr->sm_client_port = atoi(value);
+        config_ptr->mask |= CONFIG_AGENT_SM_CLIENT_PORT ;
     }
     else if (MATCH("client", "hbs_client_mgmnt_port"))
     {
@@ -617,6 +640,34 @@ int alarm_port_init ( void )
     return ( hbs_sock.alarm_sock->return_status ) ;
 }
 
+int hbs_sm_sockets_init ( void )
+{
+    int rc = PASS ;
+
+    /* Create an UDP RX Message Socket for SM Requests; LO interface only */
+    hbs_sock.sm_server_sock = new msgClassRx(LOOPBACK_IP, hbs_config.sm_server_port, IPPROTO_UDP);
+    if ( ! hbs_sock.sm_server_sock )
+    {
+        elog ("Failed to setup SM receive socket");
+        rc = FAIL_SOCKET_CREATE ;
+    }
+
+    /* Create an UDP TX Message Socket for SM Requests; LO interface only */
+    hbs_sock.sm_client_sock = new msgClassTx(LOOPBACK_IP, hbs_config.sm_client_port,IPPROTO_UDP);
+    if ( ! hbs_sock.sm_client_sock )
+    {
+        elog ("Failed to setup SM transmit socket");
+        rc = FAIL_SOCKET_CREATE ;
+    }
+
+    if ( rc == PASS )
+    {
+        hbs_sock.sm_server_sock->sock_ok(true);
+        hbs_sock.sm_client_sock->sock_ok(true);
+    }
+    return (rc);
+}
+
 /* Init the internal/local sockets ; the ones that will no change.
  * This way we don't miss add and start commands from maintenance. */
 
@@ -654,6 +705,9 @@ int hbs_int_socket_init ( void )
     {
         elog ("Alarm port setup or registration failed (rc:%d)\n", rc );
     }
+
+    rc = hbs_sm_sockets_init () ;
+
     return (rc);
 }
 
@@ -697,26 +751,36 @@ int hbs_pulse_request ( iface_enum iface,
                         string       hostname_clue,
                         unsigned int lookup_clue)
 {
-    int rc = PASS ;
-    #define MAX_LEN 1000
+#ifdef WANT_HBS_MEM_LOGS
     char str[MAX_LEN] ;
-
-    /* Add the sequence number */
-    hbs_sock.tx_mesg[iface].s = seq_num ;
-    memset ( &hbs_sock.tx_mesg[iface].m[HBS_HEADER_SIZE], 0, MAX_CHARS_HOSTNAME );
-    if (( lookup_clue ) &&
-        ( hostname_clue.length() <= MAX_CHARS_HOSTNAME ))
-    {
-        hbs_sock.tx_mesg[iface].c = lookup_clue ;
-        memcpy ( &hbs_sock.tx_mesg[iface].m[HBS_HEADER_SIZE],
-                  hostname_clue.data(),
-                  hostname_clue.length());
-    }
-    /* Message length is the size of the sequence number, the clue and the buffer */
-
-    int msg_len = (HBS_MAX_MSG+(sizeof(unsigned int)*2)) ;
+#endif
+    int bytes = 0 ;
     if ( hbs_sock.tx_sock[iface] )
     {
+        // int unused_networks = 0 ;
+        memset ( &hbs_sock.tx_mesg[iface].m[HBS_HEADER_SIZE], 0, MAX_CHARS_HOSTNAME );
+
+        /* Add message version - 0 -> 1 with the acction of cluster information */
+        hbs_sock.tx_mesg[iface].v = HBS_MESSAGE_VERSION ;
+
+        /* Add the sequence number */
+        hbs_sock.tx_mesg[iface].s = seq_num ;
+
+        if (( lookup_clue ) &&
+            ( hostname_clue.length() <= MAX_CHARS_HOSTNAME ))
+        {
+            hbs_sock.tx_mesg[iface].c = lookup_clue ;
+            memcpy ( &hbs_sock.tx_mesg[iface].m[HBS_HEADER_SIZE],
+                      hostname_clue.data(),
+                      hostname_clue.length());
+        }
+
+        /* Append the cluster info to the pulse request */
+        hbs_cluster_append(hbs_sock.tx_mesg[iface]) ;
+
+        /* Calculate the total message size */
+        bytes = sizeof(hbs_message_type)-hbs_cluster_unused_bytes();
+
 #ifdef WANT_FIT_TESTING
         if ( daemon_want_fit ( FIT_CODE__NO_PULSE_REQUEST, "any" , get_iface_name_str(iface) ) )
         {
@@ -727,14 +791,15 @@ int hbs_pulse_request ( iface_enum iface,
             goto hbs_pulse_request_out ;
         }
 #endif
-        if ( (rc = hbs_sock.tx_sock[iface]->write((char*)&hbs_sock.tx_mesg[iface], msg_len)) < 0 )
+
+        if ( (bytes = hbs_sock.tx_sock[iface]->write((char*)&hbs_sock.tx_mesg[iface], bytes)) < 0 )
         {
             elog("Failed to send Pulse request: %d:%s to %s.%d (rc:%i ; %d:%s)\n",
                          hbs_sock.tx_mesg[iface].s,
                          &hbs_sock.tx_mesg[iface].m[0],
                          hbs_sock.tx_sock[iface]->get_dst_addr()->toString(),
                          hbs_sock.tx_sock[iface]->get_dst_addr()->getPort(),
-                         rc, errno, strerror(errno) );
+                         bytes, errno, strerror(errno) );
             return (FAIL_SOCKET_SENDTO);
         }
     }
@@ -748,16 +813,17 @@ int hbs_pulse_request ( iface_enum iface,
 hbs_pulse_request_out:
 #endif
 
-    mlog1("%s Pulse Req: (%5d): %17s:%5d: %d:%d:%x:%s\n",
-              get_iface_name_str(iface), rc,
+    mlog("%s Pulse Req: (%5d): %17s:%5d: %d:%d:%d:%x:%s\n",
+              get_iface_name_str(iface), bytes,
               hbs_sock.tx_sock[iface]->get_dst_addr()->toString(),
               hbs_sock.tx_sock[iface]->get_dst_addr()->getPort(),
+                hbs_sock.tx_mesg[iface].v,
                 hbs_sock.tx_mesg[iface].s,
                 hbs_sock.tx_mesg[iface].c,
                 hbs_sock.tx_mesg[iface].f,
                 hbs_sock.tx_mesg[iface].m);
 
-
+#ifdef WANT_HBS_MEM_LOGS
     snprintf ( &str[0], MAX_LEN, "%s Pulse Req: %17s:%5d: %u:%u:%s\n",
             get_iface_name_str(iface),
             hbs_sock.tx_sock[iface]->get_dst_addr()->toString(),
@@ -766,6 +832,7 @@ hbs_pulse_request_out:
             hbs_sock.tx_mesg[iface].c,
             hbs_sock.tx_mesg[iface].m);
     mem_log (&str[0]);
+#endif
 
     return (PASS);
 }
@@ -785,7 +852,7 @@ string get_hostname_from_pulse ( char * msg_ptr )
 
 int _pulse_receive ( iface_enum iface , unsigned int seq_num )
 {
-    int n = 0 ;
+    int bytes = 0 ;
 
     int detected_pulses = 0 ;
 
@@ -796,7 +863,7 @@ int _pulse_receive ( iface_enum iface , unsigned int seq_num )
     do
     {
         /* Clean the receive buffer */
-        memset ( hbs_sock.rx_mesg[iface].m, 0, HBS_MAX_MSG );
+        memset ( hbs_sock.rx_mesg[iface].m, 0, sizeof(hbs_message_type) );
         hbs_sock.rx_mesg[iface].s = 0 ;
         hbs_sock.rx_mesg[iface].c = 0 ;
         if ( hbs_sock.rx_sock[iface] == NULL )
@@ -804,10 +871,10 @@ int _pulse_receive ( iface_enum iface , unsigned int seq_num )
             elog ("%s cannot receive pulses - null object\n", get_iface_name_str(iface) );
             return (0);
         }
-        if ( (n = hbs_sock.rx_sock[iface]->read((char*)&hbs_sock.rx_mesg[iface], sizeof(hbs_message_type))) != -1 )
+        if ( (bytes = hbs_sock.rx_sock[iface]->read((char*)&hbs_sock.rx_mesg[iface], sizeof(hbs_message_type))) != -1 )
         {
            mlog1 ("%s Pulse Rsp: (%5d): %17s:%5d: %d:%d:%x:%s\n",
-                       get_iface_name_str(iface), n,
+                       get_iface_name_str(iface), bytes,
                        hbs_sock.rx_sock[iface]->get_dst_addr()->toString(),
                        hbs_sock.rx_sock[iface]->get_dst_addr()->getPort(),
                        hbs_sock.rx_mesg[iface].s,
@@ -839,7 +906,7 @@ int _pulse_receive ( iface_enum iface , unsigned int seq_num )
                 }
 #endif
 
-                mlog ("%s Pulse Rsp from (%s)\n", get_iface_name_str(iface), hostname.c_str());
+                // mlog ("%s Pulse Rsp from (%s)\n", get_iface_name_str(iface), hostname.c_str());
                 if ( !hostname.compare("localhost") )
                 {
                     mlog3 ("%s Pulse Rsp (local): %17s:%5d: %d:%d:%x:%s\n",
@@ -868,7 +935,6 @@ int _pulse_receive ( iface_enum iface , unsigned int seq_num )
                 {
                     if ( hbsInv.monitored_pulse ( hostname , iface ) == true )
                     {
-                        #define MAX_LEN 1000
                         char str[MAX_LEN] ;
                         string extra = "Rsp" ;
 
@@ -880,25 +946,42 @@ int _pulse_receive ( iface_enum iface , unsigned int seq_num )
                         {
                             rc = hbsInv.remove_pulse ( hostname, iface, hbs_sock.rx_mesg[iface].c, hbs_sock.rx_mesg[iface].f ) ;
                         }
-                        snprintf  (&str[0], MAX_LEN, "%s Pulse %s: (%5d): %17s:%5d: %u:%u:%x:%s\n",
-                                    get_iface_name_str(iface), extra.c_str(), n,
+                        snprintf  (&str[0], MAX_LEN, "%s Pulse %s: (%5d): %s:%d: %u:%u:%x:%s\n",
+                                    get_iface_name_str(iface), extra.c_str(), bytes,
                                     hbs_sock.rx_sock[iface]->get_dst_addr()->toString(),
                                     hbs_sock.rx_sock[iface]->get_dst_addr()->getPort(),
                                     hbs_sock.rx_mesg[iface].s,
                                     hbs_sock.rx_mesg[iface].c,
                                     hbs_sock.rx_mesg[iface].f,
                                     hbs_sock.rx_mesg[iface].m);
-                        mlog1 ("%s", &str[0]);
+                        mlog ("%s", &str[0]);
+#ifdef WANT_HBS_MEM_LOGS
                         mem_log (str);
+#endif
                         if ( extra.empty())
                         {
                             detected_pulses++ ;
+                        }
+                        /* don't save data from self */
+                        if ( hostname != hbsInv.my_hostname )
+                        {
+                            if (  hbs_sock.rx_mesg[iface].v >= HBS_MESSAGE_VERSION )
+                            {
+                                if ( iface == MGMNT_IFACE )
+                                    hbs_cluster_save ( hostname, MTCE_HBS_NETWORK_MGMT , hbs_sock.rx_mesg[iface]);
+                                else
+                                    hbs_cluster_save ( hostname, MTCE_HBS_NETWORK_INFRA , hbs_sock.rx_mesg[iface]);
+                            }
+                        }
+                        else
+                        {
+ilog ("skipping my hostname");
                         }
                     }
                     else
                     {
                         mlog3 ("%s Pulse Dis: (%5d): %17s:%5d: %d:%d:%x:%s\n",
-                                  get_iface_name_str(iface), n,
+                                  get_iface_name_str(iface), bytes,
                                   hbs_sock.rx_sock[iface]->get_dst_addr()->toString(),
                                   hbs_sock.rx_sock[iface]->get_dst_addr()->getPort(),
                                   hbs_sock.rx_mesg[iface].s,
@@ -934,7 +1017,7 @@ int _pulse_receive ( iface_enum iface , unsigned int seq_num )
                                   hbs_sock.rx_mesg[iface].m) ;
             }
         }
-    } while ( n > 0 ) ;
+    } while ( bytes > 0 ) ;
     monitor_scheduling ( after_rx_time, before_rx_time, detected_pulses, SCHED_MONITOR__RECEIVER );
     return (detected_pulses);
 }
@@ -951,6 +1034,8 @@ int send_event ( string & hostname, unsigned int event_cmd, iface_enum iface )
     if ( event_cmd == MTC_EVENT_HEARTBEAT_LOSS )
     {
         daemon_dump_membuf_banner ();
+        hbsInv.print_node_info ();
+        hbs_cluster_log( hbsInv.my_hostname, "event");
         daemon_dump_membuf ();
         snprintf ( &event.hdr[0] , MSG_HEADER_SIZE, "%s", get_heartbeat_loss_header());
     }
@@ -1038,6 +1123,9 @@ int daemon_init ( string iface, string nodetype )
     /* Initialize the hbs control struct */
     MEMSET_ZERO ( hbs_ctrl );
 
+    /* init the utility module */
+    hbs_utils_init ();
+
     /* initialize the timer */
     mtcTimer_init ( hbsTimer, "controller", "heartbeat" );
 
@@ -1091,9 +1179,123 @@ int daemon_init ( string iface, string nodetype )
     return (rc);
 }
 
+/*****************************************************************************
+ *
+ * Name       : hbs_sm_handler
+ *
+ * Description: Try and receive a Service Management request from sm_server_sock
+ *
+ *              Expecting request in the following form:
+ *                   ~66 bytes with moderate spacing
+ *
+ *              {
+ *                  "origin" :"sm",
+ *                  "service":"heartbeat",
+ *                  "request":"cluster_info"
+ *                  "req_id" : number
+ *              }
+ *
+ *              Successfully parsed request results in a call to
+ *              hbs_cluser_send which sends the latest snapshot of
+ *              the heartbeat cluser info to SM.
+ *
+ * Assumptions: log flooding is avoided.
+ *
+ * Returns    : Nothing
+ *
+ ****************************************************************************/
+static int _hbs_sm_handler_log_throttle = 0 ;
+void hbs_sm_handler ( void )
+{
+    #define _MAX_MSG_LEN           (80)
+    #define _MAX_LOG_CNT         (1000)
+
+    #define PRIMARY_LABEL      "origin"
+    #define SERVICE_LABEL     "service"
+    #define REQUEST_LABEL     "request"
+    #define REQID_LABEL       "reqid"
+
+    #define SUPPORTED_ORIGIN  "sm"
+    #define SUPPERTED_SERVICE "heartbeat"
+    #define SUPPORTED_REQUEST "cluster_info"
+
+    char sm_mesg[_MAX_MSG_LEN] ;
+    MEMSET_ZERO(sm_mesg);
+    int bytes = hbs_sock.sm_server_sock->read((char*)&sm_mesg, _MAX_MSG_LEN);
+    if ( bytes )
+    {
+        /* Expecting request in the following form:
+         * { "origin":"sm" ... } */
+        if ( sm_mesg[0] == '{' )
+        {
+            int reqid = 0 ;
+            string origin  = "" ;
+            string service = "" ;
+            string request = "" ;
+            if ( jsonUtil_get_key_val ( sm_mesg, PRIMARY_LABEL, origin ) != PASS )
+            {
+                 wlog_throttled ( _hbs_sm_handler_log_throttle, _MAX_LOG_CNT,
+                                  "missing primary label 'origin' in request.");
+            }
+            else if (( origin == SUPPORTED_ORIGIN ) &&
+                     ( jsonUtil_get_key_val ( sm_mesg, SERVICE_LABEL, service ) == PASS ) &&
+                     ( jsonUtil_get_key_val ( sm_mesg, REQUEST_LABEL, request ) == PASS ) &&
+                     ( jsonUtil_get_key_val_int ( sm_mesg, REQID_LABEL, reqid ) == PASS ))
+            {
+                if (( service == SUPPERTED_SERVICE ) &&
+                    ( request == SUPPORTED_REQUEST ))
+                {
+                    /* success path ... */
+                    hbs_cluster_send( hbs_sock.sm_client_sock, reqid );
+
+                    /* reset log throttle */
+                   _hbs_sm_handler_log_throttle = 0 ;
+                }
+                else
+                {
+                    wlog_throttled ( _hbs_sm_handler_log_throttle, _MAX_LOG_CNT,
+                                     "missing service or request labels in request.");
+                }
+            }
+            else
+            {
+                wlog_throttled ( _hbs_sm_handler_log_throttle, _MAX_LOG_CNT,
+                                 "failed to parse one or more request labels.");
+            }
+        }
+        else
+        {
+            wlog_throttled ( _hbs_sm_handler_log_throttle, _MAX_LOG_CNT,
+                             "improperly formatted json string request.");
+        }
+    }
+    else if ( bytes == -1 )
+    {
+        wlog_throttled ( _hbs_sm_handler_log_throttle, _MAX_LOG_CNT,
+                         "message receive error (%d:%s)",
+                         errno, strerror(errno));
+    }
+    else
+    {
+        wlog_throttled ( _hbs_sm_handler_log_throttle, _MAX_LOG_CNT,
+                         "unknown error Error (rc:%d)", bytes );
+    }
+    dlog ("... %s", sm_mesg );
+}
+
+/****************************************************************************
+ *
+ * Name       : daemon_service_run
+ *
+ * Description: Daemon's main loop
+ *
+ ***************************************************************************/
+
 void daemon_service_run ( void )
 {
+#ifdef WANT_HBS_MEM_LOGS
     int exp_pulses[MAX_IFACES] ;
+#endif
     int rc = PASS ;
     int counter = 0 ;
     int  goenabled_wait_log_throttle = 0 ;
@@ -1154,6 +1356,8 @@ void daemon_service_run ( void )
         daemon_exit ();
     }
 
+    /* set this controller as provisioned */
+    hbs_manage_controller_state ( hbsInv.my_hostname , true );
 
     /* CGTS 4114: Small Footprint: Alarm 200.005 remains active after connectivity restored
      *
@@ -1194,6 +1398,16 @@ void daemon_service_run ( void )
 
     /* enable the base level signal handler latency monitor */
     daemon_latency_monitor (true);
+
+    /* load this controller index number - used for cluster stuff */
+    if ( hbsInv.my_hostname == CONTROLLER_0 )
+        controller_number = 0 ;
+    else
+        controller_number = 1 ;
+
+    /* tell the cluster which controller this is and
+     * how many networks are being monitored */
+    hbs_cluster_nums (controller_number,hbsInv.infra_network_provisioned ?2:1);
 
     /* Run heartbeat service forever or until stop condition */
     for ( hbsTimer.ring = false ; ; )
@@ -1315,6 +1529,14 @@ void daemon_service_run ( void )
             FD_SET(hbs_sock.mtc_to_hbs_sock->getFD(), &hbs_sock.readfds);
         }
 
+        /* Add the sm request receiver to the select list */
+        if (( hbs_sock.sm_server_sock  ) &&
+            ( hbs_sock.sm_server_sock->getFD()))
+        {
+            socks.push_front (hbs_sock.sm_server_sock->getFD());
+            FD_SET(hbs_sock.sm_server_sock->getFD(), &hbs_sock.readfds);
+        }
+
         /* Add the netlink event listener to the select list */
         if ( hbs_sock.netlink_sock )
         {
@@ -1379,6 +1601,11 @@ void daemon_service_run ( void )
                 hbs_sock.fired[INFRA_INTERFACE] = true ;
             }
 
+            if ((hbs_sock.sm_server_sock != NULL ) &&
+                ( FD_ISSET(hbs_sock.sm_server_sock->getFD(), &hbs_sock.readfds)))
+            {
+                hbs_sm_handler();
+            }
             if ((hbs_sock.mtc_to_hbs_sock != NULL ) &&
                 ( FD_ISSET(hbs_sock.mtc_to_hbs_sock->getFD(), &hbs_sock.readfds)))
             {
@@ -1404,7 +1631,7 @@ void daemon_service_run ( void )
                             inv.nodetype = msg.parm[0];
                             hbsInv.add_heartbeat_host ( inv ) ;
                             hostname_inventory.push_back ( hostname );
-                            ilog ("%s added to heartbeat service (%d)\n", hostname.c_str(), inv.nodetype );
+                            ilog ("%s added to heartbeat service (%d)\n", hostname.c_str(), msg.parm[0] );
 
                             /* clear any outstanding alarms on the ADD */
                             if ( hbsInv.hbs_failure_action != HBS_FAILURE_ACTION__NONE )
@@ -1415,10 +1642,7 @@ void daemon_service_run ( void )
                         }
                         else if ( msg.cmd == MTC_CMD_DEL_HOST )
                         {
-                            for ( int iface = 0 ; iface < MAX_IFACES ; iface++ )
-                            {
-                                hbsInv.mon_host ( hostname, (iface_enum)iface, false, false );
-                            }
+                            hbsInv.mon_host ( hostname, false, false );
                             hostname_inventory.remove ( hostname );
                             hbsInv.del_host ( hostname );
                             ilog ("%s deleted from heartbeat service\n", hostname.c_str());
@@ -1432,27 +1656,24 @@ void daemon_service_run ( void )
                         }
                         else if ( msg.cmd == MTC_CMD_STOP_HOST )
                         {
-                            for ( int iface = 0 ; iface < MAX_IFACES ; iface++ )
-                            {
-                                hbsInv.mon_host ( hostname, (iface_enum)iface, false, true );
-                            }
-                            ilog ("%s stopping heartbeat service\n", hostname.c_str());
+                            hbsInv.mon_host ( hostname, false, true );
+                            hbs_cluster_del ( hostname );
+
+                            ilog ("%s stopping heartbeat service\n",
+                                      hostname.c_str());
                         }
                         else if ( msg.cmd == MTC_CMD_START_HOST )
                         {
-                            for ( int iface = 0 ; iface < MAX_IFACES ; iface++ )
-                            {
-                                hbsInv.mon_host ( hostname, (iface_enum)iface, true, true );
-                            }
-                            ilog ("%s starting heartbeat service\n", hostname.c_str());
+                            hbsInv.mon_host ( hostname, true, true );
+                            hbs_cluster_add ( hostname );
+
+                            ilog ("%s starting heartbeat service\n",
+                                      hostname.c_str());
                         }
                         else if ( msg.cmd == MTC_RESTART_HBS )
                         {
-                            for ( int iface = 0 ; iface < MAX_IFACES ; iface++ )
-                            {
-                                hbsInv.mon_host ( hostname, (iface_enum)iface, false, false );
-                                hbsInv.mon_host ( hostname, (iface_enum)iface, true, false  );
-                            }
+                            hbsInv.mon_host ( hostname, false, false );
+                            hbsInv.mon_host ( hostname, true, false  );
                             ilog ("%s restarting heartbeat service\n", hostname.c_str());
                             hbsInv.print_node_info();
                         }
@@ -1616,7 +1837,9 @@ void daemon_service_run ( void )
                 int    rri = 0  ;
                 string lf  = "\n" ;
 
+#ifdef WANT_HBS_MEM_LOGS
                 mem_log ((char*)lf.data());
+#endif
 
                 /* Get the next Resource Reference Identifier
                  * and its Resourvce Identifier. These values
@@ -1630,7 +1853,9 @@ void daemon_service_run ( void )
                     if (( iface == INFRA_IFACE ) && ( hbsInv.infra_network_provisioned == false ))
                         continue ;
 
+#ifdef WANT_HBS_MEM_LOGS
                     exp_pulses[iface] =
+#endif
                     hbsInv.hbs_expected_pulses[iface] =
                     hbsInv.create_pulse_list((iface_enum)iface);
 
@@ -1759,28 +1984,33 @@ void daemon_service_run ( void )
                 if (( iface == INFRA_IFACE ) && ( hbsInv.infra_network_provisioned != true ))
                     continue ;
 
-                #define MAX_LEN 1000
+#ifdef WANT_HBS_MEM_LOGS
                 char str[MAX_LEN] ;
-
                 snprintf (&str[0], MAX_LEN, "%s Histogram: %d - %s\n",
                            get_iface_name_str(iface),
                            exp_pulses[iface],
                            arrival_histogram[iface].c_str());
-
                 mem_log (str);
-
                 if ( !unexpected_pulse_list[iface].empty() )
                 {
                      snprintf ( &str[0], MAX_LEN, "%s Others   : %s\n",
                                 get_iface_name_str(iface),
                                 unexpected_pulse_list[iface].c_str());
-
                      mem_log(str);
                 }
-                hbsInv.lost_pulses ( (iface_enum)iface );
+#endif
+                /*
+                 * Assume storage-0 is responding until otherwise proven
+                 * its not. Keep in mind that the 'lost_pulses' interface
+                 * only counts nodes that have not responded.
+                 */
+                bool storage_0_responding = true ;
+                int lost = hbsInv.lost_pulses ((iface_enum)iface, storage_0_responding);
+                hbs_cluster_update ((iface_enum)iface, lost, storage_0_responding);
             }
             hbsTimer.ring = false ;
             heartbeat_request = true ;
+            // hbs_cluster_log ( hbsInv.my_hostname, "->") ;
             seq_num++ ;
         }
         daemon_load_fit ();
@@ -1796,7 +2026,9 @@ void daemon_dump_info ( void )
     hbsInv.print_node_info ();
     hbsInv.memDumpAllState ();
 
+#ifdef WANT_HBS_MEM_LOGS
     daemon_dump_membuf (); /* write mem_logs to log file and clear log list */
+#endif
 }
 
 const char MY_DATA [100] = { "eieio\n" } ;

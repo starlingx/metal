@@ -267,7 +267,7 @@ bool is_goenabled ( int nodeType, bool pass )
     return daemon_is_file_present ( file );
 }
 
-#define LOG_MEMORY(buf) ilog ("%s", buf ); \
+#define LOG_MEMORY(buf) syslog ( LOG_INFO, "%s", buf ); \
                         buf_ptr = &buf[0]; \
                         MEMSET_ZERO ( buf );
 
@@ -279,7 +279,7 @@ void dump_memory ( void * raw_ptr , int format, size_t bytes )
     char buf[0x1024] ;
     char * buf_ptr = &buf[0];
     MEMSET_ZERO ( buf );
-    ilog ("Dumping Memory:\n");
+    syslog ( LOG_INFO, "Dumping Memory: %ld bytes", bytes );
     if ( format == 4 )
     {
         int loops = bytes/format ;
@@ -294,7 +294,6 @@ void dump_memory ( void * raw_ptr , int format, size_t bytes )
                     buf_ptr += sprintf ( buf_ptr, "%c", *byte_ptr) ;
                 else
                     buf_ptr += sprintf ( buf_ptr, "%c", '.');
-                
                 byte_ptr++ ;
             }
             LOG_MEMORY(buf);
@@ -315,7 +314,6 @@ void dump_memory ( void * raw_ptr , int format, size_t bytes )
                     buf_ptr += sprintf ( buf_ptr , "%c", *byte_ptr) ;
                 else
                     buf_ptr += sprintf ( buf_ptr , "%c", '.');
-                
                 byte_ptr++ ;
             }
             LOG_MEMORY(buf);
@@ -336,21 +334,12 @@ void dump_memory ( void * raw_ptr , int format, size_t bytes )
                     buf_ptr += sprintf ( buf_ptr , "%c", *byte_ptr) ;
                 else
                     buf_ptr += sprintf ( buf_ptr , "%c", '.');
-                
                 byte_ptr++ ;
             }
             LOG_MEMORY(buf);
             word_ptr += 4 ;
         }
     }
-    byte_ptr = (uint8_t*)raw_ptr ;
-    ilog ("Raw Hex Dump : %ld\n", bytes );
-    for ( unsigned int x = 0 ; x < bytes ; x++ )
-    {
-        buf_ptr += sprintf ( buf_ptr, " %02x", *byte_ptr );
-        byte_ptr++ ;
-    }
-    // printf ("\n\n");
 }
 
 

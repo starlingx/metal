@@ -207,7 +207,7 @@ int daemon_run_testhead ( void );
 #define CONFIG_AGENT_INV_PORT        0x00000100 /**< Inventory Port Number     */
 #define CONFIG_AGENT_HA_PORT         0x00000200 /**< HA Framework Port Number  */
 #define CONFIG_CLIENT_MTCALARM_PORT  0x00000400 /**< Send alarm requests to    */
-#define CONFIG_RESERVED_800          0x00000800 /**<                           */
+#define CONFIG_AGENT_SM_CLIENT_PORT  0x00000800 /**< Port to Send SM data on   */
 #define CONFIG_MTC_TO_HWMON_CMD_PORT 0x00001000 /**< HWmon Port Number         */
 #define CONFIG_AGENT_KEY_PORT        0x00002000 /**< Keystone HTTP port        */
 #define CONFIG_AGENT_HBS_MTC_PORT    0x00004000 /**< Heartbeat Service Port    */
@@ -217,8 +217,8 @@ int daemon_run_testhead ( void );
 #define CONFIG_AGENT_MTC_MGMNT_PORT  0x00040000 /**< Agent Infr network port   */
 #define CONFIG_AGENT_TOKEN_REFRESH   0x00080000 /**< Token refresh rate mask   */
 #define CONFIG_CLIENT_MTC_INFRA_PORT 0x00100000 /**< Client Infra nwk mtc port */
-#define CONFIG_CLIENT_MTC_MGMNT_PORT 0x00200000 /**< Client mgmnt nwk mtc port */ 
-#define CONFIG_AGENT_VIM_CMD_PORT    0x00400000 /**< VIM Command Port Mask     */
+#define CONFIG_CLIENT_MTC_MGMNT_PORT 0x00200000 /**< Client mgmnt nwk mtc port */
+#define CONFIG_AGENT_SM_SERVER_PORT  0x00400000 /**< Port to RX data from SM   */
 #define CONFIG_CLIENT_HBS_INFRA_PORT 0x00800000 /**< Infrastructure ntwk Port  */
 #define CONFIG_CLIENT_HBS_MGMNT_PORT 0x01000000 /**< Management network Port   */
 #define CONFIG_CLIENT_HBS_EVENT_PORT 0x02000000 /**< Heartbeat Event Messaging */

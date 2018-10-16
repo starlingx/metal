@@ -90,6 +90,15 @@ of spec operating conditions that can reduce outage time through automated
 notification and recovery thereby improving overall platform availability
 for the customer.
 
+%package -n mtce-dev
+Summary: Titanuim Server Maintenance Software Development Package
+Group: base
+Provides: mtce-dev = %{version}-%{release}
+
+%description -n mtce-dev
+Titanuim Cloud Maintenance. This package contains header files,
+and related items necessary for software development.
+
 %package -n mtce-pmon
 Summary: Titanuim Server Maintenance Process Monitor Package
 Group: base
@@ -424,6 +433,9 @@ install -m 644 -p -D %{_buildsubdir}/fsmon/scripts/fsmon.logrotate %{buildroot}%
 install -m 644 -p -D %{_buildsubdir}/hwmon/scripts/hwmon.logrotate %{buildroot}%{local_etc_logrotated}/hwmon.logrotate
 install -m 644 -p -D %{_buildsubdir}/alarm/scripts/mtcalarm.logrotate %{buildroot}%{local_etc_logrotated}/mtcalarm.logrotate
 
+# software development files
+install -m 644 -p -D %{_buildsubdir}/heartbeat/mtceHbsCluster.h %{buildroot}/%{_includedir}/mtceHbsCluster.h
+
 install -m 755 -p -D %{_buildsubdir}/public/libamon.so.$MAJOR %{buildroot}%{_libdir}/libamon.so.$MAJOR
 cd %{buildroot}%{_libdir} ; ln -s libamon.so.$MAJOR libamon.so.$MAJOR.$MINOR
 cd %{buildroot}%{_libdir} ; ln -s libamon.so.$MAJOR libamon.so
@@ -621,3 +633,10 @@ install -m 755 -d %{buildroot}/var/run
 %{_sysconfdir}/init.d/hostw
 %{local_bindir}/hostwd
 
+###############################
+# Maintenance Software Development RPM
+###############################
+%files -n mtce-dev
+%defattr(-,root,root,-)
+
+%{_includedir}/mtceHbsCluster.h

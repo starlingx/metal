@@ -69,6 +69,10 @@ int jsonUtil_get_key_val ( char   * json_str_ptr,
                               string   key, 
                               string & value );
 
+int jsonUtil_get_key_val_int ( char   * json_str_ptr,
+                               string   key,
+                               int    & value );
+
 /** Submit a request to get an authorization token and nova URL */
 int jsonApi_auth_request ( string & hostname, string & payload );
 
