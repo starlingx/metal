@@ -18,9 +18,9 @@ cgcs-dpdk-rt-dev
 cgcs-dpdk-staticdev
 cgcs-dpdk-rt-staticdev
 cgcs-dpdk-rt-apps
-cgts-mtce-compute
-cgts-mtce-storage
-cgts-mtce-common-guestServer
+mtce-compute
+mtce-storage
+mtce-guestServer
 host-guest-comm
 host-guest-comm-dev
 nfscheck

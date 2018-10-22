@@ -1,9 +1,6 @@
-%define local_etc_pmond      /%{_sysconfdir}/pmond.d
-%define local_etc_goenabledd /%{_sysconfdir}/goenabled.d
-
 %define debug_package %{nil}
 
-Name: cgts-mtce-control
+Name: mtce-control
 Version: 1.0
 Release: %{tis_patch_ver}%{?_tis_dist}
 Summary: Titanium Cloud Platform Controller Node Maintenance Package
@@ -14,8 +11,6 @@ Packager: Wind River <info@windriver.com>
 URL: unknown
 
 Source0: %{name}-%{version}.tar.gz
-Source1: goenabled
-Source2: LICENSE
 
 BuildRequires: systemd
 BuildRequires: systemd-devel
@@ -33,15 +28,7 @@ Maintenance support files for controller-only node type
 %build
 
 %install
-
-install -m 755 -d %{buildroot}%{local_etc}
-
-# Controller-Only Process Monitor Config files
-install -m 755 -d %{buildroot}%{local_etc_pmond}
-
-# Controller-Only Go Enabled Test
-install -m 755 -d                %{buildroot}%{local_etc_goenabledd}
-
+make install buildroot=%{buildroot} _sysconfdir=%{_sysconfdir} _unitdir=%{_unitdir} _datarootdir=%{_datarootdir}
 
 %post
 if [ $1 -eq 1 ] ; then
@@ -53,6 +40,8 @@ exit 0
 %files
 %license LICENSE
 %defattr(-,root,root,-)
+%{_sysconfdir}/init.d/goenabledControl
+%{_datarootdir}/licenses/mtce-control-1.0/LICENSE
 
 %clean
 rm -rf $RPM_BUILD_ROOT

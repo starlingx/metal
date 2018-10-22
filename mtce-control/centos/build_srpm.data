@@ -1,4 +1,4 @@
-SRC_DIR="$PKG_BASE/cgts-mtce-control-1.0/scripts"
+SRC_DIR="$PKG_BASE/src"
 COPY_LIST="$SRC_DIR/* \
            $PKG_BASE/LICENSE"
-TIS_PATCH_VER=4
+TIS_PATCH_VER=5

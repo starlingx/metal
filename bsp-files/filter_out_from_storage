@@ -15,10 +15,10 @@ cgcs-dpdk-rt-apps
 cgts-client
 cgts-client-bash-completion
 cgcs-patch-controller
-cgts-mtce-compute
-cgts-mtce-control
-cgts-mtce-common-guestServer
-cgts-mtce-common-guestAgent
+mtce-compute
+mtce-control
+mtce-guestServer
+mtce-guestAgent
 cgtssys
 cinder
 cinder-api

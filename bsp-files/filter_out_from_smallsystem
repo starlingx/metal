@@ -1,6 +1,6 @@
 cgcs-dpdk-rt
 cgcs-dpdk-rt-apps
-cgts-mtce-storage
+mtce-storage
 computeconfig-standalone
 kernel-module-openvswitch
 platform-util-noncontroller

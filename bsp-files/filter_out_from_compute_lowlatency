@@ -11,9 +11,9 @@ cgcs-dpdk-apps
 cgts-client
 cgts-client-bash-completion
 cgcs-patch-controller
-cgts-mtce-control
-cgts-mtce-storage
-cgts-mtce-common-guestAgent
+mtce-control
+mtce-storage
+mtce-guestAgent
 cgtssys
 cinder
 cinder-api
