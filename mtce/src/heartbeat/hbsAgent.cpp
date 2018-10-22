@@ -2059,6 +2059,8 @@ int daemon_run_testhead ( void )
         else
            PASSED ;
     }
+    free(hbsInv_testhead_ptr);
+
     printf  (TESTHEAD_BAR);
     printf  ("| Heartbeat Service Test Head\n");
     printf  (TESTHEAD_BAR);

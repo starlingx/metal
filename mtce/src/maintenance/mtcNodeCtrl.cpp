@@ -1590,6 +1590,7 @@ int daemon_run_testhead ( void )
         else
            PASSED ;
     }
+    free(mtcInv_testhead_ptr);
 
     printf  (TESTHEAD_BAR);
     printf  ("| Maintenance Timer Test Head\n");
