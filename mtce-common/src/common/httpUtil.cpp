@@ -761,11 +761,6 @@ int httpUtil_api_request ( libEvent & event )
     {
         ;
     }
-
-    else if ( TEST_WITH_NO_TOKEN )
-    {
-        ;
-    }
     else
     {
         slog ("%s Unsupported Request (%d)\n", event.hostname.c_str(), event.request);

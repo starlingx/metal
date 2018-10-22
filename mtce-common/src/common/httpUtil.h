@@ -158,9 +158,6 @@ typedef enum {
     KEYSTONE_GET_SERVICE_LIST,
     KEYSTONE_GET_ENDPOINT_LIST,
 
-    TEST_WITH_NO_TOKEN,
-    TEST_WITH_TOKEN,
-
     SERVICE_LAST
 } libEvent_enum ;
 

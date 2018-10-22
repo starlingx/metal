@@ -777,7 +777,16 @@ string get_shadow_signature ( char * shadowfile , const char * username,
                     continue;
                 }
 
-                char shadowEntry[BUFFER] = {0};
+                /* at max, both password[] and aging[] include BUFFER chars (BUFFER-1 
+                 * meaningful chars and one "\0" as tail). when they are combined with
+                 * ":" and put into shadowEntry by snprintf (..., "%s:%s", ...), 
+                 * shadowEntry has 2 chars (":" + "\0") at least and BUFFER*2 chars at most:
+                 *     BUFFER-1 chars copied from password
+                 *     ":"
+                 *     BUFFER-1 chars copied from aging, and 
+                 *     one tail "\0"
+                 */
+                char shadowEntry[BUFFER*2] = {0};
                 snprintf (shadowEntry, sizeof(shadowEntry), 
                           "%s:%s", password, aging);
 
@@ -930,8 +939,10 @@ void daemon_rename_file ( const char * path, const char * old_filename, const ch
 
 void daemon_remove_pidfile ( void )
 {
-    char str [64] ;
-    sprintf (str, "rm -f %s", pid_filename );
+    const char* cmd_str = "rm -f ";
+    size_t cmd_len = sizeof(cmd_str);
+    char str [MAX_FILENAME_LEN+cmd_len] ;
+    snprintf (str, sizeof(str), "rm -f %s", pid_filename);
     int rc = system (str);
     if ( rc )
     {
