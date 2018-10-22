@@ -47,7 +47,7 @@ REASONS=$(virt-host-validate qemu 2>/dev/null | grep -w -e FAIL)
 # - on emulated systems such as VirtualBox or QEMU, vmx is not required
 # - if vmx is enabled on QEMU, it can also support nested virtualization
 
-if [ "${host_type}" = "physical" ] && [ "${hardware_virt_supported}" == "false" ]; then
+if [ "${host_type}" == "physical" ] && [ "${hardware_virt_supported}" == "false" ]; then
     LOG "Virtualization is not supported: ${OPTS}.  Failing goenabled check."
     LOG "Failure reasons:"$'\n'"${REASONS}"
     exit 1
