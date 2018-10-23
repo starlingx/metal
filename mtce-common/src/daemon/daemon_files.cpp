@@ -784,6 +784,7 @@ string get_shadow_signature ( char * shadowfile , const char * username,
                 int ret = snprintf(shadowinfo, infolen, "%s", shadowEntry);
                 if (ret >= (int)infolen)
                 {
+                    fclose(file_ptr);
                     elog("insufficient space in shadow buffer(%d) for %d bytes\n",
                          (int)infolen, ret);
                     return ( "" );

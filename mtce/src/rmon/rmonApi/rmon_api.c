@@ -328,8 +328,8 @@ int add_rmon_client ( const char * process_name_ptr, int port , const char * reg
                     fprintf(pFile, "%s\n", rmon.rmon_rx_buf);
                     // release write lock
                     flock(fileno(pFile), LOCK_UN);
-                    fclose(pFile);
                 }
+                fclose(pFile);
             }
             else
             {
@@ -442,8 +442,8 @@ int remove_rmon_client( const char * process_name_ptr, int socket )
                 fprintf(pFile, "%s\n", rmon.rmon_rx_buf);
                 // release the lock
                 flock(fileno(pFile), LOCK_UN);
-                fclose(pFile);
             }
+            fclose(pFile);
         } else {
             syslog (LOG_ERR, "Failed to open '%s'\n",
                     RMON_API_DEREG_DIR );
