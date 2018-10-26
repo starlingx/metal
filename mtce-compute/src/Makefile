@@ -43,5 +43,5 @@ install:
 	install -m 644 -p -D scripts/$(SOURCE32) $(buildroot)/$(_unitdir)/e_nova-init.service
 	# for license
 	install -m 755 -d $(buildroot)/$(_datarootdir)/licenses/mtce-compute-1.0
-	install -p -D -m 600 scripts/$(SOURCE5) $(buildroot)/$(_datarootdir)/licenses/mtce-compute-1.0/LICENSE
+	install -p -D -m 600 $(SOURCE5) $(buildroot)/$(_datarootdir)/licenses/mtce-compute-1.0/LICENSE
 

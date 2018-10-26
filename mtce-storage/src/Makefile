@@ -21,5 +21,5 @@ install:
 	install -m 644 -p -D scripts/$(SOURCE2) $(buildroot)/$(_unitdir)/goenabled-storage.service
 	# for license
 	install -m 755 -d $(buildroot)/$(_datarootdir)/licenses/mtce-storage-1.0
-	install -p -D -m 600 scripts/$(SOURCE3) $(buildroot)/$(_datarootdir)/licenses/mtce-storage-1.0/LICENSE
+	install -p -D -m 600 $(SOURCE3) $(buildroot)/$(_datarootdir)/licenses/mtce-storage-1.0/LICENSE
 
