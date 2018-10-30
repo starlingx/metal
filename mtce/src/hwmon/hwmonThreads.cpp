@@ -567,7 +567,7 @@ void * hwmonThread_ipmitool ( void * arg )
                              * start at 1 to handle the 'i-1' case   */
 
                             int i = 1 ; /* aka character in line count or index */
-                            while (( buffer[i+1] != '\0' ) && ( i < IPMITOOL_MAX_LINE_LEN ))
+                            while (( buffer[i] != '\0' ) && ( i < IPMITOOL_MAX_LINE_LEN ))
                             {
                                 if ( buffer[i] == '|' )
                                 {
