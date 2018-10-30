@@ -144,6 +144,7 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
     {
         bytes = sock_ptr->mtc_agent_rx_socket->read((char*)&msg, sizeof(msg));
     }
+    msg.buf[BUF_SIZE-1] = '\0';
 
     if ( bytes <= 0 )
     {

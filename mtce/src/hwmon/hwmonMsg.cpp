@@ -246,6 +246,8 @@ int  hwmon_service_inbox  ( void )
             return (FAIL_UNKNOWN_HOSTNAME);
         }
 
+        /* add string terminator for protection */
+        msg.buf[BUF_SIZE-1] = '\0';
         rc = hwmonJson_load_inv ( &msg.buf[0], inv );
         if ( rc )
         {

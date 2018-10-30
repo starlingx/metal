@@ -177,6 +177,7 @@ int hostw_service_command ( hostw_socket_type * hostw_socket)
                               */
     int len = sizeof(msg[0]) + 1;
 
+    memset(msg, 0, 2*sizeof(msg[0]));
     socklen_t addrlen = (socklen_t) sizeof(hostw_socket->status_addr);
     len = recvfrom(hostw_socket->status_sock,
                           (char*)&msg,

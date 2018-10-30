@@ -525,6 +525,7 @@ int rmon_service_inbox ( int clients )
     bytes = recvfrom( rmon_sock.rmon_tx_sock, buf, RMON_MAX_LEN, 0, (struct sockaddr *)&rmon_sock.rmon_tx_addr, &len);
     if ( bytes > 0 )
     {
+        buf[RMON_MAX_LEN-1] = '\0';
         sscanf ( buf, "%99s %99s %u", str, registered_not, &port ); //RMON_MAX_LEN is defined as 100
         strcpy( active_buf, buf );
 
