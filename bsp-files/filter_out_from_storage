@@ -311,6 +311,7 @@ python-3parclient
 python-lefthandclient
 screen
 memcached
+memcached-custom
 openstack-swift-object
 openstack-swift-account
 openstack-swift-container
