@@ -630,7 +630,7 @@ int get_iface_macaddr ( const char * iface_ptr , string & macaddr )
         char str [COL_CHARS_IN_MAC_ADDR+1] ; /* and terminator */
         memset  ( &str[0], 0 , COL_CHARS_IN_MAC_ADDR);
 
-        snprintf ( &str[0], COL_CHARS_IN_MAC_ADDR+1,
+        snprintf ( &str[0], sizeof(str),
                   "%02x:%02x:%02x:%02x:%02x:%02x",
                (unsigned char)(s.ifr_hwaddr.sa_data[0]),
                (unsigned char)(s.ifr_hwaddr.sa_data[1]),
@@ -665,7 +665,7 @@ string get_iface_mac ( const char * iface_ptr )
         char str [COL_CHARS_IN_MAC_ADDR+1] ; /* and terminator */
         memset  ( &str[0], 0 , COL_CHARS_IN_MAC_ADDR);
 
-        snprintf ( &str[0], COL_CHARS_IN_MAC_ADDR,
+        snprintf ( &str[0], sizeof(str),
                   "%02x:%02x:%02x:%02x:%02x:%02x",
                (unsigned char)(s.ifr_hwaddr.sa_data[0]),
                (unsigned char)(s.ifr_hwaddr.sa_data[1]),
