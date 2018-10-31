@@ -52,6 +52,7 @@ gnocchi-common
 gnocchi-statsd
 guest-scale-helper
 haproxy
+haproxy-config
 heartbeat
 heat-api
 heat-api-cfn
