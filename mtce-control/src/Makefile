@@ -15,5 +15,5 @@ install:
 	install -m 755 -d $(buildroot)/$(local_etc_goenabledd)
 	# for license
 	install -m 755 -d $(buildroot)/$(_datarootdir)/licenses/mtce-control-1.0
-	install -p -D -m 600 scripts/$(SOURCE2) $(buildroot)/$(_datarootdir)/licenses/mtce-control-1.0/LICENSE
+	install -p -D -m 600 $(SOURCE2) $(buildroot)/$(_datarootdir)/licenses/mtce-control-1.0/LICENSE
 

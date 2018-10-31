@@ -32,11 +32,10 @@ make install buildroot=%{buildroot} _sysconfdir=%{_sysconfdir} _unitdir=%{_unitd
 /bin/systemctl enable goenabled-storage.service
 
 %files
-%license LICENSE
 %defattr(-,root,root,-)
 %{_sysconfdir}/init.d/goenabledStorage
 %{_unitdir}/goenabled-storage.service
-%{_datarootdir}/licenses/mtce-storage-1.0/LICENSE
+%license %{_datarootdir}/licenses/mtce-storage-1.0/LICENSE
 
 %clean
 rm -rf $RPM_BUILD_ROOT
