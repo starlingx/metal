@@ -209,7 +209,7 @@ int  active_monitor_dispatch ( void )
     do
     {
         memset ( amon.rx_buf, 0 , AMON_MAX_LEN );
-        rc = recvfrom ( amon.rx_sock, amon.rx_buf, AMON_MAX_LEN, 0,
+        rc = recvfrom ( amon.rx_sock, amon.rx_buf, AMON_MAX_LEN-1, 0,
                         (struct sockaddr *)&amon.rx_addr, &len);
         if ( rc == -1 )
         {

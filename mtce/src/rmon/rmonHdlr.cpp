@@ -653,7 +653,7 @@ int rmon_hdlr_init ( rmon_ctrl_type * ctrl_ptr )
     /* Initialize the Resource Monitor Array */
     memset ( (char*)&resource_config[0], 0, sizeof(resource_config_type)*MAX_RESOURCES);
     memset ( (char*)&interface_resource_config[0], 0, sizeof(interface_resource_config_type)*MAX_RESOURCES);
-    memset ( (char*)&thinmeta_resource_config[0], 0, sizeof(interface_resource_config_type)*MAX_RESOURCES);
+    memset ( (char*)&thinmeta_resource_config[0], 0, sizeof(thinmeta_resource_config_type)*MAX_RESOURCES);
     memset ( (char*)&registered_clt[0], 0, sizeof(registered_clients)*MAX_CLIENTS);
 
     /* Read in the list of config files and their contents */
@@ -2676,7 +2676,7 @@ void add_fs_resource ( int resource_index, int criticality_index, int enabled,
     
     int i = _rmon_ctrl_ptr->resources;
 
-    if (i > MAX_RESOURCES) {
+    if (i >= MAX_RESOURCES) {
         wlog ("Cannot Monitor more than %d resources\n", MAX_RESOURCES ); 
     }
     else {
