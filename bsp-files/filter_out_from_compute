@@ -263,6 +263,7 @@ python2-networking-bgpvpn
 python-networking-bgpvpn-dashboard
 python-networking-bgpvpn-heat
 python2-neutron-dynamic-routing
+python2-ruamel-yaml
 python2-ryu
 python-ryu-common
 platform-kickstarts
