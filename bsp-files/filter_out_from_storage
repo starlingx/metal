@@ -120,6 +120,7 @@ nova-api-proxy
 nova-placement-api
 novnc
 net-snmp
+net-snmp-config
 openstack-aodh-api
 openstack-aodh-commmon
 openstack-aodh-compat

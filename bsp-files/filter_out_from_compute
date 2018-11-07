@@ -80,6 +80,7 @@ nova-api-proxy
 nova-placement-api
 novnc
 net-snmp
+net-snmp-config
 openldap-backend-bdb
 openldap-backend-dnssrv
 openldap-backend-hdb
