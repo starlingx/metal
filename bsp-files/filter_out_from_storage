@@ -308,6 +308,7 @@ python2-ryu
 python-ryu-common
 python2-networking-sfc
 openvswitch
+openvswitch-config
 platform-kickstarts
 python-3parclient
 python-lefthandclient

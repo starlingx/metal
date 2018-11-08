@@ -7,6 +7,7 @@ guest-scale-helper
 heartbeat
 storageconfig
 kernel-module-openvswitch
+openstack-neutron-openvswitch
 openstack-neutron-sriov-nic-agent
 platform-util-noncontroller
 ceilometer-compute
@@ -50,3 +51,4 @@ swtpm-cuse
 swtpm-libs
 OVMF
 openvswitch
+openvswitch-config
