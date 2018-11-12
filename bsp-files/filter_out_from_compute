@@ -65,6 +65,7 @@ lighttpd-module-indexfile
 lighttpd-module-proxy
 lighttpd-module-staticfile
 lighttpd
+lighttpd-config
 nodejs
 nova-api
 nova-conductor

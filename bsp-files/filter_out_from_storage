@@ -83,6 +83,7 @@ lighttpd-module-indexfile
 lighttpd-module-proxy
 lighttpd-module-staticfile
 lighttpd
+lighttpd-config
 lighttpd-mod_geoip
 lighttpd-fastcgi
 lighttpd-mod_mysql_vhost
