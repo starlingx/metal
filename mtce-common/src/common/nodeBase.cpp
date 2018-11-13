@@ -233,6 +233,7 @@ const char * get_mtcNodeCommand_str ( int cmd )
         case MTC_CMD_QRY_HOST:      return("query host");
         case MTC_CMD_START_HOST:    return("start host service");
         case MTC_CMD_STOP_HOST:     return("stop host service");
+        case MTC_CMD_ACTIVE_CTRL:   return("publish active controller");
 
         /* VM Instance Commands */
         case MTC_CMD_ADD_INST:      return("add instance");

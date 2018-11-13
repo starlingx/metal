@@ -33,6 +33,7 @@ typedef struct
    int test    ; /**< Enable test mode                     */
    int info    ; /**< Dump data module info                */
    int verbose ; /**< Dump command line options            */
+   int Virtual ; /**< Set to non-zero when in virtual env  */
    int active  ; /**< Set daemon active                    */
    int debug   ; /**< Set tracing debug mode "debug,"test","info","trace" */
    int front   ; /**< run in the foreground ; do not daemonize */
@@ -43,7 +44,7 @@ typedef struct
    string username ;
    string command  ;
    string password ;
-}  opts_type   ;  
+}  opts_type   ;
 
 opts_type * daemon_get_opts_ptr ( void );
 

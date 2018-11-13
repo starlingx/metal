@@ -66,6 +66,8 @@ extern "C"
     #include "amon.h"      /* for ... active monitoring utilities      */
 }
 
+#define MAX_LEN (300)
+
 /* Where to send events */
 string mtcAgent_ip = "" ;
 
@@ -96,11 +98,16 @@ typedef struct
 
 static char pulse_resp_tx_hdr [HBS_MAX_MSG];
 static char   my_hostname [MAX_HOST_NAME_SIZE+1];
+static string hostname = "" ;
 static char   my_hostname_length ;
 static string my_macaddr = "" ;
 static string my_address = "" ;
 static unsigned int    my_nodetype= CGTS_NODE_NULL ;
 static stallMon_type stallMon ;
+
+/* Cached Cluster view from controllers */
+mtce_hbs_cluster_type controller_cluster_cache[MTCE_HBS_MAX_CONTROLLERS];
+
 
 void daemon_sigchld_hdlr ( void )
 {
@@ -407,16 +414,17 @@ int daemon_configure ( void )
     else
     {
         ilog("Realtime Pri: FIFO/%i \n", hbs_config.scheduling_priority );
-        ilog("Multicast: %s\n", hbs_config.multicast );
+        ilog("Multicast   : %s\n", hbs_config.multicast );
 
         hbs_config.mgmnt_iface = daemon_get_iface_master ( hbs_config.mgmnt_iface );
-        ilog("Mgmnt iface : %s\n", hbs_config.mgmnt_iface );
-        ilog("Mgmnt RxPort: %d\n", hbs_config.hbs_client_mgmnt_port );
-        ilog("Mgmnt TxPort: %d\n", hbs_config.hbs_agent_mgmnt_port );
+        ilog("Mgmnt Name  : %s\n", hbs_config.mgmnt_iface );
+        ilog("Mgmnt Port  : %d (rx)", hbs_config.hbs_client_mgmnt_port );
+        ilog("Mgmnt Port  : %d (tx)", hbs_config.hbs_agent_mgmnt_port );
 
         get_iface_macaddr  ( hbs_config.mgmnt_iface, my_macaddr );
         get_iface_address  ( hbs_config.mgmnt_iface, my_address, true );
         get_hostname       ( &my_hostname[0], MAX_HOST_NAME_SIZE );
+        hostname = my_hostname ;
 
         /* Fetch the infrastructure interface name.
          * calls daemon_get_iface_master inside so the
@@ -427,11 +435,14 @@ int daemon_configure ( void )
             if (strcmp(hbs_config.infra_iface, hbs_config.mgmnt_iface))
             {
                 infra_network_provisioned = true ;
-                ilog ("Infra iface : %s\n", hbs_config.infra_iface );
+                ilog ("Infra Name  : %s\n", hbs_config.infra_iface );
             }
         }
-        ilog("Infra RxPort: %d\n", hbs_config.hbs_client_infra_port );
-        ilog("Infra TxPort: %d\n", hbs_config.hbs_agent_infra_port );
+        if ( infra_network_provisioned == true )
+        {
+            ilog("Infra Port  : %d (rx)", hbs_config.hbs_client_infra_port );
+            ilog("Infra Port  : %d (tx)", hbs_config.hbs_agent_infra_port );
+        }
 
         /* initialize the stall detection monitor */
         stallMon_init ();
@@ -663,7 +674,37 @@ int get_pmon_pulses ( void )
     return (pulses);
 }
 
-static unsigned int my_rri = 0 ;
+/*************************************************************
+ *
+ * Name       : have_other_controller_history
+ *
+ * Description: returns true if there is cached history for any
+ *              controller number other than this one supplied.
+ *
+ *************************************************************/
+
+bool have_other_controller_history ( unsigned short controller )
+{
+    if ( controller < MTCE_HBS_MAX_CONTROLLERS )
+    {
+        /* look for history for any controller other than the one specified */
+        for ( int c = 0 ; c < MTCE_HBS_MAX_CONTROLLERS ; c++ )
+        {
+            /* skip specified controller */
+            if ( c != controller )
+            {
+                if ( controller_cluster_cache[c].histories )
+                {
+                    return true ;
+                }
+            }
+        }
+    }
+    return false ;
+}
+
+
+static unsigned int rri[MTCE_HBS_MAX_CONTROLLERS] = {0,0} ;
 
 /*************************************************************
  *
@@ -766,12 +807,13 @@ int _service_pulse_request ( iface_enum iface , unsigned int flags )
     daemon_config_type * cfg_ptr = daemon_get_cfg_ptr();
     if ( cfg_ptr->debug_msg )
     {
-        mlog ("\n");
-        mlog ("%s Pulse Req: %s:%5d: %d:%s RRI:%d\n",
+        mlog (" ");
+        mlog ("%s Pulse Req: %s:%d s:%d f:%x [%s] RRI:%d\n",
                   get_iface_name_str(iface),
                   hbs_sock.rx_sock[iface]->get_dst_addr()->toString(),
                   hbs_sock.rx_sock[iface]->get_dst_addr()->getPort(),
                   hbs_sock.rx_mesg[iface].s,
+                  hbs_sock.rx_mesg[iface].f,
                   hbs_sock.rx_mesg[iface].m,
                   hbs_sock.rx_mesg[iface].c);
     }
@@ -787,19 +829,9 @@ int _service_pulse_request ( iface_enum iface , unsigned int flags )
         return (FAIL_MSG_HEADER) ;
     }
 
-
-    /* Manage the Resource Reference Index (RRI) "lookup clue" */
-    if ( ! strncmp ( &hbs_sock.rx_mesg[iface].m[HBS_HEADER_SIZE], &my_hostname[0], MAX_CHARS_HOSTNAME ))
-    {
-        if( my_rri!= hbs_sock.rx_mesg[iface].c )
-        {
-            my_rri = hbs_sock.rx_mesg[iface].c ;
-            ilog ("%s Caching New RRI: %d\n", &my_hostname[0], my_rri );
-        }
-    }
-
-    /* Add my RRI to the response message */
-    hbs_sock.rx_mesg[iface].c = my_rri ;
+    /* Update local copy for the controller this pulse came from */
+    /* ... before the flags are cleared and setup for the reply. */
+    unsigned int controller = (hbs_sock.rx_mesg[iface].f & CTRLX_MASK ) >> CTRLX_BIT ;
 
     /* Manage OOB flags */
     hbs_sock.rx_mesg[iface].f = flags ;
@@ -807,23 +839,102 @@ int _service_pulse_request ( iface_enum iface , unsigned int flags )
     {
         hbs_sock.rx_mesg[iface].f |= ( PMOND_FLAG ) ;
     }
+
     if ( infra_network_provisioned == true )
     {
         hbs_sock.rx_mesg[iface].f |= INFRA_FLAG ;
     }
 
-#define WANT_CLUSTER_INFO_LOG
-#ifdef WANT_CLUSTER_INFO_LOG
-    /* Log the received cluster info */
-    if ( hbs_sock.rx_mesg[iface].v >= HBS_MESSAGE_VERSION )
+    /*************************************************************************
+     *****       C L U S T E R     D A T A    M A N A G E M E N T       ******
+     *                                                                       *
+     * TODO: Add support for 3 controllers.
+     *       Only 2 suppoerted by some of this code.
+     *****                                                              ******/
+
+    if ( controller >= MTCE_HBS_MAX_CONTROLLERS )
     {
-        char str[100] ;
-        // hbs_cluster_log (hbs_sock.rx_mesg[iface].cluster, hbs_sock.rx_mesg[iface].s );
-        snprintf ( &str[0], 100, " seq %6d with %d bytes from %s ", hbs_sock.rx_mesg[iface].s, rx_bytes, get_iface_name_str(iface));
-        string hostname = my_hostname ;
-        hbs_cluster_log ( hostname, hbs_sock.rx_mesg[iface].cluster, str );
+        wlog ("invalid controller number: %d ; dropping message", controller );
+        return ( FAIL_INVALID_DATA );
     }
-#endif
+
+    /* Manage the Resource Reference Index (RRI) "lookup clue"
+     * With the introduction of active-active heartbeating the hbsClient
+     * is responsible for servicing pulses from both controllers.
+     * This means that hbsClient needs to manage an rri for each controller. */
+    if ( ! strncmp ( &hbs_sock.rx_mesg[iface].m[HBS_HEADER_SIZE], &my_hostname[0], MAX_CHARS_HOSTNAME ))
+    {
+        if( rri[controller] != hbs_sock.rx_mesg[iface].c )
+        {
+            rri[controller] = hbs_sock.rx_mesg[iface].c ;
+            ilog ("Caching New RRI: %d (from controller-%d)\n", rri[controller], controller );
+        }
+    }
+
+    /* Log the received cluster info
+     * ... if the message version shows that it is supported */
+    if ( hbs_sock.rx_mesg[iface].v )
+    {
+        char str[MAX_LEN] ;
+        snprintf ( &str[0], MAX_LEN, " seq %6d with %d bytes from %s ", (int)hbs_sock.rx_mesg[iface].s, rx_bytes, get_iface_name_str(iface));
+        hbs_cluster_log ( hostname, hbs_sock.rx_mesg[iface].cluster, str );
+
+        /* add the controller back in */
+        hbs_sock.rx_mesg[iface].f |= ( controller << CTRLX_BIT );
+
+        /* Add my RRI to the response message */
+        hbs_sock.rx_mesg[iface].c = rri[controller] ;
+
+        if ( hbs_sock.rx_mesg[iface].cluster.histories > MTCE_HBS_MAX_NETWORKS )
+        {
+            slog ("controller-%d provided %d network histories ; max is %d per controller",
+                   controller,
+                   hbs_sock.rx_mesg[iface].cluster.histories,
+                   MTCE_HBS_MAX_NETWORKS );
+        }
+        else if ( hbs_sock.rx_mesg[iface].cluster.bytes != ( BYTES_IN_CLUSTER_VAULT(hbs_sock.rx_mesg[iface].cluster.histories)))
+        {
+            slog ("controller-%d provided %d bytes of history ; expected %d",
+                   controller,
+                   hbs_sock.rx_mesg[iface].cluster.bytes,
+                   (unsigned short)(BYTES_IN_CLUSTER_VAULT(hbs_sock.rx_mesg[iface].cluster.histories)));
+        }
+        else if ( hbs_sock.rx_mesg[iface].cluster.histories )
+        {
+            hbs_cluster_copy ( hbs_sock.rx_mesg[iface].cluster,
+                               controller_cluster_cache[controller] );
+            clog1 ("controller-%d cluster info from %s pulse request saved to cache",
+                    controller, get_iface_name_str(iface));
+
+            hbs_sock.rx_mesg[iface].cluster.histories = 0 ;
+
+            if ( have_other_controller_history ( controller ) == true )
+            {
+                /* Now copy the other controller's cached cluster info into
+                 * this controlers response */
+                hbs_cluster_copy ( controller_cluster_cache[controller?0:1],
+                                   hbs_sock.rx_mesg[iface].cluster );
+
+                if ( daemon_get_cfg_ptr()->debug_state & 4 )
+                {
+                    string dump_banner = "" ;
+                    dump_banner.append("controller-") ;
+                    dump_banner.append(itos(controller?0:1));
+                    dump_banner.append(" cluster info from cache injected into controller-");
+                    dump_banner.append(itos(controller));
+                    dump_banner.append(":");
+                    dump_banner.append(get_iface_name_str(iface));
+                    dump_banner.append(" pulse response");
+                    hbs_cluster_dump ( hbs_sock.rx_mesg[iface].cluster, dump_banner, true );
+                }
+            }
+        }
+    }
+
+    /* Cluster Data management end */
+
+    /* replace the request header with the response header */
+    memcpy ( &hbs_sock.rx_mesg[iface].m[0], &pulse_resp_tx_hdr[0], HBS_MAX_MSG );
 
 #ifdef WANT_PULSE_RESPONSE_FIT
     if (( iface == INFRA_IFACE ) && ( daemon_is_file_present ( MTC_CMD_FIT__NO_INFRA_RSP )))
@@ -839,29 +950,11 @@ int _service_pulse_request ( iface_enum iface , unsigned int flags )
     }
 #endif
 
-    int rc = PASS ;
-
-    /* replace the request header with the response header */
-    memcpy ( &hbs_sock.rx_mesg[iface].m[0], &pulse_resp_tx_hdr[0], HBS_MAX_MSG );
-
-    /* Deal with the cluster info if it exists.
-     * ... Introduced in messaging version 1 */
-    if ( hbs_sock.rx_mesg[iface].v >= HBS_MESSAGE_VERSION )
-    {
-        if ( hbs_sock.rx_mesg[iface].cluster.version < MTCE_HBS_CLUSTER_VERSION )
-        {
-            ilog ("Bad cluster verison (%d)", hbs_sock.rx_mesg[iface].cluster.version);
-        }
-        // if ( hbs_sock.rx_mesg[iface].cluster.revision != MTCE_HBS_CLUSTER_REVISION )
-        // {
-        //     ilog ("Bad cluster revision (%d)", hbs_sock.rx_mesg[iface].cluster.revision);
-        // }
-
-        /* Add peer controller cluster data to this controller's response */
-        // hbs_cluster_loop(hbs_sock.rx_mesg[iface]);
-    }
+    /* reuse the rx_bytes variable */
+    rx_bytes = sizeof(hbs_message_type)-sizeof(mtce_hbs_cluster_type)+BYTES_IN_CLUSTER_VAULT(hbs_sock.rx_mesg[iface].cluster.histories);
 
     /* send pulse response message */
+    int rc = PASS ;
     int tx_bytes = hbs_sock.tx_sock[iface]->reply(hbs_sock.rx_sock[iface],(char*)&hbs_sock.rx_mesg[iface], rx_bytes);
     if ( tx_bytes == -1 )
     {
@@ -884,15 +977,15 @@ int _service_pulse_request ( iface_enum iface , unsigned int flags )
     }
     else
     {
-        mlog ("%s Pulse Rsp: %s:%5d: %d:%d:%s RRI:%d (%d:%d:%d)\n",
-                get_iface_name_str(iface),
-                hbs_sock.tx_sock[iface]->get_dst_addr()->toString(),
-                hbs_sock.tx_sock[iface]->get_dst_addr()->getPort(),
-                             hbs_sock.rx_mesg[iface].s,
-                             hbs_sock.rx_mesg[iface].f,
-                             hbs_sock.rx_mesg[iface].m,
-                             hbs_sock.rx_mesg[iface].c,
-                             pmonPulse_counter, rx_bytes, tx_bytes);
+        mlog ("%s Pulse Rsp: %s:%d: s:%d f:%x [%s] RRI:%d (%x:%d:%d)\n",
+                  get_iface_name_str(iface),
+                  hbs_sock.tx_sock[iface]->get_dst_addr()->toString(),
+                  hbs_sock.tx_sock[iface]->get_dst_addr()->getPort(),
+                  hbs_sock.rx_mesg[iface].s,
+                  hbs_sock.rx_mesg[iface].f,
+                  hbs_sock.rx_mesg[iface].m,
+                  hbs_sock.rx_mesg[iface].c,
+                  pmonPulse_counter, rx_bytes, tx_bytes);
     }
 
     /* Clear the error count since we got a good receive */
@@ -984,6 +1077,10 @@ int daemon_init ( string iface, string nodeType_str )
     /* Initialize socket construct and pointer to it */
     memset ( &hbs_sock, 0, sizeof(hbs_sock));
 
+    /* Initialize the controller cluster view data bounce structure */
+    for ( int c = 0 ; c < MTCE_HBS_MAX_CONTROLLERS ; c++ )
+        memset ( &controller_cluster_cache[c], 0, sizeof(mtce_hbs_cluster_type)) ;
+
     /* init the utility module */
     hbs_utils_init ();
 
@@ -1007,6 +1104,11 @@ int daemon_init ( string iface, string nodeType_str )
 
     /* convert node type to integer */
     my_nodetype = get_host_function_mask ( nodeType_str ) ;
+    if ( my_nodetype & CONTROLLER_TYPE )
+    {
+        /* is controller but don't know what one yet. */
+        set_hn((char*)CONTROLLER_X);
+    }
     ilog ("Node Type   : %s (%d)\n", nodeType_str.c_str(), my_nodetype );
 
     /* Bind signal handlers */
@@ -1058,7 +1160,6 @@ int daemon_init ( string iface, string nodeType_str )
 
 int stall_threshold_log = 0 ;
 int stall_times_threshold_log = 0 ;
-#define MAX_LEN 300
 void daemon_service_run ( void )
 {
 #ifdef WANT_DAEMON_DEBUG
@@ -1205,7 +1306,7 @@ void daemon_service_run ( void )
                 int bytes = hbs_sock.sm_client_sock->read((char*)&msg, sizeof(mtce_hbs_cluster_type));
                 if ( bytes )
                 {
-                    hbs_cluster_dump (msg);
+                    hbs_cluster_dump (msg, "Cluster info received", true );
                 }
             }
 #endif

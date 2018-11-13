@@ -241,10 +241,11 @@ int mtcSmgrApi_active_services ( string hostname , bool * yes_no_ptr )
     return(PASS);
 }
 
-int send_hbs_command ( string hostname, int command )
+int send_hbs_command ( string hostname, int command, string controller )
 {
     UNUSED(hostname);
     UNUSED(command);
+    UNUSED(controller);
     return(PASS);
 }
 

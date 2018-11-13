@@ -78,6 +78,7 @@ void print_help ( void )
    printf ("\t-l --log              -  Log to file ; /var/log/<daemon>.log\n");
    printf ("\t-p --passive          -  Passive mode ; do not act on failures\n");
    printf ("\t-v --verbose          -  Show command line arguments\n");
+   printf ("\t-V --Virtual          -  Running in virtual environment\n");
    printf ("\t-t --test             -  Run Test Head\n");
    printf ("\t-g --gap              -  Gap in seconds\n");
    printf ("\t-m --mode             -  Word string representing a run mode\n");
@@ -106,6 +107,9 @@ int daemon_get_run_option ( const char * option )
         }
         return (1);
     }
+    else if ( !strcmp ( option, "Virtual" ) )
+        return opts.Virtual ;
+
     else if ( !strcmp ( option, "front" ) )
         return opts.front ;
 
@@ -118,6 +122,7 @@ void opts_init ( void)
     opts.log     = false ; 
     opts.test    = false ;
     opts.verbose = false ;
+    opts.Virtual = false ;
     opts.active  = false ;
     opts.front   = false ;
     opts.front   = false ;
@@ -152,8 +157,8 @@ int parseArg ( int argc, char * argv[], opts_type * opts_ptr )
     int cmd_arg_count = 1 ; /* command args start at 1 */
 
    /* A string listing of valid short options letters. */
-   const char* const short_options = "u:c:p:g:i:m:n:d:hlfpvta";
-   
+   const char* const short_options = "u:c:p:g:i:m:n:d:hlfpvVta";
+
    /* An array listing of valid long options. */
    const struct option long_options[] =
    {
@@ -167,9 +172,10 @@ int parseArg ( int argc, char * argv[], opts_type * opts_ptr )
          { "username"  , 1, NULL, 'u' },
          { "help"      , 0, NULL, 'h' },
          { "active"    , 0, NULL, 'a' },
-         { "foreground", 0, NULL, 'f' },         
-         { "log"       , 0, NULL, 'l' },         
+         { "foreground", 0, NULL, 'f' },
+         { "log"       , 0, NULL, 'l' },
          { "verbose"   , 0, NULL, 'v' },
+         { "Virtual"   , 0, NULL, 'V' },
          { "test"      , 0, NULL, 't' },
          {  NULL       , 0, NULL,  0  } /* Required at end of array. */
    };
@@ -254,19 +260,25 @@ int parseArg ( int argc, char * argv[], opts_type * opts_ptr )
          case 't': /* -t or --test */
          {
              opts_ptr->test = true ;
-             cmd_arg_count++ ; 
+             cmd_arg_count++ ;
              break;
          }
-         case 'v': /* -t or --verbose */
+         case 'v': /* -v or --verbose */
          {
              opts_ptr->verbose = true ;
-             cmd_arg_count++ ; 
+             cmd_arg_count++ ;
+             break;
+         }
+         case 'V': /* -V or --Virtual */
+         {
+             opts_ptr->Virtual = true ;
+             cmd_arg_count++ ;
              break;
          }
          case 'a': /* -a or --active */
          {
              opts_ptr->active = true ;
-             cmd_arg_count++ ; 
+             cmd_arg_count++ ;
              break;
          }
          case '?':

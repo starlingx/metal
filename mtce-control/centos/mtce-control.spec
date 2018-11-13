@@ -34,6 +34,7 @@ make install buildroot=%{buildroot} _sysconfdir=%{_sysconfdir} _unitdir=%{_unitd
 if [ $1 -eq 1 ] ; then
     /bin/systemctl enable lighttpd.service
     /bin/systemctl enable qemu_clean.service
+    /bin/systemctl enable hbsAgent.service
 fi
 exit 0
 
@@ -41,6 +42,9 @@ exit 0
 %defattr(-,root,root,-)
 %{_sysconfdir}/init.d/goenabledControl
 %license %{_datarootdir}/licenses/mtce-control-1.0/LICENSE
+%{_sysconfdir}/pmon.d/hbsAgent.conf
+%{_sysconfdir}/init.d/hbsAgent
+%{_unitdir}/hbsAgent.service
 
 %clean
 rm -rf $RPM_BUILD_ROOT

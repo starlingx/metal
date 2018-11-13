@@ -313,7 +313,6 @@ install -m 755 -d %{buildroot}/usr/lib/ocf
 install -m 755 -d %{buildroot}/usr/lib/ocf/resource.d
 install -m 755 -d %{buildroot}/usr/lib/ocf/resource.d/platform
 install -m 755 -p -D %{_buildsubdir}/scripts/mtcAgent %{buildroot}/usr/lib/ocf/resource.d/platform/mtcAgent
-install -m 755 -p -D %{_buildsubdir}/scripts/hbsAgent %{buildroot}/usr/lib/ocf/resource.d/platform/hbsAgent
 install -m 755 -p -D %{_buildsubdir}/hwmon/scripts/ocf/hwmon %{buildroot}/usr/lib/ocf/resource.d/platform/hwmon
 
 # config files
@@ -482,7 +481,6 @@ install -m 755 -d %{buildroot}/var/run
 
 # SM OCF Start/Stop/Monitor Scripts
 %{ocf_resourced}/platform/mtcAgent
-%{ocf_resourced}/platform/hbsAgent
 
 # Config files
 %config(noreplace)/etc/mtc.ini

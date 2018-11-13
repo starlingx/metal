@@ -359,6 +359,7 @@ void daemon_exit ( void );
  *  a power-off to online transition */
 #define MTC_MTCALIVE_HITS_TO_GO_ONLINE (5)
 
+#define CONTROLLER_X ((const char *)"controller-x")
 #define CONTROLLER_0 ((const char *)"controller-0")
 #define CONTROLLER_1 ((const char *)"controller-1")
 #define CONTROLLER_2 ((const char *)"controller-2")
@@ -526,7 +527,8 @@ typedef struct
 #define MTC_CMD_MOD_HOST                (0x11110012) /* Query            Host */
 #define MTC_CMD_QRY_HOST                (0x11110013) /* Modify           Host */
 #define MTC_CMD_START_HOST              (0x11110014) /* Start Monitoring Host */
-#define MTC_CMD_STOP_HOST               (0x11110015) /* Stop Moniroting  Host */
+#define MTC_CMD_STOP_HOST               (0x11110015) /* Stop Monitoring  Host */
+#define MTC_CMD_ACTIVE_CTRL             (0x11110016) /* Active Controller     */
 
 #define MTC_CMD_ADD_INST                (0x11110020) /* Add              Inst */
 #define MTC_CMD_DEL_INST                (0x11110021) /* Delete           Inst */
@@ -642,6 +644,9 @@ typedef struct
 #define NULL_PULSE_FLAGS    (0xffffffff) /**< Unknown flags value                   */
 #define PMOND_FLAG          (0x00000001) /**< Process Monitor O.K. Flag             */
 #define INFRA_FLAG          (0x00000002) /**< Infrastructure iface provisioned Flag */
+
+#define CTRLX_MASK          (0x00000300) /**< From/To Controller-0/1/2/3 Number     */
+#define CTRLX_BIT      ((unsigned int)8) /**< used to shift right mask into bit 0   */
 
 #define STALL_MON_FLAG      (0x00010000) /**< Flag indicating hang monitor running  */
 #define STALL_REC_FLAG      (0x00020000) /**< Flag indicating hbsClient took action */
@@ -1217,15 +1222,15 @@ string get_availStatus_str ( mtc_nodeAvailStatus_enum availStatus );
 string get_operState_str   ( mtc_nodeOperState_enum   operState   );
 string get_adminState_str  ( mtc_nodeAdminState_enum  adminState  );
 
-void log_adminAction ( string hostname, 
-                       mtc_nodeAdminAction_enum currAction, 
+void log_adminAction ( string hostname,
+                       mtc_nodeAdminAction_enum currAction,
                        mtc_nodeAdminAction_enum  newAction );
 
-int send_hbs_command   ( string hostname, int command );
+int send_hbs_command   ( string hostname, int command, string controller=CONTROLLER );
 int send_hwmon_command ( string hostname, int command );
 int send_guest_command ( string hostname, int command );
 
-int daemon_log_message ( const char * hostname, 
+int daemon_log_message ( const char * hostname,
                          const char * filename,
                          const char * log_str );
 

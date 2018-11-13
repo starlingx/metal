@@ -47,6 +47,11 @@ int alarm_register_user ( msgClassSock * sock_ptr )
     return (rc);
 }
 
+void alarm_unregister_user ( void )
+{
+   user_sock_ptr = NULL ;
+}
+
 /* Construct an alarm request json string in the following form
    {\"mtcalarm\":[{\"alarmid\":\"200.009\",\"hostname\":\"compute-3\",\"operation\":\"set\",\"severity\":\"major\",\"entity\":\"Infrastructure\",\"prefix\":\"service=heartbeat\"}, {\"alarmid\":\"200.005\",\"hostname\":\"compute-3\",\"operation\":\"set\",\"severity\":\"major\",\"entity\":\"Management\",\"prefix\":\"service=heartbeat\"}]}"
 
@@ -72,6 +77,17 @@ int alarm_ ( string hostname, const char * id, EFmAlarmStateT state, EFmAlarmSev
     char request [MAX_ALARM_REQ_MSG_SIZE] ;
     string msg_type ;
     string sev ;
+
+    if ( user_sock_ptr == NULL )
+    {
+        slog ("alarm socket is NULL");
+        return (FAIL_NULL_POINTER );
+    }
+    else if ( ! user_sock_ptr->sock_ok() )
+    {
+        elog ("alarm socket is not ok");
+        return (FAIL_OPERATION);
+    }
 
     if ( state == FM_ALARM_STATE_MSG )
         msg_type = "msg" ;
@@ -127,7 +143,8 @@ int alarm_ ( string hostname, const char * id, EFmAlarmStateT state, EFmAlarmSev
         }
         else
         {
-            ilog ("%s %s\n", hostname.c_str(), request);
+            ilog ("%s %s %s %s %s", hostname.c_str(), entity, msg_type.c_str(), sev.c_str(), id);
+            mlog ("%s %s\n", hostname.c_str(), request);
             return ( PASS ) ;
         }
         daemon_signal_hdlr ();
