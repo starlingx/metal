@@ -95,6 +95,7 @@ openldap-doc
 openldap-overlay-proxycache
 openldap-overlay-syncprov
 openldap-servers
+openldap-config
 openldap-slapd
 openstack-ras
 pacemaker
