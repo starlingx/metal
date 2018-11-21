@@ -6205,6 +6205,13 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
 
 #endif
 
+            /* Audits for this controller host only */
+            if ( node_ptr->hostname == this->my_hostname )
+            {
+                /* Remind the heartbeat service that this is the active ctrl */
+                send_hbs_command ( this->my_hostname, MTC_CMD_ACTIVE_CTRL );
+            }
+
             /* Manage active controller auto recovery bool.
              * If the inactive controller is inservice then disable
              * controller autorecovery. Otherwise enable it but in this case

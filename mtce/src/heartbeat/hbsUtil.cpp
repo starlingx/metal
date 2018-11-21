@@ -111,6 +111,33 @@ string hbs_cluster_network_name ( mtce_hbs_network_enum network )
     }
 }
 
+/****************************************************************************
+ *
+ * Name        : hbs_cluster_copy
+ *
+ * Descrition  : Copies cluster from src to dst.
+ *
+ * Returns     : Nothing.
+ *
+ ***************************************************************************/
+
+void hbs_cluster_copy ( mtce_hbs_cluster_type & src, mtce_hbs_cluster_type & dst )
+{
+    dst.version      = src.version ;
+    dst.revision     = src.revision ;
+    dst.magic_number = src.magic_number ;
+    dst.period_msec  = src.period_msec ;
+    dst.histories    = src.histories ;
+    dst.storage0_enabled = src.storage0_enabled ;
+    for ( int h = 0 ; h < dst.histories ; h++ )
+    {
+        memcpy( &dst.history[h],
+                &src.history[h],
+                 sizeof(mtce_hbs_cluster_history_type));
+    }
+    dst.bytes = BYTES_IN_CLUSTER_VAULT(dst.histories);
+}
+
 
 /****************************************************************************
  *
@@ -126,11 +153,9 @@ string hbs_cluster_network_name ( mtce_hbs_network_enum network )
 
 void hbs_cluster_log ( string & hostname,
                        mtce_hbs_cluster_type & cluster,
-                       string log_prefix )
+                       string log_prefix,
+                       bool force )
 {
-    // bool want_log = false ;
-
-    clog1 ("log %d histories", cluster.histories );
     for ( int h = 0 ; h < cluster.histories ; h++ )
     {
         if ( cluster.history[h].entries == MTCE_HBS_HISTORY_ENTRIES )
@@ -140,8 +165,6 @@ void hbs_cluster_log ( string & hostname,
             mtce_hbs_cluster_entry_type e = { 0, 0 } ;
             char str[MAX_CLUSTER_LINE_LEN] ;
             string line  = "";
-            int    start = 0 ;
-            int    stop  = 0 ;
             bool   newline = false ;
             bool   logit   = false ;
             bool   first   = false ;
@@ -149,18 +172,13 @@ void hbs_cluster_log ( string & hostname,
 
             mtce_hbs_cluster_history_type * history_ptr = &cluster.history[h] ;
 
-            clog1 ("%s %s has %d entries (controller-%d view from %s)", hostname.c_str(),
-                    hbs_cluster_network_name((mtce_hbs_network_enum)history_ptr->network).c_str(),
-                    history_ptr->entries,
-                    history_ptr->controller,
-                    log_prefix.c_str());
-
-
             /* Manage local this_index for log display.
              * Display oldest to newest ; left to right
              *
              * */
             int this_index = history_ptr->oldest_entry_index ;
+            int debug = daemon_get_cfg_ptr()->debug_state ;
+
             for ( int count = 0 ; count < history_ptr->entries ; count++ )
             {
                 if (( line.length() + MAX_ENTRY_STR_LEN ) >=
@@ -180,13 +198,11 @@ void hbs_cluster_log ( string & hostname,
                 }
 #endif
 
-                // want_log = true ;
-
                 if ( count == 0 )
                 {
                     snprintf (&str[0], MAX_ENTRY_STR_LEN , "%d:%d ", // -%d",
                                history_ptr->entry[this_index].hosts_enabled,
-                               history_ptr->entry[this_index].hosts_responding ); // , this_index );
+                               history_ptr->entry[this_index].hosts_responding );
                     line.append (str);
                     str[0] = '\0' ;
                 }
@@ -203,7 +219,7 @@ void hbs_cluster_log ( string & hostname,
                 {
                     snprintf (&str[0], MAX_ENTRY_STR_LEN , "%d:%d ", // -%d",
                                history_ptr->entry[this_index].hosts_enabled,
-                               history_ptr->entry[this_index].hosts_responding ); // , this_index );
+                               history_ptr->entry[this_index].hosts_responding );
                     line.append (str);
                     str[0] = '\0' ;
                     logit = true ;
@@ -214,31 +230,21 @@ void hbs_cluster_log ( string & hostname,
                     first_log[h] = true ;
                     logit = true ;
                 }
-                stop++ ;
                 if ( newline == true )
                 {
                     if ( logit )
                     {
                         SET_CONTROLLER_HOSTNAME(history_ptr->controller);
-                        if ( hostname == controller )
+                        if (( force ) || ( debug&2 ))
                         {
-                            clog ("%s view %s %s %02d..%02d: %s,",
-                                   hostname.c_str(),
-                                   log_prefix.c_str(),
-                                   hbs_cluster_network_name((mtce_hbs_network_enum)history_ptr->network).c_str(),
-                                   start, stop, line.c_str());
-                        }
-                        else
-                        {
-                            clog ("%s view from %s %s %s %02d..%02d: %s,",
-                                   controller.c_str(),
-                                   hostname.c_str(),
-                                   log_prefix.c_str(),
-                                   hbs_cluster_network_name((mtce_hbs_network_enum)history_ptr->network).c_str(),
-                                   start, stop, line.c_str());
+                            syslog ( LOG_INFO, "%s view from %s %s %s: %s",
+                                     controller.c_str(),
+                                     hostname.c_str(),
+                                     log_prefix.c_str(),
+                                     hbs_cluster_network_name((mtce_hbs_network_enum)history_ptr->network).c_str(),
+                                     line.c_str());
                         }
                     }
-                    start = stop + 1 ;
                     line.clear();
                     first = true ;
                     newline = false ;
@@ -253,7 +259,6 @@ void hbs_cluster_log ( string & hostname,
             }
             if (( newline == false ) && ( line.length() ))
             {
-                // ERIC
                 if (( logit == false ) && ( was_diff[h] == true ))
                 {
                     logit = true ;
@@ -264,30 +269,25 @@ void hbs_cluster_log ( string & hostname,
                 {
                     if ( first )
                     {
-                        clog ("............ %s %s %02d..%02d: %s",
-                               log_prefix.c_str(),
-                               hbs_cluster_network_name((mtce_hbs_network_enum)history_ptr->network).c_str(),
-                               start, stop, line.c_str());
+                        if (( force ) || ( debug&2 ))
+                        {
+                            syslog ( LOG_INFO, "............ %s %s: %s",
+                                   log_prefix.c_str(),
+                                   hbs_cluster_network_name((mtce_hbs_network_enum)history_ptr->network).c_str(),
+                                   line.c_str());
+                        }
                     }
                     else
                     {
                         SET_CONTROLLER_HOSTNAME(history_ptr->controller);
-                        if ( hostname == controller )
+                        if (( force ) || ( debug&2 ))
                         {
-                            clog ("%s view %s %s %02d..%02d: %s",
-                                   hostname.c_str(),
-                                   log_prefix.c_str(),
-                                   hbs_cluster_network_name((mtce_hbs_network_enum)history_ptr->network).c_str(),
-                                   start, stop, line.c_str());
-                        }
-                        else
-                        {
-                            clog ("%s view from %s %s %s %02d..%02d: %s",
-                                   controller.c_str(),
-                                   hostname.c_str(),
-                                   log_prefix.c_str(), /* Infra <- */
-                                   hbs_cluster_network_name((mtce_hbs_network_enum)history_ptr->network).c_str(),
-                                   start, stop, line.c_str());
+                            syslog ( LOG_INFO, "%s view from %s %s %s: %s",
+                                     controller.c_str(),
+                                     hostname.c_str(),
+                                     log_prefix.c_str(), /* Infra <- */
+                                     hbs_cluster_network_name((mtce_hbs_network_enum)history_ptr->network).c_str(),
+                                     line.c_str());
                         }
                     }
                 }
@@ -307,40 +307,62 @@ void hbs_cluster_log ( string & hostname,
  * Description: Formatted dump of the vault contents to the log file.
  *
  ***************************************************************************/
-void hbs_cluster_dump ( mtce_hbs_cluster_type & vault )
+void hbs_cluster_dump ( mtce_hbs_cluster_type & vault, string log_prefix, bool force )
 {
-    syslog ( LOG_INFO, "Cluster Vault Dump: --------------------------------------------------------------------------------------------");
-    syslog ( LOG_INFO, "Cluster Vault: v%d.%d %d msec period ; SM Reqid is %d with storage-0 %s and %d histories in %d bytes",
-            vault.version,
-            vault.revision,
-            vault.period_msec,
-            vault.reqid,
-            vault.storage0_enabled ? "enabled" : "disabled",
-            vault.histories,
-            vault.bytes );
-    for ( int h = 0 ; h < vault.histories ; h++ )
+    if ( vault.version == 0 )
+        return ;
+
+    int debug = daemon_get_cfg_ptr()->debug_state ;
+
+    if (( debug & 2 ) || ( force == true ))
     {
-        #define MAX_LINE_LEN (500)
-        char str[MAX_LINE_LEN] ;
-        int i = 0 ;
-        for ( int e = 0 ; e < vault.history[h].entries_max ; e++ )
-        {
-            snprintf ( &str[i], MAX_LINE_LEN, "%c[%d:%d]" ,
-                       vault.history[h].oldest_entry_index==e ? '>' : ' ',
-                       vault.history[h].entry[e].hosts_enabled,
-                       vault.history[h].entry[e].hosts_responding);
-            i = strlen(str) ;
-        }
-        syslog ( LOG_INFO, "Cluster Vault: C%d %s S:%s:%s (%d:%d) %s",
-            vault.history[h].controller,
-            hbs_cluster_network_name((mtce_hbs_network_enum)vault.history[h].network).c_str(),
-            vault.storage0_enabled ? "y" : "n",
-            vault.history[h].storage0_responding ? "y" : "n",
-            vault.history[h].entries_max,
-            vault.history[h].entries,
-            str);
+        ilog ("%s", log_prefix.c_str());
+        syslog ( LOG_INFO, "Cluster Vault : v%d.%d %d msec heartbeat period %s;%d network heartbeat response histories (%d bytes)",
+                 vault.version,
+                 vault.revision,
+                 vault.period_msec,
+                 vault.storage0_enabled ? " with storage-0: enabled " : "",
+                 vault.histories,
+                 vault.bytes );
     }
-    // dump_memory ( &vault, 16, vault.bytes );
+
+    if (( debug & 4 ) || ( force == true ))
+    {
+        for ( int h = 0 ; h < vault.histories ; h++ )
+        {
+            #define MAX_LINE_LEN (500)
+            char str[MAX_LINE_LEN] ;
+            int i = 0 ;
+            for ( int e = 0 ; e < vault.history[h].entries_max ; e++ )
+            {
+                snprintf ( &str[i], MAX_LINE_LEN, "%c[%d:%d]" ,
+                           vault.history[h].oldest_entry_index==e ? '>' : ' ',
+                           vault.history[h].entry[e].hosts_enabled,
+                           vault.history[h].entry[e].hosts_responding);
+                i = strlen(str) ;
+            }
+            if ( vault.storage0_enabled )
+            {
+                syslog ( LOG_INFO, "Cluster Vault : C%d %s S:%s %s",
+                                    vault.history[h].controller,
+                                    hbs_cluster_network_name((mtce_hbs_network_enum)vault.history[h].network).c_str(),
+                                    vault.history[h].storage0_responding ? "y" : "n",
+                                    str);
+            }
+            else
+            {
+                syslog ( LOG_INFO, "Cluster Vault : C%d %s %s",
+                                    vault.history[h].controller,
+                                    hbs_cluster_network_name((mtce_hbs_network_enum)vault.history[h].network).c_str(),
+                                    str);
+            }
+        }
+    }
+
+    if ( debug & 8 )
+    {
+        dump_memory ( &vault, 16, vault.bytes );
+    }
 }
 
 

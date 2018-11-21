@@ -802,7 +802,11 @@ int mtc_socket_init ( void )
     /***********************************************************/
 
     int port = daemon_get_cfg_ptr()->hbs_to_mtc_event_port ;
-    mtc_sock.mtc_event_rx_sock = new msgClassRx(LOOPBACK_IP, port, IPPROTO_UDP);
+
+    /* listen to this port on any interface so that the hbsAgent running
+     * locally or on peer controller can get events into mtcAgent */
+    mtc_sock.mtc_event_rx_sock =
+    new msgClassRx(mtcInv.my_float_ip.data(), port, IPPROTO_UDP);
     rc = mtc_sock.mtc_event_rx_sock->return_status;
     if ( rc )
     {
@@ -820,7 +824,7 @@ int mtc_socket_init ( void )
     /***********************************************************/
 
     port = daemon_get_cfg_ptr()->mtc_to_hbs_cmd_port ;
-    sock_ptr->mtc_to_hbs_sock = new msgClassTx(LOOPBACK_IP, port, IPPROTO_UDP);
+    sock_ptr->mtc_to_hbs_sock = new msgClassTx(CONTROLLER, port, IPPROTO_UDP, mtc_config.mgmnt_iface);
     rc = sock_ptr->mtc_to_hbs_sock->return_status;
     if ( rc )
     {
@@ -1281,11 +1285,14 @@ void daemon_service_run ( void )
                              mtcInv.inotify_shadow_file_fd ,
                              mtcInv.inotify_shadow_file_wd );
 
-    /* Add this controller to the heartbeat service so that we
-     * receive the out-of-band heartbeat 'flags' even though
-     * we don't self monitor the active controller specifically
-     * This add may be duplicate but covers the initial config case */
+    /* inform the heartbeat service that this controller is active */
+    send_hbs_command ( mtcInv.my_hostname, MTC_CMD_ACTIVE_CTRL );
+
+    /* Add this controller to the heartbeat service so that
+     * the peer hbsAgent also gets this controllers inventory
+     * and this hbsAgent receives the out-of-band heartbeat 'flags' */
     send_hbs_command ( mtcInv.my_hostname, MTC_CMD_ADD_HOST );
+    send_hbs_command ( mtcInv.my_hostname, MTC_CMD_START_HOST );
 
     socks.clear();
     socks.push_front (mtc_sock.mtc_event_rx_sock->getFD());   // service_events

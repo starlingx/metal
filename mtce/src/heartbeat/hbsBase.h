@@ -47,6 +47,9 @@
 /** Maximum service fail count before action */
 #define MAX_FAIL_COUNT (1)
 
+/** Audit Rate/Count */
+#define AUDIT_RATE (9)
+
 /** Heartbeat pulse request/response message header byte size */
 #define HBS_HEADER_SIZE (15)
 
@@ -60,13 +63,16 @@ const char rsp_msg_header   [HBS_HEADER_SIZE+1] = {"cgts pulse rsp:"};
 
 #define HBS_MAX_MSG (HBS_HEADER_SIZE+MAX_CHARS_HOSTNAME)
 
-#define HBS_MESSAGE_VERSION (1) // 0 -> 1 with intro of cluster info
+#define HBS_MESSAGE_VERSION   (1) // 0 -> 1 with intro of cluster info
 
 /* Heartbeat control structure */
 typedef struct
 {
+    unsigned int controller   ;
+    unsigned int audit        ;
     unsigned int nodetype     ;
     bool         clear_alarms ;
+    bool         locked       ;
 } hbs_ctrl_type ;
 hbs_ctrl_type * get_hbs_ctrl_ptr ( void );
 
@@ -218,22 +224,17 @@ void   hbs_utils_init           ( void );
 /* network enum to name lookup */
 string hbs_cluster_network_name ( mtce_hbs_network_enum network );
 
-/* Produce formatted clog's that characterize current and changing cluster
- * history for a given network. Each log is controller/network specific. */
-void   hbs_cluster_log          ( string & hostname, mtce_hbs_cluster_type & cluster, string prefix );
-
 /* Initialize the specified history array */
 void   hbs_cluster_history_init ( mtce_hbs_cluster_history_type & history );
 
 /* Clear all history in the cluster vault */
 void   hbs_cluster_history_clear( mtce_hbs_cluster_type & cluster );
 
-
 /******** Heartbeat Agent Cluster Functions in hbsCluster.cpp ********/
 
 /* Set the cluster vault to default state.
  * Called upon daemon init or heartbeat period change. */
-void hbs_cluster_init ( unsigned short period );
+void hbs_cluster_init ( unsigned short period , msgClassSock * sm_socket_ptr );
 
 /* Calculate number of bytes that is unused in the cluster data structure.
  * Primarily to know how many history elements are missing. */
@@ -286,7 +287,9 @@ void hbs_cluster_append ( hbs_message_type & msg );
 
 /* Produce formatted clog's that characterize current and changing cluster
  * history for a given network. Each log is controller/network specific. */
-void hbs_cluster_log  ( string & hostname, string prefix );
+void hbs_cluster_log  ( string & hostname,                                  string prefix, bool force=false );
+void hbs_cluster_log  ( string & hostname, mtce_hbs_cluster_type & cluster, string prefix, bool force=false );
+
 
 /* Service SM cluster info request */
 void hbs_sm_handler ( void );
@@ -294,8 +297,14 @@ void hbs_sm_handler ( void );
 /* send the cluster vault to SM */
 void hbs_cluster_send ( msgClassSock * sm_client_sock, int reqid );
 
+/* copy cluster data from src to dst */
+void hbs_cluster_copy ( mtce_hbs_cluster_type & src, mtce_hbs_cluster_type & dst );
+
 /* print the contents of the vault */
-void hbs_cluster_dump ( mtce_hbs_cluster_type & vault );
+void hbs_cluster_dump ( mtce_hbs_cluster_type & vault, string log_prefix, bool force );
+
+/* Heartbeat service state audit */
+void hbs_state_audit ( void );
 
 /**
  * @} hbs_base

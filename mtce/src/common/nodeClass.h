@@ -1266,6 +1266,10 @@ public:
     bool maintenance ;
     bool heartbeat   ;
 
+    /* Set to true if this controller is active.
+     * Currently only used by heartbeat service. */
+    bool active_controller ;
+
     /* offline_handler tuning controls */
     int offline_threshold ; /* number of back to back mtcAlive misses before offline */
     int offline_period    ; /* offline handler mtcAlive request period */

@@ -68,6 +68,7 @@ EFmAlarmSeverityT alarmUtil_getSev_enum   ( string            severity );
 #ifndef __MODULE_PRIVATE__
 
 int alarm_register_user ( msgClassSock * sock_ptr );
+void alarm_unregister_user ( void );
 
 /* Public API */
 int  alarm_ ( string hostname, const char * id, EFmAlarmStateT state, EFmAlarmSeverityT severity, const char * entity, string prefix );

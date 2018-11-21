@@ -46,6 +46,7 @@ CONTROL_OBJS += mtcHttpSvr.o
 CONTROL_OBJS += mtcCmdHdlr.o
 CONTROL_OBJS += mtcNodeMnfa.o
 CONTROL_OBJS += mtcVimApi.o
+CONTROL_OBJS += mtcStubs.o
 CONTROL_OBJS += ../common/nodeClass.o
 
 OBJS = $(SRCS:.cpp=.o)

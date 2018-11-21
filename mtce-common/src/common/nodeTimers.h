@@ -48,6 +48,7 @@
 #define MTC_MINS_20 (1200)
 #define MTC_MINS_30 (1800)
 #define MTC_MINS_40 (2400)
+#define MTC_HRS_1   (3600)
 #define MTC_HRS_4   (14400)
 #define MTC_HRS_8   (28800) /* old token refresh rate */
 

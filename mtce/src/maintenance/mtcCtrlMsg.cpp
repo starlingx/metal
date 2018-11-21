@@ -48,6 +48,7 @@ using namespace std;
 #include "mtcAlarm.h"      /* for ... mtcAlarm...       */
 #include "nodeUtil.h"      /* for ... get_event_str ...       */
 
+int service_events ( nodeLinkClass * obj_ptr, mtc_socket_type * sock_ptr );
 
 /* Throttle logging of messages from unknown IP addresses */
 std::list<string> unknown_ip_list ;
@@ -766,7 +767,7 @@ int send_mtc_cmd ( string & hostname, int cmd , int interface )
     return ( rc );
 }
 
-int send_hbs_command ( string hostname, int cmd )
+int send_hbs_command ( string hostname, int cmd, string controller )
 {
     int bytes = 0 ;
     int bytes_to_send = 0 ;
@@ -776,18 +777,6 @@ int send_hbs_command ( string hostname, int cmd )
     mtc_message_type event ;
     mtc_socket_type * sock_ptr = get_sockPtr ();
 
-    /* We don't heartbeat self */
-    if (( obj_ptr->is_active_controller (hostname) ) &&
-        (( cmd == MTC_CMD_ADD_HOST   ) ||
-         ( cmd == MTC_CMD_DEL_HOST   ) ||
-         ( cmd == MTC_CMD_START_HOST ) ||
-         ( cmd == MTC_CMD_STOP_HOST  )))
-    {
-       dlog ("%s refusing to '%s' self to heartbeat service\n",
-                 hostname.c_str(), get_event_str(cmd).c_str());
-       return (PASS);
-    }
-
     memset (&event, 0 , sizeof(mtc_message_type));
     snprintf ( &event.hdr[0] , MSG_HEADER_SIZE, "%s", get_hbs_cmd_req_header() );
     snprintf ( &event.hdr[MSG_HEADER_SIZE] , MAX_CHARS_HOSTNAME , "%s", hostname.data());
@@ -795,48 +784,72 @@ int send_hbs_command ( string hostname, int cmd )
     /* There is no buffer data in any of these messages */
     bytes_to_send = ((sizeof(mtc_message_type))-(BUF_SIZE)) ;
 
-    switch ( cmd )
-    {
-        case MTC_CMD_STOP_HOST:
-            ilog ("%s sending 'stop' to heartbeat service\n", hostname.c_str());
-            break ;
-        case MTC_CMD_START_HOST:
-            obj_ptr->manage_heartbeat_clear ( hostname , MAX_IFACES );
-            ilog ("%s sending 'start' to heartbeat service\n", hostname.c_str());
-            break ;
-        case MTC_CMD_DEL_HOST:
-            ilog ("%s sending 'delete' to heartbeat service\n", hostname.c_str());
-            break ;
-        case MTC_CMD_ADD_HOST:
-            obj_ptr->manage_heartbeat_clear ( hostname, MAX_IFACES );
-            ilog ("%s sending 'add' to heartbeat service\n", hostname.c_str());
-            break ;
-        case MTC_RESTART_HBS:
-            ilog ("%s sending 'restart' to heartbeat service\n", hostname.c_str());
-            break ;
-        case MTC_BACKOFF_HBS:
-            ilog ("%s requesting heartbeat period backoff\n", hostname.c_str());
-            break ;
-        case MTC_RECOVER_HBS:
-            ilog ("%s requesting heartbeat period recovery\n", hostname.c_str());
-            break ;
-        default:
-        {
-            slog ("%s Unsupported command operation 0x%x\n",  hostname.c_str(), cmd );
-            return (FAIL_BAD_PARM);
-        }
-    }
 
     event.cmd     = cmd ;
     event.num     = 1   ;
     event.parm[0] = obj_ptr->get_nodetype(hostname);
 
     /* send to hbsAgent daemon port */
-    bytes = sock_ptr->mtc_to_hbs_sock->write((char*) &event, bytes_to_send);
-    if ( bytes <= 0 )
+    std::list<string> controllers ;
+    controllers.clear();
+    if ( controller == CONTROLLER )
     {
-        wlog ("Cannot send to heartbeat service\n");
-        rc = FAIL_TO_TRANSMIT ;
+        controllers.push_back(CONTROLLER_0);
+        controllers.push_back(CONTROLLER_1);
+    }
+    else
+    {
+        controllers.push_back(controller);
+    }
+    string ip = "" ;
+    std::list<string>::iterator unit ;
+    for ( unit  = controllers.begin () ;
+          unit != controllers.end () ;
+          unit++ )
+    {
+        switch ( cmd )
+        {
+        case MTC_CMD_ACTIVE_CTRL:
+            mlog3 ("%s sending 'activity state' to %s heartbeat service\n", hostname.c_str(), unit->c_str());
+            break ;
+        case MTC_CMD_STOP_HOST:
+            ilog ("%s sending 'stop' to %s heartbeat service\n", hostname.c_str(), unit->c_str());
+            break ;
+        case MTC_CMD_START_HOST:
+            obj_ptr->manage_heartbeat_clear ( hostname , MAX_IFACES );
+            ilog ("%s sending 'start' to %s heartbeat service\n", hostname.c_str(), unit->c_str());
+            break ;
+        case MTC_CMD_DEL_HOST:
+            ilog ("%s sending 'delete' to %s heartbeat service\n", hostname.c_str(), unit->c_str());
+            break ;
+        case MTC_CMD_ADD_HOST:
+            obj_ptr->manage_heartbeat_clear ( hostname, MAX_IFACES );
+            ilog ("%s sending 'add' to %s heartbeat service\n", hostname.c_str(), unit->c_str());
+            break ;
+        case MTC_RESTART_HBS:
+            ilog ("%s sending 'restart' to %s heartbeat service\n", hostname.c_str(), unit->c_str());
+            break ;
+        case MTC_BACKOFF_HBS:
+            ilog ("%s requesting %s heartbeat period backoff\n", hostname.c_str(), unit->c_str());
+            break ;
+        case MTC_RECOVER_HBS:
+            ilog ("%s requesting %s heartbeat period recovery\n", hostname.c_str(), unit->c_str());
+            break ;
+        default:
+        {
+            slog ("%s Unsupported command operation 0x%x\n",  hostname.c_str(), cmd );
+            rc = FAIL_BAD_PARM ;
+            continue ;
+        }
+        }
+
+        ip = get_mtcInv_ptr()->get_hostaddr(*unit) ;
+        bytes = sock_ptr->mtc_to_hbs_sock->write((char*) &event, bytes_to_send, ip.data());
+        if ( bytes <= 0 )
+        {
+            wlog ("%s failed to send command (0x%x) to heartbeat service at %s\n", unit->c_str(), cmd, ip.c_str() );
+            rc = FAIL_TO_TRANSMIT ;
+        }
     }
     return rc ;
 }
@@ -954,6 +967,14 @@ int service_events ( nodeLinkClass * obj_ptr, mtc_socket_type * sock_ptr )
                     /* Assert the degrade condition with the 'false' (i.e. not clear)*/
                     obj_ptr->manage_heartbeat_degrade ( hostname, iface, false );
                 }
+                /* Otherwise the action must be alarm only or none ; both of which
+                 * are already handled by the hbsAgent, so do nothing */
+                else
+                {
+                    ilog ("%s heartbeat degrade event dropped ; action is not fail or degrade (%s)\n",
+                              hostname.c_str(),
+                              get_iface_name_str(iface));
+                }
             }
             else
             {
@@ -1003,7 +1024,7 @@ int service_events ( nodeLinkClass * obj_ptr, mtc_socket_type * sock_ptr )
              * are already handled by the hbsAgent, so do nothing */
             else
             {
-                dlog ("%s heartbeat loss event dropped (%s)\n",
+                ilog ("%s heartbeat loss event dropped ; action is not fail or degrade (%s)\n",
                           hostname.c_str(),
                           get_iface_name_str(iface));
             }
@@ -1070,6 +1091,7 @@ int service_events ( nodeLinkClass * obj_ptr, mtc_socket_type * sock_ptr )
 
     else if ( msg.cmd == MTC_EVENT_HEARTBEAT_READY )
     {
+        string controller = CONTROLLER ;
         std::list<string>::iterator temp ;
 
         /* no heartbeating in simplex mode */
@@ -1078,7 +1100,17 @@ int service_events ( nodeLinkClass * obj_ptr, mtc_socket_type * sock_ptr )
             return (PASS);
         }
 
-        ilog ("Received 'Heartbeat Service Ready' Event\n");
+        /* get the controller that sent this ready event */
+        if (( msg.buf[0] != '\0' ) && ( strnlen( msg.buf, BUF_SIZE) <= MAX_CHARS_HOSTNAME ))
+        {
+            controller = msg.buf ;
+            ilog ("%s Heartbeat Service Ready Event (%s)\n",
+                      msg.buf, sock_ptr->mtc_event_rx_sock->get_src_str());
+        }
+        else
+        {
+            ilog ("Heartbeat Service Ready Event\n");
+        }
         obj_ptr->hbs_ready = true ;
 
         /* Run Maintenance on Inventory */
@@ -1093,25 +1125,17 @@ int service_events ( nodeLinkClass * obj_ptr, mtc_socket_type * sock_ptr )
            * the heartbeat service. This tell the heartbeat
            * service about all the hosts so that it will
            * send heartbeat oob flag events to mtce. */
-            if ( send_hbs_command( hostname, MTC_CMD_ADD_HOST ) != PASS )
+            if ( send_hbs_command( hostname, MTC_CMD_ADD_HOST, controller ) != PASS )
             {
                 elog ("%s Failed to send inventory to heartbeat service\n", hostname.c_str());
             }
-            /* Send the start event to the heartbeat service for all enabled hosts except
-             * for the active controller which is not actively monitored */
-            if ( obj_ptr->is_active_controller ( hostname ) == false )
+            /* Send the start event to the heartbeat service for all enabled hosts */
+            if (( obj_ptr->get_adminState  ( hostname ) == MTC_ADMIN_STATE__UNLOCKED ) &&
+                ( obj_ptr->get_operState   ( hostname ) == MTC_OPER_STATE__ENABLED ) &&
+                ((obj_ptr->get_availStatus ( hostname ) == MTC_AVAIL_STATUS__AVAILABLE ) ||
+                 (obj_ptr->get_availStatus ( hostname ) == MTC_AVAIL_STATUS__DEGRADED )))
             {
-                if (( obj_ptr->get_adminState  ( hostname ) == MTC_ADMIN_STATE__UNLOCKED ) &&
-                    ( obj_ptr->get_operState   ( hostname ) == MTC_OPER_STATE__ENABLED ) &&
-                    ((obj_ptr->get_availStatus ( hostname ) == MTC_AVAIL_STATUS__AVAILABLE ) ||
-                     (obj_ptr->get_availStatus ( hostname ) == MTC_AVAIL_STATUS__DEGRADED )))
-                {
-                    send_hbs_command ( hostname, MTC_CMD_START_HOST );
-                }
-            }
-            else
-            {
-                dlog ("%s Refusing to start heartbeat of self\n", hostname.c_str() );
+                send_hbs_command ( hostname, MTC_CMD_START_HOST, controller );
             }
         }
     }

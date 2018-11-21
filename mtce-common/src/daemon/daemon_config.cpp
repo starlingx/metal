@@ -269,7 +269,7 @@ void daemon_dump_cfg ( void )
 {
     daemon_config_type * ptr = daemon_get_cfg_ptr();
 
-    ilog ("Configuration Settings\n------------------------------\n");
+    ilog ("Configuration Settings ...\n");
     if ( ptr->scheduling_priority ) { ilog ("scheduling_priority   = %d\n", ptr->scheduling_priority   ); }
 
     if ( ptr->infra_degrade_only )    { ilog ("infra_degrade_only    = %s\n", ptr->infra_degrade_only ? "Yes" : "No" );}
@@ -277,7 +277,6 @@ void daemon_dump_cfg ( void )
     if ( ptr->active )                { ilog ("active                = %s\n", ptr->active ? "Yes" : "No"  );}
 
     /* hbsAgent */
-    if ( ptr->hbs_pulse_period      ) { ilog ("hbs_pulse_period      = %d\n", ptr->hbs_pulse_period      );}
     if ( ptr->token_refresh_rate    ) { ilog ("token_refresh_rate    = %d\n", ptr->token_refresh_rate    );}
     if ( ptr->hbs_minor_threshold   ) { ilog ("hbs_minor_threshold   = %d\n", ptr->hbs_minor_threshold   );}
     if ( ptr->hbs_degrade_threshold ) { ilog ("hbs_degrade_threshold = %d\n", ptr->hbs_degrade_threshold );}
