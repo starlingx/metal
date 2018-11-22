@@ -263,7 +263,7 @@ void _get_field ( char * src_ptr , int field, char * dst_ptr )
     for ( dst_ptr-- ; *dst_ptr == ' ' ; dst_ptr-- ) { *dst_ptr = '\0' ; }
 
     /* terminate the line after the last real non-space char */
-    ++dst_ptr = '\0' ;
+    *(++dst_ptr) = '\0' ;
 
     return ;
 
