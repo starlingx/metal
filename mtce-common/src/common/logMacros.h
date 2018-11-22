@@ -39,6 +39,7 @@ typedef struct
 {
     int   scheduling_priority   ; /**< Scheduling priority of this daemon     */
     bool  active                ; /**< Maintenance activity state true|false  */
+    int   hbs_pulse_period      ; /**< time (msec) between heartbeat requests */
     int   token_refresh_rate    ; /**< token refresh rate in seconds          */
     int   hbs_minor_threshold   ; /**< heartbeat miss minor threshold         */
     int   hbs_degrade_threshold ; /**< heartbeat miss degrade threshold       */
