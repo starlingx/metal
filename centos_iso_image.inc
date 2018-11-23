@@ -23,3 +23,7 @@ pxe-network-installer
 
 # platform-kickstarts
 platform-kickstarts
+
+# inventory
+inventory
+python-inventoryclient

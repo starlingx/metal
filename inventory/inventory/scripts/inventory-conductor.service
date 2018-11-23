@@ -1,0 +1,15 @@
+[Unit]
+Description=Inventory Conductor
+After=network-online.target syslog-ng.service config.service rabbitmq-server.service
+
+[Service]
+Type=simple
+RemainAfterExit=yes
+User=root
+Environment=OCF_ROOT=/usr/lib/ocf
+ExecStart=/usr/lib/ocf/resource.d/platform/inventory-conductor start
+ExecStop=/usr/lib/ocf/resource.d/platform/inventory-conductor stop
+PIDFile=/var/run/inventory-conductor.pid
+
+[Install]
+WantedBy=multi-user.target
