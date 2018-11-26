@@ -161,6 +161,11 @@ openstack-aodh-evaluator
 openstack-aodh-expirer
 openstack-aodh-listener
 openstack-aodh-notifier
+openstack-barbican
+openstack-barbican-api
+openstack-barbican-common
+openstack-barbican-keystone-listener
+openstack-barbican-worker
 openstack-cinder
 openstack-cinder-doc
 openstack-dashboard
@@ -219,6 +224,8 @@ openstack-panko-common
 openstack-panko-doc
 python-aodh
 python-aodhclient
+python-barbican
+python2-barbicanclient
 python-ceilometerclient-doc
 python-cinder
 python-cinderclient-doc
