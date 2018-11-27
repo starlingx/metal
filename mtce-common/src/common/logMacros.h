@@ -166,6 +166,18 @@ typedef struct
     int   kernwd_update_period         ; /**< expect kernel watchdog to be updated */
     int   autorecovery_threshold       ; /**< AIO stop autorecovery threshold */
 
+    /**< Auto Recovery Thresholds                                             */
+    int   ar_config_threshold          ; /**< Configuration Failure Threshold */
+    int   ar_goenable_threshold        ; /**< GoEnable Failure Threshold      */
+    int   ar_hostservices_threshold    ; /**< Host Services Failure Threshold */
+    int   ar_heartbeat_threshold       ; /**< Heartbeat Soak Failure Threshold*/
+
+    /**< Auto Recovery Retry Intervals                                        */
+    int   ar_config_interval           ; /**< Configuration Failure Interval  */
+    int   ar_goenable_interval         ; /**< GoEnable Failure Interval       */
+    int   ar_hostservices_interval     ; /**< Host Services Failure Interval  */
+    int   ar_heartbeat_interval        ; /**< Heartbeat Soak Failure Interval */
+
     int   debug_all    ;
     int   debug_json   ; /**< Enable jlog (json string  ) output if not false */
     int   debug_timer  ; /**< Enable tlog (timer logs   ) output if not false */

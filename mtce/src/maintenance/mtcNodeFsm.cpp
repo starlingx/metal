@@ -118,7 +118,8 @@ int nodeLinkClass::fsm ( struct nodeLinkClass::node * node_ptr )
      * the insv_test_handler gets run as soon as a host's main function is enabled.
      ****************************************************************************
      */
-    if (( node_ptr->adminState  == MTC_ADMIN_STATE__UNLOCKED ) &&
+    if (( node_ptr->ar_disabled == false ) &&
+        ( node_ptr->adminState  == MTC_ADMIN_STATE__UNLOCKED ) &&
         ( node_ptr->operState   == MTC_OPER_STATE__ENABLED )   &&
         ((node_ptr->availStatus == MTC_AVAIL_STATUS__AVAILABLE ) ||
          (node_ptr->availStatus == MTC_AVAIL_STATUS__DEGRADED )))
@@ -265,7 +266,7 @@ int nodeLinkClass::fsm ( struct nodeLinkClass::node * node_ptr )
     {
         flog ("%s -> Running SubFunction Enable handler (%d)\n",
                      node_ptr->hostname.c_str(),
-                     node_ptr->handlerStage.enable );
+                     node_ptr->enableStage );
 
         nodeLinkClass::enable_subf_handler ( node_ptr );
     }

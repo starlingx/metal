@@ -446,6 +446,15 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
 {
     int rc = PASS ;
 
+    if ( node_ptr->ar_disabled == true )
+    {
+        wlog_throttled ( node_ptr->ar_log_throttle,
+                         AR_LOG_THROTTLE_THRESHOLD,
+                         "%s auto recovery disabled cause:%d",
+                         node_ptr->hostname.c_str(), node_ptr->ar_cause );
+         return (RETRY); ;
+    }
+
     if ( THIS_HOST )
     {
         /******************************************************************
@@ -476,7 +485,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
         }
     }
 
-    switch ( (int)node_ptr->handlerStage.enable )
+    switch ( (int)node_ptr->enableStage )
     {
         case MTC_ENABLE__FAILURE:
         {
@@ -539,7 +548,8 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                 if ( is_inactive_controller_main_insv() == true )
                 {
                     wlog ("%s has critical failure\n", node_ptr->hostname.c_str());
-                    wlog ("%s ... requesting swact to in-service inactive controller\n", node_ptr->hostname.c_str());
+                    wlog ("%s ... requesting swact to peer controller",
+                              node_ptr->hostname.c_str());
 
                     mtcInvApi_update_task_now ( node_ptr, MTC_TASK_FAILED_SWACT_REQ );
 
@@ -587,19 +597,6 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                 }
                 else
                 {
-                    this->autorecovery_enabled = true ;
-
-                    /* use thresholded auto recovery for simplext failure case */
-                    manage_autorecovery ( node_ptr );
-
-                    if ( this->autorecovery_disabled == false )
-                    {
-                        wlog ("%s has critical failure.\n", node_ptr->hostname.c_str());
-                        wlog ("%s ... downgrading to degrade with auto recovery disabled\n", node_ptr->hostname.c_str());
-                        wlog ("%s ... to avoid disabling only enabled controller\n", node_ptr->hostname.c_str());
-                        this->autorecovery_disabled = true ;
-                    }
-
                     if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
                     {
                         /* Raise Critical Compute Function Alarm */
@@ -620,7 +617,22 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                                             MTC_AVAIL_STATUS__FAILED );
             }
 
-            if ( degrade_only == true )
+            /* if we get here in controller simplex mode then go degraded
+             * if we are not already degraded. Otherwise, fail. */
+            if ( THIS_HOST && ( is_inactive_controller_main_insv() == false ))
+            {
+                if (( node_ptr->adminState  != MTC_ADMIN_STATE__UNLOCKED ) ||
+                    ( node_ptr->operState   != MTC_OPER_STATE__ENABLED   ) ||
+                    ( node_ptr->availStatus != MTC_AVAIL_STATUS__DEGRADED))
+                {
+                    allStateChange  ( node_ptr, MTC_ADMIN_STATE__UNLOCKED,
+                                                MTC_OPER_STATE__ENABLED,
+                                                MTC_AVAIL_STATUS__DEGRADED );
+                }
+                /* adminAction state is already changed to NONE. */
+            }
+
+            else if ( degrade_only == true )
             {
                 allStateChange ( node_ptr, MTC_ADMIN_STATE__UNLOCKED,
                                            MTC_OPER_STATE__ENABLED,
@@ -636,25 +648,28 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
             /* Inform the VIM of the failure */
             mtcVimApi_state_change ( node_ptr, VIM_HOST_FAILED, 3 );
 
-            /* if we get here in controller simplex mode then go degraded
-             * if we are not already degraded. Otherwise, fail. */
-            if ( THIS_HOST && ( is_inactive_controller_main_insv() == false ))
+            /* handle thresholded auto recovery retry delay interval */
+            if ( node_ptr->ar_cause < MTC_AR_DISABLE_CAUSE__LAST )
             {
-                /* autorecovery must be disabled */
-                if (( node_ptr->adminState  != MTC_ADMIN_STATE__UNLOCKED ) ||
-                    ( node_ptr->operState   != MTC_OPER_STATE__ENABLED   ) ||
-                    ( node_ptr->availStatus != MTC_AVAIL_STATUS__DEGRADED))
+                unsigned int interval = this->ar_interval[node_ptr->ar_cause] ;
+                if ( interval )
                 {
-                    allStateChange  ( node_ptr, MTC_ADMIN_STATE__UNLOCKED,
-                                                MTC_OPER_STATE__ENABLED,
-                                                MTC_AVAIL_STATUS__DEGRADED );
+                    /* Wait this failure cause's retry delay */
+                    mtcTimer_start ( node_ptr->mtcTimer,
+                                     mtcTimer_handler,
+                                     interval );
+
+                    wlog ("%s waiting %d secs before enable sequence retry (%d)",
+                              node_ptr->hostname.c_str(),
+                              interval, node_ptr->ar_cause );
                 }
-                /* adminAction state is already changed to NONE. */
+                else
+                    node_ptr->mtcTimer.ring = true ;
             }
             else
-            {
-                enableStageChange ( node_ptr, MTC_ENABLE__FAILURE_WAIT );
-            }
+                node_ptr->mtcTimer.ring = true ;
+
+            enableStageChange ( node_ptr, MTC_ENABLE__FAILURE_WAIT );
 
             break;
         }
@@ -717,6 +732,8 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
             mtcCmd_workQ_purge ( node_ptr );
             mtcCmd_doneQ_purge ( node_ptr );
 
+            node_ptr->mtce_flags = 0 ;
+
             /* Assert the mtc alive gate */
             node_ptr->mtcAlive_gate = true ;
 
@@ -739,8 +756,9 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
 
                    /* enable auto recovery if the inactive controller
                     * is out of service */
-                   if (( is_controller (node_ptr) ) && ( NOT_THIS_HOST ))
-                       this->autorecovery_enabled = true ;
+                   //if (( is_controller (node_ptr) ) && ( NOT_THIS_HOST ))
+                   //    node_ptr->ar_disabled = false ;
+                   // this->autorecovery_enabled = true ;
 
                     /* fall through */
 
@@ -757,20 +775,6 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                                   get_availStatus_str(node_ptr->availStatus).c_str());
 
                         mtcInvApi_update_task ( node_ptr, "" );
-
-                        /* Special case */
-                        // alarm_enabled_clear ( node_ptr, false );
-
-                        //mtcAlarm_clear ( node_ptr->hostname, MTC_ALARM_ID__CONFIG );
-                        //node_ptr->alarms[MTC_ALARM_ID__CONFIG] = FM_ALARM_SEVERITY_CLEAR ;
-
-                        //allStateChange ( node_ptr, MTC_ADMIN_STATE__UNLOCKED,
-                        //                           MTC_OPER_STATE__ENABLED,
-                        //                           MTC_AVAIL_STATUS__DEGRADED );
-
-                        // adminActionChange ( node_ptr, MTC_ADMIN_ACTION__NONE );
-
-                        // return (PASS);
                     }
                     else
                     {
@@ -986,6 +990,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
             node_ptr->mtcAlive_online         = false ;
             node_ptr->mtcAlive_offline        = true  ;
             node_ptr->goEnabled               = false ;
+            node_ptr->ar_cause = MTC_AR_DISABLE_CAUSE__NONE ;
 
             clear_service_readies ( node_ptr );
 
@@ -1038,17 +1043,24 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                 mtcTimer_reset ( node_ptr->mtcTimer );
 
                 /* Check to see if the host is/got configured correctly */
-                if ( (node_ptr->mtce_flags & MTC_FLAG__I_AM_CONFIGURED) == 0 )
+                if ((( !node_ptr->mtce_flags & MTC_FLAG__I_AM_CONFIGURED )) ||
+                    ((  node_ptr->mtce_flags & MTC_FLAG__I_AM_NOT_HEALTHY )))
                 {
-                    elog ("%s configuration incomplete or failed (oob:%x:%x)\n",
+                    elog ("%s configuration failed or incomplete (oob:%x)\n",
                               node_ptr->hostname.c_str(),
-                              node_ptr->mtce_flags,
-                              MTC_FLAG__I_AM_CONFIGURED);
+                              node_ptr->mtce_flags)
 
                     /* raise an alarm for the failure of the config */
                     alarm_config_failure ( node_ptr );
+
                     mtcInvApi_update_task ( node_ptr, MTC_TASK_MAIN_CONFIG_FAIL );
                     enableStageChange ( node_ptr, MTC_ENABLE__FAILURE );
+
+                    /* handle auto recovery for this failure */
+                    if ( ar_manage ( node_ptr,
+                                     MTC_AR_DISABLE_CAUSE__CONFIG,
+                                     MTC_TASK_AR_DISABLED_CONFIG ) != PASS )
+                        break ;
                 }
                 else
                 {
@@ -1152,6 +1164,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
         }
         case MTC_ENABLE__GOENABLED_WAIT:
         {
+            bool goenable_failed = false ;
             /* The healthy code comes from the host in the mtcAlive message.
              * This 'if' clause was introduced to detected failure of host
              * without having to wait for the GOENABLED phase to timeout.
@@ -1162,27 +1175,22 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
              * be gracefully recovered to enabled in that case. Instead
              * we want to recover the card through a reset as quickly as
              * possible. */
-            if ( node_ptr->health == NODE_UNHEALTHY )
-            {
-                elog ("%s is UNHEALTHY\n", node_ptr->hostname.c_str());
 
-                mtcTimer_reset ( node_ptr->mtcTimer );
-                this->force_full_enable ( node_ptr );
-            }
             /* search for the Go Enable message */
-            else if ( node_ptr->goEnabled_failed == true )
+            if (( node_ptr->health == NODE_UNHEALTHY ) ||
+                (( node_ptr->mtce_flags & MTC_FLAG__I_AM_NOT_HEALTHY)) ||
+                 ( node_ptr->goEnabled_failed == true ))
             {
                 elog ("%s got GOENABLED Failed\n", node_ptr->hostname.c_str());
                 mtcTimer_reset ( node_ptr->mtcTimer );
-                mtcInvApi_update_task ( node_ptr, MTC_TASK_INTEST_FAIL );
-                enableStageChange ( node_ptr, MTC_ENABLE__FAILURE );
+                goenable_failed = true ;
+                mtcInvApi_update_task ( node_ptr, MTC_TASK_MAIN_INTEST_FAIL );
             }
             /* search for the Go Enable message */
             else if ( node_ptr->goEnabled == true )
             {
                 mtcTimer_reset ( node_ptr->mtcTimer );
                 plog ("%s got GOENABLED\n", node_ptr->hostname.c_str());
-                // plog ("%s main configured OK\n", node_ptr->hostname.c_str());
 
                 /* O.K. clearing the state now that we got it */
                 node_ptr->goEnabled = false ;
@@ -1194,25 +1202,27 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
             }
             else if ( mtcTimer_expired ( node_ptr->mtcTimer ))
             {
-                elog ("%s has GOENABLED Timeout\n", node_ptr->hostname.c_str());
-                ilog ("%s ... the out-of-service tests took too long to complete\n",
-                          node_ptr->hostname.c_str());
-
-                mtcInvApi_update_task ( node_ptr, MTC_TASK_INTEST_FAIL_TO_ );
+                elog ("%s has GOENABLED Timeout", node_ptr->hostname.c_str());
                 node_ptr->mtcTimer.ring = false ;
-
-                /* raise an alarm for the enable failure */
-                alarm_enabled_failure ( node_ptr , true );
-
-                /* go back and issue reboot again */
-                enableStageChange ( node_ptr, MTC_ENABLE__FAILURE );
-
-                /* no longer In-Test ; we are 'Failed' again" */
-                availStatusChange ( node_ptr, MTC_AVAIL_STATUS__FAILED  );
+                goenable_failed = true ;
+                mtcInvApi_update_task ( node_ptr, MTC_TASK_MAIN_INTEST_TO );
             }
             else
             {
                 ; /* wait some more */
+            }
+
+            if ( goenable_failed )
+            {
+                alarm_enabled_failure ( node_ptr, true );
+
+                enableStageChange ( node_ptr, MTC_ENABLE__FAILURE );
+
+                /* handle auto recovery for this failure */
+                if ( ar_manage ( node_ptr,
+                                 MTC_AR_DISABLE_CAUSE__GOENABLE,
+                                 MTC_TASK_AR_DISABLED_GOENABLE ) != PASS )
+                    break ;
             }
             break ;
         }
@@ -1224,14 +1234,20 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
             plog ("%s Starting Host Services\n", node_ptr->hostname.c_str());
             if ( this->launch_host_services_cmd ( node_ptr, start ) != PASS )
             {
-                node_ptr->hostservices_failed = true ;
-
                 elog ("%s %s failed ; launch\n",
                           node_ptr->hostname.c_str(),
                           node_ptr->host_services_req.name.c_str());
 
-                mtcInvApi_update_task ( node_ptr, MTC_TASK_START_SERVICE_FAIL );
+                node_ptr->hostservices_failed = true ;
+                alarm_enabled_failure ( node_ptr, true );
                 enableStageChange ( node_ptr, MTC_ENABLE__FAILURE );
+                mtcInvApi_update_task ( node_ptr, MTC_TASK_MAIN_SERVICE_FAIL );
+
+                /* handle auto recovery for this failure */
+                if ( ar_manage ( node_ptr,
+                                 MTC_AR_DISABLE_CAUSE__HOST_SERVICES,
+                                 MTC_TASK_AR_DISABLED_SERVICES ) != PASS )
+                    break ;
             }
             else
             {
@@ -1261,6 +1277,10 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
             else if ( rc != PASS )
             {
                 node_ptr->hostservices_failed = true ;
+                alarm_enabled_failure ( node_ptr, true );
+                enableStageChange ( node_ptr, MTC_ENABLE__FAILURE );
+
+
                 /* distinguish 'timeout' from other 'execution' failures */
                 if ( rc == FAIL_TIMEOUT )
                 {
@@ -1269,7 +1289,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                               node_ptr->host_services_req.name.c_str());
 
                     mtcInvApi_update_task ( node_ptr,
-                                            MTC_TASK_START_SERVICE_TO );
+                                            MTC_TASK_MAIN_SERVICE_TO );
                 }
                 else
                 {
@@ -1279,9 +1299,14 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                               rc);
 
                     mtcInvApi_update_task ( node_ptr,
-                                            MTC_TASK_START_SERVICE_FAIL );
+                                            MTC_TASK_MAIN_SERVICE_FAIL );
                 }
-                enableStageChange ( node_ptr, MTC_ENABLE__FAILURE );
+
+                /* handle auto recovery for this failure */
+                if ( ar_manage ( node_ptr,
+                                 MTC_AR_DISABLE_CAUSE__HOST_SERVICES,
+                                 MTC_TASK_AR_DISABLED_SERVICES ) != PASS )
+                    break ;
             }
             else /* success path */
             {
@@ -1321,8 +1346,6 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                 mtcTimer_reset ( node_ptr->mtcTimer );
             }
 
-            /* Start Monitoring Services - heartbeat, process and hardware */
-            send_hbs_command ( node_ptr->hostname, MTC_CMD_START_HOST );
 
             if ( this->hbs_failure_action == HBS_FAILURE_ACTION__NONE )
             {
@@ -1338,11 +1361,13 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                           MTC_HEARTBEAT_SOAK_BEFORE_ENABLE,
                           node_ptr->hbsClient_ready ? " ready event" : "out ready event"  );
 
-
                 /* allow heartbeat to run for MTC_HEARTBEAT_SOAK_BEFORE_ENABLE
                  * seconds before we declare enable */
                 mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_HEARTBEAT_SOAK_BEFORE_ENABLE );
                 enableStageChange ( node_ptr, MTC_ENABLE__HEARTBEAT_SOAK );
+
+                /* Start Monitoring Services - heartbeat, process and hardware */
+                send_hbs_command ( node_ptr->hostname, MTC_CMD_START_HOST );
             }
             break ;
         }
@@ -1351,6 +1376,11 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
             if ( node_ptr->mtcTimer.ring == true )
             {
                 plog ("%s heartbeating\n", node_ptr->hostname.c_str() );
+
+                /* handle auto recovery ear for thsi potential cause */
+                node_ptr->ar_cause = MTC_AR_DISABLE_CAUSE__NONE ;
+                node_ptr->ar_count[MTC_AR_DISABLE_CAUSE__HEARTBEAT] = 0 ;
+
                 /* if heartbeat is not working then we will
                  * never get here and enable the host */
                 enableStageChange ( node_ptr, MTC_ENABLE__STATE_CHANGE );
@@ -1490,7 +1520,6 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
             }
             else
             {
-
                 node_ptr->enabled_count++ ;
 
                 /* Inform the VIM that this host is enabled */
@@ -1505,6 +1534,8 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                 adminActionChange ( node_ptr, MTC_ADMIN_ACTION__NONE );
 
                 node_ptr->health_threshold_counter = 0 ;
+
+                ar_enable ( node_ptr );
             }
 
             break ;
@@ -2103,7 +2134,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
             {
                 elog ("%s got GOENABLED Failed\n", node_ptr->hostname.c_str());
                 mtcTimer_reset ( node_ptr->mtcTimer );
-                mtcInvApi_update_task ( node_ptr, MTC_TASK_INTEST_FAIL );
+                mtcInvApi_update_task ( node_ptr, MTC_TASK_MAIN_INTEST_FAIL );
                 this->force_full_enable ( node_ptr );
             }
 
@@ -2121,6 +2152,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
             else if ( node_ptr->mtcTimer.ring == true )
             {
                 elog ("%s has GOENABLED Timeout\n", node_ptr->hostname.c_str());
+                mtcInvApi_update_task ( node_ptr, MTC_TASK_MAIN_INTEST_TO );
 
                 node_ptr->mtcTimer.ring = false ;
 
@@ -2640,7 +2672,7 @@ int nodeLinkClass::disable_handler  ( struct nodeLinkClass::node * node_ptr )
 {
     int rc = PASS ;
 
-    switch ( (int)node_ptr->handlerStage.disable )
+    switch ( (int)node_ptr->disableStage )
     {
         case MTC_DISABLE__START:
         {
@@ -2657,6 +2689,7 @@ int nodeLinkClass::disable_handler  ( struct nodeLinkClass::node * node_ptr )
             clear_subf_failed_bools ( node_ptr );
             clear_hostservices_ctls ( node_ptr );
 
+            enableStageChange  ( node_ptr, MTC_ENABLE__START ) ;
             disableStageChange ( node_ptr, MTC_DISABLE__DIS_SERVICES_WAIT) ;
 
             stop_offline_handler ( node_ptr );
@@ -2758,7 +2791,7 @@ int nodeLinkClass::disable_handler  ( struct nodeLinkClass::node * node_ptr )
             /* If the stage is still MTC_DISABLE__DIS_SERVICES_WAIT then the
              * host should already be powered on so lets send the stop
              * services command */
-            if ( node_ptr->handlerStage.disable == MTC_DISABLE__DIS_SERVICES_WAIT )
+            if ( node_ptr->disableStage == MTC_DISABLE__DIS_SERVICES_WAIT )
             {
                 bool start = false ;
                 if ( this->launch_host_services_cmd ( node_ptr, start ) != PASS )
@@ -3042,6 +3075,9 @@ int nodeLinkClass::disable_handler  ( struct nodeLinkClass::node * node_ptr )
             recovery_ctrl_init ( node_ptr->hwmon_reset );
             recovery_ctrl_init ( node_ptr->hwmon_powercycle );
 
+            /* re-enable auto recovery */
+            ar_enable ( node_ptr );
+
             /* Load configured mtcAlive and goEnabled timers */
             LOAD_NODETYPE_TIMERS ;
 
@@ -3055,7 +3091,7 @@ int nodeLinkClass::disable_handler  ( struct nodeLinkClass::node * node_ptr )
         default:
         {
             elog ("%s Bad Case (%d)\n", node_ptr->hostname.c_str(),
-                                        node_ptr->handlerStage.disable );
+                                        node_ptr->disableStage );
             rc = FAIL_BAD_CASE ;
         }
     }
@@ -3273,14 +3309,20 @@ int nodeLinkClass::online_handler ( struct nodeLinkClass::node * node_ptr )
     int rc = PASS ;
 
     /* don't need to manage the offline or online state
-     * for the following availability states */
-    if (( node_ptr->availStatus == MTC_AVAIL_STATUS__AVAILABLE )   ||
+     * for the following states
+     *  ... auto recovery state
+     *  ... enable stages
+     *  ... availability states */
+    if (( node_ptr->ar_disabled == true ) ||
+        ( node_ptr->enableStage == MTC_ENABLE__FAILURE ) ||
+        ( node_ptr->enableStage == MTC_ENABLE__FAILURE_WAIT ) ||
+        ( node_ptr->availStatus == MTC_AVAIL_STATUS__AVAILABLE )   ||
         ( node_ptr->availStatus == MTC_AVAIL_STATUS__DEGRADED  )   ||
         ( node_ptr->availStatus == MTC_AVAIL_STATUS__OFFDUTY   )   ||
         ( node_ptr->availStatus == MTC_AVAIL_STATUS__INTEST    )   ||
         ( node_ptr->availStatus == MTC_AVAIL_STATUS__NOT_INSTALLED ))
     {
-        return (PASS);
+        return (rc);
     }
 
     switch ( (int)node_ptr->onlineStage )
@@ -4648,6 +4690,8 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
             recovery_ctrl_init ( node_ptr->hwmon_reset );
             recovery_ctrl_init ( node_ptr->hwmon_powercycle );
 
+            ar_enable ( node_ptr );
+
             mtcInvApi_force_task ( node_ptr, "" );
             break ;
         }
@@ -5537,24 +5581,68 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
 
         case MTC_ADD__CLEAR_TASK:
         {
-            if ( is_controller(node_ptr) )
+            /* Check for hosts that were in the auto recovery disabled state */
+            if ( !node_ptr->task.empty () )
             {
-                if ( node_ptr->mtcTimer.ring == true )
+                if (( node_ptr->adminState   == MTC_ADMIN_STATE__UNLOCKED ) &&
+                   (( !node_ptr->task.compare(MTC_TASK_AR_DISABLED_CONFIG))  ||
+                    ( !node_ptr->task.compare(MTC_TASK_AR_DISABLED_GOENABLE))||
+                    ( !node_ptr->task.compare(MTC_TASK_AR_DISABLED_SERVICES))||
+                    ( !node_ptr->task.compare(MTC_TASK_AR_DISABLED_HEARTBEAT))))
                 {
-                    if ( !node_ptr->task.empty () )
+                    if ( !node_ptr->task.compare(MTC_TASK_AR_DISABLED_CONFIG ))
                     {
-                        mtcInvApi_force_task ( node_ptr, "" );
+                        node_ptr->ar_cause = MTC_AR_DISABLE_CAUSE__CONFIG ;
+                        alarm_config_failure ( node_ptr );
                     }
+                    else if ( !node_ptr->task.compare(MTC_TASK_AR_DISABLED_GOENABLE ))
+                    {
+                        node_ptr->ar_cause = MTC_AR_DISABLE_CAUSE__GOENABLE ;
+                        alarm_enabled_failure ( node_ptr, true );
+                    }
+                    else if ( !node_ptr->task.compare(MTC_TASK_AR_DISABLED_SERVICES ))
+                    {
+                        node_ptr->ar_cause = MTC_AR_DISABLE_CAUSE__HOST_SERVICES ;
+                        alarm_enabled_failure ( node_ptr, true );
+                    }
+                    else if ( !node_ptr->task.compare(MTC_TASK_AR_DISABLED_HEARTBEAT ))
+                    {
+                        node_ptr->ar_cause = MTC_AR_DISABLE_CAUSE__HEARTBEAT ;
+                    }
+                    node_ptr->ar_disabled = true ;
+
+                    if ( THIS_HOST )
+                        mtcInvApi_update_states ( node_ptr, "unlocked", "enabled", "degraded" );
+                    else
+                        mtcInvApi_update_states ( node_ptr, "unlocked", "disabled", "failed" );
+
+                    node_ptr->addStage = MTC_ADD__START;
+                    node_ptr->add_completed = true ;
+
+                    adminActionChange ( node_ptr, MTC_ADMIN_ACTION__NONE );
+                    plog ("%s Host Add Completed ; auto recovery disabled state (uptime:%d)\n",
+                              node_ptr->hostname.c_str(), node_ptr->uptime );
+                    break ;
                 }
                 else
                 {
-                    break ;
+                    if ( is_controller(node_ptr) )
+                    {
+                        if ( node_ptr->mtcTimer.ring == true )
+                        {
+                            mtcInvApi_force_task ( node_ptr, "" );
+                        }
+                        else
+                        {
+                            break ;
+                        }
+                    }
+                    else
+                    {
+                        /* do it immediately for all otyher server types */
+                        mtcInvApi_force_task ( node_ptr, "" );
+                    }
                 }
-            }
-            else
-            {
-                /* do it immediately for all otyher server types */
-                mtcInvApi_force_task ( node_ptr, "" );
             }
             /* default retries counter to zero before START_SERVICES */
             node_ptr->retries = 0 ;
@@ -6017,55 +6105,6 @@ int nodeLinkClass::oos_test_handler ( struct nodeLinkClass::node * node_ptr )
                               node_ptr->start_services_running_main);
                 }
             }
-#endif
-
-
-            /* Avoid forcing the states to the database when on the first & second pass.
-             * This is because it is likely we just read all the states and
-             * if coming out of a DOR or a SWACT we don't need to un-necessarily
-             * produce that extra sysinv traffic.
-             * Also, no point forcing the states while there is an admin action
-             * or enable or graceful recovery going on as well because state changes
-             * are being done in the FSM already */
-            if (( node_ptr->oos_test_count > 1 ) &&
-                ( node_ptr->adminAction == MTC_ADMIN_ACTION__NONE ) &&
-                ( !node_ptr->handlerStage.raw ) &&
-                ( !node_ptr->recoveryStage ))
-            {
-                /* Change the oper and avail states in the database */
-                allStateChange ( node_ptr, node_ptr->adminState,
-                                           node_ptr->operState,
-                                           node_ptr->availStatus );
-            }
-
-#ifdef WANT_CLEAR_ALARM_AUDIT
-
-            /* TODO: Obsolete with new Alarm Strategy */
-            /* Self Correct Stuck Failure Alarms */
-            if (( node_ptr->adminState   == MTC_ADMIN_STATE__UNLOCKED  ) &&
-                ( node_ptr->operState    == MTC_OPER_STATE__ENABLED ) &&
-                (( node_ptr->availStatus == MTC_AVAIL_STATUS__AVAILABLE ) ||
-                 ( node_ptr->availStatus == MTC_AVAIL_STATUS__DEGRADED )))
-            {
-                if ( node_ptr->alarms[MTC_ALARM_ID__CONFIG] != FM_ALARM_SEVERITY_CLEAR )
-                {
-                    mtcAlarm_clear ( node_ptr->hostname, MTC_ALARM_ID__CONFIG );
-                    node_ptr->alarms[MTC_ALARM_ID__CONFIG] = FM_ALARM_SEVERITY_CLEAR ;
-                }
-                alarm_enabled_clear ( node_ptr , false);
-            }
-#endif
-            /* Make sure the locked status on the host itself is set */
-            if (( node_ptr->adminState  == MTC_ADMIN_STATE__LOCKED  ) &&
-                ( node_ptr->operState   == MTC_OPER_STATE__DISABLED ) &&
-                ( node_ptr->availStatus == MTC_AVAIL_STATUS__ONLINE ) &&
-                ( !(node_ptr->mtce_flags & MTC_FLAG__I_AM_LOCKED)    ))
-            {
-                ilog ("%s setting 'locked' status\n", node_ptr->hostname.c_str());
-
-                /* Tell the host that it is locked */
-                send_mtc_cmd ( node_ptr->hostname , MTC_MSG_LOCKED, MGMNT_INTERFACE);
-            }
 
             if (( daemon_is_file_present ( MTC_CMD_FIT__GOENABLE_AUDIT )) &&
                 ( node_ptr->adminState == MTC_ADMIN_STATE__UNLOCKED ) &&
@@ -6077,6 +6116,43 @@ int nodeLinkClass::oos_test_handler ( struct nodeLinkClass::node * node_ptr )
                 {
                     send_mtc_cmd ( node_ptr->hostname, MTC_REQ_SUBF_GOENABLED, MGMNT_INTERFACE );
                 }
+            }
+#endif
+
+            if ( node_ptr->ar_disabled == true )
+            {
+                elog ( "%s auto recovery disabled cause:%d",
+                           node_ptr->hostname.c_str(),
+                           node_ptr->ar_cause );
+            }
+
+            /* Avoid forcing the states to the database when on the first & second pass.
+             * This is because it is likely we just read all the states and
+             * if coming out of a DOR or a SWACT we don't need to un-necessarily
+             * produce that extra sysinv traffic.
+             * Also, no point forcing the states while there is an admin action
+             * or enable or graceful recovery going on as well because state changes
+             * are being done in the FSM already */
+            if (( node_ptr->oos_test_count > 1 ) &&
+                ( node_ptr->adminAction == MTC_ADMIN_ACTION__NONE ) &&
+                ( !node_ptr->enableStage ) && ( !node_ptr->recoveryStage ))
+            {
+                /* Change the oper and avail states in the database */
+                allStateChange ( node_ptr, node_ptr->adminState,
+                                           node_ptr->operState,
+                                           node_ptr->availStatus );
+            }
+
+            /* Make sure the locked status on the host itself is set */
+            if (( node_ptr->adminState  == MTC_ADMIN_STATE__LOCKED  ) &&
+                ( node_ptr->operState   == MTC_OPER_STATE__DISABLED ) &&
+                ( node_ptr->availStatus == MTC_AVAIL_STATUS__ONLINE ) &&
+                ( !(node_ptr->mtce_flags & MTC_FLAG__I_AM_LOCKED)    ))
+            {
+                ilog ("%s setting 'locked' status\n", node_ptr->hostname.c_str());
+
+                /* Tell the host that it is locked */
+                send_mtc_cmd ( node_ptr->hostname , MTC_MSG_LOCKED, MGMNT_INTERFACE);
             }
 
             break ;
@@ -6140,7 +6216,8 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
             }
             /* manage degrade state and alarms */
             if ((  node_ptr->adminState  == MTC_ADMIN_STATE__UNLOCKED ) &&
-                (  node_ptr->operState   == MTC_OPER_STATE__ENABLED   ))
+                (  node_ptr->operState   == MTC_OPER_STATE__ENABLED   ) &&
+                (  node_ptr->ar_disabled == false ))
             {
                 /************************************************************
                  *               Manage In-Service Alarms                   *
@@ -6170,7 +6247,6 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
         }
         case MTC_INSV_TEST__RUN:
         {
-
 #ifdef WANT_FIT_TESTING
 
             daemon_load_fit ();
@@ -6229,22 +6305,20 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
              * controller autorecovery. Otherwise enable it but in this case
              * don't change the disable bool as that is used to gate auto
              * recovery once the threshoild is reached */
-            if ( is_controller ( node_ptr ) && NOT_THIS_HOST )
-            {
-                if (( this->autorecovery_enabled == true ) &&
-                    ( node_ptr->operState == MTC_OPER_STATE__ENABLED ))
-                {
-                    autorecovery_clear ( CONTROLLER_0 );
-                    autorecovery_clear ( CONTROLLER_1 );
-                    this->autorecovery_enabled  = false ;
-                    this->autorecovery_disabled = false ;
-                }
-                else if (( this->autorecovery_enabled == false ) &&
-                         ( node_ptr->operState != MTC_OPER_STATE__ENABLED ))
-                {
-                    this->autorecovery_enabled = true ;
-                }
-            }
+//            if ( is_controller ( node_ptr ) && NOT_THIS_HOST )
+//            {
+//                if (( node_ptr->ar_disabled == false ) &&
+//                    ( node_ptr->operState == MTC_OPER_STATE__ENABLED ))
+//                {
+//                    autorecovery_clear ( CONTROLLER_0 );
+//                    autorecovery_clear ( CONTROLLER_1 );
+//                }
+                //else if (( node_ptr->ar_disabled == true ) &&
+                //         ( node_ptr->operState != MTC_OPER_STATE__ENABLED ))
+                //{
+                //    node_ptr->ar_disabled = false ;
+                //}
+            // }
 
             /* Monitor the health of the host - no pass file */
             if ((  node_ptr->adminState  == MTC_ADMIN_STATE__UNLOCKED ) &&
@@ -6440,7 +6514,7 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
                      *
                      **/
                     if (( node_ptr->operState_subf == MTC_OPER_STATE__DISABLED ) &&
-                        ( this->autorecovery_disabled == false ) &&
+                        ( node_ptr->ar_disabled == false ) &&
                         ( node_ptr->start_services_needed == false ))
                     {
                         if (( node_ptr->adminAction != MTC_ADMIN_ACTION__ENABLE_SUBF ) &&
@@ -6527,7 +6601,7 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
                         if (( daemon_is_file_present ( CONFIG_COMPLETE_FILE )) &&
                             ( daemon_is_file_present ( CONFIG_FAIL_FILE )))
                         {
-                            wlog_throttled ( node_ptr->health_threshold_counter, (MTC_UNHEALTHY_THRESHOLD*3), "%s is UNHEALTHY\n", node_ptr->hostname.c_str());
+                            wlog_throttled ( node_ptr->health_threshold_counter, (MTC_UNHEALTHY_THRESHOLD*10), "%s is UNHEALTHY\n", node_ptr->hostname.c_str());
                             if ( node_ptr->health_threshold_counter >= MTC_UNHEALTHY_THRESHOLD )
                             {
                                 node_ptr->degrade_mask |= DEGRADE_MASK_CONFIG ;
