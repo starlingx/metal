@@ -133,6 +133,7 @@ openstack-barbican-api
 openstack-barbican-common
 openstack-barbican-keystone-listener
 openstack-barbican-worker
+openstack-aodh-config
 openstack-ceilometer-alarm
 openstack-ceilometer-central
 openstack-ceilometer-collector

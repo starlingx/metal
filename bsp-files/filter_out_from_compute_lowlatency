@@ -170,6 +170,7 @@ openstack-barbican-api
 openstack-barbican-common
 openstack-barbican-keystone-listener
 openstack-barbican-worker
+openstack-aodh-config
 openstack-cinder
 openstack-cinder-doc
 openstack-dashboard
