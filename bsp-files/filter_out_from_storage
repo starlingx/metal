@@ -128,6 +128,11 @@ openstack-aodh-evaluator
 openstack-aodh-expirer
 openstack-aodh-listener
 openstack-aodh-notifier
+openstack-barbican
+openstack-barbican-api
+openstack-barbican-common
+openstack-barbican-keystone-listener
+openstack-barbican-worker
 openstack-ceilometer-alarm
 openstack-ceilometer-central
 openstack-ceilometer-collector
@@ -208,6 +213,8 @@ postgresql-timezone
 pxe-network-installer
 python-aodh
 python-aodhclient
+python-barbican
+python2-barbicanclient
 python-ceilometerclient
 python-cephclient
 python-cinder
