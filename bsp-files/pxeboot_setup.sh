@@ -65,7 +65,10 @@ if [ ! -d ${COPY_DIR} ] ; then
     fi
 else
     echo "$COPY_DIR already exists"
-    exit 0
+    read -p "WARNING: Files in this folder will get overwritten, continue? [y/N] " confirm
+    if [[ "${confirm}" != "y" ]]; then
+        exit 1
+    fi
 fi
 
 #Copy the vmlinuz and initrd files to the destination directory
@@ -89,6 +92,11 @@ cp -Rf ${COPY_DIR}/pxeboot/* ${COPY_DIR}/
 #Rename the UEFI grub config
 mv ${COPY_DIR}/pxeboot_grub.cfg ${COPY_DIR}/grub.cfg
 
+#Create a symlink of the UEFI grub config, the bootloader could be also looking
+#for it under the EFI/ folder depending on if the PXE Server is configured with a
+#TFTP Server or dnsmasq
+ln -sf ../grub.cfg ${COPY_DIR}/EFI/grub.cfg
+
 #Variable replacement
 sed -i "s#xxxHTTP_URLxxx#${BASE_URL}#g;
         s#xxxHTTP_URL_PATCHESxxx#${BASE_URL}/patches#g;
@@ -105,7 +113,11 @@ rm -Rf ${COPY_DIR}/pxeboot
 
 if [ -n "$TFTP_DIR" ]; then
     #Create pxelinux.cfg directory and default link
-    mkdir ${TFTP_DIR}/pxelinux.cfg
+    if [ ! -d ${TFTP_DIR}/pxelinux.cfg ] ; then
+        mkdir ${TFTP_DIR}/pxelinux.cfg
+    fi
     chmod 755 ${TFTP_DIR}/pxelinux.cfg
-    ln -s ../pxeboot.cfg ${TFTP_DIR}/pxelinux.cfg/default
+    ln -sf ../pxeboot.cfg ${TFTP_DIR}/pxelinux.cfg/default
 fi
+
+echo "The setup is complete"
