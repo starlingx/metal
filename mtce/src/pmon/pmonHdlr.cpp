@@ -2032,7 +2032,9 @@ void pmon_service ( pmon_ctrl_type * ctrl_ptr )
 
             /* Audit to ensure that running processes are
              * registered with the kernel */
-            if (( process_config[i].registered == false ) &&
+            if (( process_config[i].stage != PMON_STAGE__POLLING ) &&
+                ( process_config[i].stage != PMON_STAGE__START_WAIT ) &&
+                ( process_config[i].registered == false ) &&
                 ( _pmon_ctrl_ptr->event_mode ) &&
                 ( process_config[i].restart == false ) &&
                 ( process_config[i].failed == false ) &&
