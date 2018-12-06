@@ -920,6 +920,12 @@ auth_load_cleanup:
         }
         json_object_put(raw_obj);
     }
+    if (token_obj)      json_object_put(token_obj);
+    if (svccat_obj)     json_object_put(svccat_obj);
+    if (tuple_obj)      json_object_put(tuple_obj);
+    if (end_obj)        json_object_put(end_obj);
+    if (url_obj)        json_object_put(type_obj);
+    if (type_obj)       json_object_put(type_obj);
 
     return (rc);
 }
