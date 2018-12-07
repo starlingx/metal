@@ -4214,6 +4214,25 @@ int nodeLinkClass::num_controllers_enabled ( void )
     return (cnt);
 }
 
+
+/** Returns true if the specified hostname is provisioned */
+bool nodeLinkClass::hostname_provisioned ( string hostname )
+{
+    bool provisioned = false ;
+    for ( struct node * ptr = head ;  ; ptr = ptr->next )
+    {
+        if ( ptr->hostname.compare(hostname) == 0 )
+        {
+            provisioned = true ;
+            break ;
+        }
+        if (( ptr->next == NULL ) || ( ptr == tail ))
+            break ;
+    }
+    return (provisioned);
+}
+
+
 int nodeLinkClass::service_netlink_events ( int nl_socket , int ioctl_socket )
 {
     std::list<string> links_gone_down ;
@@ -7336,9 +7355,6 @@ int nodeLinkClass::mon_host ( const string & hostname, bool true_false, bool sen
         bool want_log = true ;
         for ( int iface = 0 ; iface < MAX_IFACES ; iface++ )
         {
-            if ( node_ptr->monitor[iface] == true_false )
-                continue ;
-
             if ( iface == INFRA_IFACE )
             {
                 if ( this->infra_network_provisioned == false )
@@ -7810,6 +7826,16 @@ int nodeLinkClass::remPulse ( struct node * node_ptr, iface_enum iface, bool cle
         {
             ptr->hbs_count[iface]++ ;
             ptr->b2b_pulses_count[iface]++ ;
+
+            if ( ptr->b2b_pulses_count[iface] == hbs_failure_threshold )
+            {
+                hbs_cluster_change( ptr->hostname + " " + get_iface_name_str(iface) + " heartbeat pass" );
+            }
+            else if ( ptr->b2b_pulses_count[iface] == 1 )
+            {
+                hbs_cluster_change( ptr->hostname + " " + get_iface_name_str(iface) + " heartbeat start" );
+            }
+
             if ( ptr->hbs_failure[iface] == true )
             {
                 /* threshold failure recovery */
@@ -8281,8 +8307,7 @@ int nodeLinkClass::lost_pulses ( iface_enum iface, bool & storage_0_responding )
                     wlog_throttled ( pulse_ptr->no_work_log_throttle, 500,
                                      "%s %s *** Heartbeat Loss *** (degrade only)\n", pulse_ptr->hostname.c_str(),
                                                                        get_iface_name_str(iface) );
-                    this->print_node_info ();
-                    hbs_cluster_log ( this->my_hostname, "event", true );
+                    hbs_cluster_change ( pulse_ptr->hostname + " heartbeat loss" );
                 }
             }
 
@@ -8303,8 +8328,7 @@ int nodeLinkClass::lost_pulses ( iface_enum iface, bool & storage_0_responding )
                     wlog_throttled ( pulse_ptr->no_work_log_throttle, 500,
                                      "%s %s *** Heartbeat Loss *** (degrade only)\n", pulse_ptr->hostname.c_str(),
                                                                        get_iface_name_str(iface) );
-                    this->print_node_info ();
-                    hbs_cluster_log ( this->my_hostname, "event", true );
+                    hbs_cluster_change ( pulse_ptr->hostname + " heartbeat loss" );
                 }
             }
 
@@ -8327,8 +8351,7 @@ int nodeLinkClass::lost_pulses ( iface_enum iface, bool & storage_0_responding )
                 else
                 {
                     pulse_ptr->hbs_failure[iface] = true ;
-                    this->print_node_info ();
-                    hbs_cluster_log ( this->my_hostname, "event", true );
+                    hbs_cluster_change ( pulse_ptr->hostname + " heartbeat loss" );
                 }
                 pulse_ptr->hbs_failure_count[iface]++ ;
             }

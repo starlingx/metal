@@ -37,6 +37,7 @@ typedef struct
     bool controller_2_enabled ;
 #endif
 
+    bool peer_controller_enabled ;
     /* Used to prevent log flooding in presence of back to back errors. */
     unsigned int log_throttle ;
 
@@ -64,9 +65,9 @@ typedef struct
     /* The working heartbeat cluster data vault. */
     mtce_hbs_cluster_type cluster ;
 
-    bool cluster_change ;
-    int  cluster_change_threshold_count ;
-    int  cluster_change_difference_count ;
+    string cluster_change_reason ;
+
+    bool got_peer_controller_history ;
 
     msgClassSock * sm_socket_ptr ;
 
@@ -126,6 +127,24 @@ void hbs_cluster_init ( unsigned short period, msgClassSock * sm_socket_ptr )
     ctrl.log_throttle = 0 ;
 }
 
+void hbs_cluster_ctrl_init ( void )
+{
+    ctrl.this_controller = 0xffff ;
+    ctrl.controller_0_enabled = false ;
+    ctrl.controller_1_enabled = false ;
+#ifdef THREE_CONTROLLER_SYSTEM
+    ctrl.controller_2_enabled = false ;
+#endif
+    ctrl.peer_controller_enabled = false ;
+    ctrl.log_throttle = 0 ;
+    ctrl.monitored_networks = 0 ;
+    ctrl.monitored_hosts = 0 ;
+    ctrl.monitored_hostname_list.clear();
+    ctrl.cluster_change_reason = "" ;
+    ctrl.got_peer_controller_history = false ;
+    ctrl.sm_socket_ptr = NULL ;
+    memset(&ctrl.storage_0_not_responding_count[0], 0, sizeof(ctrl.storage_0_not_responding_count));
+}
 
 /****************************************************************************
  *
@@ -149,6 +168,23 @@ void hbs_cluster_nums ( unsigned short this_controller,
    ctrl.monitored_networks = monitored_networks ;
 }
 
+/****************************************************************************
+ *
+ * Name        : hbs_cluster_change
+ *
+ * Description : Maintain a the cluster change reason.
+ *
+ *               cleared and printed in hbs_cluster_update.
+ *
+ ***************************************************************************/
+
+void hbs_cluster_change ( string cluster_change_reason )
+{
+    if ( ctrl.cluster_change_reason.empty() )
+        ctrl.cluster_change_reason = cluster_change_reason ;
+    else if ( cluster_change_reason.find ( "peer controller cluster event" ) == std::string::npos )
+        ctrl.cluster_change_reason.append(" ; " + cluster_change_reason);
+}
 
 /****************************************************************************
  *
@@ -196,7 +232,7 @@ void cluster_storage0_state ( bool enabled )
         ctrl.cluster.storage0_enabled = enabled ;
         ilog ("storage-0 heartbeat state changed to %s",
                 enabled ? "enabled" : "disabled" );
-        ctrl.cluster_change = true ;
+        hbs_cluster_change ( "storage-0 state change" );
     }
 }
 
@@ -211,21 +247,50 @@ void cluster_storage0_state ( bool enabled )
 
 void hbs_manage_controller_state ( string & hostname, bool enabled )
 {
+    int controller = -1 ;
+
     /* track controller state */
     if ( hostname == CONTROLLER_0 )
     {
+        controller = 0 ;
         ctrl.controller_0_enabled = enabled ;
     }
     else if ( hostname == CONTROLLER_1 )
     {
+        controller = 1 ;
         ctrl.controller_1_enabled = enabled ;
     }
-#ifdef THREE_CONTROLLER_SYSTEM
-    else if ( hostname == CONTROLLER_2 )
+    else
     {
-        ctrl.controller_2_enabled = enabled ;
+        /* ignore all other host names */
+        return ;
     }
-#endif
+
+    /* manage the state of the peer controller */
+    if ( ctrl.this_controller != controller )
+    {
+        /* Clear peer controller cluster history when the peer
+         * controller goes disabled */
+        if (( ctrl.peer_controller_enabled == true ) &&
+            ( enabled == false ))
+        {
+            hbs_cluster_rem ( controller );
+        }
+        if ( enabled == false )
+        {
+            hbs_cluster_change ( "peer controller disabled" ) ;
+        }
+        else
+        {
+           hbs_cluster_change ( "peer controller enabled" ) ;
+        }
+        ctrl.peer_controller_enabled = enabled ;
+    }
+    else if ( enabled == false )
+    {
+        hbs_cluster_change ( "this controller locked" ) ;
+        hbs_cluster_lock();
+    }
 }
 
 
@@ -267,7 +332,6 @@ void hbs_cluster_add ( string & hostname )
         ctrl.monitored_hosts = (unsigned short)ctrl.monitored_hostname_list.size();
         ilog ("%s added to cluster", hostname.c_str());
         cluster_list ();
-        ctrl.cluster_change = true ;
     }
 
     /* Manage storage-0 state */
@@ -284,13 +348,6 @@ void hbs_cluster_add ( string & hostname )
 
     /* Manage controller state ; true means enabled in this case. */
     hbs_manage_controller_state ( hostname, true );
-
-    if (( ctrl.cluster_change ) && ( ctrl.sm_socket_ptr ))
-    {
-        hbs_cluster_send( ctrl.sm_socket_ptr, 0 );
-        ctrl.cluster_change = false ;
-    }
-
 }
 
 /****************************************************************************
@@ -341,17 +398,32 @@ void hbs_cluster_del ( string & hostname )
 
             cluster_list ();
 
-            ctrl.cluster_change = true ;
+            hbs_cluster_change ( hostname + " deleted" );
 
             break ;
         }
     }
+}
 
-    if (( ctrl.cluster_change ) && ( ctrl.sm_socket_ptr ))
-    {
-        hbs_cluster_send( ctrl.sm_socket_ptr, 0 );
-        ctrl.cluster_change = false ;
-    }
+/****************************************************************************
+ *
+ * Name        : hbs_cluster_period_start
+ *
+ * Description : The following things need to be done at the start of
+ *               every pulse period ...
+ *
+ *               - set 'got_peer_controller_history' to false only to get
+ *                 set true when one at least one hbsClient response
+ *                 contains history from the other controller.
+ *
+ ***************************************************************************/
+
+void hbs_cluster_period_start ( void )
+{
+    clog3 ("Pulse Period Start ; waiting on responses (last:%d)",
+            ctrl.got_peer_controller_history );
+    if ( ctrl.got_peer_controller_history )
+        ctrl.got_peer_controller_history = false ;
 }
 
 /****************************************************************************
@@ -500,113 +572,35 @@ void hbs_cluster_update ( iface_enum iface,
             ctrl.storage_0_not_responding_count[n] = 0 ;
     }
 
-    /*
-     * Manage the history entry index.
-     *
-     * Get the previous entry index ...
-     * ... which is the one before the oldest index.
-     * ... which is the index for the next entry.
-     */
-    unsigned short last_entry_index ;
-    unsigned short oldest_entry_index = history_ptr->oldest_entry_index ;
-
-    if ( oldest_entry_index == 0 )
-    {
-        /* Go to the end of the array. */
-        last_entry_index = MTCE_HBS_HISTORY_ENTRIES-1 ;
-    }
-    else
-    {
-        /* Otherwise, the previous index in the array */
-        last_entry_index = oldest_entry_index - 1 ;
-    }
-
-    bool   logit = false ;
-    string logit_reason = "" ;
-
-    /* Update the history with this data. */
-    history_ptr->entry[oldest_entry_index].hosts_enabled = ctrl.monitored_hosts ;
-    history_ptr->entry[oldest_entry_index].hosts_responding = ctrl.monitored_hosts - not_responding_hosts ;
-
-    if (( history_ptr->entry[oldest_entry_index].hosts_enabled !=
-          history_ptr->entry[  last_entry_index].hosts_enabled ) ||
-        ( history_ptr->entry[oldest_entry_index].hosts_responding !=
-          history_ptr->entry[  last_entry_index].hosts_responding))
-    {
-        /* Only log on change events. */
-        if ( history_ptr->entry[oldest_entry_index].hosts_enabled ==
-             history_ptr->entry[oldest_entry_index].hosts_responding )
-        {
-            ilog ("controller-%d %s cluster of %d is healthy",
-                   ctrl.this_controller,
-                   hbs_cluster_network_name(n).c_str(),
-                   history_ptr->entry[oldest_entry_index].hosts_enabled);
-            ctrl.cluster_change_threshold_count = 0 ;
-            ctrl.cluster_change_difference_count = 0 ;
-        }
-        else
-        {
-            ctrl.cluster_change_threshold_count++ ;
-            ctrl.cluster_change_difference_count =
-            history_ptr->entry[oldest_entry_index].hosts_enabled -
-            history_ptr->entry[oldest_entry_index].hosts_responding ;
-        }
-    }
-    if ( daemon_get_cfg_ptr()->debug_state&4 )
-    {
-        logit = true ;
-        logit_reason = "(debug)" ;
-    }
-//    else if (( ctrl.cluster_change_threshold_count == 1 ) &&
-//             ( cluster_change == false ))
-//    {
-//        logit = true ;
-//        logit_reason = "" ;
-//    }
-    else if ( ctrl.cluster_change_threshold_count >= CLUSTER_CHANGE_THRESHOLD )
-    {
-        logit = true ;
-        ctrl.cluster_change_threshold_count = 0 ;
-        logit_reason = "(threshold)" ;
-    }
-    else
-    {
-        int delta =
-        history_ptr->entry[oldest_entry_index].hosts_enabled -
-        history_ptr->entry[oldest_entry_index].hosts_responding ;
-        if ( delta != ctrl.cluster_change_difference_count )
-        {
-            logit = true ;
-            ctrl.cluster_change_difference_count = delta ;
-            logit_reason = "(delta)" ;
-        }
-    }
-
-    if ( logit )
-    {
-        ilog ("controller-%d %s cluster of %d with %d responding (%d:%d) %s",
-               ctrl.this_controller,
-               hbs_cluster_network_name(n).c_str(),
-               history_ptr->entry[oldest_entry_index].hosts_enabled,
-               history_ptr->entry[oldest_entry_index].hosts_responding,
-               ctrl.cluster_change_difference_count,
-               not_responding_hosts,
-               logit_reason.c_str());
-    }
-
     /* Increment the entries count till it reaches the max. */
     if ( history_ptr->entries < MTCE_HBS_HISTORY_ENTRIES )
         history_ptr->entries++ ;
 
-    /* Manage the next entry update index ; aka the oldest index. */
-    if ( oldest_entry_index == (MTCE_HBS_HISTORY_ENTRIES-1))
+    /* Update the history with this data. */
+    history_ptr->entry[history_ptr->oldest_entry_index].hosts_enabled = ctrl.monitored_hosts ;
+    history_ptr->entry[history_ptr->oldest_entry_index].hosts_responding = ctrl.monitored_hosts - not_responding_hosts ;
+
+    /* Manage the next entry update index ; aka the oldest index.
+     * - handle not full case ; oldest entry is the first entry
+     * - handle the full case ; wrap around */
+    if (( history_ptr->entries == 0 ) ||
+        ( history_ptr->oldest_entry_index == (MTCE_HBS_HISTORY_ENTRIES-1)))
         history_ptr->oldest_entry_index = 0 ;
     else
         history_ptr->oldest_entry_index++ ;
 
+    /* send SM an update if the cluster has changed which is indicated
+     * by string content in ctrl.cluster_change_reason. */
+    if ( ! ctrl.cluster_change_reason.empty() )
+    {
+        hbs_cluster_send( ctrl.sm_socket_ptr, 0, ctrl.cluster_change_reason );
+        ctrl.cluster_change_reason = "" ;
+    }
+
     /* clear the log throttle if we are updating history ok. */
     ctrl.log_throttle = 0 ;
 }
+
 
 /****************************************************************************
  *
@@ -646,6 +640,23 @@ void hbs_cluster_append ( hbs_message_type & msg )
             ctrl.this_controller, ctrl.monitored_networks, ctrl.cluster.histories, msg.cluster.bytes );
 }
 
+/* Manage peer controller vault history. */
+void hbs_cluster_peer ( void )
+{
+    /* Manage updating the local peer controller history data with 0:0
+     * for this pulse period if there was no response from the peer
+     * controller for this pulse period. */
+    if (( ctrl.got_peer_controller_history == false ) &&
+        ( ctrl.peer_controller_enabled == true ))
+    {
+        ilog ("missing peer controller cluster view" ); /* ERIK: DEBUG */
+
+        /* if no nodes have reported peer controller history then inject
+         * a 0:0 value in for this pulse period for that controller. */
+        hbs_cluster_inject ( ctrl.this_controller?0:1, 0, 0 );
+    }
+}
+
 /****************************************************************************
  *
  * Name        : hbs_cluster_unused_bytes
@@ -679,7 +690,7 @@ unsigned short hbs_cluster_unused_bytes ( void )
  *
  ***************************************************************************/
 
-void hbs_cluster_send ( msgClassSock * sm_client_sock, int reqid )
+void hbs_cluster_send ( msgClassSock * sm_client_sock, int reqid , string reason )
 {
     ctrl.cluster.reqid = (unsigned short)reqid ;
     if (( sm_client_sock ) && ( sm_client_sock->sock_ok() == true ))
@@ -691,16 +702,7 @@ void hbs_cluster_send ( msgClassSock * sm_client_sock, int reqid )
              elog ("failed to send cluster vault to SM (bytes=%d) (%d:%s)\n",
                     bytes , errno, strerror(errno));
         }
-        else
-        {
-            string reason = "" ;
-            // ilog ("heartbeat cluster vault sent to SM (%d bytes)", len );
-            if ( reqid )
-                reason = "cluster query" ;
-            else
-                reason = "cluster event" ;
-            hbs_cluster_dump ( ctrl.cluster, reason, true );
-        }
+        hbs_cluster_dump ( ctrl.cluster, reason );
     }
     else
     {
@@ -725,6 +727,12 @@ void hbs_history_save ( string hostname, mtce_hbs_cluster_history_type & sample 
         if (( ctrl.cluster.history[h].controller ==  sample.controller ) &&
             ( ctrl.cluster.history[h].network == sample.network ))
         {
+            if ( hbs_cluster_cmp( sample, ctrl.cluster.history[h] ) )
+            {
+                 hbs_cluster_change ("peer controller cluster event " +
+                 hbs_cluster_network_name((mtce_hbs_network_enum)sample.network));
+            }
+
             memcpy( &ctrl.cluster.history[h], &sample,
                     sizeof(mtce_hbs_cluster_history_type));
 
@@ -738,9 +746,13 @@ void hbs_history_save ( string hostname, mtce_hbs_cluster_history_type & sample 
         }
     }
 
+    hbs_cluster_change ( "peer controller cluster " +
+    hbs_cluster_network_name((mtce_hbs_network_enum)sample.network));
+
     /* not found ? Add a new one */
     memcpy( &ctrl.cluster.history[ctrl.cluster.histories], &sample,
             sizeof(mtce_hbs_cluster_history_type));
+
     ctrl.cluster.histories++ ;
     ctrl.cluster.bytes = BYTES_IN_CLUSTER_VAULT(ctrl.cluster.histories);
 
@@ -753,7 +765,7 @@ void hbs_history_save ( string hostname, mtce_hbs_cluster_history_type & sample 
 
 void hbs_state_audit ( void )
 {
-   hbs_cluster_dump ( ctrl.cluster, "Audit", true );
+   hbs_cluster_dump ( ctrl.cluster, "Audit" );
 }
 
 
@@ -779,46 +791,39 @@ void hbs_cluster_log ( string & hostname,
  *
  * Name        : hbs_cluster_cmp
  *
- * Descrition  : Performs a sanity check over the cluster structure.
+ * Descrition  : Compare 2 histories
  *
- * Assumptions : Debug tool, not called at runtime.
- *
- * Returns     : PASS or FAIL
+ * Returns     : 0 - when number of enabled hosts and responding
+ *                      hosts are the same for all the entries.
+ *               # - the number of entries that are different.
  *
  ***************************************************************************/
 
-int hbs_cluster_cmp( hbs_message_type & msg )
+int hbs_cluster_cmp( mtce_hbs_cluster_history_type h1,
+                     mtce_hbs_cluster_history_type h2 )
 {
-    if ( msg.cluster.version < ctrl.cluster.version )
+    int h1_delta = 0 ;
+    int h2_delta = 0 ;
+    int    delta = 0 ;
+
+    for ( int e = 0 ; e < h1.entries ; e++ )
+        if ( h1.entry[e].hosts_enabled != h1.entry[e].hosts_responding )
+            h1_delta++ ;
+
+    for ( int e = 0 ; e < h2.entries ; e++ )
+        if ( h2.entry[e].hosts_enabled != h2.entry[e].hosts_responding )
+            h2_delta++ ;
+
+    if ( h1_delta > h2_delta )
+        delta = h1_delta-h2_delta ;
+    else if ( h2_delta > h1_delta )
+        delta = h2_delta-h1_delta ;
+
+    if ( delta )
     {
-        wlog ("Unexpected version (%d:%d)",
-               msg.cluster.version, ctrl.cluster.version );
+        clog3 ("peer controller reporting %d deltas", delta );
     }
-    else if ( msg.cluster.revision != ctrl.cluster.revision )
-    {
-        wlog ("Unexpected revision (%d:%d)",
-               msg.cluster.revision, ctrl.cluster.revision );
-    }
-    else if ( msg.cluster.magic_number != ctrl.cluster.magic_number )
-    {
-        wlog ("Unexpected magic number (%d:%d)",
-               msg.cluster.magic_number, ctrl.cluster.magic_number );
-    }
-    else if ( msg.cluster.period_msec != ctrl.cluster.period_msec )
-    {
-        wlog ("Cluster Heartbeat period delta (%d:%d)",
-               msg.cluster.period_msec, ctrl.cluster.period_msec );
-    }
-    else if ( msg.cluster.storage0_enabled != ctrl.cluster.storage0_enabled )
-    {
-        wlog ("Cluster storage0 enabled state delta (%d:%d)",
-               msg.cluster.storage0_enabled, ctrl.cluster.storage0_enabled );
-    }
-    else
-    {
-        return (PASS);
-    }
-    return (FAIL);
+    return(delta);
 }
 
 /****************************************************************************
@@ -843,23 +848,106 @@ int hbs_cluster_save ( string & hostname,
     if ( ! ctrl.monitored_hosts )
         return RETRY ;
 
-    if ( msg.cluster.histories == 0 )
-        return PASS ;
-
-    for ( int h = 0 ; h < msg.cluster.histories ; h++ )
+    if ( ! msg.cluster.histories )
     {
-        if ( msg.cluster.history[h].network >= MTCE_HBS_MAX_NETWORKS )
+        wlog_throttled ( ctrl.log_throttle, THROTTLE_COUNT,
+                         "%s %s ; no peer controller history",
+                         hostname.c_str(),
+                         hbs_cluster_network_name(network).c_str());
+    }
+
+    if ( ctrl.peer_controller_enabled )
+    {
+        /* Should only contain the other controllers history */
+        for ( int h = 0 ; h < msg.cluster.histories ; h++ )
         {
-            elog ("Invalid network id (%d:%d:%d)",
-                   h,
-                   msg.cluster.history[h].controller,
-                   msg.cluster.history[h].network );
+            if ( msg.cluster.history[h].network >= MTCE_HBS_MAX_NETWORKS )
+            {
+                elog ("Invalid network id (%d:%d:%d)",
+                       h,
+                       msg.cluster.history[h].controller,
+                       msg.cluster.history[h].network );
+            }
+            else if ( msg.cluster.history[h].controller != ctrl.this_controller )
+            {
+                /* set that we got some history and save it */
+                ctrl.got_peer_controller_history = true ;
+                hbs_history_save ( hostname, msg.cluster.history[h] );
+            }
+            hbs_cluster_log( hostname, ctrl.cluster, hbs_cluster_network_name(network) );
         }
-        else if ( msg.cluster.history[h].controller != ctrl.this_controller )
-        {
-            hbs_history_save ( hostname, msg.cluster.history[h] );
-        }
-        hbs_cluster_log( hostname, ctrl.cluster, hbs_cluster_network_name(network) );
     }
     return (PASS);
+}
+
+
+void hbs_cluster_inject ( unsigned short controller, unsigned short hosts_enabled, unsigned short hosts_responding )
+{
+    for ( int h = 0 ; h < ctrl.cluster.histories ; h++ )
+    {
+        if ( ctrl.cluster.history[h].controller == controller )
+        {
+            bool dumpit = false ;
+            if (( ctrl.cluster.history[h].entry[ctrl.cluster.history[h].oldest_entry_index].hosts_enabled ) ||
+                ( ctrl.cluster.history[h].entry[ctrl.cluster.history[h].oldest_entry_index].hosts_responding ))
+            {
+                /* Inject requested data for all networks of specified controller */
+                ctrl.cluster.history[h].entry[ctrl.cluster.history[h].oldest_entry_index].hosts_enabled = hosts_enabled ;
+                ctrl.cluster.history[h].entry[ctrl.cluster.history[h].oldest_entry_index].hosts_responding = hosts_responding ;
+
+                wlog ("controller-%d injected %d:%d into controller-%d %s history (entry %d)",
+                       controller?0:1,
+                       hosts_enabled,
+                       hosts_responding,
+                       controller,
+                       hbs_cluster_network_name((mtce_hbs_network_enum)ctrl.cluster.history[h].network).c_str(),
+                       ctrl.cluster.history[h].oldest_entry_index  );
+                dumpit = true ;
+            }
+            /* manage the oldest index */
+            if ( ++ctrl.cluster.history[h].oldest_entry_index == MTCE_HBS_HISTORY_ENTRIES )
+                ctrl.cluster.history[h].oldest_entry_index = 0 ;
+
+            /* DEBUG: */
+            if ( dumpit )
+                hbs_cluster_dump( ctrl.cluster.history[h], ctrl.cluster.storage0_enabled );
+        }
+    }
+}
+
+
+void hbs_cluster_rem ( unsigned short controller )
+{
+    int removed = 0 ;
+    for ( int h = 0 ; h < ctrl.cluster.histories ; h++ )
+    {
+        if ( ctrl.cluster.history[h].controller == controller )
+        {
+            removed++ ;
+            wlog ("controller-%d %s network history removed from cluster (slot %d)",
+                   controller,
+                   hbs_cluster_network_name((mtce_hbs_network_enum)ctrl.cluster.history[h].network).c_str(),
+                   h );
+            memset ( &ctrl.cluster.history[h], 0, sizeof(mtce_hbs_cluster_history_type));
+        }
+    }
+
+    if ( removed )
+    {
+        hbs_cluster_change ( "removed controller history" ) ;
+    }
+
+    ctrl.cluster.histories -= removed ;
+    ctrl.cluster.bytes = BYTES_IN_CLUSTER_VAULT(ctrl.cluster.histories);
+}
+
+/* remove all cluster history on a lock operation */
+void hbs_cluster_lock( void )
+{
+    ilog ("controller-%d lock ; clearing all cluster info", ctrl.this_controller );
+    for ( int h = 0 ; h < ctrl.cluster.histories ; h++ )
+    {
+        memset ( &ctrl.cluster.history[h], 0, sizeof(mtce_hbs_cluster_history_type));
+    }
+    ctrl.cluster.histories = 0 ;
 }

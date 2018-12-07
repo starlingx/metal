@@ -1394,6 +1394,9 @@ public:
     /** Sets a hosts's function and subfunction members */
     int update_host_functions ( string hostname , string functions );
 
+    /** Returns true if the specified hostname is provisioned */
+    bool hostname_provisioned ( string hostname );
+
     /***********************************************************/
 
     /** Number of provisioned hosts (nodes) */

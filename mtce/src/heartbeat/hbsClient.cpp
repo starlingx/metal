@@ -108,6 +108,9 @@ static stallMon_type stallMon ;
 /* Cached Cluster view from controllers */
 mtce_hbs_cluster_type controller_cluster_cache[MTCE_HBS_MAX_CONTROLLERS];
 
+/* Incremented every time the hbsClient fails to receive a summary this
+ * controller for 2 back-to-back pulse intervals. */
+int missed_controller_summary_tracker[MTCE_HBS_MAX_CONTROLLERS] ;
 
 void daemon_sigchld_hdlr ( void )
 {
@@ -887,8 +890,9 @@ int _service_pulse_request ( iface_enum iface , unsigned int flags )
 
         if ( hbs_sock.rx_mesg[iface].cluster.histories > MTCE_HBS_MAX_NETWORKS )
         {
-            slog ("controller-%d provided %d network histories ; max is %d per controller",
+            slog ("controller-%d %s provided %d network histories ; max is %d per controller",
                    controller,
+                   get_iface_name_str(iface),
                    hbs_sock.rx_mesg[iface].cluster.histories,
                    MTCE_HBS_MAX_NETWORKS );
         }
@@ -903,29 +907,81 @@ int _service_pulse_request ( iface_enum iface , unsigned int flags )
         {
             hbs_cluster_copy ( hbs_sock.rx_mesg[iface].cluster,
                                controller_cluster_cache[controller] );
+
             clog1 ("controller-%d cluster info from %s pulse request saved to cache",
                     controller, get_iface_name_str(iface));
 
-            hbs_sock.rx_mesg[iface].cluster.histories = 0 ;
+            /* Clear the expecting count for this controller.
+             * Each heartbeat cycle should result in this being cleared for
+             * both controllers.
+             *
+             * Clearing this is indication that we got a pulse request from
+             * this controller. The code below will increment this count
+             * for its peer controller on every request.
+             * An accumulation of count is indication that we are not
+             * receiving response from the indexed controller */
+            missed_controller_summary_tracker[controller] = 0 ;
 
             if ( have_other_controller_history ( controller ) == true )
             {
-                /* Now copy the other controller's cached cluster info into
-                 * this controlers response */
-                hbs_cluster_copy ( controller_cluster_cache[controller?0:1],
-                                   hbs_sock.rx_mesg[iface].cluster );
+                /******************************************************************
+                 *
+                 * Increment the expecting count for the other controller.
+                 * If that other controller's expecting count reaches 2 or
+                 * more then do not include a summary for that controller
+                 * in this response.
+                 *
+                 * This avoids sending stale summary info.
+                 *
+                 *****************************************************************/
 
-                if ( daemon_get_cfg_ptr()->debug_state & 4 )
+                /* Since the controllers run asynchronously the absence of
+                 * one or 2 between pulse requests for the same controller
+                 * can happen. This is why we compare against greater than
+                 * the number of monitored networks (histories for this
+                 * controller) times 2 ; following Nyquist Theorem . */
+                if ( ++missed_controller_summary_tracker[controller?0:1] >
+                        controller_cluster_cache[controller?0:1].histories * 2 )
                 {
-                    string dump_banner = "" ;
-                    dump_banner.append("controller-") ;
-                    dump_banner.append(itos(controller?0:1));
-                    dump_banner.append(" cluster info from cache injected into controller-");
-                    dump_banner.append(itos(controller));
-                    dump_banner.append(":");
-                    dump_banner.append(get_iface_name_str(iface));
-                    dump_banner.append(" pulse response");
-                    hbs_cluster_dump ( hbs_sock.rx_mesg[iface].cluster, dump_banner, true );
+                    wlog ("controller-%d %s cluster info cleared (%d)",
+                            controller?0:1,
+                            get_iface_name_str(iface),
+                            missed_controller_summary_tracker[controller?0:1]);
+
+                    /* Clear the cached history for that controller who's
+                     * heartbeat requests are no longer being seen.
+                     * No need to clear the history entries,
+                     * just the number of histories to 0 and update bytes. */
+                    controller_cluster_cache[controller?0:1].histories = 0 ;
+                    controller_cluster_cache[controller?0:1].bytes = BYTES_IN_CLUSTER_VAULT(0) ;
+
+                    /* now that the peer controller cluster info is cleared
+                     * we will not see another log from above until we get
+                     * another pulse request from the peer controller. */
+                }
+                else
+                {
+                    clog  ("controller-%d %s cluster info added to response (%d)",
+                            controller?0:1,
+                            get_iface_name_str(iface), missed_controller_summary_tracker[controller?0:1] );
+
+                    /* Now copy the other controller's cached cluster info into
+                     * this controller's response */
+                    hbs_cluster_copy ( controller_cluster_cache[controller?0:1],
+                                       hbs_sock.rx_mesg[iface].cluster );
+
+                    if ( daemon_get_cfg_ptr()->debug_state & 4 )
+                    {
+                        string dump_banner = "" ;
+                        dump_banner.append("controller-") ;
+                        dump_banner.append(itos(controller?0:1));
+                        dump_banner.append(" cluster info from cache injected into controller-");
+                        dump_banner.append(itos(controller));
+                        dump_banner.append(":");
+                        dump_banner.append(get_iface_name_str(iface));
+                        dump_banner.append(" pulse response");
+                        hbs_cluster_dump ( hbs_sock.rx_mesg[iface].cluster, dump_banner );
+                    }
                 }
             }
         }
@@ -1079,7 +1135,10 @@ int daemon_init ( string iface, string nodeType_str )
 
     /* Initialize the controller cluster view data bounce structure */
     for ( int c = 0 ; c < MTCE_HBS_MAX_CONTROLLERS ; c++ )
+    {
         memset ( &controller_cluster_cache[c], 0, sizeof(mtce_hbs_cluster_type)) ;
+        missed_controller_summary_tracker[c] = 0 ;
+    }
 
     /* init the utility module */
     hbs_utils_init ();
@@ -1306,7 +1365,7 @@ void daemon_service_run ( void )
                 int bytes = hbs_sock.sm_client_sock->read((char*)&msg, sizeof(mtce_hbs_cluster_type));
                 if ( bytes )
                 {
-                    hbs_cluster_dump (msg, "Cluster info received", true );
+                    hbs_cluster_dump (msg, "cluster info received" );
                 }
             }
 #endif

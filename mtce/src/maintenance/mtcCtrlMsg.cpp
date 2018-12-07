@@ -794,8 +794,10 @@ int send_hbs_command ( string hostname, int cmd, string controller )
     controllers.clear();
     if ( controller == CONTROLLER )
     {
-        controllers.push_back(CONTROLLER_0);
-        controllers.push_back(CONTROLLER_1);
+        if ( obj_ptr->hostname_provisioned(CONTROLLER_0) )
+            controllers.push_back(CONTROLLER_0);
+        if ( obj_ptr->hostname_provisioned(CONTROLLER_1) )
+            controllers.push_back(CONTROLLER_1);
     }
     else
     {

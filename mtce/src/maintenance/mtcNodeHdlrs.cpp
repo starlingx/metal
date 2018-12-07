@@ -1065,6 +1065,18 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                         enableStageChange(node_ptr, MTC_ENABLE__FAILURE);
                         break ;
                     }
+
+                    else if (( is_controller(node_ptr) == true ) &&
+                             ( node_ptr->mtce_flags & MTC_FLAG__SM_UNHEALTHY ))
+                    {
+                        elog ("%s is SM UNHEALTHY",
+                                  node_ptr->hostname.c_str() );
+                        elog ("%s ... enable failed ; controller needs to reboot\n",
+                                  node_ptr->hostname.c_str());
+                        enableStageChange(node_ptr, MTC_ENABLE__FAILURE);
+                        break ;
+                    }
+
                     /* Set the node mtcAlive timer to configured value.
                      * This will revert bact to normal timeout after any first
                      * unlock value that may be in effect. */

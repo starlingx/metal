@@ -21,3 +21,7 @@ void hbs_cluster_log ( string & hostname, string prefix, bool force=false )
     UNUSED(force);
 }
 
+void hbs_cluster_change ( string reason )
+{
+    UNUSED(reason);
+}

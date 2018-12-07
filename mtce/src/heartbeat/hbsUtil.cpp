@@ -113,11 +113,13 @@ string hbs_cluster_network_name ( mtce_hbs_network_enum network )
 
 /****************************************************************************
  *
- * Name        : hbs_cluster_copy
+ * Name       : hbs_cluster_copy
  *
- * Descrition  : Copies cluster from src to dst.
+ * Descrition : Copies cluster from src to dst.
  *
- * Returns     : Nothing.
+ * Parameters : cluster type.
+ *
+ * Returns    : Nothing.
  *
  ***************************************************************************/
 
@@ -206,7 +208,6 @@ void hbs_cluster_log ( string & hostname,
                     line.append (str);
                     str[0] = '\0' ;
                 }
-//#ifdef WANT_DOTS
                 else if (( history_ptr->entry[this_index].hosts_enabled ==
                            e.hosts_enabled ) &&
                          ( history_ptr->entry[this_index].hosts_responding ==
@@ -214,7 +215,6 @@ void hbs_cluster_log ( string & hostname,
                 {
                     line.append(". ");
                 }
-//#endif
                 else
                 {
                     snprintf (&str[0], MAX_ENTRY_STR_LEN , "%d:%d ", // -%d",
@@ -302,66 +302,83 @@ void hbs_cluster_log ( string & hostname,
 
 /****************************************************************************
  *
- * name       : hbs_cluster_dump
+ * Name        : hbs_cluster_dump
  *
- * Description: Formatted dump of the vault contents to the log file.
+ * Description : Formatted dump of the specified history to the log file.
+ *
+ * Parameters  :
+ *
+ *    history is a single history type whose contents will be logged.
+ *    storage0_enabled true suggests the storage state should also be logged.
  *
  ***************************************************************************/
-void hbs_cluster_dump ( mtce_hbs_cluster_type & vault, string log_prefix, bool force )
+
+void hbs_cluster_dump ( mtce_hbs_cluster_history_type & history, bool storage0_enabled )
 {
-    if ( vault.version == 0 )
+    #define MAX_LINE_LEN (500)
+    char str[MAX_LINE_LEN] ;
+    int i = 0 ;
+    for ( int e = 0 ; e < history.entries_max ; e++ )
+    {
+        snprintf ( &str[i], MAX_LINE_LEN, "%c[%d:%d]" ,
+                   history.oldest_entry_index==e ? '>' : ' ',
+                   history.entry[e].hosts_enabled,
+                   history.entry[e].hosts_responding);
+        i = strlen(str) ;
+    }
+    if ( storage0_enabled )
+    {
+        syslog ( LOG_INFO, "Cluster Vault : C%d %s S:%s %s",
+                 history.controller,
+                 hbs_cluster_network_name((mtce_hbs_network_enum)history.network).c_str(),
+                 history.storage0_responding ? "y" : "n",
+                 str);
+    }
+    else
+    {
+        syslog ( LOG_INFO, "Cluster Vault : C%d %s %s",
+                 history.controller,
+                 hbs_cluster_network_name((mtce_hbs_network_enum)history.network).c_str(),
+                 str);
+    }
+}
+
+/****************************************************************************
+ *
+ * Name        : hbs_cluster_dump
+ *
+ * Description : Formatted dump of the vault contents to the log file.
+ *
+ * Parameters  :
+ *
+ *    vault is a reference to a cluster type whose contents will be logged.
+ *    reason is a string induicatig the reason for the dump.
+ *
+ ***************************************************************************/
+
+void hbs_cluster_dump ( mtce_hbs_cluster_type & vault, string reason )
+{
+    if (( vault.version == 0 ) || ( vault.histories == 0 ))
         return ;
 
-    int debug = daemon_get_cfg_ptr()->debug_state ;
-
-    if (( debug & 2 ) || ( force == true ))
+    /* The reason is cumulative , if long then use a new line */
+    if ( reason.length() > 40 )
     {
-        ilog ("%s", log_prefix.c_str());
-        syslog ( LOG_INFO, "Cluster Vault : v%d.%d %d msec heartbeat period %s;%d network heartbeat response histories (%d bytes)",
-                 vault.version,
-                 vault.revision,
-                 vault.period_msec,
-                 vault.storage0_enabled ? " with storage-0: enabled " : "",
-                 vault.histories,
-                 vault.bytes );
+        syslog ( LOG_INFO, "Cluster Dump  : %s", reason.c_str());
+        reason = "" ;
     }
+    syslog ( LOG_INFO, "Cluster Vault : v%d.%d %d msec period %s;%d network histories (%d bytes) %s",
+             vault.version,
+             vault.revision,
+             vault.period_msec,
+             vault.storage0_enabled ? " with storage-0: enabled " : "",
+             vault.histories,
+             vault.bytes,
+             reason.c_str());
 
-    if (( debug & 4 ) || ( force == true ))
+    for ( int h = 0 ; h < vault.histories ; h++ )
     {
-        for ( int h = 0 ; h < vault.histories ; h++ )
-        {
-            #define MAX_LINE_LEN (500)
-            char str[MAX_LINE_LEN] ;
-            int i = 0 ;
-            for ( int e = 0 ; e < vault.history[h].entries_max ; e++ )
-            {
-                snprintf ( &str[i], MAX_LINE_LEN, "%c[%d:%d]" ,
-                           vault.history[h].oldest_entry_index==e ? '>' : ' ',
-                           vault.history[h].entry[e].hosts_enabled,
-                           vault.history[h].entry[e].hosts_responding);
-                i = strlen(str) ;
-            }
-            if ( vault.storage0_enabled )
-            {
-                syslog ( LOG_INFO, "Cluster Vault : C%d %s S:%s %s",
-                                    vault.history[h].controller,
-                                    hbs_cluster_network_name((mtce_hbs_network_enum)vault.history[h].network).c_str(),
-                                    vault.history[h].storage0_responding ? "y" : "n",
-                                    str);
-            }
-            else
-            {
-                syslog ( LOG_INFO, "Cluster Vault : C%d %s %s",
-                                    vault.history[h].controller,
-                                    hbs_cluster_network_name((mtce_hbs_network_enum)vault.history[h].network).c_str(),
-                                    str);
-            }
-        }
-    }
-
-    if ( debug & 8 )
-    {
-        dump_memory ( &vault, 16, vault.bytes );
+        hbs_cluster_dump ( vault.history[h], vault.storage0_enabled );
     }
 }
 

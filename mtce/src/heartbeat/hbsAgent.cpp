@@ -1277,6 +1277,9 @@ int daemon_init ( string iface, string nodetype )
     /* init the utility module */
     hbs_utils_init ();
 
+    /* init the cluster control structure */
+    hbs_cluster_ctrl_init ();
+
     /* initialize the timer */
     mtcTimer_init ( hbsTimer, "controller", "heartbeat" );
     mtcTimer_init ( hbsTimer_audit, "controller", "state audit" );
@@ -1398,7 +1401,7 @@ void hbs_sm_handler ( void )
                     ( request == SUPPORTED_REQUEST ))
                 {
                     /* success path ... */
-                    hbs_cluster_send( hbs_sock.sm_client_sock, reqid );
+                    hbs_cluster_send( hbs_sock.sm_client_sock, reqid, "query" );
 
                     /* reset log throttle */
                    _hbs_sm_handler_log_throttle = 0 ;
@@ -1722,6 +1725,7 @@ void daemon_service_run ( void )
                 {
                     hbsInv.hbs_disabled = true ;
                     hbsInv.hbs_state_change = true ;
+                    hbs_cluster_lock();
                     ilog ("heartbeat service going disabled (locked)");
 
                     /* force the throttle 'still disabled' log to wait for
@@ -1900,8 +1904,18 @@ void daemon_service_run ( void )
                         }
                         else if ( msg.cmd == MTC_CMD_STOP_HOST )
                         {
-                            hbsInv.mon_host ( hostname, false, true );
-                            hbs_cluster_del ( hostname );
+                            if ( hostname == hbsInv.my_hostname )
+                            {
+                                ilog ("%s heartbeat service disabled by stop command",
+                                          hostname.c_str());
+
+                                hbs_manage_controller_state( hostname, false );
+                            }
+                            else
+                            {
+                                hbsInv.mon_host ( hostname, false, true );
+                                hbs_cluster_del ( hostname );
+                            }
                         }
                         else if ( msg.cmd == MTC_CMD_START_HOST )
                         {
@@ -1938,9 +1952,7 @@ void daemon_service_run ( void )
 
                             hbsInv.hbs_pulse_period = (hbsInv.hbs_pulse_period_save * HBS_BACKOFF_FACTOR) ;
                             ilog ("%s starting heartbeat backoff (period:%d msecs)\n", hostname.c_str(), hbsInv.hbs_pulse_period );
-
-                            /* Send SM cluster information at start of MNFA */
-                            hbs_cluster_send( hbs_sock.sm_client_sock, 0 );
+                            hbs_cluster_change ( "backoff" );
                             hbsInv.print_node_info();
                         }
                         else
@@ -2170,6 +2182,9 @@ void daemon_service_run ( void )
                  * algorithm into 'receive' mode */
                 heartbeat_request = false ;
 
+                /* tell cluster module that a new pulse period has started */
+                hbs_cluster_period_start();
+
                 /* Start the heartbeat timer.
                  * All nodes are expected to send a
                  *  pulse before this timer expires. */
@@ -2263,6 +2278,9 @@ void daemon_service_run ( void )
          */
         else
         {
+            /* manage vault wrt peer controller */
+            hbs_cluster_peer();
+
             for ( int iface = 0 ; iface < MAX_IFACES ; iface++ )
             {
                 /* Do not service the infrastructure interface if it is not provisioned */

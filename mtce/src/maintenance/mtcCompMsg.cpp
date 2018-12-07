@@ -795,9 +795,9 @@ int create_mtcAlive_msg ( mtc_message_type & msg, int cmd, string identity, int 
         }
 
         if ( daemon_is_file_present ( SMGMT_DEGRADED_FILE ) )
-        {
             msg.parm[MTC_PARM_FLAGS_IDX] |= MTC_FLAG__SM_DEGRADED ;
-        }
+        if ( daemon_is_file_present ( SMGMT_UNHEALTHY_FILE ) )
+            msg.parm[MTC_PARM_FLAGS_IDX] |= MTC_FLAG__SM_UNHEALTHY ;
 
     /* add the interface and sequence number to the mtcAlice message */
     identity.append ( ",\"interface\":\"");

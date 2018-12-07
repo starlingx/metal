@@ -86,6 +86,7 @@ void daemon_exit ( void );
 #define MTC_FLAG__SM_DEGRADED      (0x00000080)
 #define MTC_FLAG__PATCHING         (0x00000100) /* Patching in progress */
 #define MTC_FLAG__PATCHED          (0x00000200) /* Patched but not reset */
+#define MTC_FLAG__SM_UNHEALTHY     (0x00001000)
 
 #define MTC_UNHEALTHY_THRESHOLD    (3)
 
