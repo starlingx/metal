@@ -4,6 +4,8 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+SHELL = /bin/bash
+
 SRCS = hbsAlarm.cpp hbsClient.cpp hbsAgent.cpp hbsPmon.cpp hbsUtil.cpp hbsCluster.cpp hbsStubs.cpp
 OBJS = $(SRCS:.cpp=.o)
 

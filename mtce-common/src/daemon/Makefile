@@ -4,6 +4,8 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+SHELL = /bin/bash
+
 SRCS = daemon_main.cpp daemon_ini.cpp daemon_debug.cpp daemon_signal.cpp daemon_config.cpp daemon_files.cpp 
 OBJS = daemon_main.o   daemon_ini.o   daemon_debug.o   daemon_signal.o   daemon_config.o   daemon_files.o
 

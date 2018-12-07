@@ -4,6 +4,8 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+SHELL = /bin/bash
+
 SRCS = pmonAlarm.cpp pmonInit.cpp pmonMsg.cpp pmonHdlr.cpp pmonFsm.cpp
 OBJS = $(SRCS:.cpp=.o)
 LDLIBS = -lstdc++ -ldaemon -lcommon -lrt -lcrypto -lfmcommon -ljson-c
