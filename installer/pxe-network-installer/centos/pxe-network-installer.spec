@@ -7,13 +7,11 @@ Group: base
 Packager: Wind River <info@windriver.com>
 URL: unknown
 
-%define tis_image_version stx-0.2
-
 Source0: LICENSE
 
-Source001: vmlinuz-%{tis_image_version}
-Source002: initrd.img-%{tis_image_version}
-Source003: squashfs.img-%{tis_image_version}
+Source001: vmlinuz
+Source002: initrd.img
+Source003: squashfs.img
 
 Source010: pxeboot-update.sh
 Source011: grub.cfg
@@ -59,14 +57,14 @@ install -v -d -m 755 %{buildroot}/pxeboot/EFI
 install -v -d -m 755 %{buildroot}/pxeboot/EFI/centos
 ln -s %{_prefix}/lib/grub/x86_64-efi %{buildroot}/pxeboot/EFI/centos/x86_64-efi
 
-install -v -m 644 %{_sourcedir}/vmlinuz-%{tis_image_version} \
+install -v -m 644 %{_sourcedir}/vmlinuz \
     %{buildroot}/pxeboot/rel-%{platform_release}/installer-bzImage_1.0
-install -v -m 644 %{_sourcedir}/initrd.img-%{tis_image_version} \
+install -v -m 644 %{_sourcedir}/initrd.img \
     %{buildroot}/pxeboot/rel-%{platform_release}/installer-intel-x86-64-initrd_1.0
 ln -s installer-bzImage_1.0 %{buildroot}/pxeboot/rel-%{platform_release}/installer-bzImage
 ln -s installer-intel-x86-64-initrd_1.0 %{buildroot}/pxeboot/rel-%{platform_release}/installer-initrd
 
-install -v -D -m 644 %{_sourcedir}/squashfs.img-%{tis_image_version} \
+install -v -D -m 644 %{_sourcedir}/squashfs.img \
     %{buildroot}/www/pages/feed/rel-%{platform_release}/LiveOS/squashfs.img
 
 install -v -d -m 755 %{buildroot}%{_sbindir}
@@ -75,7 +73,7 @@ install -v -m 755 %{_sourcedir}/pxeboot-update.sh %{buildroot}%{_sbindir}/pxeboo
 
 install -v -m 644 %{_sourcedir}/post_clone_iso_ks.cfg \
     %{buildroot}/pxeboot/post_clone_iso_ks.cfg
-        
+
 install -v -m 644 %{_sourcedir}/default \
     %{buildroot}/pxeboot/pxelinux.cfg.files/default
 install -v -m 644 %{_sourcedir}/default.static \
