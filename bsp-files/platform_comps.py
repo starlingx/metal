@@ -119,20 +119,20 @@ def main():
 
     add_group(comps, 'controller', rpmlist,
               filter_dir, 'filter_out_from_controller')
-    add_group(comps, 'controller-compute', rpmlist,
+    add_group(comps, 'controller-worker', rpmlist,
               filter_dir, 'filter_out_from_smallsystem')
-    add_group(comps, 'controller-compute-lowlatency', rpmlist,
+    add_group(comps, 'controller-worker-lowlatency', rpmlist,
               filter_dir, 'filter_out_from_smallsystem_lowlatency')
-    add_group(comps, 'compute', rpmlist, filter_dir, 'filter_out_from_compute')
-    add_group(comps, 'compute-lowlatency', rpmlist,
-              filter_dir, 'filter_out_from_compute_lowlatency')
+    add_group(comps, 'worker', rpmlist, filter_dir, 'filter_out_from_worker')
+    add_group(comps, 'worker-lowlatency', rpmlist,
+              filter_dir, 'filter_out_from_worker_lowlatency')
     add_group(comps, 'storage', rpmlist, filter_dir, 'filter_out_from_storage')
 
     add_group(comps, 'controller')
-    add_group(comps, 'controller-compute')
-    add_group(comps, 'controller-compute-lowlatency')
-    add_group(comps, 'compute')
-    add_group(comps, 'compute-lowlatency')
+    add_group(comps, 'controller-worker')
+    add_group(comps, 'controller-worker-lowlatency')
+    add_group(comps, 'worker')
+    add_group(comps, 'worker-lowlatency')
     add_group(comps, 'storage')
 
     tree.write(groups_file, encoding="UTF-8")

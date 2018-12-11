@@ -51,7 +51,7 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
 
     /* Setup the log prefix */
     string name = node_ptr->hostname ;
-    name.append("-compute");
+    name.append("-worker");
 
     switch ( (int)node_ptr->enableStage )
     {
@@ -85,7 +85,7 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
             node_ptr->unknown_health_reported = false ;
             node_ptr->goEnabled_failed_subf   = false ;
 
-            /* load compute subfunciton alarm state */
+            /* load worker subfunciton alarm state */
             EFmAlarmSeverityT sev = mtcAlarm_state ( node_ptr->hostname,
                                                  MTC_ALARM_ID__CH_COMP);
             if ( sev != FM_ALARM_SEVERITY_CLEAR )
@@ -94,16 +94,16 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
                 node_ptr->degrade_mask |= DEGRADE_MASK_SUBF;
             }
 
-            /* start a timer that waits for the /var/run/.compute_config_complete flag */
+            /* start a timer that waits for the /var/run/.worker_config_complete flag */
             mtcTimer_reset ( node_ptr->mtcTimer );
-            mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_COMPUTE_CONFIG_TIMEOUT );
+            mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_WORKER_CONFIG_TIMEOUT );
 
             enableStageChange ( node_ptr, MTC_ENABLE__CONFIG_COMPLETE_WAIT );
             break ;
         }
 
-        /* Wait for the CONFIG_COMPLETE_COMPUTE flag file that indicates
-         * that the compute part of the combo-blade init is finished */
+        /* Wait for the CONFIG_WORKER_COMPUTE flag file that indicates
+         * that the worker part of the combo-blade init is finished */
         case MTC_ENABLE__CONFIG_COMPLETE_WAIT:
         {
             /* look for file */
@@ -141,7 +141,7 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
             {
                 elog ("%s configuration timeout (%d secs)\n",
                           name.c_str(),
-                          MTC_COMPUTE_CONFIG_TIMEOUT );
+                          MTC_WORKER_CONFIG_TIMEOUT );
 
                 alarm_config_failure ( node_ptr );
 

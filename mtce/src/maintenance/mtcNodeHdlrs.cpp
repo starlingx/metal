@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2016 Wind River Systems, Inc.
+ * Copyright (c) 2013-2018 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -496,7 +496,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
              *              to swact to. In this case the ctive controller
              *              - is only degraded to avoid a system outage.
              *              - the CPE subfunction is failed
-             *              - compute SubFunction Alarm is raised
+             *              - worker SubFunction Alarm is raised
              *              - Enable alarm is raised
              *              - A process monitor alarm may also be raised if
              *                the failure was that of a critical process.
@@ -1170,7 +1170,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
              * without having to wait for the GOENABLED phase to timeout.
              *
              * This case is particularly important in the DOR case where
-             * computes may have come up and fail to run their manifests
+             * workers may have come up and fail to run their manifests
              * and sit there in an unconfigured state. We don't want them to
              * be gracefully recovered to enabled in that case. Instead
              * we want to recover the card through a reset as quickly as
@@ -1312,7 +1312,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
             {
                 /* Don't start the self heartbeat for the active controller.
                  * Also, in AIO , hosts that have a controller function also
-                 * have a compute function and the heartbeat for those hosts
+                 * have a worker function and the heartbeat for those hosts
                  * are started at the end of the subfunction handler. */
                 if (( THIS_HOST ) ||
                    (( CPE_SYSTEM ) && ( is_controller(node_ptr)) ))
@@ -1514,7 +1514,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
 
             if (( CPE_SYSTEM ) && ( is_controller(node_ptr)))
             {
-                ilog ("%s running compute sub-function enable handler\n", node_ptr->hostname.c_str());
+                ilog ("%s running worker sub-function enable handler\n", node_ptr->hostname.c_str());
                 mtcInvApi_update_task ( node_ptr, MTC_TASK_ENABLING_SUBF );
                 adminActionChange ( node_ptr, MTC_ADMIN_ACTION__ENABLE_SUBF );
             }
@@ -2118,7 +2118,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
              * without having to wait for the GOENABLED phase to timeout.
              *
              * This case is particularly important in the DOR case where
-             * computes may have come up and fail to run their manifests
+             * workers may have come up and fail to run their manifests
              * and sit there in an unconfigured state. We don't want them to
              * be gracefully recovered to enabled in that case. Instead
              * we want to recover the card through a reset as quickly as
@@ -2225,11 +2225,11 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
                      * system. */
                     if ( NOT_THIS_HOST )
                     {
-                        /* start a timer that waits for the /var/run/.compute_config_complete flag */
-                        mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_COMPUTE_CONFIG_TIMEOUT );
+                        /* start a timer that waits for the /var/run/.worker_config_complete flag */
+                        mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_WORKER_CONFIG_TIMEOUT );
 
                         /* We will come back to MTC_RECOVERY__HEARTBEAT_START
-                         * after we enable the compute subfunction */
+                         * after we enable the worker subfunction */
                         recoveryStageChange ( node_ptr, MTC_RECOVERY__CONFIG_COMPLETE_WAIT );
                     }
                     else
@@ -2259,7 +2259,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
             /* look for file */
             if ( node_ptr->mtce_flags & MTC_FLAG__SUBF_CONFIGURED )
             {
-                plog ("%s-compute configured\n", node_ptr->hostname.c_str());
+                plog ("%s-worker configured\n", node_ptr->hostname.c_str());
 
                 mtcTimer_reset ( node_ptr->mtcTimer );
 
@@ -2269,7 +2269,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
             /* timeout handling */
             else if ( node_ptr->mtcTimer.ring == true )
             {
-                elog ("%s-compute configuration timeout\n", node_ptr->hostname.c_str());
+                elog ("%s-worker configuration timeout\n", node_ptr->hostname.c_str());
 
                 mtcInvApi_update_task ( node_ptr, MTC_TASK_RECOVERY_FAIL );
                 nodeLinkClass::force_full_enable ( node_ptr );
@@ -2282,7 +2282,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
         }
         case MTC_RECOVERY__SUBF_GOENABLED_TIMER:
         {
-            ilog ("%s-compute running out-of-service tests\n", node_ptr->hostname.c_str());
+            ilog ("%s-worker running out-of-service tests\n", node_ptr->hostname.c_str());
 
             /* See if the host is there and already in the go enabled state */
             send_mtc_cmd ( node_ptr->hostname, MTC_REQ_SUBF_GOENABLED, MGMNT_INTERFACE );
@@ -2302,7 +2302,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
             /* search for the Go Enable message */
             if ( node_ptr->goEnabled_failed_subf == true )
             {
-                elog ("%s-compute one or more out-of-service tests failed\n", node_ptr->hostname.c_str());
+                elog ("%s-worker one or more out-of-service tests failed\n", node_ptr->hostname.c_str());
                 mtcTimer_reset ( node_ptr->mtcTimer );
                 mtcInvApi_update_task ( node_ptr, MTC_TASK_RECOVERY_FAIL );
                 this->force_full_enable ( node_ptr );
@@ -2314,7 +2314,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
                 /* stop the timer */
                 mtcTimer_reset ( node_ptr->mtcTimer );
 
-                plog ("%s-compute passed  out-of-service tests\n", node_ptr->hostname.c_str());
+                plog ("%s-worker passed  out-of-service tests\n", node_ptr->hostname.c_str());
 
                 /* O.K. clearing the state now that we got it */
                 node_ptr->goEnabled_subf        = false ;
@@ -2324,7 +2324,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
             }
             else if ( node_ptr->mtcTimer.ring == true )
             {
-                elog ("%s-compute out-of-service test execution timeout\n", node_ptr->hostname.c_str());
+                elog ("%s-worker out-of-service test execution timeout\n", node_ptr->hostname.c_str());
                 node_ptr->mtcTimer.ring = false ;
                 mtcInvApi_update_task ( node_ptr, MTC_TASK_RECOVERY_FAIL );
                 this->force_full_enable ( node_ptr );
@@ -2341,11 +2341,11 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
             bool start = true ;
             bool subf  = true ;
 
-            plog ("%s-compute Starting Host Services\n", node_ptr->hostname.c_str());
+            plog ("%s-worker Starting Host Services\n", node_ptr->hostname.c_str());
 
             if ( this->launch_host_services_cmd ( node_ptr, start, subf ) != PASS )
             {
-                elog ("%s-compute %s failed ; launch\n",
+                elog ("%s-worker %s failed ; launch\n",
                           node_ptr->hostname.c_str(),
                           node_ptr->host_services_req.name.c_str());
                 node_ptr->hostservices_failed_subf = true ;
@@ -2373,7 +2373,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
                 node_ptr->hostservices_failed_subf = true ;
                 if ( rc == FAIL_TIMEOUT )
                 {
-                    elog ("%s-compute %s failed ; timeout\n",
+                    elog ("%s-worker %s failed ; timeout\n",
                               node_ptr->hostname.c_str(),
                               node_ptr->host_services_req.name.c_str());
 
@@ -2382,7 +2382,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
                 }
                 else
                 {
-                    elog ("%s-compute %s failed ; rc=%d\n",
+                    elog ("%s-worker %s failed ; rc=%d\n",
                               node_ptr->hostname.c_str(),
                               node_ptr->host_services_req.name.c_str(),
                               rc);
@@ -2875,7 +2875,7 @@ int nodeLinkClass::disable_handler  ( struct nodeLinkClass::node * node_ptr )
         }
         case MTC_DISABLE__HANDLE_FORCE_LOCK:
         {
-            /* If this is a force lock against a compute then we have to reset it */
+            /* If this is a force lock against a worker then we have to reset it */
             if (( node_ptr->adminAction == MTC_ADMIN_ACTION__FORCE_LOCK ))
             {
                 /* Stop the timer if it is active coming into this case */
@@ -5429,7 +5429,7 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
 
             if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
             {
-                if ( daemon_is_file_present ( CONFIG_COMPLETE_COMPUTE ) == false )
+                if ( daemon_is_file_present ( CONFIG_COMPLETE_WORKER ) == false )
                 {
                     if ( node_ptr->operState_subf != MTC_OPER_STATE__DISABLED )
                     {
@@ -5693,7 +5693,7 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
             {
                 send_hwmon_command ( node_ptr->hostname, MTC_CMD_ADD_HOST );
             }
-            if ( ( CPE_SYSTEM ) || ( is_compute (node_ptr) == true ))
+            if ( ( CPE_SYSTEM ) || ( is_worker (node_ptr) == true ))
             {
                 send_guest_command ( node_ptr->hostname, MTC_CMD_ADD_HOST );
             }
@@ -6411,7 +6411,7 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
                             }
 
                             /*************************************************
-                             * Handle running the subfunction start compute
+                             * Handle running the subfunction start worker
                              * host services command as a background operation
                              * after the controller start result has come in
                              * as a PASS.
@@ -6523,7 +6523,7 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
                             if (( node_ptr->inservice_failed_subf == false ) &&
                                 ( node_ptr->hostservices_failed_subf == false ))
                             {
-                                ilog ("%s-compute ... running recovery enable\n", node_ptr->hostname.c_str());
+                                ilog ("%s-worker ... running recovery enable\n", node_ptr->hostname.c_str());
 
                                 alarm_compute_clear ( node_ptr, true );
 
@@ -6532,13 +6532,13 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
                             }
                             else
                             {
-                                ilog ("%s-compute subfunction is unlocked-disabled (non-operational)\n",
+                                ilog ("%s-worker subfunction is unlocked-disabled (non-operational)\n",
                                           node_ptr->hostname.c_str());
                             }
                         }
                         else
                         {
-                            ilog ("%s-compute ... waiting on current goEnable completion\n", node_ptr->hostname.c_str() );
+                            ilog ("%s-worker ... waiting on current goEnable completion\n", node_ptr->hostname.c_str() );
                         }
                     }
                 }

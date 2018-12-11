@@ -34,7 +34,7 @@ const char mtc_msg_rep_msg_header [MSG_HEADER_SIZE] = {"cgts mtc rep msg:"};
 const char mtc_log_msg_hdr    [MSG_HEADER_SIZE]     = {"cgts mtc log msg:"};
 
 /** Maintenance Message header content */
-const char mtc_compute_msg_header [MSG_HEADER_SIZE] = {"cgts mtc message:"};
+const char mtc_worker_msg_header [MSG_HEADER_SIZE] = {"cgts mtc message:"};
 
 const char mtc_event_hdr [MSG_HEADER_SIZE] =          {"mtce event msg  :"};
 
@@ -50,7 +50,7 @@ const char * get_loopback_header       (void) { return mtc_loopback_hdr;}
 const char * get_hbs_cmd_req_header    (void) { return mtc_hbs_cmd_req_header ;}
 const char * get_cmd_req_msg_header    (void) { return mtc_cmd_req_msg_header ;}
 const char * get_cmd_rsp_msg_header    (void) { return mtc_cmd_rsp_msg_header ;}
-const char * get_compute_msg_header    (void) { return mtc_compute_msg_header ;}
+const char * get_worker_msg_header     (void) { return mtc_worker_msg_header ;}
 const char * get_pmond_pulse_header    (void) { return mtc_pmond_pulse_header ;}
 const char * get_mtc_log_msg_hdr       (void) { return mtc_log_msg_hdr        ;}
 const char * get_mtce_event_header     (void) { return mtc_event_hdr          ;}
@@ -160,10 +160,10 @@ const char * get_mtcNodeCommand_str ( int cmd )
 
         /* start and stop services commands and messages */
         case MTC_CMD_STOP_CONTROL_SVCS:      return ("stop controller host services");
-        case MTC_CMD_STOP_COMPUTE_SVCS:      return ("stop compute host services");
+        case MTC_CMD_STOP_WORKER_SVCS:       return ("stop worker host services");
         case MTC_CMD_STOP_STORAGE_SVCS:      return ("stop storage host services");
         case MTC_CMD_START_CONTROL_SVCS:     return ("start controller host services");
-        case MTC_CMD_START_COMPUTE_SVCS:     return ("start compute host services");
+        case MTC_CMD_START_WORKER_SVCS:      return ("start worker host services");
         case MTC_CMD_START_STORAGE_SVCS:     return ("start storage host services");
         case MTC_CMD_HOST_SVCS_RESULT:       return ("host services result");
 
@@ -721,10 +721,10 @@ void recovery_ctrl_init ( recovery_ctrl_type & recovery_ctrl )
 bool is_host_services_cmd ( unsigned int cmd )
 {
     if (( cmd == MTC_CMD_START_CONTROL_SVCS ) ||
-        ( cmd == MTC_CMD_START_COMPUTE_SVCS ) ||
+        ( cmd == MTC_CMD_START_WORKER_SVCS ) ||
         ( cmd == MTC_CMD_START_STORAGE_SVCS ) ||
         ( cmd == MTC_CMD_STOP_CONTROL_SVCS  ) ||
-        ( cmd == MTC_CMD_STOP_COMPUTE_SVCS  ) ||
+        ( cmd == MTC_CMD_STOP_WORKER_SVCS  ) ||
         ( cmd == MTC_CMD_STOP_STORAGE_SVCS  ) ||
         ( cmd == MTC_CMD_HOST_SVCS_RESULT ))
     {

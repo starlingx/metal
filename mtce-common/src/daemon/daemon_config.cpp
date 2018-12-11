@@ -107,10 +107,10 @@ int timeout_config_handler (       void * user,
                 config_ptr->controller_mtcalive_timeout,
                 extended ? "(doubled for vbox)" : "");
     }
-    else if (MATCH("timeouts", "compute_boot_timeout"))
+    else if (MATCH("timeouts", "worker_boot_timeout"))
     {
         config_ptr->compute_mtcalive_timeout = atoi(value);
-        ilog (" mtcAlive TO: %4d secs (compute)\n"    , config_ptr->compute_mtcalive_timeout);
+        ilog (" mtcAlive TO: %4d secs (worker)\n"    , config_ptr->compute_mtcalive_timeout);
     }
     else if (MATCH("timeouts", "goenabled_timeout"))
     {

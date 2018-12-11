@@ -121,7 +121,7 @@ private:
         /** The Mac address of the host's infra interface */
         std::string infra_mac  ;
 
-        /** The type of node 'controller' or 'compute' node */
+        /** The type of node 'controller' or 'worker' node */
         std::string type ;
 
         /** Short text phrase indicating the operation the FSM is
@@ -131,7 +131,7 @@ private:
         /** Administrative action from inventory */
         std::string action ;
 
-        /** The Node Type ; compute or control or storage as a mask */
+        /** The Node Type ; worker or control or storage as a mask */
         string       functions       ; /* comma delimited string of host types */
         unsigned int nodetype        ; /* numeric mask of functions */
 
@@ -139,7 +139,7 @@ private:
                                           the main function of the host        */
         unsigned int function        ; /* numeric representing function_str    */
 
-        string       subfunction_str ; /* single host type string ie "compute" */
+        string       subfunction_str ; /* single host type string ie "worker" */
         unsigned int subfunction     ; /* numeric representing subfunction_str */
 
         /** set to true if the host specific sub function enable handler passes */
@@ -1386,15 +1386,15 @@ public:
     /* NODE TYPE Member Functions */
     /******************************/
 
-    /** Fetch the node type (compute or controller) by hostname */
+    /** Fetch the node type (worker or controller) by hostname */
     int get_nodetype ( string & hostname );
 
     /** Check if a node is a controller */
     bool is_controller ( struct nodeLinkClass::node * node_ptr );
 
-    /** Check if a node is a compute */
-    bool is_compute             ( struct nodeLinkClass::node * node_ptr );
-    bool is_compute_subfunction ( struct nodeLinkClass::node * node_ptr );
+    /** Check if a node is a worker */
+    bool is_worker             ( struct nodeLinkClass::node * node_ptr );
+    bool is_worker_subfunction ( struct nodeLinkClass::node * node_ptr );
 
     string get_node_function_str    ( string hostname );
     string get_node_subfunction_str ( string hostname );
@@ -1405,9 +1405,9 @@ public:
     /** Check if a node is a controller by hostname */
     bool is_controller ( string & hostname );
 
-    /** Check if a node is a compute by hostname */
-    bool is_compute             ( string & hostname );
-    bool is_compute_subfunction ( string & hostname );
+    /** Check if a node is a worker by hostname */
+    bool is_worker             ( string & hostname );
+    bool is_worker_subfunction ( string & hostname );
 
     /** Check if a node is a storage by hostname */
     bool is_storage ( string & hostname );
@@ -1546,7 +1546,7 @@ public:
 
     /** Performs a service affecting symantic check on whether
       * the specified uuid can be locked.
-      * In the case of a compute node it asks Nova.
+      * In the case of a worker node it asks Nova.
       * In the case of a controller it verifies that there is
       * another controller active and inservice.
       *
@@ -1580,7 +1580,7 @@ public:
      * from within the reboot handler. */
     int set_activeClient ( string hostname, mtc_client_enum client );
 
-    /** Get the number of compute hosts that are operationally 'enabled' */
+    /** Get the number of worker hosts that are operationally 'enabled' */
     int enabled_compute_nodes ( void );
 
     /** Get the number of storage hosts that are operationally 'enabled' */

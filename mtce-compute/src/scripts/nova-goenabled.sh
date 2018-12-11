@@ -32,7 +32,7 @@ NOVA_ADVANCE_ENABLED="/var/run/.nova_timer_advance_enabled"
 
 case "$1" in
     start)
-        if [ -e ${VOLATILE_COMPUTE_CONFIG_COMPLETE} ] && [ ! -e ${VOLATILE_DISABLE_COMPUTE_SERVICES} ]; then
+        if [ -e ${VOLATILE_WORKER_CONFIG_COMPLETE} ] && [ ! -e ${VOLATILE_DISABLE_WORKER_SERVICES} ]; then
             log "Start"
 
             if [ -e ${NOVA_INIT_FAILED} ]; then

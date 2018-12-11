@@ -259,7 +259,7 @@ hardware failure detection, reporting and recovery. The Resource Monitor
 Service (rmond) adds resource monitoring with present and predictive
 failure and overload detection and reporting. The Guest Services
 (guestAgent/guestServer) daemons control access into and heartbeat of guest
-VMs on the compute. The Host Watchdog (hostwd) daemon watches for errors in
+VMs on the worker. The Host Watchdog (hostwd) daemon watches for errors in
 pmond and logs system information on error. All of these maintenance
 services improve MTTD of node failures as well as resource overload and out
 of spec operating conditions that can reduce outage time through automated
@@ -385,9 +385,9 @@ install -m 755 -p -D %{_buildsubdir}/scripts/goenabled %{buildroot}%{_sysconfdir
 # start or stop services test script
 install -m 755 -d %{buildroot}%{local_etc_servicesd}
 install -m 755 -d %{buildroot}%{local_etc_servicesd}/controller
-install -m 755 -d %{buildroot}%{local_etc_servicesd}/compute
+install -m 755 -d %{buildroot}%{local_etc_servicesd}/worker
 install -m 755 -d %{buildroot}%{local_etc_servicesd}/storage
-install -m 755 -p -D %{_buildsubdir}/scripts/mtcTest %{buildroot}/%{local_etc_servicesd}/compute
+install -m 755 -p -D %{_buildsubdir}/scripts/mtcTest %{buildroot}/%{local_etc_servicesd}/worker
 install -m 755 -p -D %{_buildsubdir}/scripts/mtcTest %{buildroot}/%{local_etc_servicesd}/controller
 install -m 755 -p -D %{_buildsubdir}/scripts/mtcTest %{buildroot}/%{local_etc_servicesd}/storage
 install -m 755 -p -D %{_buildsubdir}/scripts/runservices %{buildroot}%{_sysconfdir}/init.d/runservices
@@ -508,7 +508,7 @@ install -m 755 -d %{buildroot}/var/run
 # Maintenance start/stop services scripts
 %{local_etc_servicesd}/controller/mtcTest
 %{local_etc_servicesd}/storage/mtcTest
-%{local_etc_servicesd}/compute/mtcTest
+%{local_etc_servicesd}/worker/mtcTest
 
 # BMC profile Files
 %{bmc_profilesd}/sensor_hp360_v1_ilo_v4.profile

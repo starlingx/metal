@@ -75,16 +75,16 @@ case "$1" in
 
         # Do not continue if the host has not been configured. We don't
         # want to run nova-compute before its config file has been updated.
-        if [ ! -f ${INITIAL_COMPUTE_CONFIG_COMPLETE} ]
+        if [ ! -f ${INITIAL_WORKER_CONFIG_COMPLETE} ]
         then
-            log "Initial compute configuration is not complete"
+            log "Initial worker configuration is not complete"
             exit ${GENERIC_ERROR}
         fi
 
-        # Do not continue if the compute services are disabled.
-        if [ -f ${VOLATILE_DISABLE_COMPUTE_SERVICES} ]
+        # Do not continue if the worker services are disabled.
+        if [ -f ${VOLATILE_DISABLE_WORKER_SERVICES} ]
         then
-            log "Compute services are disabled, nothing to do"
+            log "Worker services are disabled, nothing to do"
             rm ${NOVA_INIT_FAILED}
             exit ${SUCCESS}
         fi

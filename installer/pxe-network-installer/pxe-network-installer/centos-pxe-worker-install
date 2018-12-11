@@ -19,9 +19,9 @@ NOCOMPLETE 1
 ALLOWOPTIONS 0
 
 LABEL 1
-  MENU LABEL ^1) Compute
+  MENU LABEL ^1) Worker
   MENU DEFAULT
   KERNEL rel-xxxSW_VERSIONxxx/installer-bzImage
-  APPEND initrd=rel-xxxSW_VERSIONxxx/installer-initrd bootifonly=1 devfs=nomount inst.repo=http://pxecontroller/feed/rel-xxxSW_VERSIONxxx/ inst.ks=http://pxecontroller/feed/rel-xxxSW_VERSIONxxx/net_compute_ks.cfg usbcore.autosuspend=-1 biosdevname=0 rd.net.timeout.dhcp=120 xxxAPPEND_OPTIONSxxx
+  APPEND initrd=rel-xxxSW_VERSIONxxx/installer-initrd bootifonly=1 devfs=nomount inst.repo=http://pxecontroller/feed/rel-xxxSW_VERSIONxxx/ inst.ks=http://pxecontroller/feed/rel-xxxSW_VERSIONxxx/net_worker_ks.cfg usbcore.autosuspend=-1 biosdevname=0 rd.net.timeout.dhcp=120 xxxAPPEND_OPTIONSxxx
   IPAPPEND 2
 

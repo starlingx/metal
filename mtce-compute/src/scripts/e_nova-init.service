@@ -1,7 +1,7 @@
 [Unit]
 Description=Titanium Cloud Nova Init
-After=network.target config.service compute-config-gate.service
-Before=goenabled-compute.service
+After=network.target config.service worker-config-gate.service
+Before=goenabled-worker.service
 
 [Service]
 Type=oneshot

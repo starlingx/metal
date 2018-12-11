@@ -32,9 +32,9 @@ void daemon_exit ( void )
     exit (0);
 }
 
-bool is_compute ( void )
+bool is_worker ( void )
 {
-    if (( rmon_ctrl.function == COMPUTE_TYPE ) && ( rmon_ctrl.subfunction == CGTS_NODE_NULL ))
+    if (( rmon_ctrl.function == WORKER_TYPE ) && ( rmon_ctrl.subfunction == CGTS_NODE_NULL ))
         return (true);
     else
         return (false);
@@ -50,7 +50,7 @@ bool is_controller ( void )
 
 bool is_cpe ( void )
 {
-    if (( rmon_ctrl.function == CONTROLLER_TYPE ) && ( rmon_ctrl.subfunction == COMPUTE_TYPE ))
+    if (( rmon_ctrl.function == CONTROLLER_TYPE ) && ( rmon_ctrl.subfunction == WORKER_TYPE ))
         return (true);
     else
         return (false);

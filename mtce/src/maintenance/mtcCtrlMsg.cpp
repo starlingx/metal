@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2016 Wind River Systems, Inc.
+ * Copyright (c) 2013-2018 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -63,11 +63,11 @@ int send_guest_command ( string hostname, int command )
               hostname.c_str(),
               obj_ptr->functions.c_str(),
               obj_ptr->get_nodetype(hostname),
-              obj_ptr->is_compute (hostname)            ? 'Y' : 'n',
-              obj_ptr->is_compute_subfunction(hostname) ? 'Y' : 'n');
+              obj_ptr->is_worker (hostname)            ? 'Y' : 'n',
+              obj_ptr->is_worker_subfunction(hostname) ? 'Y' : 'n');
 
-    if ( obj_ptr->is_compute            (hostname) ||
-         obj_ptr->is_compute_subfunction(hostname))
+    if ( obj_ptr->is_worker            (hostname) ||
+         obj_ptr->is_worker_subfunction(hostname))
     {
         mtc_message_type msg ; /* the message to send */
 
@@ -89,7 +89,7 @@ int send_guest_command ( string hostname, int command )
             hostinfo.append (",\"ip\":\"");
             hostinfo.append ( obj_ptr->get_hostaddr (hostname));
             hostinfo.append ( "\"");
-            hostinfo.append (",\"personality\":\"compute\"");
+            hostinfo.append (",\"personality\":\"worker\"");
         }
         else if ( command == MTC_CMD_DEL_HOST )
         {
@@ -242,9 +242,9 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
     }
 
     /*
-     * Check for compute messages
+     * Check for worker messages
      */
-    else if ( strstr ( &msg.hdr[0], get_compute_msg_header() ) )
+    else if ( strstr ( &msg.hdr[0], get_worker_msg_header() ) )
     {
             if ( msg.cmd == MTC_MSG_MTCALIVE )
             {
@@ -319,23 +319,23 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
             }
             else if ( msg.cmd == MTC_MSG_SUBF_GOENABLED )
             {
-                mlog ("%s-compute GOENABLED message\n", hostname.c_str());
+                mlog ("%s-worker GOENABLED message\n", hostname.c_str());
                 if ( !obj_ptr->my_hostname.compare(hostname) )
                 {
-                    ilog ("%s-compute received GOENABLED from self\n", hostname.c_str());
+                    ilog ("%s-worker received GOENABLED from self\n", hostname.c_str());
                 }
                 rc = send_mtc_cmd ( hostname , msg.cmd, MGMNT_INTERFACE );
                 if ( rc != PASS )
                 {
-                    elog ("%s-compute GOENABLED send reply failed (rc:%d)\n",
+                    elog ("%s-worker GOENABLED send reply failed (rc:%d)\n",
                               hostname.c_str(), rc);
 
-                    wlog ("%s-compute ... need successful GOENABLED reply, dropping ...\n",
+                    wlog ("%s-worker ... need successful GOENABLED reply, dropping ...\n",
                               hostname.c_str() );
                 }
                 else
                 {
-                    mlog ("%s-compute got GOENABLED (out-of-service tests passed) message\n", hostname.c_str());
+                    mlog ("%s-worker got GOENABLED (out-of-service tests passed) message\n", hostname.c_str());
                     obj_ptr->set_goEnabled_subf ( hostname );
                 }
             }
@@ -343,14 +343,14 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
             {
                 if ( obj_ptr->get_adminState ( hostname ) == MTC_ADMIN_STATE__UNLOCKED )
                 {
-                    wlog ("%s-compute failed GOENABLE test: %s\n", hostname.c_str(), &msg.buf[0] );
+                    wlog ("%s-worker failed GOENABLE test: %s\n", hostname.c_str(), &msg.buf[0] );
                     obj_ptr->set_goEnabled_failed_subf ( hostname );
                 }
                 /* We don't send a reply on a fail */
             }
             else
             {
-                wlog ("Unexpected compute message (0x%x) from '%s'\n", msg.cmd, hostname.c_str());
+                wlog ("Unexpected worker message (0x%x) from '%s'\n", msg.cmd, hostname.c_str());
             }
     }
 
@@ -630,10 +630,10 @@ int send_mtc_cmd ( string & hostname, int cmd , int interface )
             break ;
         }
         case MTC_CMD_STOP_CONTROL_SVCS:
-        case MTC_CMD_STOP_COMPUTE_SVCS:
+        case MTC_CMD_STOP_WORKER_SVCS:
         case MTC_CMD_STOP_STORAGE_SVCS:
         case MTC_CMD_START_CONTROL_SVCS:
-        case MTC_CMD_START_COMPUTE_SVCS:
+        case MTC_CMD_START_WORKER_SVCS:
         case MTC_CMD_START_STORAGE_SVCS:
         {
             snprintf ( &mtc_cmd.hdr[0], MSG_HEADER_SIZE, "%s", get_cmd_req_msg_header() );

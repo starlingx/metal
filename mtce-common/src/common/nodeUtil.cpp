@@ -156,8 +156,8 @@ void print_inv ( node_inv_type & info )
 unsigned int get_host_function_mask ( string & nodeType_str )
 {
     unsigned int nodeType = CGTS_NODE_NULL ;
-    if ( nodeType_str.find("compute") != string::npos )
-        nodeType |= COMPUTE_TYPE ;
+    if ( nodeType_str.find("worker") != string::npos )
+        nodeType |= WORKER_TYPE ;
     if ( nodeType_str.find("controller") != string::npos )
         nodeType |= CONTROLLER_TYPE ;
     if ( nodeType_str.find("storage") != string::npos )
@@ -170,7 +170,7 @@ bool is_combo_system (unsigned int nodetype_mask )
 {
     if ( nodetype_mask & CONTROLLER_TYPE )
     {
-        if ( nodetype_mask & COMPUTE_TYPE )
+        if ( nodetype_mask & WORKER_TYPE )
         {
             return (true);
         }
@@ -200,10 +200,10 @@ int set_host_functions ( string         nodetype_str,
         dlog2 ("Function    : controller\n");
 
         /* Check for subfunctions */
-        if ( *nodetype_bits_ptr & COMPUTE_TYPE )
+        if ( *nodetype_bits_ptr & WORKER_TYPE )
         {
-            dlog2 ("Sub Function: compute\n");
-            *nodetype_subfunction_ptr = COMPUTE_TYPE ;
+            dlog2 ("Sub Function: worker\n");
+            *nodetype_subfunction_ptr = WORKER_TYPE ;
         }
         if ( *nodetype_bits_ptr & STORAGE_TYPE )
         {
@@ -213,10 +213,10 @@ int set_host_functions ( string         nodetype_str,
     }
     else
     {
-        if ( *nodetype_bits_ptr & COMPUTE_TYPE )
+        if ( *nodetype_bits_ptr & WORKER_TYPE )
         {
-            *nodetype_function_ptr = COMPUTE_TYPE ;
-            dlog2 ("Function    : compute\n");
+            *nodetype_function_ptr = WORKER_TYPE ;
+            dlog2 ("Function    : worker\n");
         }
         else if ( *nodetype_bits_ptr & STORAGE_TYPE )
         {

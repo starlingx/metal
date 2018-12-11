@@ -78,10 +78,11 @@ string get_who_i_am ( void )
     return (ctrl.who_i_am) ;
 }
 
-bool is_subfunction_compute ( void )
+bool is_subfunction_worker ( void )
 {
-    if ( ctrl.subfunction & COMPUTE_TYPE )
+    if ( ctrl.subfunction & WORKER_TYPE ) {
         return true ;
+    }
     else
         return false ;
 }
@@ -996,7 +997,7 @@ int daemon_init ( string iface, string nodetype_str )
        rc = FAIL_SIGNAL_INIT ;
     }
 
-    /* Configure the compute */
+    /* Configure the worker */
     else if ( (rc = daemon_configure ()) != PASS )
     {
         elog ("Daemon service configuration failed (rc:%i)\n", rc );
@@ -1244,7 +1245,7 @@ void daemon_service_run ( void )
                 }
                 else if ( ctrl.active_script_set == GOENABLED_SUBF_SCRIPTS )
                 {
-                    if (( daemon_is_file_present ( CONFIG_COMPLETE_COMPUTE )) &&
+                    if (( daemon_is_file_present ( CONFIG_COMPLETE_WORKER )) &&
                         ( daemon_is_file_present ( GOENABLED_SUBF_READY )))
                     {
                         ctrl.posted_script_set.pop_front();
@@ -1560,10 +1561,10 @@ int _launch_all_scripts ( script_ctrl_type  & group,
  *   cmd    - 'uint' representing start or stop services commands
  *
  *             MTC_CMD_STOP_CONTROL_SVCS
- *             MTC_CMD_STOP_COMPUTE_SVCS
+ *             MTC_CMD_STOP_WORKER_SVCS
  *             MTC_CMD_STOP_STORAGE_SVCS
  *             MTC_CMD_START_CONTROL_SVCS
- *             MTC_CMD_START_COMPUTE_SVCS
+ *             MTC_CMD_START_WORKER_SVCS
  *             MTC_CMD_START_STORAGE_SVCS
  *
  * Returns   : Operation PASS or non-zero return code with the failing
@@ -1583,10 +1584,10 @@ int run_hostservices_scripts ( unsigned int cmd )
             action = "stop" ;
             func = "controller";
             break ;
-        case MTC_CMD_STOP_COMPUTE_SVCS:
-            dir.append("/compute");
+        case MTC_CMD_STOP_WORKER_SVCS:
+            dir.append("/worker");
             action = "stop" ;
-            func = "compute";
+            func = "worker";
             break ;
         case MTC_CMD_STOP_STORAGE_SVCS:
             dir.append("/storage");
@@ -1598,10 +1599,10 @@ int run_hostservices_scripts ( unsigned int cmd )
             action = "start" ;
             func = "controller";
             break ;
-        case MTC_CMD_START_COMPUTE_SVCS:
-            dir.append("/compute");
+        case MTC_CMD_START_WORKER_SVCS:
+            dir.append("/worker");
             action = "start" ;
-            func = "compute";
+            func = "worker";
             break ;
         case MTC_CMD_START_STORAGE_SVCS:
             dir.append("/storage");
@@ -1624,18 +1625,18 @@ int run_hostservices_scripts ( unsigned int cmd )
 
 
     /* For the stop command we need the mtcClient to run both controller and
-     * compute stop services if we are on a CPE system.
+     * worker stop services if we are on a CPE system.
      * This saves the mtcAgent from having to issue and manage 2 commands,
-     * one for controller and 1 for compute */
+     * one for controller and 1 for worker */
     if ( ctrl.system_type != SYSTEM_TYPE__NORMAL )
     {
         string dir = "" ;
         if ( action == "stop" )
         {
             std::list<string> more_scripts ;
-            if ( cmd == MTC_CMD_STOP_COMPUTE_SVCS )
+            if ( cmd == MTC_CMD_STOP_WORKER_SVCS )
             {
-                /* only add the controller if we get a compute stop
+                /* only add the controller if we get a worker stop
                  * and this host has a controller nodetype function */
                 if (ctrl.nodetype & CONTROLLER_TYPE)
                 {
@@ -1645,12 +1646,12 @@ int run_hostservices_scripts ( unsigned int cmd )
             }
             else if ( cmd == MTC_CMD_STOP_CONTROL_SVCS )
             {
-                /* add the compute stop if we get a controller stop
-                 * and this host has a compute nodetype function */
-                if (ctrl.nodetype & COMPUTE_TYPE)
+                /* add the worker stop if we get a controller stop
+                 * and this host has a worker nodetype function */
+                if (ctrl.nodetype & WORKER_TYPE)
                 {
                     dir = SERVICES_DIR ;
-                    dir.append("/compute");
+                    dir.append("/worker");
                 }
             }
 

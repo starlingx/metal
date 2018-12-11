@@ -167,7 +167,7 @@ using namespace std;
 #define CONFIG_DIR            ((const char *)"/etc/rmon.d")
 #define INT_CONFIG_DIR        ((const char *)"/etc/rmon_interfaces.d")
 #define COMPUTE_VSWITCH_DIR   ((const char *)"/etc/nova/compute_extend.conf")
-#define COMPUTE_RESERVED_CONF ((const char *)"/etc/nova/compute_reserved.conf")
+#define COMPUTE_RESERVED_CONF ((const char *)"/etc/platform/worker_reserved.conf")
 #define DYNAMIC_FS_FILE       ((const char *)"/etc/rmonfiles.d/dynamic.conf")
 #define STATIC_FS_FILE        ((const char *)"/etc/rmonfiles.d/static.conf")
 
@@ -502,7 +502,7 @@ typedef struct
     unsigned int     minorlog_cnt   ; /* track minor log count for thresholding */
     unsigned int     count          ; /* track the number of times the condition has been occured */ 
     bool             failed         ; /* track if the resource needs to be serviced by the resource handler */ 
-    double           resource_value ; /* Usage for the Linux blades: controller, compute and storage  */ 
+    double           resource_value ; /* Usage for the Linux blades: controller, worker and storage  */
     double           resource_prev  ; /*       the previous resource_value */
     int              sev            ; /* The severity of the failed resource */ 
     rmonStage_enum   stage          ; /* The stage the resource is in within the resource handler fsm */ 
@@ -737,8 +737,8 @@ int rmon_resource_response ( int clients );
 /* Updates the interface data structure with the state (up or down) of the interface */
 void check_interface_status( interface_resource_config_type * ptr );
 
-/* Check if the node is a compute node */ 
-bool check_compute(); 
+/* Check if the node is a worker node */
+bool check_worker();
 
 /* Handle failed platform interfaces */ 
 void interface_handler( interface_resource_config_type * ptr );

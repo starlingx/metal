@@ -1,8 +1,8 @@
 task-cloud-compute
-compute-huge
-computeconfig
-computeconfig-standalone
-computeconfig-subfunction
+worker-utils
+workerconfig
+workerconfig-standalone
+workerconfig-subfunction
 guest-scale-helper
 heartbeat
 storageconfig
@@ -27,7 +27,7 @@ host-guest-comm-dev
 nfscheck
 radvd
 remote-clients
-config-gate-compute
+config-gate-worker
 kernel-rt
 kernel-module-igb-uio
 kernel-module-igb-uio-rt

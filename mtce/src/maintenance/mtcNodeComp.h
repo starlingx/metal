@@ -106,7 +106,7 @@ typedef struct
 
 ctrl_type * get_ctrl_ptr ( void );
 
-bool is_subfunction_compute ( void );
+bool is_subfunction_worker ( void );
 int run_goenabled_scripts ( mtc_socket_type * sock_ptr , string requestor );
 int run_hostservices_scripts ( unsigned int cmd );
 

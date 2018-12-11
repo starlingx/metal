@@ -25,10 +25,10 @@ cinder-api
 cinder-scheduler
 cinder-tests
 cinder-volume
-compute-huge
-computeconfig
-computeconfig-standalone
-computeconfig-subfunction
+worker-utils
+workerconfig
+workerconfig-standalone
+workerconfig-subfunction
 configvalidator
 controllerconfig
 createrepo
@@ -276,7 +276,7 @@ nfv-tools
 vm-topology
 remote-clients
 python-networking-odl
-config-gate-compute
+config-gate-worker
 tis-extensions-controller
 wrs-heat-templates
 python-django-horizon

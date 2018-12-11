@@ -4258,7 +4258,7 @@ int _postPMs ()
  *****************************************************************************/
 
 extern bool is_cpe ( void );
-extern bool is_compute ( void );
+extern bool is_worker ( void );
 
 void _get_events (void)
 {
@@ -4299,7 +4299,7 @@ void _get_events (void)
         {
             /* ensure that configuration has completed before computing
              * vswitch resource utilization */
-            if ( !daemon_is_file_present ( CONFIG_COMPLETE_COMPUTE ) )
+            if ( !daemon_is_file_present ( CONFIG_COMPLETE_WORKER ) )
                 continue ;
 
             pFile = fopen (COMPUTE_VSWITCH_DIR , "r");
@@ -4324,10 +4324,10 @@ void _get_events (void)
         {
             /* do not perform this check if we are not on a compute node.
              * its not valid on storage not combo load */
-            if ( !is_compute () )
+            if ( !is_worker () )
                 continue ;
 
-            if ( !daemon_is_file_present ( CONFIG_COMPLETE_COMPUTE ) )
+            if ( !daemon_is_file_present ( CONFIG_COMPLETE_WORKER ) )
                 continue ;
 
             /* nova instances mount check */    
@@ -4389,10 +4389,10 @@ void _get_events (void)
                  (resource_config[i].alarm_status == ALARM_ON)){
             /* do not perform this check if we are not on a compute node.
              * its not valid on storage not combo load */
-            if ( !is_compute () && !is_cpe () )
+            if ( !is_worker () && !is_cpe () )
                 continue ;
 
-            if ( !daemon_is_file_present ( CONFIG_COMPLETE_COMPUTE ) )
+            if ( !daemon_is_file_present ( CONFIG_COMPLETE_WORKER ) )
                 continue ;
 
             /* virtual thin pool space utilization */

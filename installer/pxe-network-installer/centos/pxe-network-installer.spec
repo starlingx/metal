@@ -23,19 +23,19 @@ Source013: post_clone_iso_ks.cfg
 Source030: default
 Source031: default.static
 Source032: centos-pxe-controller-install
-Source033: centos-pxe-compute-install
+Source033: centos-pxe-worker-install
 Source034: centos-pxe-smallsystem-install
 Source035: centos-pxe-storage-install
-Source036: centos-pxe-compute_lowlatency-install
+Source036: centos-pxe-worker_lowlatency-install
 Source037: centos-pxe-smallsystem_lowlatency-install
 
 Source050: pxe-grub.cfg
 Source051: pxe-grub.cfg.static
 Source052: efi-centos-pxe-controller-install
-Source053: efi-centos-pxe-compute-install
+Source053: efi-centos-pxe-worker-install
 Source054: efi-centos-pxe-smallsystem-install
 Source055: efi-centos-pxe-storage-install
-Source056: efi-centos-pxe-compute_lowlatency-install
+Source056: efi-centos-pxe-worker_lowlatency-install
 Source057: efi-centos-pxe-smallsystem_lowlatency-install
 
 
@@ -75,21 +75,21 @@ install -v -m 755 %{_sourcedir}/pxeboot-update.sh %{buildroot}%{_sbindir}/pxeboo
 
 install -v -m 644 %{_sourcedir}/post_clone_iso_ks.cfg \
     %{buildroot}/pxeboot/post_clone_iso_ks.cfg
-        
+
 install -v -m 644 %{_sourcedir}/default \
     %{buildroot}/pxeboot/pxelinux.cfg.files/default
 install -v -m 644 %{_sourcedir}/default.static \
     %{buildroot}/pxeboot/pxelinux.cfg.files/default.static
 install -v -m 644 %{_sourcedir}/centos-pxe-controller-install \
     %{buildroot}/pxeboot/pxelinux.cfg.files/pxe-controller-install-%{platform_release}
-install -v -m 644 %{_sourcedir}/centos-pxe-compute-install \
-    %{buildroot}/pxeboot/pxelinux.cfg.files/pxe-compute-install-%{platform_release}
+install -v -m 644 %{_sourcedir}/centos-pxe-worker-install \
+    %{buildroot}/pxeboot/pxelinux.cfg.files/pxe-worker-install-%{platform_release}
 install -v -m 644 %{_sourcedir}/centos-pxe-smallsystem-install \
     %{buildroot}/pxeboot/pxelinux.cfg.files/pxe-smallsystem-install-%{platform_release}
 install -v -m 644 %{_sourcedir}/centos-pxe-storage-install \
     %{buildroot}/pxeboot/pxelinux.cfg.files/pxe-storage-install-%{platform_release}
-install -v -m 644 %{_sourcedir}/centos-pxe-compute_lowlatency-install \
-    %{buildroot}/pxeboot/pxelinux.cfg.files/pxe-compute_lowlatency-install-%{platform_release}
+install -v -m 644 %{_sourcedir}/centos-pxe-worker_lowlatency-install \
+    %{buildroot}/pxeboot/pxelinux.cfg.files/pxe-worker_lowlatency-install-%{platform_release}
 install -v -m 644 %{_sourcedir}/centos-pxe-smallsystem_lowlatency-install \
     %{buildroot}/pxeboot/pxelinux.cfg.files/pxe-smallsystem_lowlatency-install-%{platform_release}
 
@@ -104,14 +104,14 @@ install -v -m 644 %{_sourcedir}/efiboot.img \
     %{buildroot}/pxeboot/rel-%{platform_release}/
 install -v -m 644 %{_sourcedir}/efi-centos-pxe-controller-install \
     %{buildroot}/pxeboot/pxelinux.cfg.files/efi-pxe-controller-install-%{platform_release}
-install -v -m 644 %{_sourcedir}/efi-centos-pxe-compute-install \
-    %{buildroot}/pxeboot/pxelinux.cfg.files/efi-pxe-compute-install-%{platform_release}
+install -v -m 644 %{_sourcedir}/efi-centos-pxe-worker-install \
+    %{buildroot}/pxeboot/pxelinux.cfg.files/efi-pxe-worker-install-%{platform_release}
 install -v -m 644 %{_sourcedir}/efi-centos-pxe-smallsystem-install \
     %{buildroot}/pxeboot/pxelinux.cfg.files/efi-pxe-smallsystem-install-%{platform_release}
 install -v -m 644 %{_sourcedir}/efi-centos-pxe-storage-install \
     %{buildroot}/pxeboot/pxelinux.cfg.files/efi-pxe-storage-install-%{platform_release}
-install -v -m 644 %{_sourcedir}/efi-centos-pxe-compute_lowlatency-install \
-    %{buildroot}/pxeboot/pxelinux.cfg.files/efi-pxe-compute_lowlatency-install-%{platform_release}
+install -v -m 644 %{_sourcedir}/efi-centos-pxe-worker_lowlatency-install \
+    %{buildroot}/pxeboot/pxelinux.cfg.files/efi-pxe-worker_lowlatency-install-%{platform_release}
 install -v -m 644 %{_sourcedir}/efi-centos-pxe-smallsystem_lowlatency-install \
     %{buildroot}/pxeboot/pxelinux.cfg.files/efi-pxe-smallsystem_lowlatency-install-%{platform_release}
 

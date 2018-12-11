@@ -7,11 +7,11 @@
 
 source "/etc/init.d/log_functions.sh"
 
-# is it a compute subfunction on a CPE system
+# is it a worker subfunction on a CPE system
 isCompute ()
 {
     [ -f /etc/platform/platform.conf ] || return 0
-    res=$(grep "subfunction" /etc/platform/platform.conf | grep "controller,compute" | wc -l)
+    res=$(grep "subfunction" /etc/platform/platform.conf | grep "controller,worker" | wc -l)
 
     if [ "$res" -eq 0 ] ; then
         return 0
@@ -28,8 +28,8 @@ if [[ "$?" -eq 0 ]]; then
     exit 0
 fi
 
-if [ ! -f /var/run/.compute_config_complete ]; then
-    log "Cannot run prior to compute configuration complete."
+if [ ! -f /var/run/.worker_config_complete ]; then
+    log "Cannot run prior to worker configuration complete."
     exit 0
 fi
 

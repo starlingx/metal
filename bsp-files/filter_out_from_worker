@@ -20,7 +20,7 @@ cinder-api
 cinder-scheduler
 cinder-tests
 cinder-volume
-computeconfig-subfunction
+workerconfig-subfunction
 configvalidator
 controllerconfig
 corosync

@@ -181,7 +181,7 @@ void fsmon_service ( unsigned int nodetype )
             mtcTimer_audit.ring = false ;
 
             /* only support stall monitor on computes */
-            if (( nodetype & COMPUTE_TYPE) == COMPUTE_TYPE )
+            if (( nodetype & WORKER_TYPE) == WORKER_TYPE )
             {
                 int file_i;
                 int rc = PASS ;

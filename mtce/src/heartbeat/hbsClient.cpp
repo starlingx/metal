@@ -242,7 +242,7 @@ void stallMon_init ( void )
     temp.prev_count = 0 ;
 
     /* only support stall monitor on computes */
-    if ( (my_nodetype & COMPUTE_TYPE) != COMPUTE_TYPE )
+    if ( (my_nodetype & WORKER_TYPE) != WORKER_TYPE )
         return ;
 
     if (( hbs_config.mon_process_1 != NULL ) &&
@@ -1451,7 +1451,7 @@ void daemon_service_run ( void )
 
         if (( locked == false ) &&
             (stall_monitor_ready  == true ) &&
-            ((my_nodetype & COMPUTE_TYPE) == COMPUTE_TYPE ) &&
+            ((my_nodetype & WORKER_TYPE) == WORKER_TYPE ) &&
             (!(flags & PMOND_FLAG) ))
         {
             /* This is run every 50 msec - the WAIT_SELECT time */

@@ -1704,7 +1704,7 @@ int nodeLinkClass::alarm_enabled_clear ( struct nodeLinkClass::node * node_ptr, 
     return (PASS);
 }
 
-/* Generate compute subfunction failure alarm */
+/* Generate worker subfunction failure alarm */
 int nodeLinkClass::alarm_compute_failure ( struct nodeLinkClass::node * node_ptr, EFmAlarmSeverityT sev )
 {
     if ( (node_ptr->degrade_mask & DEGRADE_MASK_SUBF) == 0 )
@@ -1716,12 +1716,12 @@ int nodeLinkClass::alarm_compute_failure ( struct nodeLinkClass::node * node_ptr
     {
         if ( sev == FM_ALARM_SEVERITY_CRITICAL )
         {
-            elog ("%s critical compute subf failure\n", node_ptr->hostname.c_str());
+            elog ("%s critical worker subf failure\n", node_ptr->hostname.c_str());
             mtcAlarm_critical ( node_ptr->hostname, MTC_ALARM_ID__CH_COMP );
         }
         else
         {
-            elog ("%s major compute subf failure\n", node_ptr->hostname.c_str());
+            elog ("%s major worker subf failure\n", node_ptr->hostname.c_str());
             mtcAlarm_major ( node_ptr->hostname, MTC_ALARM_ID__CH_COMP );
         }
         node_ptr->alarms[MTC_ALARM_ID__CH_COMP] = sev ;
@@ -1757,7 +1757,7 @@ int nodeLinkClass::alarm_insv_clear ( struct nodeLinkClass::node * node_ptr, boo
     return (PASS);
 }
 
-/* Clear the compute subfunction alarm and degrade flag */
+/* Clear the worker subfunction alarm and degrade flag */
 int nodeLinkClass::alarm_compute_clear ( struct nodeLinkClass::node * node_ptr, bool force )
 {
     if ( node_ptr->degrade_mask & DEGRADE_MASK_SUBF )
@@ -3036,7 +3036,7 @@ bool nodeLinkClass::can_uuid_be_locked ( string uuid , int & reason )
             }
             /* Rule 2 - Cannot lock inactive controller if the floating storage 
              *          ceph monitor is locked */
-            if (( get_storage_backend() == CGCS_STORAGE_CEPH ) && 
+            if (( get_storage_backend() == CGCS_STORAGE_CEPH ) &&
                 (  is_storage_mon_enabled () == false ))
             {
                 wlog ("%s cannot be 'locked' - failed storage redundancy check\n", node_ptr->hostname.c_str());
@@ -3046,7 +3046,7 @@ bool nodeLinkClass::can_uuid_be_locked ( string uuid , int & reason )
             ilog ("%s can be locked\n", node_ptr->hostname.c_str());
             return (true);
         }
-        else if ( is_compute(node_ptr) )
+        else if ( is_worker(node_ptr) )
         {
             if ( node_ptr->adminState == MTC_ADMIN_STATE__UNLOCKED )
             {
@@ -4108,18 +4108,18 @@ int  nodeLinkClass::manage_shadow_change ( string hostname )
     return (rc);
 }
 
-/** Returns the number of compute hosts that are operationally 'enabled' */
+/** Returns the number of worker hosts that are operationally 'enabled' */
 int nodeLinkClass::enabled_compute_nodes ( void )
 {
     int temp_count = 0 ;
     for ( struct node * ptr = head ;  ; ptr = ptr->next )
     {
-        if (( is_compute( ptr )) &&
+        if (( is_worker( ptr )) &&
             ( ptr->operState == MTC_OPER_STATE__ENABLED ))
         {
             temp_count++ ;
         }
-        else if (( is_compute_subfunction ( ptr )) &&
+        else if (( is_worker_subfunction ( ptr )) &&
                  ( ptr->operState_subf == MTC_OPER_STATE__ENABLED ))
         {
             temp_count++ ;
@@ -4613,7 +4613,7 @@ void nodeLinkClass::manage_heartbeat_clear ( string hostname, iface_enum iface )
     }
 }
 
-/** Manage compute host maintenance based on this heartbeat
+/** Manage worker host maintenance based on this heartbeat
   * degrade event and others that may be present at this moment */
 void nodeLinkClass::manage_heartbeat_degrade ( string hostname, iface_enum iface, bool clear_event )
 {
@@ -5665,7 +5665,7 @@ int nodeLinkClass::set_subf_info ( string hostname,
 
 
 
-/********************************************************************************** 
+/**********************************************************************************
  *
  * Name   : update_host_functions
  *
@@ -5673,9 +5673,9 @@ int nodeLinkClass::set_subf_info ( string hostname,
  *          delimited function string like.
  *
  *      controller
- *      compute
+ *      worker
  *      storage
- *      controller,compute
+ *      controller,worker
  *      controller,storage
  *
  **********************************************************************************/
@@ -5702,16 +5702,16 @@ int nodeLinkClass::update_host_functions ( string hostname , string functions )
         {
             if ( node_ptr->function == CONTROLLER_TYPE )
                  node_ptr->function_str = "controller" ;
-            else if ( node_ptr->function == COMPUTE_TYPE )
-                 node_ptr->function_str = "compute" ;
+            else if ( node_ptr->function == WORKER_TYPE )
+                 node_ptr->function_str = "worker" ;
             else if ( node_ptr->function == STORAGE_TYPE )
                  node_ptr->function_str = "storage" ;
             else
                  node_ptr->function_str = "" ;
 
-            if ( node_ptr->subfunction == COMPUTE_TYPE )
+            if ( node_ptr->subfunction == WORKER_TYPE )
             {
-                node_ptr->subfunction_str = "compute" ;
+                node_ptr->subfunction_str = "worker" ;
             }
             else if ( node_ptr->subfunction == STORAGE_TYPE )
             {
@@ -5729,7 +5729,7 @@ int nodeLinkClass::update_host_functions ( string hostname , string functions )
 
 
 
-/** Fetch the node type (compute or controller) by hostname */
+/** Fetch the node type (worker or controller) by hostname */
 int nodeLinkClass::get_nodetype ( string & hostname )
 {
     nodeLinkClass::node * node_ptr = getNode ( hostname ) ;
@@ -5753,12 +5753,12 @@ bool nodeLinkClass::is_controller ( struct nodeLinkClass::node * node_ptr )
     return (false);
 }
 
-/** Check if a node is a compute */
-bool nodeLinkClass::is_compute_subfunction ( struct nodeLinkClass::node * node_ptr )
+/** Check if a node is a worker */
+bool nodeLinkClass::is_worker_subfunction ( struct nodeLinkClass::node * node_ptr )
 {
     if ( node_ptr != NULL )
     {
-        if ( (node_ptr->subfunction & COMPUTE_TYPE ) == COMPUTE_TYPE )
+        if ( (node_ptr->subfunction & WORKER_TYPE ) == WORKER_TYPE )
         {
             return (true);
         }
@@ -5766,12 +5766,12 @@ bool nodeLinkClass::is_compute_subfunction ( struct nodeLinkClass::node * node_p
     return (false);
 }
 
-/** Check if a node is a compute */
-bool nodeLinkClass::is_compute ( struct nodeLinkClass::node * node_ptr )
+/** Check if a node is a worker */
+bool nodeLinkClass::is_worker ( struct nodeLinkClass::node * node_ptr )
 {
     if ( node_ptr != NULL )
     {
-        if ( (node_ptr->function & COMPUTE_TYPE ) == COMPUTE_TYPE )
+        if ( (node_ptr->function & WORKER_TYPE ) == WORKER_TYPE )
         {
             return (true);
         }
@@ -5823,24 +5823,24 @@ bool nodeLinkClass::is_controller ( string & hostname )
     return false ;
 }
 
-/** Check if a node is a compute */
-bool nodeLinkClass::is_compute ( string & hostname )
+/** Check if a node is a worker */
+bool nodeLinkClass::is_worker ( string & hostname )
 {
     nodeLinkClass::node * node_ptr = getNode ( hostname );
     if ( node_ptr )
     {
-        return is_compute(node_ptr);
+        return is_worker(node_ptr);
     }
     return false ;
 }
 
-/** Check if a node is a compute */
-bool nodeLinkClass::is_compute_subfunction ( string & hostname )
+/** Check if a node is a worker */
+bool nodeLinkClass::is_worker_subfunction ( string & hostname )
 {
     nodeLinkClass::node * node_ptr = getNode ( hostname );
     if ( node_ptr )
     {
-        return is_compute_subfunction(node_ptr);
+        return is_worker_subfunction(node_ptr);
     }
     return false ;
 }
@@ -7362,13 +7362,13 @@ void nodeLinkClass::force_full_enable ( struct nodeLinkClass::node * node_ptr )
  *              start = False (means stop)
  *
  *                 MTC_CMD_STOP_CONTROL_SVCS
- *                 MTC_CMD_STOP_COMPUTE_SVCS
+ *                 MTC_CMD_STOP_WORKER_SVCS
  *                 MTC_CMD_STOP_STORAGE_SVCS
  *
  *              start = True
  *
  *                 MTC_CMD_START_CONTROL_SVCS
- *                 MTC_CMD_START_COMPUTE_SVCS
+ *                 MTC_CMD_START_WORKER_SVCS
  *                 MTC_CMD_START_STORAGE_SVCS
  *
  * Returns    : PASS = launch success
@@ -7389,16 +7389,16 @@ int nodeLinkClass::launch_host_services_cmd ( struct nodeLinkClass::node * node_
     {
         /* only supported subfunction (right now) is COMPUTE */
         if ( start == true )
-            node_ptr->host_services_req.cmd = MTC_CMD_START_COMPUTE_SVCS ;
+            node_ptr->host_services_req.cmd = MTC_CMD_START_WORKER_SVCS ;
         else
-            node_ptr->host_services_req.cmd = MTC_CMD_STOP_COMPUTE_SVCS ;
+            node_ptr->host_services_req.cmd = MTC_CMD_STOP_WORKER_SVCS ;
     }
     else if ( start == true )
     {
         if ( is_controller (node_ptr) )
             node_ptr->host_services_req.cmd = MTC_CMD_START_CONTROL_SVCS ;
-        else if ( is_compute (node_ptr) )
-            node_ptr->host_services_req.cmd = MTC_CMD_START_COMPUTE_SVCS ;
+        else if ( is_worker (node_ptr) )
+            node_ptr->host_services_req.cmd = MTC_CMD_START_WORKER_SVCS ;
         else if ( is_storage (node_ptr) )
             node_ptr->host_services_req.cmd = MTC_CMD_START_STORAGE_SVCS ;
         else
@@ -7412,8 +7412,8 @@ int nodeLinkClass::launch_host_services_cmd ( struct nodeLinkClass::node * node_
     {
         if ( is_controller (node_ptr) )
             node_ptr->host_services_req.cmd = MTC_CMD_STOP_CONTROL_SVCS ;
-        else if ( is_compute (node_ptr) )
-            node_ptr->host_services_req.cmd = MTC_CMD_STOP_COMPUTE_SVCS ;
+        else if ( is_worker (node_ptr) )
+            node_ptr->host_services_req.cmd = MTC_CMD_STOP_WORKER_SVCS ;
         else if ( is_storage (node_ptr) )
             node_ptr->host_services_req.cmd = MTC_CMD_STOP_STORAGE_SVCS ;
         else

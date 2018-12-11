@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2016 Wind River Systems, Inc.
+ * Copyright (c) 2013-2018 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -452,7 +452,7 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
         }
     }
 
-    else if ( strstr ( &msg.hdr[0], get_compute_msg_header()) )
+    else if ( strstr ( &msg.hdr[0], get_worker_msg_header()) )
     {
         elog ("Unsupported Message\n");
         print_mtc_message ( &msg );
@@ -751,7 +751,7 @@ int create_mtcAlive_msg ( mtc_message_type & msg, int cmd, string identity, int 
 
         /* Init the message buffer */
         MEMSET_ZERO (msg);
-        snprintf ( &msg.hdr[0], MSG_HEADER_SIZE, "%s", get_compute_msg_header());
+        snprintf ( &msg.hdr[0], MSG_HEADER_SIZE, "%s", get_worker_msg_header());
         msg.cmd = cmd ;
         msg.num = MTC_PARM_MAX_IDX ;
 
@@ -778,10 +778,10 @@ int create_mtcAlive_msg ( mtc_message_type & msg, int cmd, string identity, int 
         if ( daemon_is_file_present ( NODE_IS_PATCHED_FILE ) )
             msg.parm[MTC_PARM_FLAGS_IDX] |= MTC_FLAG__PATCHED ;
 
-        /* manage the compute subfunction flag */
-        if ( is_subfunction_compute () == true )
+        /* manage the worker subfunction flag */
+        if ( is_subfunction_worker () == true )
         {
-            if ( daemon_is_file_present ( CONFIG_COMPLETE_COMPUTE ) )
+            if ( daemon_is_file_present ( CONFIG_COMPLETE_WORKER ) )
             {
                 msg.parm[MTC_PARM_FLAGS_IDX] |= MTC_FLAG__SUBF_CONFIGURED ;
 
