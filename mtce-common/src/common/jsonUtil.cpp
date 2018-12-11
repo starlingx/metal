@@ -406,9 +406,6 @@ int jsonUtil_inv_load ( char * json_str_ptr,
 cleanup:
 
     if (raw_obj)  json_object_put(raw_obj);
-    if (req_obj)  json_object_put(req_obj);
-    if (next_obj) json_object_put(next_obj);
-    if (node_obj) json_object_put(node_obj);
 
     return (rc);
 }
@@ -807,7 +804,6 @@ int jsonApi_auth_load    ( string & hostname,
     struct json_object *token_obj = (struct json_object *)(NULL);
     struct json_object *svccat_obj = (struct json_object *)(NULL);
     struct json_object *tuple_obj = (struct json_object *)(NULL);
-    struct json_object *type_obj = (struct json_object *)(NULL);
     struct json_object *url_obj = (struct json_object *)(NULL);
     struct json_object *end_obj = (struct json_object *)(NULL);
 
@@ -920,12 +916,6 @@ auth_load_cleanup:
         }
         json_object_put(raw_obj);
     }
-    if (token_obj)      json_object_put(token_obj);
-    if (svccat_obj)     json_object_put(svccat_obj);
-    if (tuple_obj)      json_object_put(tuple_obj);
-    if (end_obj)        json_object_put(end_obj);
-    if (url_obj)        json_object_put(type_obj);
-    if (type_obj)       json_object_put(type_obj);
 
     return (rc);
 }
@@ -973,8 +963,6 @@ int jsonUtil_get_list ( char * json_str_ptr, string label, list<string> & key_li
 get_list_cleanup:
 
     if (raw_obj)   json_object_put(raw_obj);
-    if (label_obj) json_object_put(label_obj);
-    if (item_obj)  json_object_put(item_obj);
 
     return (rc);
 }
@@ -1067,8 +1055,6 @@ int jsonApi_array_value ( char * json_str_ptr,
 array_value_cleanup:
 
     if (raw_obj)   json_object_put(raw_obj);
-    if (array_obj) json_object_put(array_obj);
-    if (tuple_obj) json_object_put(tuple_obj);
     if (type_obj)  json_object_put(type_obj);
 
     return (rc);
@@ -1149,8 +1135,6 @@ int jsonUtil_get_array_idx  (   char * json_str_ptr,
 get_array_idx_cleanup:
 
     if (raw_obj)   json_object_put(raw_obj);
-    if (array_obj) json_object_put(array_obj);
-    if (tuple_obj) json_object_put(tuple_obj);
     return (rc);
 }
 
@@ -1203,7 +1187,6 @@ int jsonUtil_array_elements ( char * json_str_ptr, string label, int & elements 
 array_elements_cleanup:
 
     if (raw_obj)   json_object_put(raw_obj);
-    if (array_obj) json_object_put(array_obj);
 
     return (rc);
 }
