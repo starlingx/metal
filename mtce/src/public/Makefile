@@ -4,6 +4,8 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+SHELL = /bin/bash
+
 SRCS = amon.c
 OBJS = $(SRCS:.c=.o)
 INCLUDES = -I.

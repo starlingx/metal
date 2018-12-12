@@ -4,6 +4,8 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+SHELL = /bin/bash
+
 SRCS = rmonInit.cpp rmonMsg.cpp rmonHdlr.cpp rmonHttp.cpp interfaceHdlr.cpp rmonFM.cpp remoteloggingHdlr.cpp thinmetaHdlr.cpp
 OBJS = $(SRCS:.cpp=.o)
 LDLIBS = -lstdc++ -ldaemon -lcommon -lfmcommon -lrmonapi -lrt -levent -lcrypto -luuid -lpthread -ljson-c

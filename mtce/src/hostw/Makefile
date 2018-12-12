@@ -4,6 +4,8 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+SHELL = /bin/bash
+
 SRCS = hostwInit.cpp hostwHdlr.cpp hostwMsg.cpp
 OBJS = $(SRCS:.cpp=.o)
 LDLIBS = -lstdc++ -ldaemon -lcommon -lrt -lcrypto
