@@ -43,20 +43,17 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
 {
     int rc = PASS ;
 
+    if ( node_ptr->ar_disabled == true )
+    {
+        enableStageChange ( node_ptr, MTC_ENABLE__START );
+        return (rc);
+    }
+
     /* Setup the log prefix */
     string name = node_ptr->hostname ;
     name.append("-compute");
 
-    bool simplex = false ;
-    if (( SIMPLEX ) ||
-        (( THIS_HOST ) &&
-        (( this->is_inactive_controller_main_insv() == false ) ||
-         ( this->is_inactive_controller_subf_insv() == false ))))
-    {
-        simplex = true ;
-    }
-
-    switch ( (int)node_ptr->handlerStage.enable )
+    switch ( (int)node_ptr->enableStage )
     {
         case MTC_ENABLE__FAILURE_WAIT:
         {
@@ -77,29 +74,7 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
             workQueue_purge ( node_ptr );
             doneQueue_purge ( node_ptr );
 
-            enableStageChange ( node_ptr, MTC_ENABLE__START );
-
-            /* avoid failing this controller if there is no inactive to
-             * take over and avoid thrashing back and forth if the sub
-             * function on the inactive is disabled */
-            if ( simplex )
-            {
-                /* if autorecovery is enabled then handle it that way. */
-                if ( this->autorecovery_enabled == true )
-                {
-                    adminActionChange ( node_ptr, MTC_ADMIN_ACTION__NONE );
-                    enableStageChange ( node_ptr, MTC_ENABLE__START );
-
-                    manage_autorecovery ( node_ptr );
-                }
-
-                wlog ("%s is ENABLED-degraded (failed subfunction)\n", name.c_str());
-            }
-            else
-            {
-                /* if there is another controller enabled then just force a full enable of this one */
-                force_full_enable ( node_ptr ) ;
-            }
+            force_full_enable ( node_ptr ) ;
             break ;
         }
 
@@ -139,22 +114,26 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
                 enableStageChange ( node_ptr, MTC_ENABLE__GOENABLED_TIMER );
                 alarm_config_clear ( node_ptr );
             }
-            else if ( node_ptr->mtce_flags & MTC_FLAG__I_AM_NOT_HEALTHY )
+
+            if ((( !node_ptr->mtce_flags & MTC_FLAG__I_AM_CONFIGURED )) ||
+                ((  node_ptr->mtce_flags & MTC_FLAG__I_AM_NOT_HEALTHY )))
             {
                 mtcTimer_reset (node_ptr->mtcTimer);
-                elog ("%s configuration failed (oob:%x:%x)\n",
-                          name.c_str(),
-                          node_ptr->mtce_flags,
-                          MTC_FLAG__I_AM_NOT_HEALTHY);
+
+                elog ("%s configuration failed or incomplete (oob:%x)\n",
+                          name.c_str(), node_ptr->mtce_flags);
 
                 alarm_config_failure ( node_ptr );
 
-                if ( simplex )
-                    mtcInvApi_update_task ( node_ptr, MTC_TASK_SUBF_CONFIG_FAIL_ );
-                else
-                    mtcInvApi_update_task ( node_ptr, MTC_TASK_SUBF_CONFIG_FAIL );
+                mtcInvApi_update_task ( node_ptr, MTC_TASK_SUBF_CONFIG_FAIL );
 
                 enableStageChange ( node_ptr, MTC_ENABLE__SUBF_FAILED );
+
+                /* handle auto recovery for this failure */
+                if ( ar_manage ( node_ptr,
+                                 MTC_AR_DISABLE_CAUSE__CONFIG,
+                                 MTC_TASK_AR_DISABLED_CONFIG ) != PASS )
+                    break ;
             }
 
             /* timeout handling */
@@ -166,12 +145,15 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
 
                 alarm_config_failure ( node_ptr );
 
-                if ( simplex )
-                    mtcInvApi_update_task ( node_ptr, MTC_TASK_SUBF_CONFIG_TO_ );
-                else
-                    mtcInvApi_update_task ( node_ptr, MTC_TASK_SUBF_CONFIG_TO );
+                mtcInvApi_update_task ( node_ptr, MTC_TASK_SUBF_CONFIG_TO );
 
                 enableStageChange ( node_ptr, MTC_ENABLE__SUBF_FAILED );
+
+                /* handle auto recovery for this failure */
+                if ( ar_manage ( node_ptr,
+                                 MTC_AR_DISABLE_CAUSE__CONFIG,
+                                 MTC_TASK_AR_DISABLED_CONFIG ) != PASS )
+                    break ;
             }
             else
             {
@@ -227,19 +209,19 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
         }
         case MTC_ENABLE__GOENABLED_WAIT:
         {
+            bool goenable_failed = false ;
+
             /* search for the Go Enable message */
-            if ( node_ptr->goEnabled_failed_subf == true )
+            if (( node_ptr->health == NODE_UNHEALTHY ) ||
+                ( node_ptr->mtce_flags & MTC_FLAG__I_AM_NOT_HEALTHY) ||
+                ( node_ptr->goEnabled_failed_subf == true ))
             {
                 mtcTimer_reset ( node_ptr->mtcTimer );
                 elog ("%s one or more out-of-service tests failed\n", name.c_str());
 
-                mtcInvApi_update_task ( node_ptr, simplex ? MTC_TASK_INTEST_FAIL_ : MTC_TASK_INTEST_FAIL );
-
-                /* Need thresholded auto recovery for this failure mode */
-                if ( this->system_type == SYSTEM_TYPE__CPE_MODE__SIMPLEX )
-                    this->autorecovery_enabled = true ;
-
+                mtcInvApi_update_task ( node_ptr, MTC_TASK_SUBF_INTEST_FAIL );
                 enableStageChange ( node_ptr, MTC_ENABLE__SUBF_FAILED );
+                goenable_failed = true ;
             }
 
             /* search for the Go Enable message */
@@ -248,6 +230,7 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
                 mtcTimer_reset ( node_ptr->mtcTimer );
 
                 alarm_enabled_clear ( node_ptr, false );
+                alarm_compute_clear ( node_ptr, true );
 
                 plog ("%s passed  out-of-service tests\n", name.c_str());
 
@@ -275,17 +258,24 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
             {
                 elog ("%s out-of-service test execution timeout\n", name.c_str());
 
-                mtcInvApi_update_task ( node_ptr, simplex ? MTC_TASK_INTEST_FAIL_TO_ : MTC_TASK_INTEST_FAIL_TO );
-
-                /* Need thresholded auto recovery for this failure mode */
-                if ( this->system_type == SYSTEM_TYPE__CPE_MODE__SIMPLEX )
-                    this->autorecovery_enabled = true ;
-
+                mtcInvApi_update_task ( node_ptr, MTC_TASK_SUBF_INTEST_TO );
                 enableStageChange ( node_ptr, MTC_ENABLE__SUBF_FAILED );
+                goenable_failed = true ;
             }
             else
             {
                 ; /* wait some more */
+            }
+
+            if ( goenable_failed == true )
+            {
+                alarm_compute_failure ( node_ptr, FM_ALARM_SEVERITY_CRITICAL );
+
+                /* handle auto recovery for this failure */
+                if ( ar_manage ( node_ptr,
+                                 MTC_AR_DISABLE_CAUSE__GOENABLE,
+                                 MTC_TASK_AR_DISABLED_GOENABLE ) != PASS )
+                    break ;
             }
             break ;
         }
@@ -312,17 +302,20 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
 
             else if ( launch_host_services_cmd ( node_ptr, start, subf ) != PASS )
             {
-                node_ptr->hostservices_failed_subf = true ;
-
                 wlog ("%s %s failed ; launch\n",
                           name.c_str(),
                           node_ptr->host_services_req.name.c_str());
 
-                /* Need thresholded auto recovery for this failure mode */
-                if ( this->system_type == SYSTEM_TYPE__CPE_MODE__SIMPLEX )
-                    this->autorecovery_enabled = true ;
-
+                node_ptr->hostservices_failed_subf = true ;
+                alarm_compute_failure ( node_ptr, FM_ALARM_SEVERITY_CRITICAL );
                 enableStageChange ( node_ptr, MTC_ENABLE__SUBF_FAILED );
+                mtcInvApi_update_task ( node_ptr, MTC_TASK_SUBF_SERVICE_FAIL );
+
+                /* handle auto recovery for this failure */
+                if ( ar_manage ( node_ptr,
+                                 MTC_AR_DISABLE_CAUSE__HOST_SERVICES,
+                                 MTC_TASK_AR_DISABLED_SERVICES ) != PASS )
+                    break ;
             }
             else
             {
@@ -343,11 +336,12 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
             }
             else if ( rc != PASS )
             {
-                /* Need thresholded auto recovery for this failure mode */
-                if ( this->system_type == SYSTEM_TYPE__CPE_MODE__SIMPLEX )
-                    this->autorecovery_enabled = true ;
-
                 node_ptr->hostservices_failed_subf = true ;
+                alarm_compute_failure ( node_ptr, FM_ALARM_SEVERITY_CRITICAL );
+
+                enableStageChange ( node_ptr, MTC_ENABLE__SUBF_FAILED );
+
+
                 if ( rc == FAIL_TIMEOUT )
                 {
                     elog ("%s %s failed ; timeout\n",
@@ -355,7 +349,7 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
                               node_ptr->host_services_req.name.c_str());
 
                     /* Report "Enabling Compute Service Timeout" to sysinv/horizon */
-                    mtcInvApi_update_task ( node_ptr, MTC_TASK_ENABLING_SUBF_TO );
+                    mtcInvApi_update_task ( node_ptr, MTC_TASK_SUBF_SERVICE_TO );
                 }
                 else
                 {
@@ -365,9 +359,14 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
                               rc);
 
                     /* Report "Enabling Compute Service Failed" to sysinv/horizon */
-                    mtcInvApi_update_task ( node_ptr, MTC_TASK_ENABLING_SUBF_FAIL );
+                    mtcInvApi_update_task ( node_ptr, MTC_TASK_SUBF_SERVICE_FAIL );
                 }
-                enableStageChange ( node_ptr, MTC_ENABLE__SUBF_FAILED );
+
+                /* handle auto recovery for this failure */
+                if ( ar_manage ( node_ptr,
+                                 MTC_AR_DISABLE_CAUSE__HOST_SERVICES,
+                                 MTC_TASK_AR_DISABLED_SERVICES ) != PASS )
+                    break ;
             }
             else /* success path */
             {
@@ -409,8 +408,6 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
                 mtcTimer_reset ( node_ptr->mtcTimer );
             }
 
-            /* Start Monitoring heartbeat */
-            send_hbs_command ( node_ptr->hostname, MTC_CMD_START_HOST );
 
             if ( this->hbs_failure_action == HBS_FAILURE_ACTION__NONE )
             {
@@ -426,6 +423,9 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
                 /* allow heartbeat to run for 10 seconds before we declare enable */
                 mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_HEARTBEAT_SOAK_BEFORE_ENABLE );
                 enableStageChange ( node_ptr, MTC_ENABLE__HEARTBEAT_SOAK );
+
+                /* Start Monitoring heartbeat */
+                send_hbs_command ( node_ptr->hostname, MTC_CMD_START_HOST );
             }
             break ;
         }
@@ -434,6 +434,11 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
             if ( node_ptr->mtcTimer.ring == true )
             {
                 plog ("%s heartbeating\n", name.c_str() );
+
+                /* handle auto recovery ear for thsi potential cause */
+                node_ptr->ar_cause = MTC_AR_DISABLE_CAUSE__NONE ;
+                node_ptr->ar_count[MTC_AR_DISABLE_CAUSE__HEARTBEAT] = 0 ;
+
                 /* if heartbeat is not working then we will
                  * never get here and enable the host */
                 enableStageChange ( node_ptr, MTC_ENABLE__STATE_CHANGE );
@@ -472,7 +477,7 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
             {
                 elog ("%s enable failed ; Enable workQueue timeout, purging ...\n", name.c_str());
 
-                mtcInvApi_update_task ( node_ptr, simplex ? MTC_TASK_ENABLE_WORK_TO_ : MTC_TASK_ENABLE_WORK_TO );
+                mtcInvApi_update_task ( node_ptr, MTC_TASK_ENABLE_WORK_TO );
 
                 fail = true ;
             }
@@ -480,7 +485,7 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
             {
                 elog ("%s enable failed ; Enable doneQueue has failed commands\n", name.c_str());
 
-                mtcInvApi_update_task ( node_ptr, simplex ? MTC_TASK_ENABLE_WORK_FAIL_ : MTC_TASK_ENABLE_WORK_FAIL );
+                mtcInvApi_update_task ( node_ptr, MTC_TASK_ENABLE_WORK_FAIL );
 
                 fail = true ;
             }
@@ -655,6 +660,8 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
             node_ptr->was_dor_recovery_mode = false ;
             node_ptr->dor_recovery_mode = false ;
             this->dor_mode_active = false ;
+
+            ar_enable ( node_ptr );
 
             mtcInvApi_force_task ( node_ptr, "" );
             break ;

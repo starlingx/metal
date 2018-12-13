@@ -254,13 +254,9 @@ private:
         mtc_nodeOperState_enum    operState_dport  ; /**< Data Port Operational State   */
         mtc_nodeAvailStatus_enum  availStatus_dport; /**< Data Port Availability Status */
 
-
-        /** Maintains the current handler stage.
-          * This is a union of all handler types such as enable,
-          * disable, degrade etc. See nodeBase.h for list of union members */
-        mtc_stages_union          handlerStage;
-
         /* Individual FSM handler stages */
+        mtc_enableStages_enum     enableStage     ;
+        mtc_disableStages_enum    disableStage    ;
         mtc_offlineStages_enum    offlineStage    ;
         mtc_onlineStages_enum     onlineStage     ;
         mtc_swactStages_enum      swactStage      ;
@@ -379,6 +375,24 @@ private:
 
         /** when true requests the task for this host be cleared at first opportunity */
         bool clear_task ;
+
+        /******* Auto Recovery Control Structure and member Functions ********/
+
+        /* reason/cause based host level enable failure counter */
+        unsigned int ar_count[MTC_AR_DISABLE_CAUSE__LAST] ;
+
+        /* The last enable failure reason/cause.
+         * Note: MTC_AR_DISABLE_CAUSE__NONE is no failure (default) */
+        autorecovery_disable_cause_enum ar_cause ;
+
+        /* when true indicates that a host has reached its enbale failure
+         * threshold and is left in the unlocked-disabled state */
+        bool ar_disabled ;
+
+        /* throttles the ar_disabled log to periodically indicate auto
+         * recovery disabled state but avoid flooding that same message. */
+        #define AR_LOG_THROTTLE_THRESHOLD (100000)
+        unsigned int ar_log_throttle ;
 
         /** Host's mtc timer struct. Use to time handler stages.
          *
@@ -870,9 +884,10 @@ private:
 
     int update_dport_states ( struct nodeLinkClass::node * node_ptr, int event );
 
-    /* manage deciding to return or issue an immediate reboot if the
-     * auto recovery threshold is exceeded. */
-    void manage_autorecovery ( struct nodeLinkClass::node * node_ptr );
+    /* manage auto recovery */
+    int  ar_manage ( struct nodeLinkClass::node * node_ptr,
+                     autorecovery_disable_cause_enum cause,
+                     string ar_disable_banner );
 
     /** ***********************************************************************
       *
@@ -1040,6 +1055,12 @@ private:
     void clear_subf_failed_bools ( struct nodeLinkClass::node * node_ptr );
     void clear_main_failed_bools ( struct nodeLinkClass::node * node_ptr );
     void clear_hostservices_ctls ( struct nodeLinkClass::node * node_ptr );
+
+    /* Enables/Clears dynamic auto recovery state. start fresh !
+     * called in disabled_handler (lock) and in the DONE stages
+     * of the enable handler. */
+    void ar_enable ( struct nodeLinkClass::node * node_ptr );
+
 
     /** Find the node that has this timerID in its general mtc timer */
     struct nodeLinkClass::node * get_mtcTimer_timer   ( timer_t tid );
@@ -2005,22 +2026,36 @@ public:
     int compute_mtcalive_timeout;
     int controller_mtcalive_timeout ;
     int goenabled_timeout      ;
+
+    /** /etc/mtc.conf configurable audit intervals */
     int swact_timeout          ;
     int sysinv_timeout         ;
     int sysinv_noncrit_timeout ;
-    int loc_recovery_timeout ; /**< Loss Of Communication Recovery Timeout        */
-    int work_queue_timeout   ;
+    int loc_recovery_timeout   ; /**< Loss Of Communication Recovery Timeout */
+    int work_queue_timeout     ;
     int node_reinstall_timeout ;
 
-    /** /etc/mtc.ini configurable audit intervals */
     int insv_test_period  ;
     int oos_test_period   ;
     int uptime_period     ;
     int online_period     ;
     int token_refresh_rate;
 
+    /* Service specific max failures before autorecovery is disabled.
+     *
+     * ... values for each service are loaded from mtc config
+     *     file at daemon startup
+     */
+    unsigned int ar_threshold[MTC_AR_DISABLE_CAUSE__LAST] ;
+
+    /* service specific secs between autorecovery retries.
+     *
+     * ... values for each service are loaded from mtc config
+     *     file at daemon startup
+     */
+    unsigned int ar_interval[MTC_AR_DISABLE_CAUSE__LAST]  ;
+
     int  unknown_host_throttle ;
-    int  invalid_arg_throttle  ;
 };
 
 /**
@@ -2052,7 +2087,6 @@ const char * get_adminAction_str ( mtc_nodeAdminAction_enum action );
 string       bmc_get_ip          ( string hostname, string mac , string & current_bm_ip );
 void         clear_host_degrade_causes ( unsigned int & degrade_mask );
 bool         sensor_monitoring_supported ( string hostname );
-void         autorecovery_clear  ( string hostname );
 void         log_mnfa_pool      ( std::list<string> & mnfa_awol_list );
 
 #endif /* __INCLUDE_NODECLASS_H__ */

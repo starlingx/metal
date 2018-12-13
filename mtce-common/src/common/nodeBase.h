@@ -229,28 +229,35 @@ void daemon_exit ( void );
 #define MTC_TASK_INIT_FAIL         "Initialization Failed, recovering"
 #define MTC_TASK_START_SERVICE_FAIL "Start Services Failed"
 #define MTC_TASK_START_SERVICE_TO  "Start Services Timeout"
-#define MTC_TASK_ENABLING          "Enabling"
-#define MTC_TASK_ENABLING_SUBF     "Enabling Compute Service"
-#define MTC_TASK_ENABLING_SUBF_FAIL "Enabling Compute Service Failed"
-#define MTC_TASK_ENABLING_SUBF_TO  "Enabling Compute Service Timeout"
-#define MTC_TASK_ENABLE_WORK_FAIL  "Enable Action Failed, re-enabling"
-#define MTC_TASK_ENABLE_WORK_FAIL_ "Enable Action Failed"
-#define MTC_TASK_ENABLE_WORK_TO    "Enable Action Timeout, re-enabling"
-#define MTC_TASK_ENABLE_WORK_TO_   "Enable Action Timeout"
+#define MTC_TASK_ENABLE_WORK_FAIL  "Enable Action Failed"
+#define MTC_TASK_ENABLE_WORK_TO    "Enable Action Timeout"
 #define MTC_TASK_ENABLE_FAIL_HB    "Enable Heartbeat Failure, re-enabling"
 #define MTC_TASK_RECOVERY_FAIL     "Graceful Recovery Failed, re-enabling"
 #define MTC_TASK_RECOVERY_WAIT     "Graceful Recovery Wait"
 #define MTC_TASK_RECOVERED         "Gracefully Recovered"
+
+#define MTC_TASK_ENABLING          "Enabling"
 #define MTC_TASK_MAIN_CONFIG_FAIL  "Configuration Failed, re-enabling"
-#define MTC_TASK_SUBF_CONFIG_FAIL  "Compute Configuration Failed, re-enabling"
-#define MTC_TASK_SUBF_CONFIG_FAIL_ "Compute Configuration Failed"
 #define MTC_TASK_MAIN_CONFIG_TO    "Configuration Timeout, re-enabling"
+#define MTC_TASK_MAIN_INTEST_FAIL  "In-Test Failed, re-enabling"
+#define MTC_TASK_MAIN_INTEST_TO    "In-Test Timeout, re-enabling"
+#define MTC_TASK_MAIN_SERVICE_FAIL "Start Services Failed, re-enabling"
+#define MTC_TASK_MAIN_SERVICE_TO   "Start Services Timeout, re-enabling"
+
+#define MTC_TASK_ENABLING_SUBF     "Enabling Compute Service"
+#define MTC_TASK_SUBF_CONFIG_FAIL  "Compute Configuration Failed, re-enabling"
 #define MTC_TASK_SUBF_CONFIG_TO    "Compute Configuration Timeout, re-enabling"
-#define MTC_TASK_SUBF_CONFIG_TO_   "Compute Configuration Timeout"
-#define MTC_TASK_INTEST_FAIL       "In-Test Failed, re-enabling"
-#define MTC_TASK_INTEST_FAIL_      "In-Test Failed"
-#define MTC_TASK_INTEST_FAIL_TO    "In-Test Timeout, re-enabling"
-#define MTC_TASK_INTEST_FAIL_TO_   "In-Test Timeout"
+#define MTC_TASK_SUBF_INTEST_FAIL  "Compute In-Test Failed, re-enabling"
+#define MTC_TASK_SUBF_INTEST_TO    "Compute In-Test Timeout, re-enabling"
+#define MTC_TASK_SUBF_SERVICE_FAIL "Compute Start Services Failed, re-enabling"
+#define MTC_TASK_SUBF_SERVICE_TO   "Compute Start Services Timeout, re-enabling"
+
+#define MTC_TASK_AR_DISABLED_CONFIG    "Configuration failure, threshold reached, Lock/Unlock to retry"
+#define MTC_TASK_AR_DISABLED_GOENABLE  "In-Test Failure, threshold reached, Lock/Unlock to retry"
+#define MTC_TASK_AR_DISABLED_SERVICES  "Service Failure, threshold reached, Lock/Unlock to retry"
+#define MTC_TASK_AR_DISABLED_ENABLE    "Enable Failure, threshold reached, Lock/Unlock to retry"
+#define MTC_TASK_AR_DISABLED_HEARTBEAT "Heartbeat Failure, threshold reached, Lock/Unlock to retry"
+
 #define MTC_TASK_RESET_FAIL        "Reset Failed"
 #define MTC_TASK_RESET_QUEUE       "Reset Failed, retrying (%d of %d)"
 #define MTC_TASK_POWERON_FAIL      "Power-On Failed"
@@ -275,8 +282,6 @@ void daemon_exit ( void );
 #define MTC_TASK_RESETTING_HOST    "Resetting Host, critical sensor"
 #define MTC_TASK_CPE_SX_UNLOCK_MSG "Unlocking, please stand-by while the system gracefully reboots"
 #define MTC_TASK_SELF_UNLOCK_MSG   "Unlocking active controller, please stand-by while it reboots"
-#define MTC_TASK_AUTO_RECOVERY          "Critical failure. Auto-recovery enabled, re-enabling"
-#define MTC_TASK_AUTO_RECOVERY_DISABLED "Critical failure. Auto-recovery disabled, threshold reached"
 #define MTC_TASK_FAILED_SWACT_REQ  "Critical failure.Requesting SWACT to enabled standby controller"
 #define MTC_TASK_FAILED_NO_BACKUP  "Critical failure.Please provision/enable standby controller"
 
@@ -1176,13 +1181,6 @@ typedef enum
     MTC_STRESS_TEST__STAGES = 6,
 } mtc_stressStages_enum ;
 
-typedef union
-{
-    mtc_enableStages_enum   enable  ;
-    mtc_disableStages_enum  disable ;
-    int                     raw     ;
-} mtc_stages_union ;
-
 typedef struct
 {
    mtc_nodeAdminAction_enum adminAction ;
@@ -1209,6 +1207,24 @@ typedef enum
     INFRA_IFACE  = 1,
       MAX_IFACES = 2
 } iface_enum ;
+
+/* Auto recovery Disable Causes */
+typedef enum
+{
+    MTC_AR_DISABLE_CAUSE__CONFIG,
+    MTC_AR_DISABLE_CAUSE__GOENABLE,
+    MTC_AR_DISABLE_CAUSE__HOST_SERVICES,
+    MTC_AR_DISABLE_CAUSE__HEARTBEAT,
+    MTC_AR_DISABLE_CAUSE__LAST,
+    MTC_AR_DISABLE_CAUSE__NONE,
+} autorecovery_disable_cause_enum ;
+
+/* Service Based Auto Recovery Control Structure */
+typedef struct
+{
+    unsigned int count     ; /* running back-2-back failure count         */
+    bool         disabled  ; /* true if autorecovery is disabled          */
+} autorecovery_cause_ctrl_type ;
 
 /** Returns true if the specified admin state string is valid */
 bool adminStateOk  ( string admin );

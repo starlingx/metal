@@ -316,6 +316,25 @@ static int mtc_config_handler ( void * user,
         mtcInv.offline_threshold = atoi(value);
         ilog ("OfflineThrsh: %d\n", mtcInv.offline_threshold );
     }
+
+    else if (MATCH("agent", "ar_config_threshold"))
+        mtcInv.ar_threshold[MTC_AR_DISABLE_CAUSE__CONFIG] = atoi(value);
+    else if (MATCH("agent", "ar_goenable_threshold"))
+        mtcInv.ar_threshold[MTC_AR_DISABLE_CAUSE__GOENABLE] = atoi(value);
+    else if (MATCH("agent", "ar_hostservices_threshold"))
+        mtcInv.ar_threshold[MTC_AR_DISABLE_CAUSE__HOST_SERVICES] = atoi(value);
+    else if (MATCH("agent", "ar_heartbeat_threshold"))
+        mtcInv.ar_threshold[MTC_AR_DISABLE_CAUSE__HEARTBEAT] = atoi(value);
+
+    else if (MATCH("agent", "ar_config_interval"))
+        mtcInv.ar_interval[MTC_AR_DISABLE_CAUSE__CONFIG] = atoi(value);
+    else if (MATCH("agent", "ar_goenable_interval"))
+        mtcInv.ar_interval[MTC_AR_DISABLE_CAUSE__GOENABLE] = atoi(value);
+    else if (MATCH("agent", "ar_hostservices_interval"))
+        mtcInv.ar_interval[MTC_AR_DISABLE_CAUSE__HOST_SERVICES] = atoi(value);
+    else if (MATCH("agent", "ar_heartbeat_interval"))
+        mtcInv.ar_interval[MTC_AR_DISABLE_CAUSE__HEARTBEAT] = atoi(value);
+
     else
     {
         return (PASS);
@@ -634,6 +653,20 @@ int daemon_configure ( void )
     ilog("guestAgent  : %d (port)\n", mtc_config.mtc_to_guest_cmd_port );
     ilog("hwmond      : %d (port)\n", mtc_config.hwmon_cmd_port );
     ilog("auth_host   : %s \n", mtc_config.keystone_auth_host );
+
+    /* log system wide service based auto recovery control values */
+    ilog("AR Config   : %d (threshold) %d sec (retry interval)",
+          mtcInv.ar_threshold[MTC_AR_DISABLE_CAUSE__CONFIG],
+          mtcInv.ar_interval [MTC_AR_DISABLE_CAUSE__CONFIG]);
+    ilog("AR GoEnable : %d (threshold) %d sec (retry interval)",
+          mtcInv.ar_threshold[MTC_AR_DISABLE_CAUSE__GOENABLE],
+          mtcInv.ar_interval [MTC_AR_DISABLE_CAUSE__GOENABLE]);
+    ilog("AR Host Svcs: %d (threshold) %d sec (retry interval)",
+          mtcInv.ar_threshold[MTC_AR_DISABLE_CAUSE__HOST_SERVICES],
+          mtcInv.ar_interval [MTC_AR_DISABLE_CAUSE__HOST_SERVICES]);
+    ilog("AR Heartbeat: %d (threshold) %d sec (retry interval)",
+          mtcInv.ar_threshold[MTC_AR_DISABLE_CAUSE__HEARTBEAT],
+          mtcInv.ar_interval [MTC_AR_DISABLE_CAUSE__HEARTBEAT]);
 
     /* Get this Controller Activity State */
     mtc_config.active = daemon_get_run_option ("active") ;

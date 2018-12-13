@@ -236,9 +236,6 @@ nodeLinkClass::nodeLinkClass()
     this->loc_recovery_timeout        = 0;
     this->node_reinstall_timeout      = 0;
     this->token_refresh_rate          = 0;
-    this->autorecovery_enabled        = false ;
-    this->autorecovery_disabled       = false ;
-
 
     head = tail = NULL;
     memory_allocs = 0 ;
@@ -313,6 +310,11 @@ nodeLinkClass::nodeLinkClass()
     sysinv_noncrit_timeout       = HTTP_SYSINV_NONC_TIMEOUT ;
     work_queue_timeout           = MTC_WORKQUEUE_TIMEOUT    ;
 
+    /* Init the auto recovery threshold and intervals to zero until
+     * modified by daemon config */
+    memset (&ar_threshold, 0, sizeof(ar_threshold));
+    memset (&ar_interval, 0, sizeof(ar_interval));
+
     /* Inservice test periods in seconds - 0 = disabled */
     insv_test_period = 0 ;
     oos_test_period = 0 ;
@@ -340,7 +342,6 @@ nodeLinkClass::nodeLinkClass()
     tokenEvent.buf   = NULL ;
 
     unknown_host_throttle = 0 ;
-    invalid_arg_throttle = 0 ;
 
     testmode = 0 ;
     module_init( );
@@ -564,6 +565,11 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
     ptr->was_dor_recovery_mode= false ;
     ptr->dor_recovery_time    = 0     ;
 
+    ptr->ar_disabled = false ;
+    ptr->ar_cause = MTC_AR_DISABLE_CAUSE__NONE ;
+    memset (&ptr->ar_count, 0, sizeof(ptr->ar_count));
+    ptr->ar_log_throttle = 0 ;
+
     mtcTimer_init ( ptr->mtcTimer,         hostname, "mtc timer");       /* Init node's general mtc timer    */
     mtcTimer_init ( ptr->insvTestTimer,    hostname, "insv test timer");
     mtcTimer_init ( ptr->oosTestTimer,     hostname, "oos test timer");  /* Init node's oos test timer       */
@@ -603,7 +609,8 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
     ptr->subStage          = MTC_SUBSTAGE__DONE  ;
     ptr->reinstallStage    = MTC_REINSTALL__DONE ;
     ptr->resetStage        = MTC_RESET__START    ;
-    ptr->handlerStage.enable = MTC_ENABLE__START ; /* Enable and Disable */
+    ptr->enableStage       = MTC_ENABLE__START   ;
+    ptr->disableStage      = MTC_DISABLE__START  ;
 
     ptr->oos_test_count = 0 ;
     ptr->insv_test_count = 0 ;
@@ -613,9 +620,8 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
     ptr->uptime_refresh_counter = 0 ;
     ptr->node_unlocked_counter = 0 ;
 
-    /* Default to a healthy config until mtcAlive messages prove otherwise */
-    ptr->mtce_flags = ( MTC_FLAG__I_AM_CONFIGURED |
-                        MTC_FLAG__I_AM_HEALTHY ) ;
+    /* Good health needs to be learned */
+    ptr->mtce_flags = 0 ;
 
     ptr->graceful_recovery_counter = 0 ;
     ptr->health_threshold_counter = 0 ;
@@ -745,8 +751,6 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
     /* start with no action and an empty todo list */
     ptr->adminAction = MTC_ADMIN_ACTION__NONE    ;
     ptr->adminAction_todo_list.clear();
-
-    ptr->handlerStage.enable = MTC_ENABLE__START;
 
     hosts++ ;
 
@@ -4504,16 +4508,31 @@ void nodeLinkClass::manage_heartbeat_failure ( string hostname, iface_enum iface
     }
     else
     {
-        //bool want_degrade = true ;
-        //if ( this->hbs_failure_action == HBS_FAILURE_ACTION__ALARM )
-        //    want_degrade = false ;
-        // alarm_enabled_failure (node_ptr, want_degrade);
+        /* handle auto recovery for heartbeat failure during enable */
+        if ( node_ptr->ar_cause == MTC_AR_DISABLE_CAUSE__HEARTBEAT )
+            return ;
+        else if ( node_ptr->enableStage == MTC_ENABLE__HEARTBEAT_SOAK )
+        {
+            elog ("%s %s *** Heartbeat Loss *** (during enable soak)\n",
+                      hostname.c_str(),
+                      get_iface_name_str(iface));
+
+            if ( ar_manage ( node_ptr,
+                             MTC_AR_DISABLE_CAUSE__HEARTBEAT,
+                             MTC_TASK_AR_DISABLED_HEARTBEAT ) == PASS )
+            {
+                  mtcInvApi_update_task ( node_ptr, MTC_TASK_ENABLE_FAIL_HB );
+                  enableStageChange ( node_ptr, MTC_ENABLE__FAILURE );
+                  adminActionChange ( node_ptr, MTC_ADMIN_ACTION__NONE );
+            }
+            return ;
+        }
 
         mnfa_add_host ( node_ptr , iface );
 
         if ( mnfa_active == false )
         {
-            elog ("%s %s *** Heartbeat Loss ***\n", hostname.c_str(), get_iface_name_str(iface)); 
+            elog ("%s %s *** Heartbeat Loss ***\n", hostname.c_str(), get_iface_name_str(iface));
             if ( iface == INFRA_IFACE )
             {
                 node_ptr->heartbeat_failed[INFRA_IFACE] = true ;
@@ -4546,6 +4565,7 @@ void nodeLinkClass::manage_heartbeat_failure ( string hostname, iface_enum iface
                 {
                     mtcInvApi_update_task ( node_ptr, MTC_TASK_ENABLE_FAIL_HB );
                     enableStageChange ( node_ptr, MTC_ENABLE__FAILURE );
+                    adminActionChange ( node_ptr, MTC_ADMIN_ACTION__NONE );
                 }
             }
         }
@@ -5485,7 +5505,7 @@ int nodeLinkClass::critical_process_failed( string & hostname,
         /* Special critical process failure handling for AIO system */
         if ( THIS_HOST && ( is_inactive_controller_main_insv() == false ))
         {
-            if ( this->autorecovery_disabled == true )
+            if ( node_ptr->ar_disabled == true )
             {
                 dlog ("%s bypassing persistent critical process failure\n",
                           node_ptr->hostname.c_str());
@@ -5510,7 +5530,7 @@ int nodeLinkClass::critical_process_failed( string & hostname,
         dlog ("%s adminState:%s  EnableStage:%s\n",
                   node_ptr->hostname.c_str(),
                   adminAction_enum_to_str(node_ptr->adminAction).c_str(),
-                  get_enableStages_str(node_ptr->handlerStage.enable).c_str());
+                  get_enableStages_str(node_ptr->enableStage).c_str());
     }
     return (PASS);
 }
@@ -5843,7 +5863,7 @@ int nodeLinkClass::set_enableStage ( string & hostname,
     nodeLinkClass::node * node_ptr = getNode ( hostname ) ;
     if ( node_ptr != NULL )
     {
-        node_ptr->handlerStage.enable = stage ;
+        node_ptr->enableStage = stage ;
         return (PASS);
     }
     return (FAIL);
@@ -5867,7 +5887,7 @@ mtc_enableStages_enum nodeLinkClass::get_enableStage ( string & hostname)
     nodeLinkClass::node * node_ptr = getNode ( hostname ) ;
     if ( node_ptr != NULL )
     {
-        return ( node_ptr->handlerStage.enable ) ;
+        return ( node_ptr->enableStage ) ;
     }
     return (MTC_ENABLE__STAGES);
 }
@@ -6124,16 +6144,15 @@ int nodeLinkClass::adminActionChange ( struct nodeLinkClass::node * node_ptr,
                         node_ptr->node_unlocked_counter++ ;
                     }
 
-                    if ( is_controller ( node_ptr ) )
-                        autorecovery_clear (node_ptr->hostname);
+                    ar_enable (node_ptr);
 
-                    node_ptr->handlerStage.enable = MTC_ENABLE__START ;
+                    node_ptr->enableStage = MTC_ENABLE__START ;
                     break ;
                 }
                 case MTC_ADMIN_ACTION__LOCK:
                 case MTC_ADMIN_ACTION__FORCE_LOCK:
                 {
-                    node_ptr->handlerStage.disable = MTC_DISABLE__START ;
+                    node_ptr->disableStage = MTC_DISABLE__START ;
                     break ;
                 }
                 case MTC_ADMIN_ACTION__RESET:
@@ -6423,26 +6442,26 @@ int nodeLinkClass::enableStageChange ( struct nodeLinkClass::node * node_ptr,
 {
     /* TODO: Consider converting stage to strings ... */
     if (( newHdlrStage >= MTC_ENABLE__STAGES ) ||
-        ( node_ptr->handlerStage.enable >= MTC_ENABLE__STAGES ))
+        ( node_ptr->enableStage >= MTC_ENABLE__STAGES ))
     {
        slog ("%s has invalid Enable stage (%d:%d)\n",
               node_ptr->hostname.c_str(),
-              node_ptr->handlerStage.enable,
+              node_ptr->enableStage,
               newHdlrStage );
 
-       node_ptr->handlerStage.enable = MTC_ENABLE__FAILURE ;
+       node_ptr->enableStage = MTC_ENABLE__FAILURE ;
 
        /* TODO: cause failed or degraded state ? */
        return (FAIL);
     }
-    else if ( node_ptr->handlerStage.enable != newHdlrStage )
+    else if ( node_ptr->enableStage != newHdlrStage )
     {
         clog ("%s %s -> %s\n",
                node_ptr->hostname.c_str(),
-               get_enableStages_str(node_ptr->handlerStage.enable).c_str(),
+               get_enableStages_str(node_ptr->enableStage).c_str(),
                get_enableStages_str(newHdlrStage).c_str());
 
-        node_ptr->handlerStage.enable = newHdlrStage  ;
+        node_ptr->enableStage = newHdlrStage  ;
         return (PASS);
     }
     else
@@ -6450,7 +6469,7 @@ int nodeLinkClass::enableStageChange ( struct nodeLinkClass::node * node_ptr,
         /* No state change */
         dlog1 ("%s %s -> %s\n",
                node_ptr->hostname.c_str(),
-               get_enableStages_str(node_ptr->handlerStage.enable).c_str(),
+               get_enableStages_str(node_ptr->enableStage).c_str(),
                get_enableStages_str(newHdlrStage).c_str());
         return (PASS);
     }
@@ -6461,15 +6480,15 @@ int nodeLinkClass::disableStageChange ( struct nodeLinkClass::node * node_ptr,
                                         mtc_disableStages_enum newHdlrStage )
 {
     /* TODO: Consider converting stage to strings ... */
-    if (( newHdlrStage >= MTC_DISABLE__STAGES ) || 
-        ( node_ptr->handlerStage.disable >= MTC_DISABLE__STAGES ))
+    if (( newHdlrStage >= MTC_DISABLE__STAGES ) ||
+        ( node_ptr->disableStage >= MTC_DISABLE__STAGES ))
     {
-       slog ("%s has invalid disable stage (%d:%d)\n", 
+       slog ("%s has invalid disable stage (%d:%d)\n",
               node_ptr->hostname.c_str(),
-              node_ptr->handlerStage.disable, 
+              node_ptr->disableStage,
               newHdlrStage );
 
-       node_ptr->handlerStage.disable = MTC_DISABLE__DISABLED ;
+       node_ptr->disableStage = MTC_DISABLE__DISABLED ;
 
        /* TODO: cause failed or degraded state ? */
        return (FAIL);
@@ -6478,10 +6497,10 @@ int nodeLinkClass::disableStageChange ( struct nodeLinkClass::node * node_ptr,
     {
         clog ("%s %s -> %s\n", 
                node_ptr->hostname.c_str(),
-               get_disableStages_str(node_ptr->handlerStage.disable).c_str(), 
+               get_disableStages_str(node_ptr->disableStage).c_str(), 
                get_disableStages_str(newHdlrStage).c_str());
 
-        node_ptr->handlerStage.disable = newHdlrStage  ;
+        node_ptr->disableStage = newHdlrStage  ;
         return (PASS);
     }
 }
@@ -7053,61 +7072,131 @@ struct nodeLinkClass::node * nodeLinkClass::get_insvTestTimer ( timer_t tid )
     return static_cast<struct node *>(NULL);
 }
 
-
 /*****************************************************************************
  *
- * Name       : autorecovery_clear
+ * Name       : ar_enable
  *
- * Assumptions: Applies when simplex.
- *
- * Description: Removes the auto recovery count file if it exists.
- *
- * Auto recovery count is tracked/preserved in a host named auto recovery
- * counter file /tmp/hostname_ar_count.
- *
- *****************************************************************************/
-
-void autorecovery_clear ( string hostname )
-{
-    string ar_file = TMP_DIR_PATH + hostname + AUTO_RECOVERY_FILE_SUFFIX ;
-    if ( daemon_is_file_present (ar_file.data()))
-    {
-        wlog ("%s clearing autorecovery counter\n", hostname.c_str());
-        daemon_remove_file (ar_file.data());
-    }
-}
-
-/*****************************************************************************
- *
- * Name       : manage_autorecovery
- *
- * Assumptions: Applies to the active controller only while simplex.
- *
- * Description: Issues an immediate lazy reboot if the autorecovery threshold
- *              is reached. Otherwise it disables autorecovery and returns
- *              do we don't get a rolling boot loop.
+ * Description: Clears all auto recovery state for the specified host and
+ *              removes the auto recovery count file if it exists.
  *
  * Auto recovery count is tracked/preserved in a host named auto recovery
  * counter file /etc/mtc/tmp/hostname_ar_count.
  *
- * in the event of a persistent autorecovery failure that results in a
- * disable then the active controller goes enabled-degraded with a horizon
- * status that indicates the active controller has a critical failure but
- * auto recovery is disabled. The enable alarm is raised.
- *
  *****************************************************************************/
 
-void nodeLinkClass::manage_autorecovery ( struct nodeLinkClass::node * node_ptr )
+void nodeLinkClass::ar_enable ( struct nodeLinkClass::node * node_ptr )
 {
-    /* manage removing the auto recovery threshold count file */
-    if ( ( THIS_HOST ) &&
-        ( this->autorecovery_enabled == true ) &&
-        ( this->autorecovery_disabled == false ) &&
-        ( is_inactive_controller_main_insv() == false ))
+    string ar_file = TMP_DIR_PATH + node_ptr->hostname + AUTO_RECOVERY_FILE_SUFFIX ;
+    if ( daemon_is_file_present (ar_file.data()))
     {
-        int value      = 0 ;
-        string ar_file = TMP_DIR_PATH + node_ptr->hostname + AUTO_RECOVERY_FILE_SUFFIX ;
-        int threshold  = daemon_get_cfg_ptr()->autorecovery_threshold ;
+        wlog ("%s clearing autorecovery file counter\n", node_ptr->hostname.c_str());
+        daemon_remove_file (ar_file.data());
+    }
+
+    if (( node_ptr->ar_disabled ) ||
+        ( node_ptr->ar_cause != MTC_AR_DISABLE_CAUSE__NONE ))
+    {
+        wlog ("%s re-enabling autorecovery\n", node_ptr->hostname.c_str());
+    }
+
+    node_ptr->ar_disabled = false ;
+    node_ptr->ar_cause = MTC_AR_DISABLE_CAUSE__NONE ;
+    memset (&node_ptr->ar_count, 0, sizeof(node_ptr->ar_count));
+
+    node_ptr->ar_log_throttle = 0 ;
+}
+
+/*****************************************************************************
+ *
+ * Name       : ar_manage
+ *
+ * Purpose    : Manage Auto Recovery state.
+ *
+ * Description: the following checks and operations are performed ...
+ *
+ * Pre Checks:
+ *
+ * Validate auto recovery cause code
+ * Return if already in ar_disabled state. Unlikely but safe guard.
+ *
+ * Manage Auto Recovery:
+ *
+ * Case 1: Failed active controller with no enabled inactive controller.
+ *
+ *    Requires persistent count file and self reboot until threshold
+ *    is reached.
+ *
+ *    Issues an immediate lazy reboot if the autorecovery threshold
+ *    is not reached. Otherwise it disables autorecovery and returns
+ *    so we don't get a rolling boot loop.
+ *
+ *    Auto recovery count is tracked/preserved in a host named auto
+ *    recovery counter file /etc/mtc/tmp/hostname_ar_count.
+ *
+ * Case 2: All other cases
+ *
+ * Case 2a: No auto recovery thresholding of active controller in non AIO SX
+ *          where the user can't lock and unlock the active controller.
+ *
+ *    Maintain auto recovery count and set ar_disabled for the host when
+ *    the threshold is reached.
+ *
+ * Parameters:
+ *
+ *    node_ptr nodeLinkClass ptr of failing host.
+ *
+ *    cause    autorecovery_disable_cause_enum failure cause code.
+ *
+ *    string   host status string to display when auto recovery
+ *             threshold is reached and autorecovery is disabled.
+ *
+ * Returns:
+ *
+ *    FAIL tells the caller to break from its FSM at earliest opportunity
+ *         because auto recovery threshold is reached and auto recovery
+ *         is disabled.
+ *
+ *    PASS tells the caller that the threshold is not reached and to
+ *         continue handling the failure.
+ *
+ ******************************************************************************/
+
+int nodeLinkClass::ar_manage ( struct nodeLinkClass::node * node_ptr,
+                               autorecovery_disable_cause_enum cause,
+                               string ar_disable_banner )
+{
+    int rc = FAIL ;
+
+    /* Auto recovery only applies for hosts that are unlocked
+     * and not already in ar_disabled state */
+    if (( node_ptr->adminState != MTC_ADMIN_STATE__UNLOCKED ) ||
+        ( node_ptr->ar_disabled ))
+    {
+        return (rc);
+    }
+
+    /* check for invalid call case */
+    if ( cause >= MTC_AR_DISABLE_CAUSE__LAST )
+    {
+        slog ("%s called with invalid auto recovery cause (%d)",
+                  node_ptr->hostname.c_str(), cause );
+        return (rc);
+    }
+
+    /* update cause code */
+    if ( node_ptr->ar_cause != cause )
+        node_ptr->ar_cause = cause ;
+
+
+    /* Case 1 check */
+    if ( ( THIS_HOST ) && ( is_inactive_controller_main_insv() == false ))
+    {
+        /* manage the auto recovery threshold count file */
+        unsigned int value = 0 ;
+
+        string ar_file = TMP_DIR_PATH +
+                         node_ptr->hostname +
+                         AUTO_RECOVERY_FILE_SUFFIX ;
 
         if ( daemon_is_file_present (ar_file.data()))
         {
@@ -7119,48 +7208,75 @@ void nodeLinkClass::manage_autorecovery ( struct nodeLinkClass::node * node_ptr 
         /* Save the new value in the file */
         daemon_log_value ( ar_file.data(), value );
 
+        value = daemon_get_file_int ( ar_file.data() );
+
         /* set rc to reflect what the caller should do */
-        if ( value > threshold )
+        if ( value > this->ar_threshold[node_ptr->ar_cause] )
         {
             elog ("%s auto recovery threshold exceeded (%d)\n",
-                      node_ptr->hostname.c_str(), threshold );
+                      node_ptr->hostname.c_str(),
+                      this->ar_threshold[node_ptr->ar_cause] );
 
-            this->autorecovery_disabled = true ;
-
-            if ( this->system_type == SYSTEM_TYPE__CPE_MODE__SIMPLEX )
-            {
-                alarm_compute_failure ( node_ptr , FM_ALARM_SEVERITY_CRITICAL ) ;
-            }
-            else
-            {
-                alarm_enabled_failure ( node_ptr , true ) ;
-            }
+            node_ptr->ar_disabled = true ;
+            adminActionChange ( node_ptr, MTC_ADMIN_ACTION__NONE );
 
             allStateChange  ( node_ptr, node_ptr->adminState,
                                         MTC_OPER_STATE__ENABLED,
                                         MTC_AVAIL_STATUS__DEGRADED );
 
-            mtcInvApi_update_task ( node_ptr,
-                                    MTC_TASK_AUTO_RECOVERY_DISABLED );
+            mtcInvApi_update_task ( node_ptr, ar_disable_banner );
 
-            return ;
+            return (rc);
         }
 
-        wlog ("%s auto recovery (try %d of %d)\n",
-                  node_ptr->hostname.c_str(), value , threshold );
+        wlog ("%s auto recovery (try %d of %d) (%d)",
+                  node_ptr->hostname.c_str(),
+                  value,
+                  this->ar_threshold[node_ptr->ar_cause],
+                  node_ptr->ar_cause);
 
-        mtcInvApi_update_states_now ( node_ptr,
-                                      "unlocked",
-                                      "disabled",
-                                      "failed",
-                                      "disabled",
-                                      "failed" );
-
-        mtcInvApi_update_task_now ( node_ptr,
-                                    MTC_TASK_AUTO_RECOVERY );
+        mtcInvApi_update_states_now ( node_ptr, "unlocked",
+                                      "disabled", "failed",
+                                      "disabled", "failed" );
 
         lazy_graceful_fs_reboot ( node_ptr );
     }
+    else /* Case 2 */
+    {
+        send_hbs_command   ( node_ptr->hostname, MTC_CMD_STOP_HOST  );
+        mtcInvApi_update_states ( node_ptr, "unlocked", "disabled", "failed" );
+
+        if (( NOT_THIS_HOST ) &&
+            ( this->system_type != SYSTEM_TYPE__CPE_MODE__SIMPLEX ))
+        {
+            if ( ++node_ptr->ar_count[node_ptr->ar_cause] >=
+                  this->ar_threshold [node_ptr->ar_cause] )
+            {
+                elog ("%s auto recovery threshold exceeded (%d)\n",
+                          node_ptr->hostname.c_str(),
+                          this->ar_threshold[node_ptr->ar_cause] );
+                node_ptr->ar_disabled = true ;
+                adminActionChange ( node_ptr, MTC_ADMIN_ACTION__NONE );
+                mtcInvApi_update_task ( node_ptr, ar_disable_banner );
+                rc = FAIL ;
+            }
+            else
+            {
+                wlog ("%s auto recovery (try %d of %d) (%d)",
+                          node_ptr->hostname.c_str(),
+                          node_ptr->ar_count[node_ptr->ar_cause],
+                          this->ar_threshold[node_ptr->ar_cause],
+                          node_ptr->ar_cause);
+                rc = PASS ;
+            }
+        }
+        else
+        {
+            wlog ("%s auto recovery\n", node_ptr->hostname.c_str());
+            rc = PASS ;
+        }
+    }
+    return (rc);
 }
 
 /****************************************************************************
@@ -7198,13 +7314,8 @@ void nodeLinkClass::report_dor_recovery ( struct nodeLinkClass::node * node_ptr,
 
 void nodeLinkClass::force_full_enable ( struct nodeLinkClass::node * node_ptr )
 {
-    /* don't do a full enable if active controller in simplex mode */
-    if ( THIS_HOST && SIMPLEX )
-    {
-        wlog ("%s avoiding full enable of simplex system\n", node_ptr->hostname.c_str());
-        wlog ("%s ... lock and unlock host to force recovery\n", node_ptr->hostname.c_str());
+    if ( node_ptr->ar_disabled == true )
         return ;
-    }
 
     if ( node_ptr->was_dor_recovery_mode )
     {
@@ -8599,13 +8710,14 @@ void nodeLinkClass::mem_log_alarm1 ( struct nodeLinkClass::node * node_ptr )
 void nodeLinkClass::mem_log_stage ( struct nodeLinkClass::node * node_ptr )
 {
     char str[MAX_MEM_LOG_DATA] ;
-    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tAdd:%d Offline:%d: Swact:%d Recovery:%d Able:%d\n", 
+    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tAdd:%d Offline:%d: Swact:%d Recovery:%d Enable:%d Disable:%d\n",
                 node_ptr->hostname.c_str(),
-                node_ptr->addStage, 
-                node_ptr->offlineStage, 
-                node_ptr->swactStage, 
+                node_ptr->addStage,
+                node_ptr->offlineStage,
+                node_ptr->swactStage,
                 node_ptr->recoveryStage,
-                node_ptr->handlerStage.raw);
+                node_ptr->enableStage,
+                node_ptr->disableStage);
     mem_log (str);
 }
 
