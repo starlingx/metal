@@ -250,8 +250,9 @@ void hbs_cluster_change ( string cluster_change_reason );
  * Automatically adjusts the numbers in the cluster vault. */
 void hbs_cluster_add  ( string & hostname );
 void hbs_cluster_del  ( string & hostname );
-void hbs_cluster_rem  ( unsigned short controller );
-void hbs_cluster_lock ( void );
+
+/* do actions when this controller is detected as locked */
+void hbs_controller_lock ( void );
 
 /* Do stuff in preparation for another pulse period start */
 void hbs_cluster_period_start ( void );
@@ -262,9 +263,6 @@ void hbs_cluster_storage0_status ( iface_enum iface , bool responding );
 /* Compare 2 histories */
 int hbs_cluster_cmp( mtce_hbs_cluster_history_type h1,
                      mtce_hbs_cluster_history_type h2 );
-
-/* Manage the enabled state of the controllers */
-void hbs_manage_controller_state ( string & hostname, bool enabled );
 
 /* Set the number of monitored hosts and this controller's
  * number in the cluster vault. */

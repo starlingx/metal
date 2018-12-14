@@ -1183,11 +1183,11 @@ int send_event ( string & hostname, unsigned int event_cmd, iface_enum iface )
     memset (&event, 0 , sizeof(mtc_message_type));
     if ( event_cmd == MTC_EVENT_HEARTBEAT_LOSS )
     {
-        // daemon_dump_membuf_banner ();
-        hbsInv.print_node_info ();
+        if ( hbs_config.debug_state == 2 )
+        {
+            hbsInv.print_node_info ();
+        }
         hbs_cluster_log ( hbsInv.my_hostname, "event", true );
-
-        // daemon_dump_membuf ();
         snprintf ( &event.hdr[0] , MSG_HEADER_SIZE, "%s", get_heartbeat_loss_header());
     }
     else if ( event_cmd == MTC_EVENT_LOOPBACK )
@@ -1504,9 +1504,6 @@ void daemon_service_run ( void )
         daemon_exit ();
     }
 
-    /* set this controller as provisioned */
-    hbs_manage_controller_state ( hbsInv.my_hostname , true );
-
     /* Run heartbeat service forever or until stop condition */
     for ( hbsTimer.ring = false , hbsTimer_audit.ring = false ; ; )
     {
@@ -1518,7 +1515,6 @@ void daemon_service_run ( void )
             if ( sockets_init == true )
             {
                 hbsInv.print_node_info();
-
                 hbs_state_audit ();
             }
 
@@ -1725,7 +1721,7 @@ void daemon_service_run ( void )
                 {
                     hbsInv.hbs_disabled = true ;
                     hbsInv.hbs_state_change = true ;
-                    hbs_cluster_lock();
+                    hbs_controller_lock ();
                     ilog ("heartbeat service going disabled (locked)");
 
                     /* force the throttle 'still disabled' log to wait for
@@ -1904,17 +1900,12 @@ void daemon_service_run ( void )
                         }
                         else if ( msg.cmd == MTC_CMD_STOP_HOST )
                         {
-                            if ( hostname == hbsInv.my_hostname )
-                            {
-                                ilog ("%s heartbeat service disabled by stop command",
-                                          hostname.c_str());
-
-                                hbs_manage_controller_state( hostname, false );
-                            }
-                            else
+                            if ( hostname != hbsInv.my_hostname )
                             {
                                 hbsInv.mon_host ( hostname, false, true );
                                 hbs_cluster_del ( hostname );
+                                ilog ("%s heartbeat service disabled by stop command",
+                                          hostname.c_str());
                             }
                         }
                         else if ( msg.cmd == MTC_CMD_START_HOST )
@@ -2309,7 +2300,10 @@ void daemon_service_run ( void )
                  */
                 bool storage_0_responding = true ;
                 int lost = hbsInv.lost_pulses ((iface_enum)iface, storage_0_responding);
-                hbs_cluster_update ((iface_enum)iface, lost, storage_0_responding);
+                if ( !hbs_ctrl.locked && !hbsInv.hbs_disabled )
+                {
+                    hbs_cluster_update ((iface_enum)iface, lost, storage_0_responding);
+                }
             }
             hbsTimer.ring = false ;
             heartbeat_request = true ;

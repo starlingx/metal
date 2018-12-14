@@ -750,6 +750,7 @@ static unsigned int rri[MTCE_HBS_MAX_CONTROLLERS] = {0,0} ;
 
 static int rx_error_count[MAX_IFACES] = {0,0} ;
 static int tx_error_count[MAX_IFACES] = {0,0} ;
+static int missing_history_count[MAX_IFACES] = {0,0} ;
 
 #define ERROR_LOG_THRESHOLD (200)
 
@@ -961,18 +962,21 @@ int _service_pulse_request ( iface_enum iface , unsigned int flags )
                 }
                 else
                 {
+                    int debug_state = daemon_get_cfg_ptr()->debug_state ;
+
                     clog  ("controller-%d %s cluster info added to response (%d)",
                             controller?0:1,
-                            get_iface_name_str(iface), missed_controller_summary_tracker[controller?0:1] );
+                            get_iface_name_str(iface),
+                            missed_controller_summary_tracker[controller?0:1] );
 
                     /* Now copy the other controller's cached cluster info into
                      * this controller's response */
                     hbs_cluster_copy ( controller_cluster_cache[controller?0:1],
                                        hbs_sock.rx_mesg[iface].cluster );
 
-                    if ( daemon_get_cfg_ptr()->debug_state & 4 )
+                    string dump_banner = "" ;
+                    if ( debug_state )
                     {
-                        string dump_banner = "" ;
                         dump_banner.append("controller-") ;
                         dump_banner.append(itos(controller?0:1));
                         dump_banner.append(" cluster info from cache injected into controller-");
@@ -980,10 +984,30 @@ int _service_pulse_request ( iface_enum iface , unsigned int flags )
                         dump_banner.append(":");
                         dump_banner.append(get_iface_name_str(iface));
                         dump_banner.append(" pulse response");
+                    }
+
+                    if ( debug_state & 4 )
+                    {
                         hbs_cluster_dump ( hbs_sock.rx_mesg[iface].cluster, dump_banner );
+                    }
+                    else
+                    {
+                        clog ("%s", dump_banner.c_str());
                     }
                 }
             }
+            if (missing_history_count[iface])
+            {
+                ilog ("controller-%d %s providing cluster history",
+                       controller, get_iface_name_str(iface));
+                missing_history_count[iface] = 0 ;
+            }
+        }
+        else
+        {
+            wlog_throttled ( missing_history_count[iface], 5000,
+                    "controller-%d %s proividing no cluster history",
+                    controller, get_iface_name_str(iface));
         }
     }
 

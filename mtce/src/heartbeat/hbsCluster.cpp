@@ -30,16 +30,16 @@ typedef struct
     /* Contains the controller number (0 or 1) for this controller. */
     unsigned short this_controller ;
 
-    /* Preserves which controllers are enabled. */
-    bool controller_0_enabled ;
-    bool controller_1_enabled ;
-#ifdef THREE_CONTROLLER_SYSTEM
-    bool controller_2_enabled ;
-#endif
-
+    /* Used to manage the cluster based on this and peer controller state */
     bool peer_controller_enabled ;
+
     /* Used to prevent log flooding in presence of back to back errors. */
     unsigned int log_throttle ;
+
+    /* Used to log when
+     * - peer history goes missing (false -> true change)
+     * - peer history starts being received ( true -> false change ) */
+    bool peer_history_missing ;
 
     /* Used to threshold storage-0 not responding state */
     unsigned int storage_0_not_responding_count[MTCE_HBS_NETWORKS];
@@ -130,12 +130,8 @@ void hbs_cluster_init ( unsigned short period, msgClassSock * sm_socket_ptr )
 void hbs_cluster_ctrl_init ( void )
 {
     ctrl.this_controller = 0xffff ;
-    ctrl.controller_0_enabled = false ;
-    ctrl.controller_1_enabled = false ;
-#ifdef THREE_CONTROLLER_SYSTEM
-    ctrl.controller_2_enabled = false ;
-#endif
     ctrl.peer_controller_enabled = false ;
+    ctrl.peer_history_missing = true ;
     ctrl.log_throttle = 0 ;
     ctrl.monitored_networks = 0 ;
     ctrl.monitored_hosts = 0 ;
@@ -236,64 +232,6 @@ void cluster_storage0_state ( bool enabled )
     }
 }
 
-
-/****************************************************************************
- *
- * Name        : hbs_manage_controller_state
- *
- * Description : Track the monitored enabled state of the controllers.
- *
- ***************************************************************************/
-
-void hbs_manage_controller_state ( string & hostname, bool enabled )
-{
-    int controller = -1 ;
-
-    /* track controller state */
-    if ( hostname == CONTROLLER_0 )
-    {
-        controller = 0 ;
-        ctrl.controller_0_enabled = enabled ;
-    }
-    else if ( hostname == CONTROLLER_1 )
-    {
-        controller = 1 ;
-        ctrl.controller_1_enabled = enabled ;
-    }
-    else
-    {
-        /* ignore all other host names */
-        return ;
-    }
-
-    /* manage the state of the peer controller */
-    if ( ctrl.this_controller != controller )
-    {
-        /* Clear peer controller cluster history when the peer
-         * controller goes disabled */
-        if (( ctrl.peer_controller_enabled == true ) &&
-            ( enabled == false ))
-        {
-            hbs_cluster_rem ( controller );
-        }
-        if ( enabled == false )
-        {
-            hbs_cluster_change ( "peer controller disabled" ) ;
-        }
-        else
-        {
-           hbs_cluster_change ( "peer controller enabled" ) ;
-        }
-        ctrl.peer_controller_enabled = enabled ;
-    }
-    else if ( enabled == false )
-    {
-        hbs_cluster_change ( "this controller locked" ) ;
-        hbs_cluster_lock();
-    }
-}
-
-
 /****************************************************************************
  *
  * Name        : hbs_cluster_add
@@ -346,8 +284,11 @@ void hbs_cluster_add ( string & hostname )
         hbs_cluster_init ( ctrl.cluster.period_msec, NULL );
     }
 
-    /* Manage controller state ; true means enabled in this case. */
-    hbs_manage_controller_state ( hostname, true );
+    /* Catch enable/provisioning of the peer controller */
+    if (( hostname == CONTROLLER_0 ) && ( ctrl.this_controller != 0 ))
+        ctrl.peer_controller_enabled = true ;
+    if (( hostname == CONTROLLER_1 ) && ( ctrl.this_controller != 1 ))
+        ctrl.peer_controller_enabled = true ;
 }
 
 /****************************************************************************
@@ -390,9 +331,6 @@ void hbs_cluster_del ( string & hostname )
             {
                 hbs_cluster_init ( ctrl.cluster.period_msec, NULL );
             }
-
-            /* Manage controller state ; false means not enabled in this case. */
-            hbs_manage_controller_state ( hostname , false );
 
             ilog ("%s deleted from cluster", hostname.c_str());
 
@@ -454,7 +392,6 @@ void hbs_cluster_period_start ( void )
  *               count.
  *
  ***************************************************************************/
-
 
 void hbs_cluster_update ( iface_enum iface,
                       unsigned short not_responding_hosts,
@@ -636,7 +573,7 @@ void hbs_cluster_append ( hbs_message_type & msg )
     }
     msg.cluster.bytes = BYTES_IN_CLUSTER_VAULT(msg.cluster.histories);
 
-    clog2 ("controller-%d appending cluster info to heartbeat message (%d:%d:%d)",
+    clog1 ("controller-%d appending cluster info to heartbeat message (%d:%d:%d)",
             ctrl.this_controller, ctrl.monitored_networks, ctrl.cluster.histories, msg.cluster.bytes );
 }
 
@@ -649,11 +586,21 @@ void hbs_cluster_peer ( void )
     if (( ctrl.got_peer_controller_history == false ) &&
         ( ctrl.peer_controller_enabled == true ))
     {
-        ilog ("missing peer controller cluster view" ); /* ERIK: DEBUG */
-
+        if ( ctrl.peer_history_missing == false )
+        {
+            wlog ( "missing peer controller cluster view" );
+            ctrl.peer_history_missing = true ;
+        }
         /* if no nodes have reported peer controller history then inject
          * a 0:0 value in for this pulse period for that controller. */
         hbs_cluster_inject ( ctrl.this_controller?0:1, 0, 0 );
+    }
+    else if (( ctrl.got_peer_controller_history == true ) &&
+             ( ctrl.peer_controller_enabled == true ) &&
+             ( ctrl.peer_history_missing == true ))
+    {
+        wlog ( "receiving peer controller cluster view" );
+        ctrl.peer_history_missing = false ;
     }
 }
 
@@ -720,7 +667,9 @@ void hbs_cluster_send ( msgClassSock * sm_client_sock, int reqid , string reason
  *
  ***************************************************************************/
 
-void hbs_history_save ( string hostname, mtce_hbs_cluster_history_type & sample )
+void hbs_history_save ( string hostname,
+                        mtce_hbs_network_enum network,
+                        mtce_hbs_cluster_history_type & sample )
 {
     for ( int h = 0 ; h < ctrl.cluster.histories ; h++ )
     {
@@ -736,12 +685,12 @@ void hbs_history_save ( string hostname, mtce_hbs_cluster_history_type & sample 
             memcpy( &ctrl.cluster.history[h], &sample,
                     sizeof(mtce_hbs_cluster_history_type));
 
-            clog1 ("controller-%d updated vault with controller-%d:%s network history through %s (histories:%d)",
+            clog1 ("controller-%d vault update from controller-%d %s reply with %d histories (this:%s)",
                    ctrl.this_controller,
                    sample.controller,
-                   hbs_cluster_network_name((mtce_hbs_network_enum)sample.network).c_str(),
-                   hostname.c_str(),
-                   ctrl.cluster.histories);
+                   hbs_cluster_network_name(network).c_str(),
+                   ctrl.cluster.histories,
+                   hbs_cluster_network_name((mtce_hbs_network_enum)sample.network).c_str());
             return ;
         }
     }
@@ -756,16 +705,17 @@ void hbs_history_save ( string hostname, mtce_hbs_cluster_history_type & sample 
     ctrl.cluster.histories++ ;
     ctrl.cluster.bytes = BYTES_IN_CLUSTER_VAULT(ctrl.cluster.histories);
 
-    ilog ("controller-%d added new controller-%d:%s history to vault ; now have %d network views",
+    ilog ("controller-%d added new %s:%s history to vault ; now have %d network views",
               ctrl.this_controller,
-              sample.controller,
+              hostname.c_str(),
               hbs_cluster_network_name((mtce_hbs_network_enum)sample.network).c_str(),
               ctrl.cluster.histories);
 }
 
 void hbs_state_audit ( void )
 {
-   hbs_cluster_dump ( ctrl.cluster, "Audit" );
+    if ( ctrl.monitored_hosts )
+        hbs_cluster_dump ( ctrl.cluster, "Audit" );
 }
 
 
@@ -872,7 +822,7 @@ int hbs_cluster_save ( string & hostname,
             {
                 /* set that we got some history and save it */
                 ctrl.got_peer_controller_history = true ;
-                hbs_history_save ( hostname, msg.cluster.history[h] );
+                hbs_history_save ( hostname, network, msg.cluster.history[h] );
             }
             hbs_cluster_log( hostname, ctrl.cluster, hbs_cluster_network_name(network) );
         }
@@ -915,39 +865,26 @@ void hbs_cluster_inject ( unsigned short controller, unsigned short hosts_enable
     }
 }
 
+/****************************************************************************
+ *
+ * Name        : hbs_controller_lock
+ *
+ * Description : Clear all history for this controller.
+ *               Called when this controller is detected as locked.
+ *
+ ***************************************************************************/
 
-void hbs_cluster_rem ( unsigned short controller )
+void hbs_controller_lock ( void )
 {
-    int removed = 0 ;
-    for ( int h = 0 ; h < ctrl.cluster.histories ; h++ )
+    if ( ctrl.cluster.histories )
     {
-        if ( ctrl.cluster.history[h].controller == controller )
+        ilog ("controller-%d locked ; clearing all cluster info", ctrl.this_controller );
+        for ( int h = 0 ; h < ctrl.cluster.histories ; h++ )
         {
-            removed++ ;
-            wlog ("controller-%d %s network history removed from cluster (slot %d)",
-                   controller,
-                   hbs_cluster_network_name((mtce_hbs_network_enum)ctrl.cluster.history[h].network).c_str(),
-                   h );
             memset ( &ctrl.cluster.history[h], 0, sizeof(mtce_hbs_cluster_history_type));
         }
+        ctrl.cluster.histories = 0 ;
+        hbs_cluster_change ( "this controller locked" ) ;
     }
-
-    if ( removed )
-    {
-        hbs_cluster_change ( "removed controller history" ) ;
-    }
-
-    ctrl.cluster.histories -= removed ;
-    ctrl.cluster.bytes = BYTES_IN_CLUSTER_VAULT(ctrl.cluster.histories);
 }
 
-/* remove all cluster history on a lock operation */
-void hbs_cluster_lock( void )
-{
-    ilog ("controller-%d lock ; clearing all cluster info", ctrl.this_controller );
-    for ( int h = 0 ; h < ctrl.cluster.histories ; h++ )
-    {
-        memset ( &ctrl.cluster.history[h], 0, sizeof(mtce_hbs_cluster_history_type));
-    }
-    ctrl.cluster.histories = 0 ;
-}
