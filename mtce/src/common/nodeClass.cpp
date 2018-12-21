@@ -8299,7 +8299,7 @@ int nodeLinkClass::lost_pulses ( iface_enum iface, bool & storage_0_responding )
                                                      pulse_ptr->b2b_misses_count[iface],
                                                      0xfff);
                     }
-                    /* Once the misses exceed 25 then throttle the logging to avoid flooding */
+                    /* Once the misses exceed 4095 then throttle the logging to avoid flooding */
                     if ( (pulse_ptr->b2b_misses_count[iface] & 0xfff) == 0 )
                     {
                         ilog ("%s %s Pulse Miss (%d)\n", pulse_ptr->hostname.c_str(),
@@ -8309,13 +8309,7 @@ int nodeLinkClass::lost_pulses ( iface_enum iface, bool & storage_0_responding )
                 }
                 else
                 {
-                    if ( pulse_ptr->b2b_misses_count[iface] > hbs_failure_threshold )
-                    {
-                        ilog ("%s %s Pulse Miss (%3d) (in failure)\n", pulse_ptr->hostname.c_str(),
-                                                                    get_iface_name_str(iface),
-                                                                    pulse_ptr->b2b_misses_count[iface] );
-                    }
-                    else if ( pulse_ptr->b2b_misses_count[iface] > hbs_degrade_threshold )
+                    if ( pulse_ptr->b2b_misses_count[iface] > hbs_degrade_threshold )
                     {
                         ilog ("%s %s Pulse Miss (%3d) (max:%3d) (in degrade)\n", pulse_ptr->hostname.c_str(),
                                                                     get_iface_name_str(iface),

@@ -444,13 +444,13 @@ int daemon_configure ( void )
 
     if ( hbsInv.hbs_degrade_threshold >= hbsInv.hbs_failure_threshold )
     {
-        wlog ("Degrade threshold should be larger than Failure threshold\n");
+        wlog ("Degrade threshold should be smaller than Failure threshold\n");
         wlog ("Heartbeat 'degrade' state disabled ; see %s\n", MTCE_CONF_FILE);
     }
     for ( ;; )
     {
         get_ip_addresses ( hbsInv.my_hostname, hbsInv.my_local_ip , hbsInv.my_float_ip );
-        if ( hbsInv.my_float_ip.empty() || hbsInv.my_float_ip.empty() )
+        if ( hbsInv.my_local_ip.empty() || hbsInv.my_float_ip.empty() )
         {
             if ( waiting_msg == false )
             {
@@ -1105,7 +1105,7 @@ int _pulse_receive ( iface_enum iface , unsigned int seq_num )
                         // mlog ("%s", &str[0]);
                         mem_log (str);
 #endif
-                        if ( extra.empty())
+                        if ( !extra.compare("Rsp"))
                         {
                             detected_pulses++ ;
                         }
