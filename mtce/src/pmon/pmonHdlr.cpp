@@ -1014,6 +1014,7 @@ void _get_events ( void )
     {
         bool running = false ;
 
+        /* ignore is ignore */
         if ( process_config[i].ignore == true )
         {
             process_config[i].failed = false ;
@@ -1021,12 +1022,12 @@ void _get_events ( void )
             continue ;
         }
 
-        else if ( process_config[i].stage == PMON_STAGE__POLLING )
-        {
-            continue ;
-        }
-
-        else if ( process_config[i].status_monitoring )
+        /* only look for events for process that are
+         * - in the managed state and
+         * - not monitored by 'status
+         */
+        else if (( process_config[i].stage != PMON_STAGE__MANAGE ) ||
+                 ( process_config[i].status_monitoring ))
         {
             continue ;
         }
@@ -2016,7 +2017,8 @@ void pmon_service ( pmon_ctrl_type * ctrl_ptr )
                 /* Run the FSM for this failed process */
                 pmon_passive_handler ( &process_config[i] ) ;
             }
-            else if ( process_config[i].active_monitoring )
+            else if (( process_config[i].active_monitoring ) &&
+                     ( process_config[i].stage == PMON_STAGE__MANAGE ))
             {
                 // if ( process_config[i].active_failed == false )
                 if ( process_config[i].failed == false )
@@ -2032,8 +2034,7 @@ void pmon_service ( pmon_ctrl_type * ctrl_ptr )
 
             /* Audit to ensure that running processes are
              * registered with the kernel */
-            if (( process_config[i].stage != PMON_STAGE__POLLING ) &&
-                ( process_config[i].stage != PMON_STAGE__START_WAIT ) &&
+            if (( process_config[i].stage == PMON_STAGE__MANAGE ) &&
                 ( process_config[i].registered == false ) &&
                 ( _pmon_ctrl_ptr->event_mode ) &&
                 ( process_config[i].restart == false ) &&

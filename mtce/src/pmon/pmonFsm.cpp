@@ -566,8 +566,6 @@ int pmon_passive_handler ( process_config_type * ptr )
 
             /* Start the monitor debounce timer. */
             mtcTimer_reset ( ptr->pt_ptr );
-            mtcTimer_start ( ptr->pt_ptr, pmon_timer_handler, ptr->startuptime );
-            passiveStageChange ( ptr, PMON_STAGE__MONITOR_WAIT ) ;
 
             /* Don't wait for the debounce timer to take this process out of 'commanded restart' mode.
              * Do it now, otherwise tight patch loop stress testing might fail */
@@ -576,6 +574,12 @@ int pmon_passive_handler ( process_config_type * ptr )
                 ilog ("%s Restarted\n", ptr->process )
                 ptr->restart = false ;
                 ptr->registered = false ;
+                passiveStageChange ( ptr, PMON_STAGE__MANAGE ) ;
+            }
+            else
+            {
+                mtcTimer_start ( ptr->pt_ptr, pmon_timer_handler, ptr->startuptime );
+                passiveStageChange ( ptr, PMON_STAGE__MONITOR_WAIT ) ;
             }
             break ;
         }
@@ -614,7 +618,6 @@ int pmon_passive_handler ( process_config_type * ptr )
 
                     /* Start debounce monitor phase */
                     passiveStageChange ( ptr, PMON_STAGE__MONITOR ) ;
-                    // ilog ("%s Monitor Start ...\n", ptr->process);
                     process_running ( ptr );
                     ilog ("%s Monitor    (%d)\n", ptr->process, ptr->pid );
                 }
