@@ -8249,7 +8249,7 @@ void nodeLinkClass::manage_heartbeat_alarm ( struct nodeLinkClass::node * node_p
 
 
 
-
+#define HBS_LOSS_REPORT_THROTTLE (100)
 int nodeLinkClass::lost_pulses ( iface_enum iface, bool & storage_0_responding )
 {
     int lost = 0  ;
@@ -8408,16 +8408,16 @@ int nodeLinkClass::lost_pulses ( iface_enum iface, bool & storage_0_responding )
                 ( infra_degrade_only == true ))
             {
                 /* Only print the log at the threshold boundary */
-                if ( pulse_ptr->b2b_misses_count[iface] == hbs_failure_threshold )
+                if (( pulse_ptr->b2b_misses_count[iface]%HBS_LOSS_REPORT_THROTTLE) == hbs_failure_threshold )
                 {
                     if ( this->active_controller )
                     {
                         manage_heartbeat_alarm ( pulse_ptr, FM_ALARM_SEVERITY_CRITICAL, iface );
                     }
 
-                    wlog_throttled ( pulse_ptr->no_work_log_throttle, 500,
-                                     "%s %s *** Heartbeat Loss *** (degrade only)\n", pulse_ptr->hostname.c_str(),
-                                                                       get_iface_name_str(iface) );
+                    wlog ( "%s %s *** Heartbeat Loss *** (degrade only)\n",
+                               pulse_ptr->hostname.c_str(),
+                               get_iface_name_str(iface) );
                     hbs_cluster_change ( pulse_ptr->hostname + " heartbeat loss" );
                 }
             }
@@ -8430,21 +8430,20 @@ int nodeLinkClass::lost_pulses ( iface_enum iface, bool & storage_0_responding )
                      (( pulse_ptr->nodetype & CONTROLLER_TYPE) == CONTROLLER_TYPE ))
             {
                 /* Only print the log at the threshold boundary */
-                if ( pulse_ptr->b2b_misses_count[iface] == hbs_failure_threshold )
+                if ( (pulse_ptr->b2b_misses_count[iface]%HBS_LOSS_REPORT_THROTTLE) == hbs_failure_threshold )
                 {
                     if ( this->active_controller )
                     {
                         manage_heartbeat_alarm ( pulse_ptr, FM_ALARM_SEVERITY_CRITICAL, iface );
                     }
-                    wlog_throttled ( pulse_ptr->no_work_log_throttle, 500,
-                                     "%s %s *** Heartbeat Loss *** (degrade only)\n", pulse_ptr->hostname.c_str(),
-                                                                       get_iface_name_str(iface) );
+                    wlog ( "%s %s *** Heartbeat Loss *** (degrade only)\n",
+                               pulse_ptr->hostname.c_str(),
+                               get_iface_name_str(iface));
                     hbs_cluster_change ( pulse_ptr->hostname + " heartbeat loss" );
                 }
             }
 
-            else if (( pulse_ptr->b2b_misses_count[iface] == hbs_failure_threshold ) &&
-                     ( pulse_ptr->hbs_failure[iface] == false ))
+            else if ((pulse_ptr->b2b_misses_count[iface]%HBS_LOSS_REPORT_THROTTLE) == hbs_failure_threshold )
             {
                 elog ("%s %s *** Heartbeat Loss ***\n", pulse_ptr->hostname.c_str(),
                                                         get_iface_name_str(iface) );
