@@ -419,7 +419,6 @@ install -m 644 -p -D %{_buildsubdir}/rmon/scripts/nova_virtual_resource.conf %{b
 install -m 644 -p -D %{_buildsubdir}/rmon/scripts/oam_resource.conf %{buildroot}%{_sysconfdir}/rmon_interfaces.d/oam_resource.conf
 install -m 644 -p -D %{_buildsubdir}/rmon/scripts/management_resource.conf %{buildroot}%{_sysconfdir}/rmon_interfaces.d/management_resource.conf
 install -m 644 -p -D %{_buildsubdir}/rmon/scripts/infrastructure_resource.conf %{buildroot}%{_sysconfdir}/rmon_interfaces.d/infrastructure_resource.conf
-install -m 755 -p -D %{_buildsubdir}/rmon/scripts/query_ntp_servers.sh %{buildroot}%{_sysconfdir}/rmonfiles.d/query_ntp_servers.sh
 install -m 755 -p -D %{_buildsubdir}/rmon/scripts/rmon_reload_on_cpe.sh %{buildroot}%{local_etc_goenabledd}/rmon_reload_on_cpe.sh
 
 # log rotation
@@ -466,7 +465,6 @@ install -m 755 -d %{buildroot}/var/run
 
 %post -n mtce-rmon
 /bin/systemctl enable rmon.service
-
 
 ###############################
 # Maintenance RPM Files
@@ -588,7 +586,6 @@ install -m 755 -d %{buildroot}/var/run
 %{_sysconfdir}/rmon_interfaces.d/management_resource.conf
 %{_sysconfdir}/rmon_interfaces.d/oam_resource.conf
 %{_sysconfdir}/rmon_interfaces.d/infrastructure_resource.conf
-%{_sysconfdir}/rmonfiles.d/query_ntp_servers.sh
 
 %{_libdir}/librmonapi.so.1.0
 %{_libdir}/librmonapi.so.1
