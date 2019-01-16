@@ -28,7 +28,7 @@ class CephApiOperator(object):
 
     def __init__(self):
         self._ceph_api = ceph.CephWrapper(
-            endpoint='http://localhost:5001/api/v0.1/')
+            endpoint='https://localhost:5001/')
 
     def ceph_status_ok(self, timeout=10):
         """
