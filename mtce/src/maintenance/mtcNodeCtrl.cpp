@@ -53,7 +53,7 @@ using namespace std;
 #include "mtcHttpSvr.h"    /* for ... mtcHttpSvr_init/_fini/_look        */
 #include "mtcInvApi.h"     /* */
 #include "mtcSmgrApi.h"    /* */
-#include "nlEvent.h"       /* for ... open_netlink_socket              */
+#include "nlEvent.h"       /* for ... open_netlink_socket                */
 
 /**************************************************************
  *            Implementation Structure
@@ -237,19 +237,16 @@ static int mtc_config_handler ( void * user,
         config_ptr->ha_port = atoi(value);
         config_ptr->mask |= CONFIG_AGENT_HA_PORT ;
     }
-
     else if (MATCH("agent", "inv_event_port"))
     {
         config_ptr->inv_event_port = atoi(value);
         config_ptr->mask |= CONFIG_AGENT_INV_EVENT_PORT ;
     }
-
     else if (MATCH("agent", "keystone_port"))
     {
         config_ptr->keystone_port = atoi(value);
         config_ptr->mask |= CONFIG_AGENT_KEY_PORT ;
     }
-
     else if (MATCH("agent", "mtc_agent_port"))
     {
         config_ptr->mtc_agent_port = atoi(value);
@@ -482,6 +479,12 @@ int daemon_configure ( void )
         return (FAIL_LOAD_INI);
     }
 
+    if (ini_parse(SECRET_CFG_FILE, barbican_config_handler, &mtc_config) < 0)
+    {
+        elog ("Can't load '%s'\n", SECRET_CFG_FILE );
+        return (FAIL_LOAD_INI);
+    }
+
     /* Loads key Mtce debug values that can override the defaults */
     if (ini_parse(MTCE_CONF_FILE, debug_config_handler, &mtc_config) < 0)
     {
@@ -653,6 +656,8 @@ int daemon_configure ( void )
     ilog("guestAgent  : %d (port)\n", mtc_config.mtc_to_guest_cmd_port );
     ilog("hwmond      : %d (port)\n", mtc_config.hwmon_cmd_port );
     ilog("auth_host   : %s \n", mtc_config.keystone_auth_host );
+    ilog("Barbican Port: %d (rx)\n", mtc_config.barbican_api_port );
+    ilog("Barbican Address : %s (tx)\n", mtc_config.barbican_api_host );
 
     /* log system wide service based auto recovery control values */
     ilog("AR Config   : %d (threshold) %d sec (retry interval)",

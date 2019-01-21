@@ -9,7 +9,7 @@ SHELL = /bin/bash
 SRCS = hbsAlarm.cpp hbsClient.cpp hbsAgent.cpp hbsPmon.cpp hbsUtil.cpp hbsCluster.cpp hbsStubs.cpp
 OBJS = $(SRCS:.cpp=.o)
 
-LDLIBS = -lstdc++ -ldaemon -lcommon -lthreadUtil -lpthread -lfmcommon -lalarm -lrt -lamon -lcrypto -luuid -ljson-c
+LDLIBS = -lstdc++ -ldaemon -lcommon -lthreadUtil -lpthread -lfmcommon -lalarm -lrt -lamon -lcrypto -luuid -ljson-c -levent
 INCLUDES = -I. -I/usr/include/mtce-daemon -I/usr/include/mtce-common
 INCLUDES += -I../common -I../alarm -I../maintenance -I../public
 

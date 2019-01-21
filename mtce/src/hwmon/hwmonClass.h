@@ -49,6 +49,10 @@ class hwmonHostClass
 
         bool bm_provisioned ;
 
+        int empty_secret_log_throttle ;
+
+        libEvent secretEvent ;
+
         /** set true once a connection is estabished and
          *  set false when error recovery is performed on the connection
          **/
@@ -91,12 +95,13 @@ class hwmonHostClass
 
         /** Pointer to the previous host in the list */
         struct hwmon_host * prev;
-		
+
         /** Pointer to the next host in the list */
         struct hwmon_host * next;
 
         struct mtc_timer hostTimer    ;
         struct mtc_timer addTimer     ;
+        struct mtc_timer secretTimer  ;
 
         bool monitor ; /* true if host's sensors are to be monitored */
 
@@ -232,9 +237,9 @@ class hwmonHostClass
     int memory_allocs ;
 
     /** A memory used counter
-    *  
+    *
     * A variable storing the accumulated host memory
-    */  
+    */
     int memory_used ;
 
     struct hwmon_host * hwmon_head ; /**< Host Linked List Head pointer */
@@ -458,7 +463,7 @@ class hwmonHostClass
 
     void timer_handler ( int sig, siginfo_t *si, void *uc);
 
-    /** This is a list of host names. */ 
+    /** This is a list of host names. */
     std::list<string>           hostlist ;
     std::list<string>::iterator hostlist_iter_ptr ;
 
@@ -476,7 +481,7 @@ class hwmonHostClass
     int hosts ;
 
     /* This bool is set in the daemon_configure case to inform the
-     * FSM that there has been a configuration reload. 
+     * FSM that there has been a configuration reload.
      * The initial purpose if this bool is to trigger a full sensor
      * dump of all hosts on demand */
     bool config_reload ;
@@ -506,7 +511,7 @@ class hwmonHostClass
      * Name:        get_sensor
      *
      * Description: Returns a pointer to the host sensor
-     *              that matches the supplied sensor name. 
+     *              that matches the supplied sensor name.
      *
      ****************************************************************************/
     sensor_type * get_sensor ( string hostname, string sensorname );
@@ -515,7 +520,7 @@ class hwmonHostClass
      *
      * Name:        add_sensor
      *
-     * Description: If the return code is PASS then the supplied sensor is 
+     * Description: If the return code is PASS then the supplied sensor is
      *              provisioned against this host. If the sensor already exists
      *              then it is updated with all the new information. Otherwise
      *              (normally) a new sensor is added.
@@ -532,13 +537,13 @@ class hwmonHostClass
      *
      ****************************************************************************/
     int  add_sensor_uuid ( string & hostname, string & name, string & uuid );
-    
+
     /****************************************************************************
      *
      * Name:        hwmon_get_group
      *
      * Description: Returns a pointer to the host sensor group
-     *              that matches the supplied sensor group name. 
+     *              that matches the supplied sensor group name.
      ****************************************************************************/
     struct sensor_group_type * hwmon_get_group ( string hostname, string group_name );
 
@@ -547,7 +552,7 @@ class hwmonHostClass
      * Name:        hwmon_get_sensorgroup
      *
      * Description: Returns a pointer to the host sensor group
-     *              that matches the supplied sensor name. 
+     *              that matches the supplied sensor name.
      ****************************************************************************/
     struct sensor_group_type * hwmon_get_sensorgroup ( string hostname, string sensorname );
 
@@ -555,7 +560,7 @@ class hwmonHostClass
      *
      * Name:        hwmon_add_group
      *
-     * Description: If the return code is PASS then the supplied sensor group is 
+     * Description: If the return code is PASS then the supplied sensor group is
      *              provisioned against this host. If the group already exists
      *              then it is updated with all the new information. Otherwise
      *              (normally) a new group is added to the hwmon class struct.

@@ -169,6 +169,11 @@ int sysinv_config_handler  (       void * user,
                              const char * name,
                              const char * value);
 
+int barbican_config_handler (      void * user,
+                             const char * section,
+                             const char * name,
+                             const char * value);
+
 int client_timeout_handler (       void * user,
                              const char * section,
                              const char * name,
@@ -225,6 +230,7 @@ int daemon_run_testhead ( void );
 #define CONFIG_MTC_TO_HBS_CMD_PORT   0x04000000 /**< Mtce to Hbs Command Port  */
 #define CONFIG_HBS_TO_MTC_EVENT_PORT 0x08000000 /**< Hbs to Mtc Event Port     */
 #define CONFIG_CLIENT_PULSE_PORT     0x10000000 /**< Pmon pulse port           */
+#define CONFIG_AGENT_SECRET_PORT     0x20000000 /**< Barbican HTTP port        */
 #define CONFIG_AGENT_VIM_EVENT_PORT  0x40000000 /**< VIM Event Port Mask       */
 #define CONFIG_CLIENT_RMON_PORT      0x80000000 /**< Rmon client port          */
 

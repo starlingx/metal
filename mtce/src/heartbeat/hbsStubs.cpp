@@ -226,7 +226,6 @@ int nodeLinkClass::mtcSmgrApi_request ( struct nodeLinkClass::node * node_ptr, m
     return(PASS);
 }
 
-
 void mtcTimer_handler ( int sig, siginfo_t *si, void *uc)
 {
     UNUSED(sig);

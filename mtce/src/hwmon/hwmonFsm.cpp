@@ -16,7 +16,7 @@
 #include "hwmonHttp.h"
 #include "hwmonSensor.h"
 #include "hwmonThreads.h" /* for ... ipmitool_thread                      */
-
+#include "secretUtil.h"
 
 
 /**************************************************************************
@@ -155,9 +155,19 @@ void hwmonHostClass::hwmon_fsm ( void )
 #endif
                     if (( host_ptr->thread_extra_info.bm_pw.empty ()) && ( host_ptr->ping_info.ok == true ))
                     {
-                        wlog ( "%s bm password is empty ; learning and forcing reconnect\n", host_ptr->hostname.c_str());
-                        host_ptr->ping_info.ok = false ;
-                        host_ptr->thread_extra_info.bm_pw = host_ptr->bm_pw = get_bm_password (hostBase.get_uuid(host_ptr->hostname).data());
+                        string host_uuid = hostBase.get_uuid(host_ptr->hostname);
+                        wlog_throttled ( host_ptr->empty_secret_log_throttle, 20,
+                                         "%s bm password is empty ; learning and forcing reconnect\n",
+                                         host_ptr->hostname.c_str());
+                        barbicanSecret_type * secret = secretUtil_manage_secret( host_ptr->secretEvent,
+                                                                                 host_uuid,
+                                                                                 host_ptr->secretTimer,
+                                                                                 hwmonTimer_handler );
+                        if ( secret->stage == MTC_SECRET__GET_PWD_RECV )
+                        {
+                            host_ptr->ping_info.ok = false ;
+                            host_ptr->thread_extra_info.bm_pw = host_ptr->bm_pw = secret->payload ;
+                        }
                     }
                     else if ( host_ptr->accessible )
                     {

@@ -22,6 +22,7 @@ SRCS = regexUtil.cpp \
 	   jsonUtil.cpp \
 	   httpUtil.cpp \
 	   tokenUtil.cpp \
+	   secretUtil.cpp \
 	   msgClass.cpp
 
 COMMON_OBJS = regexUtil.o \
@@ -39,6 +40,7 @@ COMMON_OBJS = regexUtil.o \
 	   jsonUtil.o \
 	   httpUtil.o \
 	   tokenUtil.o \
+	   secretUtil.o \
 	   msgClass.o
 
 OBJS = $(SRCS:.cpp=.o)

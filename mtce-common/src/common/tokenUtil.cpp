@@ -7,7 +7,7 @@
 
  /**
   * @file
-  * Wind River Titanium Cloud 
+  * Wind River Titanium Cloud
   * Common Keystone Token Authentication Utility API
   *
   *     tokenUtil_handler   - handle response
@@ -410,18 +410,18 @@ string _get_keystone_prefix_path ( )
   return (prefix_path);
 }
 
-/* http://localhost:5000/v2.0/tokens -X POST -H "Content-Type: application/json" 
- *                                            -H "Accept: application/json" 
+/* http://localhost:5000/v2.0/tokens -X POST -H "Content-Type: application/json"
+ *                                            -H "Accept: application/json"
  *                                            -H "User-Agent: python-keyclient"
  *                                            -H "Connection: close"
  *
- *    { 
- *        "auth": 
+ *    {
+ *        "auth":
  *        {
- *            "tenantName": "admin", 
- *            "passwordCredentials": 
+ *            "tenantName": "admin",
+ *            "passwordCredentials":
  *            {
- *                "username": "admin", 
+ *                "username": "admin",
  *                "password": "password"
  *            }
  *        }
@@ -433,12 +433,12 @@ string _get_keystone_prefix_path ( )
  *
  * Name       : tokenUtil_handler
  *
- * Description: The handles the keystone get request 
+ * Description: The handles the keystone get request
  *              responses for the following messages
  *
- *     KEYSTONE_GET_TOKEN,        
+ *     KEYSTONE_GET_TOKEN,
  *     KEYSTONE_GET_SERVICE_LIST
- *     KEYSTONE_GET_ENDPOINT_LIST 
+ *     KEYSTONE_GET_ENDPOINT_LIST
  *
  *******************************************************************/
 int tokenUtil_handler ( libEvent & event )
@@ -486,12 +486,12 @@ int tokenUtil_handler ( libEvent & event )
     }
     else if ( event.request == KEYSTONE_GET_ENDPOINT_LIST )
     {
-        /* Response: {"endpoints": 
+        /* Response: {"endpoints":
          * [{
-         *    "service_id": "067...b60", 
+         *    "service_id": "067...b60",
          *    "region": "RegionOne",
-         *    "enabled": true, 
-         *    "id": "410ab64a37114a418d188f450300aa48", 
+         *    "enabled": true,
+         *    "id": "410ab64a37114a418d188f450300aa48",
          *    "interface": "internal",
          *    ""links": {
          *         "self": "http://192.168.204.2:5000/v3/endpoints/410ab64a37114a418d188f450300aa48"
@@ -592,28 +592,28 @@ int tokenUtil_handler ( libEvent & event )
     {
         /* Response: {"services":
            [
-           {"id": "49fc93c32d734c78a9d9f975c22f1703", "type": "network", "name": "neutron", "description": "Neutron Networking Service"}, 
+           {"id": "49fc93c32d734c78a9d9f975c22f1703", "type": "network", "name": "neutron", "description": "Neutron Networking Service"},
            {"id": "0900a982ff114e7ba62c317443b43362", "type": "metering", "name": "ceilometer", "description": "Openstack Metering Service"}, 
-           {"id": "97940d057bec47cc989cc190b4293aad", "type": "ec2", "name": "nova_ec2", "description": "EC2 Service"}, 
-           {"id": "7ce51d481d024b1f8b80bb1127b80752", "type": "volumev2", "name": "cinderv2", "description": "Cinder Service v2"}, 
+           {"id": "97940d057bec47cc989cc190b4293aad", "type": "ec2", "name": "nova_ec2", "description": "EC2 Service"},
+           {"id": "7ce51d481d024b1f8b80bb1127b80752", "type": "volumev2", "name": "cinderv2", "description": "Cinder Service v2"},
            {"id": "3ed8ae6ccf85445ebdf2e93bbce9f5fb", "type": "computev3", "name": "novav3", "description": "Openstack Compute Service v3"},
-           {"id": "564bf663693c49cf9fee24e2fdbdba3a", "type": "identity", "name": "keystone", "description": "OpenStack Identity Service"}, 
+           {"id": "564bf663693c49cf9fee24e2fdbdba3a", "type": "identity", "name": "keystone", "description": "OpenStack Identity Service"},
            {"id": "7e0cadd9db444342b7fddb0005c4ce5f", "type": "platform", "name": "sysinv", "description": "SysInv Service"},
-           {"id": "be7afccda91c4ba19ac2e53f613c6b63", "type": "volume", "name": "cinder", "description": "Cinder Service"}, 
-           {"id": "edf60a37f4f84b9baba215d8346b814f", "type": "image", "name": "glance", "description": "Openstack Image Service"}, 
-           {"id": "0673921c7b094178989455a5b157fb60", "type": "patching", "name": "patching", "description": "Patching Service"}, 
+           {"id": "be7afccda91c4ba19ac2e53f613c6b63", "type": "volume", "name": "cinder", "description": "Cinder Service"},
+           {"id": "edf60a37f4f84b9baba215d8346b814f", "type": "image", "name": "glance", "description": "Openstack Image Service"},
+           {"id": "0673921c7b094178989455a5b157fb60", "type": "patching", "name": "patching", "description": "Patching Service"},
            {"id": "d7621026166f43c0a1c74e0e9784cce6", "type": "compute", "name": "nova", "description": "Openstack Compute Service"},
            {"id": "aef585311e3144e0b1267ea25dc40b70", "type": "orchestration", "name": "heat", "description": "Openstack Orchestration Service"}, 
            {"id": "0a67bc174fa0469e9b837daf23d83aaf", "type": "cloudformation", "name": "heat-cfn", "description": "Openstack Cloudformation Service"}
            ]} */
-        
+
         bool   found = false ;
         list<string> service_list ; service_list.clear() ;
         rc = jsonUtil_get_list ( (char*)event.response.data(), (char*)event.label.data(), service_list );
         if ( rc == PASS )
         {
             std::list<string>::iterator iter_ptr ;
-            
+
             for ( iter_ptr = service_list.begin() ;
                   iter_ptr != service_list.end() ;
                   iter_ptr++ )
@@ -625,16 +625,16 @@ int tokenUtil_handler ( libEvent & event )
                         if ( jsonUtil_get_key_val ( (char*)iter_ptr->data(), "id", event.result ) == PASS )
                         {
                             found = true ;
-                            ilog ("%s '%s' service uuid is '%s'\n", 
-                                       event.hostname.c_str(), 
+                            ilog ("%s '%s' service uuid is '%s'\n",
+                                       event.hostname.c_str(),
                                        event.information.c_str(),
                                        event.result.c_str());
                             break ;
                         }
                         else
                         {
-                            wlog ("%s '%s' service uuid not found\n", 
-                                       event.hostname.c_str(), 
+                            wlog ("%s '%s' service uuid not found\n",
+                                       event.hostname.c_str(),
                                        event.information.c_str());
                             event.status = FAIL_KEY_VALUE_PARSE ;
                         }
@@ -642,8 +642,8 @@ int tokenUtil_handler ( libEvent & event )
                 }
                 else
                 {
-                    wlog ("%s '%s' service not found\n", 
-                              event.hostname.c_str(), 
+                    wlog ("%s '%s' service not found\n",
+                              event.hostname.c_str(),
                               event.information.c_str());
                 }
             }
@@ -707,13 +707,13 @@ int tokenUtil_new_token ( libEvent & event, string hostname, bool blocking )
     ilog ("%s Requesting Authentication Token\n", hostname.c_str());
 
     httpUtil_event_init ( &event,
-                           hostname, 
-                           "tokenUtil_new_token", 
+                           hostname,
+                           "tokenUtil_new_token",
                            _get_ip(),
                            daemon_get_cfg_ptr()->keystone_port);
 
     event.hostname = _hn ();
-    
+
     dlog ("%s fetching new token\n", event.hostname.c_str());
 
     event.prefix_path = _get_keystone_prefix_path();
@@ -724,7 +724,7 @@ int tokenUtil_new_token ( libEvent & event, string hostname, bool blocking )
     event.type        = EVHTTP_REQ_POST ;
     event.timeout     = HTTP_TOKEN_TIMEOUT ;
     event.handler     = &tokenUtil_handler ;
-    
+
     return ( httpUtil_api_request ( event ));
 }
 
@@ -732,11 +732,11 @@ int tokenUtil_new_token ( libEvent & event, string hostname, bool blocking )
 string tokenUtil_get_svc_uuid ( libEvent & event, string service_name )
 {
     httpUtil_event_init ( &event,
-                           service_name, 
-                           "tokenUtil_get_svc_uuid", 
+                           service_name,
+                           "tokenUtil_get_svc_uuid",
                            _get_ip(),
                            5000 ) ; // get_keystone_admin_port() ;
-    
+
     event.hostname = _hn() ;
 
     /* The type of HTTP request */
@@ -766,8 +766,8 @@ string tokenUtil_get_svc_uuid ( libEvent & event, string service_name )
 int tokenUtil_get_endpoints ( libEvent & event, string service_uuid )
 {
     httpUtil_event_init ( &event,
-                           service_uuid, 
-                           "tokenUtil_get_endpoints", 
+                           service_uuid,
+                           "tokenUtil_get_endpoints",
                            _get_ip(),
                            5000 ); // get_keystone_admin_port();
 
@@ -799,7 +799,7 @@ int tokenUtil_get_endpoints ( libEvent & event, string service_uuid )
     return ( event.status );
 }
 
-int keystone_config_handler ( void * user, 
+int keystone_config_handler ( void * user,
                         const char * section,
                         const char * name,
                         const char * value)
@@ -833,33 +833,28 @@ int keystone_config_handler ( void * user,
             }
         }
     }
-    else if (MATCH("agent", "keyring_directory"))
-    {
-	    config_ptr->keyring_directory = strdup(value);
-        ilog("Keyring Directory : %s\n", config_ptr->keyring_directory );
-    }
     else if (MATCH("agent", "keystone_auth_username"))
     {
 	    config_ptr->keystone_auth_username = strdup(value);
-        ilog("Mtce Keystone username : %s\n", 
+        ilog("Mtce Keystone username : %s\n",
              config_ptr->keystone_auth_username );
     }
     else if (MATCH("agent", "keystone_auth_pw"))
     {
 	    config_ptr->keystone_auth_pw = strdup(value);
-        dlog("Mtce Keystone pw : %s\n", 
+        dlog("Mtce Keystone pw : %s\n",
              config_ptr->keystone_auth_pw );
     }
     else if (MATCH("agent", "keystone_auth_project"))
     {
 	    config_ptr->keystone_auth_project = strdup(value);
-        ilog("Mtce Keystone project : %s\n", 
+        ilog("Mtce Keystone project : %s\n",
              config_ptr->keystone_auth_project );
     }
     else if (MATCH("agent", "keystone_user_domain"))
     {
 	    config_ptr->keystone_user_domain = strdup(value);
-        ilog("Mtce Keystone user domain : %s\n", 
+        ilog("Mtce Keystone user domain : %s\n",
              config_ptr->keystone_user_domain );
     }
     else if (MATCH("agent", "keystone_project_domain"))

@@ -37,6 +37,7 @@ using namespace std;
 
 #include "jsonUtil.h"     /* for ... jsonApi_array_value     */
 #include "tokenUtil.h"
+#include "secretUtil.h"
 #include "regexUtil.h"    /* for ... regexUtil_pattern_match */
 
 #include "nodeClass.h"    /* All base stuff                  */
@@ -5833,6 +5834,18 @@ int nodeLinkClass::bm_handler ( struct nodeLinkClass::node * node_ptr )
                     mtcTimer_start ( node_ptr->bmc_access_timer, mtcTimer_handler, MTC_MINS_2 );
                 }
 
+                if (( node_ptr->thread_extra_info.bm_pw.empty ()) && ( node_ptr->bm_ping_info.ok == true ))
+                {
+                    barbicanSecret_type * secret = secretUtil_manage_secret( node_ptr->secretEvent,
+                                                                             node_ptr->uuid,
+                                                                             node_ptr->bm_timer,
+                                                                             mtcTimer_handler );
+                    if ( secret->stage == MTC_SECRET__GET_PWD_RECV )
+                    {
+                        node_ptr->thread_extra_info.bm_pw = node_ptr->bm_pw = secret->payload ;
+                    }
+                }
+
                 /* This block queries and logs BMC Info and last Reset Cause */
                 if (( node_ptr->bm_accessible == false ) &&
                     ( node_ptr->bm_ping_info.ok == true ) &&
@@ -5968,8 +5981,8 @@ int nodeLinkClass::bm_handler ( struct nodeLinkClass::node * node_ptr )
                                     node_ptr->power_status_query_done   = true  ;
                                     node_ptr->ipmitool_thread_ctrl.done = true  ;
                                     node_ptr->ipmitool_thread_info.command = 0  ;
-                                node_ptr->bm_accessible = true ;
                                     node_ptr->bm_accessible = true ;
+                                    node_ptr->bm_ping_info.ok = true;
                                     mtcTimer_reset ( node_ptr->bmc_access_timer );
 
                                     ilog ("%s %s\n", node_ptr->hostname.c_str(),

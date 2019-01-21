@@ -140,6 +140,7 @@ install -m 644 -p -D %{_buildsubdir}/common/pingUtil.h %{buildroot}%{_includedir
 install -m 644 -p -D %{_buildsubdir}/common/regexUtil.h %{buildroot}%{_includedir}/mtce-common
 install -m 644 -p -D %{_buildsubdir}/common/threadUtil.h %{buildroot}%{_includedir}/mtce-common
 install -m 644 -p -D %{_buildsubdir}/common/tokenUtil.h %{buildroot}%{_includedir}/mtce-common
+install -m 644 -p -D %{_buildsubdir}/common/secretUtil.h %{buildroot}%{_includedir}/mtce-common
 
 %clean
 rm -v -rf $RPM_BUILD_ROOT

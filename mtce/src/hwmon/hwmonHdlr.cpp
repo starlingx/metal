@@ -236,6 +236,12 @@ void hwmonHostClass::timer_handler ( int sig, siginfo_t *si, void *uc)
                 hwmon_host_ptr->relearn = false ;
                 return ;
             }
+            else if (( *tid_ptr == hwmon_host_ptr->secretTimer.tid ) )
+            {
+                mtcTimer_stop_int_safe ( hwmon_host_ptr->secretTimer );
+                hwmon_host_ptr->secretTimer.ring = true ;
+                return ;
+            }
         }
     }
     mtcTimer_stop_tid_int_safe (tid_ptr);

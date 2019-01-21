@@ -35,7 +35,7 @@ using namespace std;
 #include "httpUtil.h"     /* for ... libevent stuff                   */
 #include "ipmiUtil.h"     /* for ... mc_info_type                     */
 #include "mtcHttpUtil.h"  /* for ... libevent stuff                   */
-#include "mtcSmgrApi.h"   /*                                          */
+#include "mtcSmgrApi.h"   /* for ... mtcSmgrApi_request/handler       */
 #include "alarmUtil.h"    /* for ... SFmAlarmDataT                    */
 #include "mtcAlarm.h"     /* for ... MTC_ALARM_ID__xx and utils       */
 #include "mtcThreads.h"   /* for ... mtcThread_ipmitool               */
@@ -455,8 +455,9 @@ private:
           * based on each service */
 
         libEvent sysinvEvent; /**< Sysinv REST API Handling for host */
-        libEvent    cfgEvent; /**< Sysinv REST API Handling for config changes */
+        libEvent cfgEvent   ; /**< Sysinv REST API Handling for config changes */
         libEvent vimEvent   ; /**< VIM Event REST API Handling       */
+        libEvent secretEvent;
 
         libEvent httpReq    ; /**< Http libEvent Request Handling    */
         libEvent thisReq    ; /**< Http libEvent Request Handling    */
@@ -1110,7 +1111,7 @@ private:
     int mtcSmgrApi_request          ( struct nodeLinkClass::node * node_ptr, mtc_cmd_enum operation, int retries );
 
     /* Private VIM API */
-    int  mtcVimApi_state_change     ( struct nodeLinkClass::node * node_ptr, libEvent_enum operation, int retries );
+    int mtcVimApi_state_change      ( struct nodeLinkClass::node * node_ptr, libEvent_enum operation, int retries );
 
     int  set_bm_prov ( struct nodeLinkClass::node * node_ptr, bool state );
 
@@ -1925,12 +1926,6 @@ public:
     void mtcSmgrApi_handler    ( struct evhttp_request *req, void *arg );
 
     void mtcHttpUtil_handler   ( struct evhttp_request *req, void *arg );
-
-    /* Update the authentication token as a work queue'd command */
-    int mtcKeyApi_refresh_token ( string hostname );
-
-    /* Update the authentication token now ; as a blocking request */
-    int mtcKeyApi_get_token     ( string hostname );
 
     /*********************** Public Heartbeat Interfaces *********************/
 

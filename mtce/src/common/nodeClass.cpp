@@ -28,6 +28,7 @@ using namespace std;
 #include "threadUtil.h"
 #include "nodeClass.h"
 #include "nodeUtil.h"
+#include "secretUtil.h"
 #include "mtcNodeMsg.h"    /* for ... send_mtc_cmd         */
 #include "nlEvent.h"       /* for ... get_netlink_events   */
 #include "daemon_common.h"
@@ -649,6 +650,7 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
     ptr->cfgEvent.base   = NULL ;
     ptr->sysinvEvent.base= NULL ;
     ptr->vimEvent.base   = NULL ;
+    ptr->secretEvent.base= NULL ;
 
     ptr->httpReq.base    = NULL ;
     ptr->libEvent_done_fifo.clear();
@@ -664,17 +666,19 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
     ptr->sysinvEvent.conn= NULL ;
     ptr->vimEvent.conn   = NULL ;
     ptr->httpReq.conn    = NULL ;
+    ptr->secretEvent.conn= NULL ;
 
     ptr->cfgEvent.req    = NULL ;
     ptr->sysinvEvent.req = NULL ;
     ptr->vimEvent.req    = NULL ;
     ptr->httpReq.req     = NULL ;
-
+    ptr->secretEvent.req = NULL ;
 
     ptr->cfgEvent.buf    = NULL ;
     ptr->sysinvEvent.buf = NULL ;
     ptr->vimEvent.buf    = NULL ;
     ptr->httpReq.buf     = NULL ;
+    ptr->secretEvent.buf = NULL ;
 
     /* log throttles */
     ptr->stall_recovery_log_throttle = 0 ;
@@ -838,10 +842,21 @@ struct nodeLinkClass::node* nodeLinkClass::getEventBaseNode ( libEvent_enum requ
                    return ptr ;
                }
            }
+           case BARBICAN_GET_SECRET:
+           case BARBICAN_READ_SECRET:
+           {
+               if ( ptr->secretEvent.base == base_ptr )
+               {
+                   hlog1 ("%s Found secretEvent Base Pointer (%p) \n",
+                             ptr->hostname.c_str(), ptr->secretEvent.base);
+
+                   return ptr ;
+               }
+           }
            default:
                ;
        } /* End Switch */
-       
+
        if (( ptr->next == NULL ) || ( ptr == tail ))
           break ;
     }
@@ -2428,9 +2443,10 @@ int nodeLinkClass::mod_host ( node_inv_type & inv )
             /* BM is already provisioned but is now deprovisioned */
             else if (( bm_type_was_valid == true ) && ( bm_type_now_valid == false ))
             {
-                node_ptr->bm_type = NONE ;
-                node_ptr->bm_ip   = NONE ;
-                node_ptr->bm_un   = NONE ;
+                node_ptr->bm_type   = NONE ;
+                node_ptr->bm_ip     = NONE ;
+                node_ptr->bm_un     = NONE ;
+                node_ptr->bm_pw     = NONE ;
                 mtcAlarm_log ( node_ptr->hostname, MTC_LOG_ID__COMMAND_BM_DEPROVISIONED );
                 set_bm_prov ( node_ptr, false );
             }
@@ -3953,10 +3969,16 @@ int nodeLinkClass::set_bm_prov ( struct nodeLinkClass::node * node_ptr, bool sta
             bmc_access_data_init ( node_ptr );
             node_ptr->bm_ping_info.timer_handler = &mtcTimer_handler ;
 
-            node_ptr->thread_extra_info.bm_pw =
-            node_ptr->bm_pw =
-            get_bm_password (node_ptr->uuid.data());
+            barbicanSecret_type * secret = secretUtil_find_secret( node_ptr->uuid );
+            if ( secret )
+            {
+                secret->reference.clear() ;
+                secret->payload.clear() ;
+                secret->stage = MTC_SECRET__START ;
+            }
+            mtcTimer_start( node_ptr->bm_timer, mtcTimer_handler, SECRET_START_DELAY );
 
+            node_ptr->thread_extra_info.bm_pw.clear() ;
             node_ptr->thread_extra_info.bm_ip = node_ptr->bm_ip ;
             node_ptr->thread_extra_info.bm_un = node_ptr->bm_un ;
 

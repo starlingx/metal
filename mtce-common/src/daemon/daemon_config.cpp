@@ -40,7 +40,6 @@ void daemon_config_default ( daemon_config_type* config_ptr )
     config_ptr->keystone_auth_uri     = strdup("");
     config_ptr->keystone_auth_host    = strdup("");
     config_ptr->keystone_region_name  = strdup("none");
-    config_ptr->keyring_directory     = strdup("");
     config_ptr->sysinv_mtc_inv_label  = strdup("none");
     config_ptr->mgmnt_iface           = strdup("none");
     config_ptr->infra_iface           = strdup("none");
@@ -48,6 +47,7 @@ void daemon_config_default ( daemon_config_type* config_ptr )
     config_ptr->mode                  = strdup("none");
     config_ptr->fit_host              = strdup("none");
     config_ptr->multicast             = strdup("none");
+    config_ptr->barbican_api_host     = strdup("none");
 
     config_ptr->debug_all    = 0 ;
     config_ptr->debug_json   = 0 ;
@@ -264,6 +264,27 @@ int sysinv_config_handler (       void * user,
     return (PASS);
 }
 
+/* Openstack Barbican Config Reader */
+int barbican_config_handler (     void * user,
+                            const char * section,
+                            const char * name,
+                            const char * value)
+{
+    daemon_config_type* config_ptr = (daemon_config_type*)user;
+
+    if (MATCH("DEFAULT", "bind_port")) // bind_port=9311
+    {
+        config_ptr->barbican_api_port = atoi(value);
+        ilog("Barbican Port : %d\n", config_ptr->barbican_api_port );
+    }
+    else if (MATCH("DEFAULT", "bind_host")) // bind_host=192.168.204.2
+    {
+        config_ptr->barbican_api_host = strdup(value);
+        ilog("Barbican Host : %s\n", config_ptr->barbican_api_host );
+    }
+    return (PASS);
+}
+
 #define EMPTY "----"
 
 void daemon_dump_cfg ( void )
@@ -306,7 +327,8 @@ void daemon_dump_cfg ( void )
     if ( ptr->keystone_user_domain  ) { ilog ("keystone_user_domain  = %s\n", ptr->keystone_user_domain );}
     if ( ptr->keystone_project_domain ) { ilog ("keystone_project_domain  = %s\n", ptr->keystone_project_domain );}
     if ( ptr->keystone_region_name  ) { ilog ("keystone_region_name  = %s\n", ptr->keystone_region_name  );}
-    if ( ptr->keyring_directory     ) { ilog ("keyring_directory     = %s\n", ptr->keyring_directory     );}
+    if ( ptr->barbican_api_port     ) { ilog ("barbican_api_port     = %d\n", ptr->barbican_api_port     );}
+    if ( ptr->barbican_api_host     ) { ilog ("barbican_api_host     = %s\n", ptr->barbican_api_host     );}
 
     if ( ptr->mtc_rx_mgmnt_port    ) { ilog ("mtc_rx_mgmnt_port     = %d\n", ptr->mtc_rx_mgmnt_port    );}
     if ( ptr->mtc_rx_infra_port    ) { ilog ("mtc_rx_infra_port     = %d\n", ptr->mtc_rx_infra_port    );}

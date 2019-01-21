@@ -70,6 +70,7 @@ typedef enum
     SERVICE_TOKEN  = 1,
     SERVICE_SMGR   = 2,
     SERVICE_VIM    = 3,
+    SERVICE_SECRET = 4,
 } mtc_service_enum ;
 
 string hostUtil_getServiceIp   ( mtc_service_enum service );

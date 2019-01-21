@@ -619,6 +619,80 @@ load_host_cleanup:
     return (rc);
 }
 
+int jsonUtil_secret_load ( string & name,
+                           char * json_str_ptr,
+                           jsonUtil_secret_type & info )
+{
+    int rc = PASS ;
+    json_bool status ;
+
+    /* init to null to avoid trap on early cleanup call with
+     * bad non-null default pointer value */
+    struct array_list * array_list_obj = (struct array_list *)(NULL);
+    struct json_object *raw_obj = (struct json_object *)(NULL);
+    struct json_object *secret_obj = (struct json_object *)(NULL);
+    struct json_object *ref_obj = (struct json_object *)(NULL);
+
+    if (( json_str_ptr == NULL ) || ( *json_str_ptr == '\0' ) ||
+        ( ! strncmp ( json_str_ptr, "(null)" , 6 )))
+    {
+        elog ("Cannot tokenize a null json string\n");
+        return (FAIL);
+    }
+    raw_obj = json_tokener_parse( json_str_ptr );
+    if ( !raw_obj )
+    {
+        elog ("No or invalid json string (%s)\n", json_str_ptr );
+        rc = FAIL ;
+        goto secret_load_cleanup ;
+    }
+
+    status = json_object_object_get_ex(raw_obj, MTC_JSON_SECRET_LIST, &secret_obj );
+    if ( ( status == TRUE ) && ( secret_obj ))
+    {
+        array_list_obj = json_object_get_array(secret_obj );
+        if ( array_list_obj )
+        {
+            int len = array_list_length (array_list_obj );
+            if ( len == 0 )
+            {
+                wlog ( "No %s elements in array\n", MTC_JSON_SECRET_LIST );
+                goto secret_load_cleanup;
+            }
+            for ( int i = 0 ; i < len ; i++ )
+            {
+                ref_obj = _json_object_array_get_idx (secret_obj, i );
+                if ( ref_obj )
+                {
+                    string secret_name = _json_get_key_value_string ( ref_obj, MTC_JSON_SECRET_NAME );
+                    if ( ( secret_name.length() > 0) && !secret_name.compare(name) )
+                    {
+                        info.secret_ref = _json_get_key_value_string ( ref_obj, MTC_JSON_SECRET_REFERENCE );
+                        jlog ( "Found secret_ref %s\n", info.secret_ref.c_str() );
+                        break ;
+                    }
+                }
+            }
+        }
+        else
+        {
+            elog ("%s Failed to find %s object array\n", name.c_str(), MTC_JSON_SECRET_LIST );
+        }
+    }
+    else
+    {
+        elog ("%s Failed to find %s object\n", name.c_str(), MTC_JSON_SECRET_LIST );
+    }
+
+secret_load_cleanup:
+
+    if (raw_obj) json_object_put(raw_obj );
+    if (secret_obj) json_object_put(secret_obj );
+    if (ref_obj) json_object_put(ref_obj );
+
+    return (rc);
+}
+
 void jsonUtil_print ( jsonUtil_info_type & info, int index )
 {
     if ( info.elements == 0 )

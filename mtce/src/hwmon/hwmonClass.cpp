@@ -7,6 +7,7 @@
 
 #include "nodeBase.h"
 #include "tokenUtil.h"
+#include "secretUtil.h"
 #include "hwmonClass.h"
 #include "hwmonUtil.h"
 #include "hwmonIpmi.h"
@@ -128,6 +129,7 @@ struct hwmonHostClass::hwmon_host* hwmonHostClass::addHost( string hostname )
     ptr->ping_info.timer_handler = &hwmonTimer_handler ;
     mtcTimer_init ( ptr->hostTimer,          ptr->hostname, "host timer" );
     mtcTimer_init ( ptr->addTimer,           ptr->hostname, "add timer"  );
+    mtcTimer_init ( ptr->secretTimer,        ptr->hostname, "secret timer" );
     mtcTimer_init ( ptr->relearnTimer,       ptr->hostname, "relearn timer" );
 
     mtcTimer_init ( ptr->ping_info.timer,    ptr->hostname, "ping monitor timer" );
@@ -143,6 +145,11 @@ struct hwmonHostClass::hwmon_host* hwmonHostClass::addHost( string hostname )
     ptr->event.conn = NULL ;
     ptr->event.req = NULL ;
     ptr->event.buf = NULL ;
+
+    ptr->secretEvent.base= NULL ;
+    ptr->secretEvent.conn= NULL ;
+    ptr->secretEvent.req = NULL ;
+    ptr->secretEvent.buf = NULL ;
 
     /* If the host list is empty add it to the head */
     if( hwmon_head == NULL )
@@ -180,6 +187,7 @@ void hwmonHostClass::free_host_timers ( struct hwmon_host * ptr )
 {
     mtcTimer_fini ( ptr->hostTimer );
     mtcTimer_fini ( ptr->addTimer );
+    mtcTimer_fini ( ptr->secretTimer );
     mtcTimer_fini ( ptr->relearnTimer );
     mtcTimer_fini ( ptr->ping_info.timer );
 
@@ -195,7 +203,7 @@ int hwmonHostClass::remHost( string hostname )
 
     if ( hwmon_head == NULL )
         return -ENXIO ;
-    
+
     struct hwmon_host * ptr = hwmonHostClass::getHost ( hostname );
 
     if ( ptr == NULL )
@@ -263,15 +271,15 @@ struct hwmonHostClass::hwmon_host* hwmonHostClass::getHost ( string hostname )
 }
 
 /*
- * Allocates memory for a new host and stores its the address in host_ptrs 
+ * Allocates memory for a new host and stores its the address in host_ptrs
  *
  * @param void
  * @return pointer to the newly allocted host memory
- */ 
+ */
 struct hwmonHostClass::hwmon_host * hwmonHostClass::newHost ( void )
 {
    struct hwmonHostClass::hwmon_host * temp_host_ptr = NULL ;
-      
+
    if ( memory_allocs == 0 )
    {
        memset ( host_ptrs, 0 , sizeof(struct hwmon_host *)*MAX_HOSTS);
@@ -428,7 +436,7 @@ void hwmonHostClass::degrade_state_audit ( struct hwmonHostClass::hwmon_host * h
 }
 
 /* Frees the memory of a pre-allocated host and removes
- * it from the host_ptrs list 
+ * it from the host_ptrs list
  * @param host * pointer to the host memory address to be freed
  * @return int return code { PASS or -EINVAL }
  */
@@ -451,14 +459,14 @@ int hwmonHostClass::delHost ( struct hwmonHostClass::hwmon_host * host_ptr )
     }
     else
        elog ( "Error: Free memory called when there is no memory to free\n" );
-    
+
     return -EINVAL ;
 }
 
 void hwmonHostClass::clear_bm_assertions ( struct hwmonHostClass::hwmon_host * host_ptr )
 {
     /* Loop over all sensors and groups
-     *  - clear any outstanding alarms 
+     *  - clear any outstanding alarms
      *  - clear degrade of host
      *  ... while we deprovision the BMC */
     for ( int i = 0 ; i < host_ptr->sensors ; i++ )
@@ -475,18 +483,15 @@ void hwmonHostClass::clear_bm_assertions ( struct hwmonHostClass::hwmon_host * h
     {
         hwmonAlarm_clear ( host_ptr->hostname, HWMON_ALARM_ID__SENSORGROUP, host_ptr->group[g].group_name, REASON_DEPROVISIONED );
     }
-    
+
     /* send the degrade anyway , just to be safe */
-    hwmon_send_event ( host_ptr->hostname, MTC_DEGRADE_CLEAR , "sensors" );   
+    hwmon_send_event ( host_ptr->hostname, MTC_DEGRADE_CLEAR , "sensors" );
 
     /* Bug Fix: This was outside the if bm_provisioned clause causing it
      *          to be called even if the bmc was not already provisioned
      */
     hwmonAlarm_clear ( host_ptr->hostname, HWMON_ALARM_ID__SENSORCFG, "sensors", REASON_DEPROVISIONED );
 }
-
-
-
 
 int hwmonHostClass::set_bm_prov ( struct hwmonHostClass::hwmon_host * host_ptr, bool state )
 {
@@ -510,7 +515,18 @@ int hwmonHostClass::set_bm_prov ( struct hwmonHostClass::hwmon_host * host_ptr, 
             host_ptr->ping_info.ip       = host_ptr->bm_ip ;
             host_ptr->ping_info.hostname = host_ptr->hostname ;
             ipmi_bmc_data_init ( host_ptr );
-            host_ptr->thread_extra_info.bm_pw = host_ptr->bm_pw = get_bm_password (hostBase.get_uuid(host_ptr->hostname).data());
+
+            string host_uuid = hostBase.get_uuid( host_ptr->hostname );
+            barbicanSecret_type * secret = secretUtil_find_secret( host_uuid );
+            if ( secret )
+            {
+                secret->reference.clear() ;
+                secret->payload.clear() ;
+                secret->stage = MTC_SECRET__START ;
+            }
+            mtcTimer_start( host_ptr->secretTimer, hwmonTimer_handler, SECRET_START_DELAY );
+
+            host_ptr->thread_extra_info.bm_pw.clear() ;
             host_ptr->thread_extra_info.bm_ip = host_ptr->bm_ip ;
             host_ptr->thread_extra_info.bm_un = host_ptr->bm_un ;
         }
@@ -709,6 +725,7 @@ int hwmonHostClass::add_host ( node_inv_type & inv )
             host_ptr->sensor_query_count            = 0 ;
 
             /* Sensor Monitoring Thread 'Extra Request Information' */
+            host_ptr->empty_secret_log_throttle = 0 ;
             host_ptr->thread_extra_info.bm_ip = host_ptr->bm_ip ;
             host_ptr->thread_extra_info.bm_un = host_ptr->bm_un ;
             host_ptr->thread_extra_info.bm_pw.clear() ;
@@ -779,7 +796,7 @@ int hwmonHostClass::rem_host ( string hostname )
             hwmonHostClass::remHost ( hostname );
             slog ("potential memory leak !\n");
         }
-        
+
         /* Now remove the service specific component */
         hostlist.remove ( hostname );
     }
@@ -814,7 +831,7 @@ int hwmonHostClass::del_host ( string hostname )
 {
     int rc = FAIL_DEL_UNKNOWN ;
     hwmonHostClass::hwmon_host * hwmon_host_ptr = hwmonHostClass::getHost( hostname );
-    if ( hwmon_host_ptr ) 
+    if ( hwmon_host_ptr )
     {
         rc = rem_host ( hostname );
         if ( rc == PASS )
@@ -838,7 +855,7 @@ int hwmonHostClass::mon_host ( string hostname, bool monitor )
 {
     int rc = FAIL_UNKNOWN_HOSTNAME ;
     hwmonHostClass::hwmon_host * hwmon_host_ptr = hwmonHostClass::getHost( hostname );
-    if ( hwmon_host_ptr ) 
+    if ( hwmon_host_ptr )
     {
         bool change = false ;
         string want_state = "" ;
@@ -1013,6 +1030,10 @@ struct hwmonHostClass::hwmon_host * hwmonHostClass::getHost_timer ( timer_t tid 
            {
                return host_ptr ;
            }
+           if ( host_ptr->secretTimer.tid == tid )
+           {
+               return host_ptr ;
+           }
            if ( host_ptr->ping_info.timer.tid == tid )
            {
                return host_ptr ;
@@ -1166,7 +1187,7 @@ int hwmonHostClass::add_sensor ( string hostname, sensor_type & sensor )
 
     if ( rc )
     {
-        elog ("%s '%s' sensor add failed\n", hostname.c_str() , 
+        elog ("%s '%s' sensor add failed\n", hostname.c_str(),
                                              sensor.sensorname.c_str());
     }
     return (rc);
@@ -1197,8 +1218,8 @@ struct sensor_group_type * hwmonHostClass::hwmon_get_sensorgroup ( string hostna
                 {
                     if ( !host_ptr->group[g].sensor_ptr[s]->sensorname.compare(entity_path) )
                     {
-                        blog ("%s '%s' sensor found in '%s' group\n", 
-                              hostname.c_str(), 
+                        blog ("%s '%s' sensor found in '%s' group\n",
+                              hostname.c_str(),
                               host_ptr->group[g].sensor_ptr[s]->sensorname.c_str(),
                               host_ptr->group[g].group_name.c_str());
 
@@ -1229,7 +1250,7 @@ struct sensor_group_type * hwmonHostClass::hwmon_get_sensorgroup ( string hostna
  *
  * Name        : hwmon_get_group
  *
- * Description : Returns a pointer to the sensor group that matches the supplied 
+ * Description : Returns a pointer to the sensor group that matches the supplied
  *               group name.
  *
  **********************************************************************************/
@@ -1247,8 +1268,8 @@ struct sensor_group_type * hwmonHostClass::hwmon_get_group ( string hostname, st
             {
                 if ( !group_name.compare(host_ptr->group[i].group_name))
                 {
-                    blog ("%s '%s' sensor group found\n", 
-                              hostname.c_str(), 
+                    blog ("%s '%s' sensor group found\n",
+                              hostname.c_str(),
                               host_ptr->group[i].group_name.c_str());
 
                     return (&host_ptr->group[i]) ;
@@ -1306,7 +1327,7 @@ int hwmonHostClass::hwmon_add_group ( string hostname, struct sensor_group_type 
 
                 host_ptr->group[i].hostname = hostname ;
                 host_ptr->interval_changed = true ;
-                    
+
                 host_ptr->group[i].group_interval = group.group_interval ;
 
                 host_ptr->group[i].sensortype     = group.sensortype  ;
@@ -1349,7 +1370,7 @@ int hwmonHostClass::hwmon_add_group ( string hostname, struct sensor_group_type 
 
     if ( rc )
     {
-        elog ("%s '%s' sensor group add failed\n", hostname.c_str() , 
+        elog ("%s '%s' sensor group add failed\n", hostname.c_str(),
                                                    group.group_name.c_str());
     }
     return (rc);
@@ -1377,8 +1398,8 @@ int  hwmonHostClass::add_group_uuid ( string & hostname, string & group_name, st
             {
                 if ( !group_name.compare(host_ptr->group[i].group_name))
                 {
-                    blog1 ("%s '%s' sensor group found\n", 
-                              hostname.c_str(), 
+                    blog1 ("%s '%s' sensor group found\n",
+                              hostname.c_str(),
                               host_ptr->group[i].group_name.c_str());
 
                     host_ptr->group[i].group_uuid = uuid ;
@@ -1418,8 +1439,8 @@ int  hwmonHostClass::add_sensor_uuid ( string & hostname, string & sensorname, s
             {
                 if ( !sensorname.compare(host_ptr->sensor[i].sensorname))
                 {
-                    blog1 ("%s '%s' sensor found\n", 
-                              hostname.c_str(), 
+                    blog1 ("%s '%s' sensor found\n",
+                              hostname.c_str(),
                               host_ptr->sensor[i].sensorname.c_str());
 
                     host_ptr->sensor[i].uuid = uuid ;
@@ -2352,7 +2373,6 @@ void hwmonHostClass::mem_log_groups ( struct hwmonHostClass::hwmon_host * host_p
                     done = true ;
                 }
                 if ((( x % 8 == 0 ) & ( x != 0 )) || ( done == true ))
-                // if ( done == true ) 
                 {
                     if ( first == true )
                     {

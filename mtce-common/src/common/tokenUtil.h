@@ -26,12 +26,10 @@
 
 using namespace std;
 
-#include "logMacros.h" 
+#include "logMacros.h"
 #include "httpUtil.h"        /* for ... libEvent                   */
 
 #define MTC_POST_KEY_LABEL "/v3/auth/tokens"
-
-#define KEYSTONE_SIG       "token"
 
 /* The invalidation window is 5 minutes according
  * to the testing of token expiration time */

@@ -49,7 +49,6 @@
 #include "nodeUtil.h"       /* for ... Utility Service Header          */
 #include "jsonUtil.h"       /* for ... Json utilities                  */
 #include "mtcInvApi.h"      /* this .. module header                   */
-#include "mtcKeyApi.h"      /* for ... keystone service utilities      */
 #include "mtcNodeHdlrs.h"   /* for ... mtcTimer_handler ( .. )         */
 
 
@@ -70,11 +69,6 @@ int mtcInvApi_read_inventory ( int batch )
 
     nodeLinkClass * obj_ptr = get_mtcInv_ptr ();
     string hostname = obj_ptr->get_my_hostname();
-    if ( rc != PASS )
-    {
-        wlog ("Failed to get an authentication token ... requesting retry\n");
-        return (RETRY);
-    }
 
     rc = mtcHttpUtil_event_init ( &obj_ptr->sysinvEvent,
                                    obj_ptr->my_hostname,

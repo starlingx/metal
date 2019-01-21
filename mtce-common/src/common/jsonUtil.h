@@ -10,7 +10,7 @@
  /**
   * @file
   * Wind River CGTS Platform Controller Maintenance
-  * 
+  *
   * JSON Utility Header
   */
 
@@ -56,17 +56,57 @@ typedef struct
     string adminURL; /**< path to the nova server.                        */
 } jsonUtil_auth_type ;
 
-/** Module initialization interface. 
+#define MAX_JSON_SECRET_CONTENTS_NUM 7
+#define MTC_JSON_SECRET_LIST       "secrets"
+#define MTC_JSON_SECRET_TOTAL      "total"
+#define MTC_JSON_SECRET_PREVIOUS   "previous"
+#define MTC_JSON_SECRET_NEXT       "next"
+#define MTC_JSON_SECRET_ALGORITHM  "algorithm"
+#define MTC_JSON_SECRET_LENGTH     "bit_length"
+#define MTC_JSON_SECRET_CONTENT    "content_types"
+#define MTC_JSON_SECRET_CREATED    "created"
+#define MTC_JSON_SECRET_CREATOR    "creator_id"
+#define MTC_JSON_SECRET_EXPIRATION "expiration"
+#define MTC_JSON_SECRET_MODE       "mode"
+#define MTC_JSON_SECRET_NAME       "name"
+#define MTC_JSON_SECRET_REFERENCE  "secret_ref"
+#define MTC_JSON_SECRET_TYPE       "secret_type"
+#define MTC_JSON_SECRET_STATUS     "status"
+#define MTC_JSON_SECRET_UPDATED    "updated"
+
+typedef struct
+{
+    string type     ;
+    string encoding ;
+} content_type ;
+
+typedef struct
+{
+    string algorithm     ;
+    int    bit_length    ;
+    content_type contents[MAX_JSON_SECRET_CONTENTS_NUM];
+    string created       ;
+    string creator_id    ;
+    string expiration    ;
+    string mode          ;
+    string name          ;
+    string secret_ref    ;
+    string secret_type   ;
+    string status        ;
+    string updated       ;
+} jsonUtil_secret_type ;
+
+/** Module initialization interface.
   */
 void jsonUtil_init  ( jsonUtil_info_type & info );
 
-/** Print the authroization struct to stdio. 
+/** Print the authroization struct to stdio.
   */
 void jsonUtil_print ( jsonUtil_info_type & info , int index );
 void jsonUtil_print_inv ( node_inv_type & info );
 
 int jsonUtil_get_key_val ( char   * json_str_ptr,
-                              string   key, 
+                              string   key,
                               string & value );
 
 int jsonUtil_get_key_val_int ( char   * json_str_ptr,
@@ -76,10 +116,11 @@ int jsonUtil_get_key_val_int ( char   * json_str_ptr,
 /** Submit a request to get an authorization token and nova URL */
 int jsonApi_auth_request ( string & hostname, string & payload );
 
-/** Parse through the authorization request's response json string 
+/** Parse through the authorization request's response json string
   * and load the relavent information into the passed in structure */
- int jsonUtil_inv_load ( char * json_str_ptr,
-                            jsonUtil_info_type & info );
+int jsonUtil_inv_load ( char * json_str_ptr, jsonUtil_info_type & info );
+
+int jsonUtil_secret_load ( string & name, char * json_str_ptr, jsonUtil_secret_type & info );
 
 int jsonUtil_load_host ( char * json_str_ptr, node_inv_type & info );
 int jsonUtil_load_host_state ( char * json_str_ptr, node_inv_type & info );
@@ -102,7 +143,7 @@ int jsonUtil_patch_load ( char * json_str_ptr, node_inv_type & info );
   *-  FAIL indicates bad or error reply in json string.
   *
   */
-int jsonApi_auth_load    ( string & hostname, char * json_str_ptr, 
+int jsonApi_auth_load    ( string & hostname, char * json_str_ptr,
                               jsonUtil_auth_type & info );
 
 
@@ -110,9 +151,9 @@ int jsonApi_auth_load    ( string & hostname, char * json_str_ptr,
  * This utility searches for an 'array_label' and then loops over the array
  * looking at each element for the specified 'search_key' and 'search_value'
  * Once found it searches that same element for the specified 'element_key'
- * and loads its value content into 'element_value' - what we're looking for 
+ * and loads its value content into 'element_value' - what we're looking for
  ***************************************************************************/
-int jsonApi_array_value (   char * json_str_ptr, 
+int jsonApi_array_value (   char * json_str_ptr,
                           string   array_label,
                           string   search_key,
                           string   search_value,
@@ -123,18 +164,18 @@ int jsonApi_array_value (   char * json_str_ptr,
  * This utility updates the reference key_list with all the
  * values for the specified label.
  ***********************************************************************/
-int jsonUtil_get_list   (   char * json_str_ptr, 
+int jsonUtil_get_list   (   char * json_str_ptr,
                           string   label, list<string> & key_list );
 
 /***********************************************************************
  * This utility updates the reference element with the number of array
- * elements for the specified label in the provided string 
+ * elements for the specified label in the provided string
  ***********************************************************************/
 int jsonUtil_array_elements ( char * json_str_ptr, string label, int & elements );
 
 /***********************************************************************
  * This utility updates the reference string 'element' with the
- * contents of the specified labeled array element index. 
+ * contents of the specified labeled array element index.
  ***********************************************************************/
 int jsonUtil_get_array_idx  ( char * json_str_ptr, string label, int idx, string & element );
 

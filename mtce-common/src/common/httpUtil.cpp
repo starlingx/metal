@@ -20,7 +20,7 @@ using namespace std;
 #include "tokenUtil.h"  /* for ... tokenUtil_handler          */
 #include "nodeUtil.h"   /* for ... string_contains            */
 #include "timeUtil.h"   /* for ... time_debug_type            */
-#include "keyClass.h"   /* for ... add_key, del_key */ 
+#include "keyClass.h"   /* for ... add_key, del_key           */
 
 static keyClass keyValObject ;
 static char rest_api_filename[MAX_FILENAME_LEN];
@@ -66,10 +66,10 @@ const char * getHttpCmdType_str ( evhttp_cmd_type type )
  *
  * ************************************************************************/
 
-int httpUtil_event_init ( libEvent * ptr , 
+int httpUtil_event_init ( libEvent * ptr ,
                             string   hostname,
-                            string   service, 
-                            string   ip, 
+                            string   service,
+                            string   ip,
                                int   port )
 {
     /* Default Starting States */
@@ -127,12 +127,12 @@ int httpUtil_event_init ( libEvent * ptr ,
     /** Default the user agent to mtce ; other users and commands can override */
     ptr->user_agent = "mtce/1.0" ;
 
-    ptr->admin_url.clear(); 
+    ptr->admin_url.clear();
     ptr->internal_url.clear();
     ptr->public_url.clear();
 
     /* HTTP Specific Info */
-    ptr->type = EVHTTP_REQ_GET ; /* request type GET/PUT/PATCH etc */   
+    ptr->type = EVHTTP_REQ_GET ; /* request type GET/PUT/PATCH etc */
 
     /* Result Info */
     ptr->status      = FAIL;
@@ -154,8 +154,8 @@ void httpUtil_init ( void )
 {
     httpUtil_event_init ( &nullEvent, "null", "null" , "0.0.0.0", 0);
     nullEvent.request = SERVICE_NONE ;
-    
-    snprintf (&rest_api_filename[0], MAX_FILENAME_LEN, "/var/log/%s_api.log", 
+
+    snprintf (&rest_api_filename[0], MAX_FILENAME_LEN, "/var/log/%s_api.log",
                program_invocation_short_name );
 }
 
@@ -200,7 +200,7 @@ void httpUtil_free_base ( libEvent & event )
         event.base = NULL ;
         if ( event.conn )
         {
-            hlog ("%s Free Connection (%p) --------- along with base\n", 
+            hlog ("%s Free Connection (%p) --------- along with base\n",
                          event.log_prefix.c_str(), event.conn );
 
             evhttp_connection_free ( event.conn );
@@ -209,7 +209,7 @@ void httpUtil_free_base ( libEvent & event )
     }
     else
     {
-        hlog1 ("%s Already Freed Event Base\n", event.log_prefix.c_str()); 
+        hlog1 ("%s Already Freed Event Base\n", event.log_prefix.c_str());
     }
 }
 
@@ -230,7 +230,7 @@ int httpUtil_connect ( libEvent & event )
 
         /* Open an http connection to specified IP and port */
         event.conn = evhttp_connection_base_new ( event.base, NULL,
-                                                  event.ip.c_str(), 
+                                                  event.ip.c_str(),
                                                   event.port );
         /* bind to the correctly-versioned local address */
         if ( event.conn )
@@ -262,7 +262,7 @@ int httpUtil_request ( libEvent & event,
                        void(*hdlr)(struct evhttp_request *, void *))
 {
     int rc = PASS ;
-    
+
     /* make a new request and bind the event handler to it */
     event.req = evhttp_request_new( hdlr , event.base );
     if ( ! event.req )
@@ -286,14 +286,14 @@ int httpUtil_request ( libEvent & event,
 int httpUtil_payload_add ( libEvent & event )
 {
     int rc = PASS ;
-    
+
     /* Returns the output buffer. */ 
     event.buf = evhttp_request_get_output_buffer ( event.req );
-   
+
     /* Check for no buffer */
     if ( ! event.buf )
     {
-        elog ("%s evhttp_request_get_output_buffer returned null (%p)\n", 
+        elog ("%s evhttp_request_get_output_buffer returned null (%p)\n",
                   event.log_prefix.c_str(), event.req );
 
         rc = FAIL ;
@@ -311,7 +311,7 @@ int httpUtil_payload_add ( libEvent & event )
         }
         else if ( rc == 0 )
         {
-            elog ("%s no data added to output buffer (len=0)\n", 
+            elog ("%s no data added to output buffer (len=0)\n",
                       event.log_prefix.c_str());
 
             rc = FAIL ;
@@ -367,15 +367,15 @@ int httpUtil_header_add ( libEvent * ptr, http_headers_type * hdrs_ptr )
 
     if ( hdrs_ptr->entries > MAX_HEADERS )
     {
-        elog ("%s Too many headers (%d:%d)\n", 
+        elog ("%s Too many headers (%d:%d)\n",
                   ptr->log_prefix.c_str(), MAX_HEADERS, hdrs_ptr->entries );
         return FAIL ;
     }
     for ( int i = 0 ; i < hdrs_ptr->entries ; i++ )
     {
         /* Add the header */
-        rc = evhttp_add_header( ptr->req->output_headers, 
-                                hdrs_ptr->entry[i].key.c_str() ,  
+        rc = evhttp_add_header( ptr->req->output_headers,
+                                hdrs_ptr->entry[i].key.c_str(),
                                 hdrs_ptr->entry[i].value.c_str());
         if ( rc )
         {
@@ -385,7 +385,7 @@ int httpUtil_header_add ( libEvent * ptr, http_headers_type * hdrs_ptr )
                    hdrs_ptr->entry[i].value.c_str());
             rc = FAIL ;
             break ;
-        }  
+        }
     }
     return (rc);
 }
@@ -432,14 +432,14 @@ int httpUtil_get_response ( libEvent & event )
         /* Get a stack buffer, zero it, copy to it and terminate it */
         char * stack_buf_ptr = (char*)malloc (event.response_len+1);
         memset ( stack_buf_ptr, 0, event.response_len+1 );
-        real_len = evbuffer_remove( event.req->input_buffer, stack_buf_ptr, 
+        real_len = evbuffer_remove( event.req->input_buffer, stack_buf_ptr,
                                 event.response_len);
 
         if ( real_len != event.response_len )
         {
             wlog ("%s Length differs from removed length (%ld:%ld)\n",
                       event.log_prefix.c_str(),
-                      event.response_len, 
+                      event.response_len,
                       real_len );
         }
 
@@ -447,7 +447,7 @@ int httpUtil_get_response ( libEvent & event )
         {
             hlog1 ("%s has no response data\n", event.log_prefix.c_str() );
         }
-        /* Terminate the buffer , this is where the +1 above is required. 
+        /* Terminate the buffer , this is where the +1 above is required.
          * Without it there is memory corruption reported by Linux */
          *(stack_buf_ptr+event.response_len) = '\0';
 
@@ -538,7 +538,7 @@ void httpUtil_handler ( struct evhttp_request *req, void *arg )
         return ;
     }
 
-    event_ptr = (libEvent*)temp; 
+    event_ptr = (libEvent*)temp;
     if (( event_ptr->request >= SERVICE_LAST ) || ( event_ptr->request == SERVICE_NONE ))
     {
         slog ("HTTP Event Lookup Failed for http base (%p) <------\n", arg);
@@ -549,18 +549,17 @@ void httpUtil_handler ( struct evhttp_request *req, void *arg )
     event_ptr->status = httpUtil_status ( (*event_ptr) ) ;
     if ( event_ptr->status == HTTP_NOTFOUND )
     {
-        elog ("%s returned (Not-Found) (%d)\n", 
-                  event_ptr->log_prefix.c_str(), 
+        elog ("%s returned (Not-Found) (%d)\n",
+                  event_ptr->log_prefix.c_str(),
                   event_ptr->status);
         if ( event_ptr->type != EVHTTP_REQ_POST )
             event_ptr->status = PASS ;
-
         goto httpUtil_handler_done ;
     }
 
     else if (( event_ptr->status != PASS ) && ( ! req ))
     {
-        elog ("%s Request Timeout (%d)\n", 
+        elog ("%s Request Timeout (%d)\n",
                    event_ptr->log_prefix.c_str(),
                    event_ptr->timeout);
 
@@ -788,6 +787,11 @@ int httpUtil_api_request ( libEvent & event )
     {
         ;
     }
+    else if (( event.request == BARBICAN_GET_SECRET ) ||
+             ( event.request == BARBICAN_READ_SECRET  ))
+    {
+        ;
+    }
     else
     {
         slog ("%s Unsupported Request (%d)\n", event.hostname.c_str(), event.request);
@@ -799,7 +803,7 @@ int httpUtil_api_request ( libEvent & event )
     if ( httpUtil_connect ( event ))
     {
         event.status = FAIL_CONNECT ;
-        goto httpUtil_api_request_done ;        
+        goto httpUtil_api_request_done ;
     }
 
     if ( httpUtil_request ( event, &httpUtil_handler ))
@@ -813,7 +817,7 @@ int httpUtil_api_request ( libEvent & event )
         jlog ("%s Address : %s\n", event.hostname.c_str(), event.address.c_str());
     }
 
-    if (( event.type != EVHTTP_REQ_GET ) && 
+    if (( event.type != EVHTTP_REQ_GET ) &&
         ( event.type != EVHTTP_REQ_DELETE ))
     {
         /* Add payload to the output buffer but only for PUT, POST and PATCH requests */
@@ -824,15 +828,15 @@ int httpUtil_api_request ( libEvent & event )
         }
         if ( daemon_get_cfg_ptr()->debug_json )
         {
-            if ((!string_contains(event.payload,"token")) && 
+            if ((!string_contains(event.payload,"token")) &&
                 (!string_contains(event.payload,"assword")))
             {
-                jlog ("%s Payload : %s\n", event.hostname.c_str(), 
+                jlog ("%s Payload : %s\n", event.hostname.c_str(),
                                            event.payload.c_str() );
             }
             else
             {
-                jlog ("%s Payload : ... contains private content ...\n", 
+                jlog ("%s Payload : ... contains private content ...\n",
                           event.hostname.c_str());
 
             }
@@ -848,7 +852,7 @@ int httpUtil_api_request ( libEvent & event )
     hdrs.entry[hdr_entry].value = "admin";
     hdr_entry++;
 
-    if (( event.type != EVHTTP_REQ_GET ) && 
+    if (( event.type != EVHTTP_REQ_GET ) &&
         ( event.type != EVHTTP_REQ_DELETE ))
     {
         hdrs.entry[hdr_entry].key   = "Content-Length" ;
@@ -859,14 +863,23 @@ int httpUtil_api_request ( libEvent & event )
     hdrs.entry[hdr_entry].key   = "User-Agent" ;
     hdrs.entry[hdr_entry].value = event.user_agent ;
     hdr_entry++;
-           
+ 
     hdrs.entry[hdr_entry].key   = "Content-Type" ;
     hdrs.entry[hdr_entry].value = "application/json" ;
     hdr_entry++;
 
-    hdrs.entry[hdr_entry].key   = "Accept" ;
-    hdrs.entry[hdr_entry].value = "application/json" ;
-    hdr_entry++;
+    if ( event.request == BARBICAN_READ_SECRET )
+    {
+        hdrs.entry[hdr_entry].key   = "Accept" ;
+        hdrs.entry[hdr_entry].value = "application/octet-stream" ;
+        hdr_entry++;
+    }
+    else
+    {
+        hdrs.entry[hdr_entry].key   = "Accept" ;
+        hdrs.entry[hdr_entry].value = "application/json" ;
+        hdr_entry++;
+    }
 
     if ( event.request != KEYSTONE_GET_TOKEN )
     {
@@ -912,8 +925,10 @@ int httpUtil_api_request ( libEvent & event )
     }
     else
     {
+        hlog ("%s API Internal Address : %s\n", event.hostname.c_str(), event.address.c_str());
         event.status = evhttp_make_request ( event.conn, event.req, event.type, event.address.data());
     }
+
     daemon_signal_hdlr ();
     if ( event.status == PASS )
     {
@@ -939,14 +954,15 @@ int httpUtil_api_request ( libEvent & event )
             httpUtil_latency_log ( event, label.c_str(), __LINE__, MAX_DELAY_B4_LATENCY_LOG );
             goto httpUtil_api_request_done ;
         }
-        else if ( event.request == KEYSTONE_GET_TOKEN )
+        else if ( event.request == KEYSTONE_GET_TOKEN ||
+                  event.request == BARBICAN_GET_SECRET ||
+                  event.request == BARBICAN_READ_SECRET )
         {
             hlog ("%s Requested (non-blocking) (timeout:%d secs)\n", event.log_prefix.c_str(), event.timeout);
             event.active = true ;
             event.status = event_base_loop(event.base, EVLOOP_NONBLOCK);
             httpUtil_latency_log ( event, label.c_str(), __LINE__, MAX_DELAY_B4_LATENCY_LOG ); /* Should be immediate ; non blocking */
             return (event.status);
-            // goto httpUtil_api_request_done ;
         }
         else
         {
@@ -979,9 +995,9 @@ httpUtil_api_request_done:
 
 void httpUtil_event_info ( libEvent & event )
 {
-    ilog ("%s request to %s.%d Status:%d \n", 
-            event.log_prefix.c_str(), 
-            event.ip.c_str(), 
+    ilog ("%s request to %s.%d Status:%d \n",
+            event.log_prefix.c_str(),
+            event.ip.c_str(),
             event.port,
             event.status);
     if ( event.request == KEYSTONE_GET_TOKEN )
@@ -1001,7 +1017,7 @@ void httpUtil_log_event ( libEvent * event_ptr )
 {
     string event_sig = daemon_get_cfg_ptr()->debug_event ;
     msgSock_type * mtclogd_ptr = get_mtclogd_sockPtr ();
-    
+
     send_log_message ( get_mtclogd_sockPtr(), event_ptr->hostname.data(), &rest_api_filename[0], &event_ptr->req_str[0] );
 
     if ( event_ptr->request == KEYSTONE_GET_TOKEN )
@@ -1031,16 +1047,16 @@ void httpUtil_log_event ( libEvent * event_ptr )
 
     if (!event_ptr->payload.empty())
     {
-        if ((!string_contains(event_ptr->payload,"token")) && 
+        if ((!string_contains(event_ptr->payload,"token")) &&
             (!string_contains(event_ptr->payload,"assword")))
         {
-            snprintf (&rest_api_log_str[0], MAX_API_LOG_LEN-1, 
+            snprintf (&rest_api_log_str[0], MAX_API_LOG_LEN-1,
                        "%s [%5d] %s seq:%d -> Payload : %s",
                        pt(), getpid(), event_ptr->log_prefix.c_str(), event_ptr->sequence, event_ptr->payload.c_str() );
         }
         else
         {
-            snprintf (&rest_api_log_str[0], MAX_API_LOG_LEN-1, 
+            snprintf (&rest_api_log_str[0], MAX_API_LOG_LEN-1,
                        "%s [%5d] %s seq:%d -> Payload : ... contains private content ...",
                        pt(), getpid(), event_ptr->log_prefix.c_str(), event_ptr->sequence );
         }
@@ -1049,10 +1065,10 @@ void httpUtil_log_event ( libEvent * event_ptr )
 
     if ( !event_ptr->response.empty() )
     {
-        if ((!string_contains(event_ptr->response,"token")) && 
+        if ((!string_contains(event_ptr->response,"token")) &&
             (!string_contains(event_ptr->response,"assword")))
         {
-            snprintf (&rest_api_log_str[0], MAX_API_LOG_LEN-1, 
+            snprintf (&rest_api_log_str[0], MAX_API_LOG_LEN-1,
                        "%s [%5d] %s seq:%d -> Response: %s",
                        pt(), getpid(), event_ptr->log_prefix.c_str(), event_ptr->sequence, event_ptr->response.c_str() );
         }
@@ -1064,18 +1080,18 @@ void httpUtil_log_event ( libEvent * event_ptr )
         }
         send_log_message ( mtclogd_ptr, event_ptr->hostname.data(), rest_api_filename, &rest_api_log_str[0] );
     }
-    
-    snprintf (&rest_api_log_str[0], MAX_API_LOG_LEN-1, 
+
+    snprintf (&rest_api_log_str[0], MAX_API_LOG_LEN-1,
           "%s [%5d] %s %s '%s' seq:%d -> Status  : %d {execution time %ld.%06ld secs}\n",
           pt(), getpid(),
           event_ptr->hostname.c_str(),
-          event_ptr->service.c_str(), 
+          event_ptr->service.c_str(),
           event_ptr->operation.c_str(),
           event_ptr->sequence,
           event_ptr->http_status,
-          event_ptr->diff_time.secs, 
+          event_ptr->diff_time.secs,
           event_ptr->diff_time.msecs );
-    
+
     if (( event_ptr->diff_time.secs > 2 ) || (event_ptr->http_status != HTTP_OK ) )
     {
         int len = strlen (rest_api_log_str) ;

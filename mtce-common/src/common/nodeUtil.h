@@ -41,10 +41,10 @@ typedef struct
 } msgSock_type ;
 
 int send_log_message ( msgSock_type * sock_ptr,
-                       const char   * hostname, 
+                       const char   * hostname,
                        const char   * filename,
                        const char   * log_str );
-    
+
 msgSock_type * get_mtclogd_sockPtr ( void ) ;
 
 void mem_log_list_init ( void );
@@ -70,14 +70,13 @@ const char * get_iface_name_str ( int iface );
 unsigned int  get_host_function_mask ( string & nodeType_str );
 bool          is_combo_system (unsigned int nodetype_mask );
 
-int set_host_functions ( string         nodetype_str, 
-                         unsigned int * nodetype_bits_ptr, 
-                         unsigned int * nodetype_function_ptr, 
+int set_host_functions ( string         nodetype_str,
+                         unsigned int * nodetype_bits_ptr,
+                         unsigned int * nodetype_function_ptr,
                          unsigned int * nodetype_subfunction_ptr );
 
 bool is_goenabled ( int nodeType, bool pass );
 
-string get_bm_password ( const char * username );
 string get_strings_in_string_list ( std::list<string> & l );
 bool is_string_in_string_list ( std::list<string> & l , string & str );
 bool is_int_in_int_list ( std::list<int> & l , int & val );

@@ -680,6 +680,7 @@ int mtcHttpUtil_api_request ( libEvent & event )
             event.type = EVHTTP_REQ_PATCH  ;
         }
     }
+
     else
     {
         slog ("%s Unsupported Request (%d)\n", event.hostname.c_str(), event.request);
@@ -826,6 +827,7 @@ int mtcHttpUtil_api_request ( libEvent & event )
     }
     else
     {
+        jlog ("%s API Address : %s\n", event.hostname.c_str(), event.token.url.c_str());
         event.status = evhttp_make_request ( event.conn, event.req, event.type, event.token.url.data());
     }
     if ( event.status == PASS )

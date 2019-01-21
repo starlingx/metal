@@ -169,6 +169,7 @@ function install_mtce_common {
         "common/regexUtil.h" \
         "common/threadUtil.h" \
         "common/tokenUtil.h" \
+        "common/secretUtil.h" \
         )
     sudo install -m 755 -d ${inc_dir_common}
     sudo install -m 644 -t ${inc_dir_common} ${commonhdr_file[*]}
@@ -957,6 +958,7 @@ function cleanup_metal {
         "regexUtil.h" \
         "threadUtil.h" \
         "tokenUtil.h" \
+        "secretUtil.h" \
         "daemon_ini.h" \
         "daemon_common.h" \
         "daemon_option.h" \

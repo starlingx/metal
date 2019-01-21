@@ -114,7 +114,7 @@ void daemon_exit ( void );
 #define NFVI_PLUGIN_CFG_FILE    ((const char *)"/etc/nfv/nfv_plugins/nfvi_plugins/config.ini")
 #define SYSINV_CFG_FILE         ((const char *)"/etc/sysinv/sysinv.conf")
 #define HWMON_CONF_FILE         ((const char *)"/etc/mtc/hwmond.conf")
-
+#define SECRET_CFG_FILE         ((const char *)"/etc/barbican/barbican.conf")
 
 #define GOENABLED_DIR           ((const char *)"/etc/goenabled.d")    /* generic */
 #define GOENABLED_WORKER_DIR    ((const char *)"/etc/goenabled.d/worker")

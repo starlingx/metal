@@ -56,6 +56,11 @@ string hostUtil_getServiceIp   ( mtc_service_enum service )
             ip = "localhost" ;
             break ;
         }
+        case SERVICE_SECRET:
+        {
+            ip = cfg_ptr->barbican_api_host;
+            break ;
+        }
         default:
         {
             slog ("Unsupported service (%d)\n", service );
@@ -96,6 +101,9 @@ int hostUtil_getServicePort ( mtc_service_enum service )
 
         case SERVICE_TOKEN:
             return(cfg_ptr->keystone_port);
+
+        case SERVICE_SECRET:
+            return(cfg_ptr->barbican_api_port);
 
         default:
         {

@@ -151,6 +151,12 @@ int daemon_configure ( void )
         return (FAIL_LOAD_INI);
     }
 
+    if (ini_parse(SECRET_CFG_FILE, barbican_config_handler, &hwmon_config) < 0)
+    {
+        elog ("Can't load '%s'\n", SECRET_CFG_FILE );
+        return (FAIL_LOAD_INI);
+    }
+
     /* tell the host service that there has been a config reload */
     obj_ptr->config_reload = true ;
 
