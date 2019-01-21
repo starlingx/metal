@@ -78,7 +78,6 @@ import xml.etree.ElementTree as ET
 import xml.etree.ElementTree as et
 
 LOG = log.getLogger(__name__)
-KEYRING_BM_SERVICE = "BM"
 ERR_CODE_LOCK_SOLE_SERVICE_PROVIDER = "-1003"
 
 
@@ -1819,15 +1818,10 @@ class HostController(rest.RestController):
         LOG.info("notify systemconfig of host-delete which will"
                  "also do stors, lvgs, pvs, ceph crush remove")
 
-        # tell conductor to delete the keystore entry associated
+        # tell conductor to delete the barbican secret associated
         # with this host (if present)
-        try:
-            pecan.request.rpcapi.unconfigure_keystore_account(
-                pecan.request.context,
-                KEYRING_BM_SERVICE,
-                ihost.uuid)
-        except exception.NotFound:
-            pass
+        pecan.request.rpcapi.delete_barbican_secret(pecan.request.context,
+                                                    ihost.uuid)
 
         # Notify patching to drop the host
         if ihost.hostname is not None:
@@ -2295,7 +2289,7 @@ class HostController(rest.RestController):
                     _("Host-add Rejected: bm_ip %s already exists") %
                     phost['bm_ip'])
 
-        # Update keyring with updated board management credentials, if supplied
+        # Update barbican with updated board management credentials if supplied
         if (ohost['bm_username'] and phost['bm_username'] and
                 (ohost['bm_username'] != phost['bm_username'])):
             if not password_exists:
@@ -2306,13 +2300,11 @@ class HostController(rest.RestController):
                          ohost['bm_username'],
                          phost['bm_username'])))
 
-        if password_exists:
-            # The conductor will handle creating the keystore acct
-            pecan.request.rpcapi.configure_keystore_account(
-                pecan.request.context,
-                KEYRING_BM_SERVICE,
-                phost['uuid'],
-                patch_bm_password)
+        if password_exists and patch_bm_password:
+            pecan.request.rpcapi.create_barbican_secret(pecan.request.context,
+                                                        phost['uuid'],
+                                                        patch_bm_password)
+
         LOG.info("%s bm semantic checks for user_agent %s passed" %
                  (phost['hostname'], pecan.request.user_agent))
 

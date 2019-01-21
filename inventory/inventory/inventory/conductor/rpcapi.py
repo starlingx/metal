@@ -516,40 +516,29 @@ class ConductorAPI(object):
         cctxt = self.client.prepare(topic=topic or self.topic, version='1.0')
         return cctxt.call(context, 'update_cpu_config')
 
-    def configure_keystore_account(self, context, service_name,
-                                   username, password, topic=None):
-        """Synchronously, have a conductor configure a ks(keyring) account.
-
-        Does the following tasks:
-        - call keyring API to create an account under a service.
+    def create_barbican_secret(self, context, name, payload, topic=None):
+        """Calls Barbican API to create a secret
 
         :param context: request context.
-        :param service_name: the keystore service.
-        :param username: account username
-        :param password: account password
+        :param name: secret name
+        :param payload: secret payload
         """
         cctxt = self.client.prepare(topic=topic or self.topic, version='1.0')
         return cctxt.call(context,
-                          'configure_keystore_account',
-                          service_name=service_name,
-                          username=username, password=password)
+                          'create_barbican_secret',
+                          name=name,
+                          payload=payload)
 
-    def unconfigure_keystore_account(self, context,
-                                     service_name, username, topic=None):
-        """Synchronously, have a conductor unconfigure a ks(keyring) account.
-
-        Does the following tasks:
-        - call keyring API to delete an account under a service.
+    def delete_barbican_secret(self, context, name, topic=None):
+        """Calls Barbican API to delete a secret
 
         :param context: request context.
-        :param service_name: the keystore service.
-        :param username: account username
+        :param name: secret name
         """
         cctxt = self.client.prepare(topic=topic or self.topic, version='1.0')
         return cctxt.call(context,
-                          'unconfigure_keystore_account',
-                          service_name=service_name,
-                          username=username)
+                          'delete_barbican_secret',
+                          name=name)
 
     def reload_snmp_config(self, context, topic=None):
         """Synchronously, have a conductor reload the SNMP configuration.

@@ -11,6 +11,7 @@
 
 """ Inventory Openstack Utilities and helper functions."""
 
+from barbicanclient.v1 import client as barbican_client_v1
 from cinderclient.v2 import client as cinder_client_v2
 from inventory.common import constants
 from inventory.common import exception
@@ -70,6 +71,9 @@ keystone_opts = [
     cfg.StrOpt('nova_region_name',
                default='RegionOne',
                help=_("Nova Region Name")),
+    cfg.StrOpt('barbican_region_name',
+               default='RegionOne',
+               help=_("Barbican Region Name")),
     cfg.StrOpt('username',
                default='inventory',
                help=_("Inventory keystone user name")),
@@ -96,6 +100,7 @@ class OpenStackOperator(object):
 
     def __init__(self, dbapi):
         self.dbapi = dbapi
+        self.barbican_client = None
         self.cinder_client = None
         self.keystone_client = None
         self.keystone_session = None
@@ -794,6 +799,58 @@ class OpenStackOperator(object):
                           "Cinder client: %s" % e)
 
         return volume_types_list
+
+    #################
+    # Barbican
+    #################
+    def _get_barbicanclient(self):
+        if not self.barbican_client:
+            self.barbican_client = barbican_client_v1.Client(
+                session=self._get_keystone_session(),
+                auth_url=self.auth_url,
+                endpoint_type='internalURL',
+                region_name=cfg.CONF.KEYSTONE_AUTHTOKEN.barbican_region_name)
+        return self.barbican_client
+
+    def get_barbican_secret_by_name(self, context, name):
+        try:
+            client = self._get_barbicanclient()
+            secret_list = client.secrets.list(name=name)
+            secret = next(iter(secret_list), None)
+            return secret
+        except Exception:
+            LOG.error("Unable to find Barbican secret %s", name)
+            return None
+
+    def create_barbican_secret(self, context, name, payload):
+        if not payload:
+            LOG.error("Empty password is passed to Barbican %s" % name)
+            return None
+        try:
+            client = self._get_barbicanclient()
+            secret = self.get_barbican_secret_by_name(context, name)
+            if secret:
+                client.secrets.delete(secret.secret_ref)
+            secret = client.secrets.create(name, payload)
+            secret.store()
+            return secret.secret_ref
+        except Exception:
+            LOG.error("Unable to create Barbican secret %s" % name)
+            return None
+
+    def delete_barbican_secret(self, context, name):
+        try:
+            client = self._get_barbicanclient()
+            secret = self.get_barbican_secret_by_name(context=context,
+                                                      name=name)
+            if not secret:
+                LOG.error("Unable to delete unknown Barbican secret %s" % name)
+                return False
+            client.secrets.delete(secret_ref=secret.secret_ref)
+            return True
+        except Exception:
+            LOG.error("Unable to delete Barbican secret %s" % name)
+            return False
 
     #########################
     # Primary Region Inventory
