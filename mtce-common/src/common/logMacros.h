@@ -55,6 +55,7 @@ typedef struct
     int   mtc_agent_port        ; /**< mtcAgent receive port (from Client)    */
     int   mtc_client_port       ; /**< mtcClient receive port (from Agent)    */
 
+    char* uri_path              ; /**< /mtce/lmon ... for link monitor        */
     int   keystone_port         ; /**< Keystone REST API port number          */
     char* keystone_prefix_path  ; /**< Keystone REST API prefix path          */
     char* keystone_auth_host    ; /**< =auth_host=192.168.204.2               */
@@ -67,7 +68,6 @@ typedef struct
     char* keystone_user_domain;   /**< = Default                              */
     char* keystone_project_domain; /**< = Default                             */
     char* keyring_directory     ; /**< =/opt/platform/.keyring/<release>      */
-
     char* sysinv_mtc_inv_label  ; /**< =/v1/hosts/                            */
     int   sysinv_api_port       ; /**< =6385                                  */
     char* sysinv_api_bind_ip    ; /**< =<local floating IP>                   */
@@ -114,8 +114,9 @@ typedef struct
     int   event_port            ; /**< daemon specific event tx port          */
     int   cmd_port              ; /**< daemon specific command rx port        */
     int   sensor_port           ; /**< sensor read value port                 */
-    int   sm_server_port            ; /**< port mtce uses to receive data from SM */
-    int   sm_client_port            ; /**< port mtce uses to send SM data         */
+    int   sm_server_port        ; /**< port mtce uses to receive data from SM */
+    int   sm_client_port        ; /**< port mtce uses to send SM data         */
+    int   lmon_query_port       ;
     int   start_delay           ; /**< startup delay, added for pmon          */
     int   api_retries           ; /**< api retries before failure             */
     int   hostwd_failure_threshold ; /**< allowed # of missed pmon/hostwd messages */

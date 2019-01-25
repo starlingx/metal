@@ -34,6 +34,7 @@ void daemon_config_default ( daemon_config_type* config_ptr )
     config_ptr->mon_process_5         = strdup("none");
     config_ptr->mon_process_6         = strdup("none");
     config_ptr->mon_process_7         = strdup("none");
+    config_ptr->uri_path              = strdup("");
     config_ptr->keystone_prefix_path  = strdup("");
     config_ptr->keystone_identity_uri = strdup("");
     config_ptr->keystone_auth_uri     = strdup("");
@@ -295,6 +296,7 @@ void daemon_dump_cfg ( void )
 
     /* mtcAgent & hwmond */
     if ( ptr->sysinv_api_port       ) { ilog ("sysinv_api_port       = %d\n", ptr->sysinv_api_port       );}
+    if ( ptr->uri_path  )             { ilog ("uri_path              = %s\n", ptr->uri_path              );}
     if ( ptr->keystone_prefix_path  ) { ilog ("keystone_prefix_path  = %s\n", ptr->keystone_prefix_path  );}
     if ( ptr->keystone_auth_host    ) { ilog ("keystone_auth_host    = %s\n", ptr->keystone_auth_host    );}
     if ( ptr->keystone_identity_uri ) { ilog ("keystone_identity_uri = %s\n", ptr->keystone_identity_uri );}

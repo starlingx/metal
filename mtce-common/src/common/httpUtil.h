@@ -12,6 +12,7 @@
 #include <evhttp.h>         /* for ... http libevent client */
 #include <time.h>
 #include <list>
+#include <fcntl.h>          /* for ... F_GETFL              */
 
 using namespace std;
 
@@ -22,6 +23,7 @@ using namespace std;
 #define MTC_HTTP_BAD_REQUEST          400
 #define MTC_HTTP_UNAUTHORIZED         401
 #define MTC_HTTP_FORBIDDEN            403
+#define MTC_HTTP_METHOD_NOT_ALLOWED   405
 #define MTC_HTTP_CONFLICT             409
 #define MTC_HTTP_LENGTH_REQUIRED      411
 #define MTC_HTTP_NORESPONSE           444
@@ -194,6 +196,10 @@ struct libEvent
     struct evbuffer          *buf ; /**< HTTP output buffer ptr      */
     struct evbuffer_ptr       evp ; /**< HTTP output buffer ptr      */
 
+    int                        fd ;
+    struct sockaddr_in       addr ;
+    struct evhttp          *httpd ;
+
     string log_prefix             ; /**< log prefix for this event   */
 
     /** Service Specific Request Info */
@@ -339,5 +345,14 @@ void httpUtil_event_info ( libEvent & event );
 
 const char * getHttpCmdType_str ( evhttp_cmd_type type );
 
+/* HTTP Server setup utilities */
+int httpUtil_bind  ( libEvent & event );
+
+int httpUtil_setup ( libEvent & event,
+                     int        supported_methods,
+                     void(*hdlr)(struct evhttp_request *, void *));
+/* Cleanup */
+void httpUtil_fini ( libEvent & event );
+void httpUtil_look ( libEvent & event );
 
 #endif /* __INCLUDE_HTTPUTIL_H__ */

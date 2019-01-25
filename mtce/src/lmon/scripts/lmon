@@ -1,0 +1,83 @@
+#! /bin/sh
+#
+# Copyright (c) 2019 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+#
+# chkconfig: 2345 95 95
+#
+### BEGIN INIT INFO
+# Provides:          lmon
+# Default-Start:     3 5
+# Default-Stop:      0 1 2 6
+# Short-Description: Link Monitor daemon
+### END INIT INFO
+
+. /etc/init.d/functions
+
+DAEMON_NAME="lmond"
+DAEMON="/usr/local/bin/${DAEMON_NAME}"
+IFACE=""
+
+if [ ! -e "$DAEMON" ] ; then
+    logger "$DAEMON is missing"
+    exit 1
+fi
+
+RETVAL=0
+
+PATH=/sbin:/usr/sbin:/bin:/usr/bin:/usr/local/bin
+export PATH
+
+case "$1" in
+    start)
+        echo -n "Starting $DAEMON_NAME: "
+        # Prevent multiple starts
+        if [ -n "`pidof ${DAEMON_NAME}`" ] ; then
+            echo "OK"
+            exit $RETVAL
+        fi
+        start-stop-daemon --start -b -x ${DAEMON} --
+        RETVAL=$?
+        if [ $RETVAL -eq 0 ] ; then
+            echo "OK"
+        else
+            echo "FAIL"
+        fi
+        ;;
+
+    stop)
+        echo -n "Stopping ${DAEMON_NAME}: "
+        if [ -n "`pidof ${DAEMON_NAME}`" ] ; then
+            killproc ${DAEMON_NAME}
+        fi
+        echo "OK"
+        ;;
+
+    restart)
+        $0 stop
+        $0 start
+        ;;
+
+    status)
+        pid=`pidof ${DAEMON_NAME}`
+        RETVAL=$?
+        if [ ${RETVAL} -eq 0 ] ; then
+            echo "${DAEMON_NAME} is running"
+        else
+            echo "${DAEMON_NAME} is NOT running"
+        fi
+        ;;
+
+    condrestart)
+        [ -f /var/lock/subsys/${DAEMON_NAME} ] && $0 restart
+        ;;
+
+    *)
+        echo "usage: $0 { start | stop | status | restart | condrestart | status }"
+        ;;
+esac
+
+exit $RETVAL

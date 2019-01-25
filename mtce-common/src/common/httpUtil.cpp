@@ -27,6 +27,33 @@ static char rest_api_filename[MAX_FILENAME_LEN];
 static char rest_api_log_str [MAX_API_LOG_LEN];
 static libEvent nullEvent ;
 
+#define HTTP_GET_STR "GET"
+#define HTTP_PUT_STR "PUT"
+#define HTTP_PATCH_STR "PATCH"
+#define HTTP_POST_STR "POST"
+#define HTTP_DELETE_STR "DELETE"
+#define HTTP_UNKNOWN_STR "UNKNOWN"
+
+/* convert http event type to its string name */
+const char * getHttpCmdType_str ( evhttp_cmd_type type )
+{
+    switch (type)
+    {
+        case EVHTTP_REQ_GET:    return(HTTP_GET_STR);
+        case EVHTTP_REQ_PUT:    return(HTTP_PUT_STR);
+        case EVHTTP_REQ_PATCH:  return(HTTP_PATCH_STR);
+        case EVHTTP_REQ_POST:   return(HTTP_POST_STR);
+        case EVHTTP_REQ_DELETE: return(HTTP_DELETE_STR);
+        case EVHTTP_REQ_HEAD:
+        case EVHTTP_REQ_OPTIONS:
+        case EVHTTP_REQ_TRACE:
+        case EVHTTP_REQ_CONNECT:
+        default:
+            break ;
+    }
+    return(HTTP_UNKNOWN_STR);
+}
+
 /* ***********************************************************************
  *
  * Name       : httpUtil_event_init
@@ -1057,3 +1084,132 @@ void httpUtil_log_event ( libEvent * event_ptr )
 
     send_log_message ( mtclogd_ptr, event_ptr->hostname.data(), &rest_api_filename[0], &rest_api_log_str[0] );
 }
+
+/*****************************************************************
+ *
+ * Name        : httpUtil_bind
+ *
+ * Description : Setup the HTTP server socket
+ *
+ *****************************************************************/
+int httpUtil_bind ( libEvent & event )
+{
+   int one = 1;
+
+   event.fd = socket(AF_INET, SOCK_STREAM, 0);
+   if (event.fd < 0)
+   {
+       elog ("failed to create http server socket (%d:%m)\n", errno );
+       return FAIL_SOCKET_CREATE ;
+   }
+
+   /* make socket reusable */
+   if ( 0 > setsockopt(event.fd, SOL_SOCKET, SO_REUSEADDR, (char *)&one, sizeof(int)))
+   {
+       elog ("failed to set http server socket to reusable (%d:%m)\n", errno );
+       return FAIL_SOCKET_OPTION ;
+   }
+
+   memset(&event.addr, 0, sizeof(struct sockaddr_in));
+   event.addr.sin_family = AF_INET;
+
+   /* ERIK: INADDR_ANY; TODO: Refine this if we can */
+   event.addr.sin_addr.s_addr = inet_addr(LOOPBACK_IP);
+   // event.addr.sin_addr.s_addr = INADDR_ANY;
+   event.addr.sin_port = htons(event.port);
+
+   /* bind port */
+   if ( 0 > bind ( event.fd, (struct sockaddr*)&event.addr, sizeof(struct sockaddr_in)))
+   {
+       elog ("failed to bind to http server port %d (%d:%m)\n", event.port, errno );
+       return FAIL_SOCKET_BIND ;
+   }
+
+   /* Listen for events */
+   if ( 0 > listen(event.fd, 10 ))
+   {
+       elog ("failed to listen to http server socket (%d:%m)\n", errno );
+       return FAIL_SOCKET_LISTEN;
+   }
+
+   /* make non-blocking */
+   int flags = fcntl ( event.fd, F_GETFL, 0) ;
+   if ( flags < 0 || fcntl(event.fd, F_SETFL, flags | O_NONBLOCK) < 0)
+   {
+       elog ("failed to set http server socket to non-blocking (%d:%m)\n", errno );
+       return FAIL_SOCKET_OPTION;
+   }
+
+   return PASS;
+}
+
+/* Setup the http server */
+int httpUtil_setup ( libEvent & event,
+                     int          supported_methods,
+                     void(*hdlr)(struct evhttp_request *, void *) )
+{
+   int rc = PASS ;
+   if ( ( rc = httpUtil_bind ( event )) != PASS )
+   {
+       return rc ;
+   }
+   else if (event.fd < 0)
+   {
+       wlog ("failed to get http server socket file descriptor\n");
+       return RETRY ;
+   }
+
+   event.base = event_base_new();
+   if (event.base == NULL)
+   {
+       elog ("failed to get http server event base\n");
+       return -1;
+   }
+   event.httpd = evhttp_new(event.base);
+   if (event.httpd == NULL)
+   {
+       elog ("failed to get httpd server handle\n");
+       return -1;
+   }
+
+   /* api is a void return */
+   evhttp_set_allowed_methods (event.httpd, supported_methods );
+
+   rc = evhttp_accept_socket(event.httpd, event.fd);
+   if ( rc == -1)
+   {
+       elog ("failed to accept on http server socket\n");
+       return -1;
+   }
+
+   /* api is a void return */
+   evhttp_set_gencb(event.httpd, hdlr, NULL);
+
+   ilog ("Listening On: 'http server' socket %s:%d\n",
+          inet_ntoa(event.addr.sin_addr), event.port );
+   return PASS ;
+}
+
+void httpUtil_fini ( libEvent & event )
+{
+    if ( event.fd )
+    {
+        if ( event.base )
+        {
+            event_base_free( event.base);
+        }
+        close ( event.fd );
+        event.fd = 0 ;
+    }
+}
+
+void httpUtil_look ( libEvent & event )
+{
+    /* Look for Events */
+    if ( event.base )
+    {
+        // rc = event_base_loopexit( mtce_event.base, NULL ) ; // EVLOOP_NONBLOCK );
+        event_base_loop(event.base, EVLOOP_NONBLOCK );
+    }
+}
+
