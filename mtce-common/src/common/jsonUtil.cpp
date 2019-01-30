@@ -847,7 +847,7 @@ int jsonApi_auth_load    ( string & hostname,
             {
                 tuple_obj = _json_object_array_get_idx (svccat_obj, i);
                 entity = _json_get_key_value_string ( tuple_obj, MTC_JSON_AUTH_TYPE );
-                if ( entity == MTC_JSON_AUTH_COMP )
+                if ( entity == MTC_JSON_AUTH_PLATFORM)
                 {
                     found_type = true ;
                     break ;

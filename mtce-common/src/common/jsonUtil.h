@@ -40,7 +40,7 @@ typedef struct
 #define MTC_JSON_AUTH_ISSUE     "issued_at"
 #define MTC_JSON_AUTH_EXPIRE    "expires_at"
 #define MTC_JSON_AUTH_ID        "X-Subject-Token"
-#define MTC_JSON_AUTH_COMP      "compute"
+#define MTC_JSON_AUTH_PLATFORM  "platform"
 #define MTC_JSON_AUTH_INTERFACE "interface" /** looking for admin */
 #define MTC_JSON_AUTH_ADMIN     "admin"
 
