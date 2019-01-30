@@ -339,103 +339,91 @@ string daemon_mgmnt_iface ( void )
  *
  * Name       : daemon_system_type
  *
- * Description: Read the platform.conf file looking for system type system_mode label.
- *              If found then load and return that content.
- *              if not found then return an empty string.
+ * Purpose    : Learn the system type
  *
- * Assumptions: Caller is expected to interpret the data.
- *
- * At time of writing the valid CPE Modes were
- *
- *  - simplex - All In One Controller/Compute               (one unit )
- *  - duplex  - Fully redundant Combined Controller/Compute (two units)
+ * Description: Read the platform.conf file looking for system type.
+ *              If type is not Standard then refine the system type to
+ *              one of the AIO variations.
  *
  *****************************************************************************/
 
 #define SYSTEM_TYPE_PREFIX ((const char *)("System Type :"))
 system_type_enum daemon_system_type ( void )
 {
-    bool system_type_found = false ;
-    bool system_mode_found = false ;
-    bool cpe_system        = false ;
-
-    system_type_enum system_type = SYSTEM_TYPE__NORMAL ;
-
+    char buffer  [BUFFER];
+    system_type_enum system_type = SYSTEM_TYPE__CPE_MODE__SIMPLEX ;
     FILE * cfg_file_stream = fopen ( PLATFORM_CONF_FILE, "r" );
     if ( cfg_file_stream != NULL )
     {
-        char   buffer  [BUFFER];
-        int    line  = 0       ;
         MEMSET_ZERO(buffer);
         while ( fgets (buffer, BUFFER, cfg_file_stream) != NULL )
         {
-            char   mode_str[BUFFER];
-            MEMSET_ZERO(mode_str);
             if ( strstr ( buffer, "system_type") != NULL )
             {
-                int rc = sscanf ( &buffer[0], "system_type=%1023s",  &mode_str[0] );
-                if ( rc == 1 )
+                char   type_str[BUFFER];
+                MEMSET_ZERO(type_str);
+                if ( sscanf ( &buffer[0], "system_type=%1023s",  &type_str[0] ) == 1 )
                 {
-                    string mode = mode_str ;
-
-                    if ( !mode.empty() )
+                    string type_string = type_str ;
+                    if ( !type_string.empty() && ( type_string == "Standard"))
                     {
-                        if (( mode == "CPE" ) || ( mode == "All-in-one"))
-                        {
-                            cpe_system = true ;
-                        }
-                        system_type_found = true ;
+                        system_type = SYSTEM_TYPE__NORMAL ;
                     }
+                    break ;
                 }
             }
-            else if ( strstr ( buffer, "system_mode") != NULL )
-            {
-                int rc = sscanf ( &buffer[0], "system_mode=%1023s",  &mode_str[0] );
-                if ( rc == 1 )
-                {
-                    string mode = mode_str ;
+            MEMSET_ZERO(buffer);
+        }
+    }
 
-                    if ( !mode.empty() )
+    if ( cfg_file_stream )
+    {
+        /* Close the file */
+        fclose(cfg_file_stream);
+        cfg_file_stream = NULL ;
+    }
+
+    /* If system_type is updated to NORMAL then we are done.
+     * Otherwise lets see what kind of AIO system mode we are running in. */
+    if ( system_type != SYSTEM_TYPE__NORMAL )
+    {
+        cfg_file_stream = fopen ( PLATFORM_CONF_FILE, "r" );
+        if ( cfg_file_stream != NULL )
+        {
+            MEMSET_ZERO(buffer);
+            while ( fgets (buffer, BUFFER, cfg_file_stream) != NULL )
+            {
+                if ( strstr ( buffer, "system_mode") != NULL )
+                {
+                    char mode_str[BUFFER];
+                    MEMSET_ZERO(mode_str);
+                    if ( sscanf ( &buffer[0], "system_mode=%1023s",  &mode_str[0] ) == 1 )
                     {
-                        if ( mode.compare("duplex") == 0 )
+                        string mode = mode_str ;
+                        if ( !mode.empty() )
                         {
-                            system_mode_found = true ;
-                            system_type = SYSTEM_TYPE__CPE_MODE__DUPLEX ;
-                        }
-                        else if ( mode.compare("duplex-direct") == 0 )
-                        {
-                            system_mode_found = true ;
-                            system_type = SYSTEM_TYPE__CPE_MODE__DUPLEX_DIRECT ;
-                        }
-                        else if ( mode.compare("simplex") == 0 )
-                        {
-                            system_mode_found = true ;
-                            system_type = SYSTEM_TYPE__CPE_MODE__SIMPLEX ;
+                            if ( mode.compare("duplex") == 0 )
+                                system_type = SYSTEM_TYPE__CPE_MODE__DUPLEX ;
+                            else if ( mode.compare("duplex-direct") == 0 )
+                                system_type = SYSTEM_TYPE__CPE_MODE__DUPLEX_DIRECT ;
+                            else if ( mode.compare("simplex") == 0 )
+                                system_type = SYSTEM_TYPE__CPE_MODE__SIMPLEX ;
+                            else
+                            {
+                                elog ("%s All-In-One system type ; mode unknown\n", SYSTEM_TYPE_PREFIX );
+                                wlog ("... %s\n", buffer );
+                            }
                         }
                         else
                         {
-                            elog ("%s CPE Undetermined\n", SYSTEM_TYPE_PREFIX );
+                            elog ("%s All-In-One system type ; mode empty\n", SYSTEM_TYPE_PREFIX );
                             wlog ("... %s\n", buffer );
                         }
                     }
-                    else
-                    {
-                        elog ("%s CPE Undetermined\n", SYSTEM_TYPE_PREFIX );
-                        wlog ("... %s\n", buffer );
-                    }
+                    break ;
                 }
-                else
-                {
-                    elog ("%s CPE Undetermined\n", SYSTEM_TYPE_PREFIX );
-                    wlog ("... %s\n", buffer );
-                }
-                break ;
+                MEMSET_ZERO(buffer);
             }
-            if (( system_type_found == true ) && ( system_mode_found == true ))
-                break ;
-
-            line++ ;
-            MEMSET_ZERO(buffer);
         }
     }
 
@@ -445,39 +433,28 @@ system_type_enum daemon_system_type ( void )
         fclose(cfg_file_stream);
     }
 
-    if (( system_type_found == true ) && ( system_mode_found == true ))
-    {
-        if ( !cpe_system )
-        {
-            system_type = SYSTEM_TYPE__NORMAL ;
-        }
-    }
-    else
-    {
-        system_type = SYSTEM_TYPE__NORMAL ;
-    }
-
     switch ( system_type )
     {
+        case SYSTEM_TYPE__NORMAL:
+        {
+            ilog("%s Standard System\n", SYSTEM_TYPE_PREFIX);
+            break ;
+        }
         case SYSTEM_TYPE__CPE_MODE__DUPLEX_DIRECT:
         {
-            ilog ("%s Duplex Direct Connect CPE\n", SYSTEM_TYPE_PREFIX );
+            ilog ("%s All-in-one Duplex Direct Connect\n", SYSTEM_TYPE_PREFIX );
             break ;
         }
         case SYSTEM_TYPE__CPE_MODE__DUPLEX:
         {
-            ilog ("%s Duplex CPE\n", SYSTEM_TYPE_PREFIX );
+            ilog ("%s All-in-one Duplex\n", SYSTEM_TYPE_PREFIX );
             break ;
         }
         case SYSTEM_TYPE__CPE_MODE__SIMPLEX:
-        {
-            ilog ("%s Simplex CPE\n", SYSTEM_TYPE_PREFIX );
-            break ;
-        }
-        case SYSTEM_TYPE__NORMAL:
         default:
         {
-            ilog("%s Large System\n", SYSTEM_TYPE_PREFIX);
+            ilog ("%s All-in-one Simplex \n", SYSTEM_TYPE_PREFIX );
+            system_type = SYSTEM_TYPE__CPE_MODE__SIMPLEX ;
             break ;
         }
     }
