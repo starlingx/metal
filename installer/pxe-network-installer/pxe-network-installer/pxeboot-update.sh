@@ -30,11 +30,13 @@ Arguments:
     -s <mode>           : Specify Security Profile mode (optional)
     -T <tboot value>    : Specify whether or not to use tboot (optional)
     -k <kernel args>    : Specify any extra kernel boot arguments (optional)
+    -l <base url>       : Specify installer base URL
 
 EOF
 }
 
 declare text_install="inst.text"
+declare base_url="http://pxecontroller:8080"
 
 function generate_config {
     input=$1
@@ -55,7 +57,7 @@ function generate_config {
         exit 1
     fi
 
-    sed -e "s#xxxAPPEND_OPTIONSxxx#$APPEND_OPTIONS#" $input > $output
+    sed -e "s#xxxAPPEND_OPTIONSxxx#$APPEND_OPTIONS#;s#xxxBASE_URLxxx#$BASE_URL#g" $input > $output
 
     if [ $? -ne 0 -o ! -f $output ]; then
         logger --stderr -t $0 "Error: Failed to generate pxeboot file $output"
@@ -66,7 +68,7 @@ function generate_config {
 parms=$@
 logger -t $0 " $parms"
 
-while getopts "i:o:tgc:b:r:u:s:T:k:h" opt
+while getopts "i:o:tgc:b:r:u:s:T:k:l:h" opt
 do
     case $opt in
         i)
@@ -106,6 +108,9 @@ do
             ;;
         k)
             kernal_extra_args=$OPTARG
+            ;;
+        l)
+            base_url=$OPTARG
             ;;
         h)
             usage
@@ -157,6 +162,8 @@ fi
 if [ -n "$kernal_extra_args" ]; then
     APPEND_OPTIONS="$APPEND_OPTIONS $kernal_extra_args"
 fi
+
+BASE_URL=$base_url
 
 generate_config $input_file $output_file
 

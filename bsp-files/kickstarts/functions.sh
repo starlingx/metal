@@ -68,5 +68,10 @@ EOF
     exit 1
 }
 
+function get_http_port()
+{
+    echo \$(cat /proc/cmdline |xargs -n1 echo |grep '^inst.repo=' | sed -r 's#^[^/]*://[^/]*:([0-9]*)/.*#\1#')
+}
+
 END_FUNCTIONS
 
