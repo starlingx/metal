@@ -99,9 +99,9 @@ int  get_link_state    ( int   ioctl_socket , const char * iface_ptr, bool * run
 int  open_ioctl_socket ( void );
 
 string get_event_str ( int event_code );
-const char * getHttpCmdType_str ( evhttp_cmd_type type );
 
 string itos ( int val );
+string lltos (long long unsigned int val );
 string ftos ( float val, int resolution );
 unsigned short checksum(void *b, int len);
 

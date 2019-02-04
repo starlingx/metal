@@ -663,7 +663,7 @@ int rmon_hdlr_init ( rmon_ctrl_type * ctrl_ptr )
 
     _thinmeta_config_load();
     _config_files_load ();
-    _inter_config_load ();
+    // _inter_config_load ();
 
     /* init Thin Metadata Monitoring after config reload - including timers */
     thinmeta_init(thinmeta_resource_config, thinmetatimer, ctrl_ptr->thinmeta_resources);

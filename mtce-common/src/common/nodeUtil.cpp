@@ -1489,33 +1489,6 @@ string get_event_str ( int event_code )
     }
 }
 
-#define HTTP_GET_STR "GET"
-#define HTTP_PUT_STR "PUT"
-#define HTTP_PATCH_STR "PATCH"
-#define HTTP_POST_STR "POST"
-#define HTTP_DELETE_STR "DELETE"
-#define HTTP_UNKNOWN_STR "UNKNOWN"
-
-/* Private: convert http event type to its string name */
-const char * getHttpCmdType_str ( evhttp_cmd_type type )
-{
-    switch (type)
-    {
-        case EVHTTP_REQ_GET:    return(HTTP_GET_STR);
-        case EVHTTP_REQ_PUT:    return(HTTP_PUT_STR);
-        case EVHTTP_REQ_PATCH:  return(HTTP_PATCH_STR);
-        case EVHTTP_REQ_POST:   return(HTTP_POST_STR);
-        case EVHTTP_REQ_DELETE: return(HTTP_DELETE_STR);
-        case EVHTTP_REQ_HEAD:
-        case EVHTTP_REQ_OPTIONS:
-        case EVHTTP_REQ_TRACE:
-        case EVHTTP_REQ_CONNECT:
-        default:
-            break ;
-    }
-    return(HTTP_UNKNOWN_STR);    
-}
-
 #define MAX_NUM_LEN 64
 string itos ( int val )
 {
@@ -1523,6 +1496,17 @@ string itos ( int val )
     string temp ;
     memset  ( &int_str[0], 0, MAX_NUM_LEN );
     snprintf ( &int_str[0], MAX_NUM_LEN, "%d" , val );
+    temp = int_str ;
+    return (temp);
+}
+
+#define MAX_NUM_LEN 64
+string lltos (long long unsigned int val )
+{
+    char int_str[MAX_NUM_LEN] ;
+    string temp ;
+    memset  ( &int_str[0], 0, MAX_NUM_LEN );
+    snprintf ( &int_str[0], MAX_NUM_LEN, "%llu" , val );
     temp = int_str ;
     return (temp);
 }

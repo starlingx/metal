@@ -178,7 +178,7 @@ Provides: librmonapi.so.1()(64bit)
 Titanium Cloud Host Maintenance Resource Monitor Service (rmond) adds
 threshold based monitoring with predictive severity level alarming for
 out of tolerance utilization of critical resourses such as memory, cpu
-file system, interface state, etc.
+file system, etc.
 
 %package -n mtce-hwmon
 Summary: Titanuim Server Maintenance Hardware Monitor Package
@@ -266,6 +266,39 @@ of spec operating conditions that can reduce outage time through automated
 notification and recovery thereby improving overall platform availability
 for the customer.
 
+%package -n mtce-lmon
+Summary: Titanuim Server Maintenance Link Monitor Package
+Group: base
+BuildRequires: cppcheck
+Requires: util-linux
+Requires: /bin/bash
+Requires: /bin/systemctl
+Requires: dpkg
+Requires: time
+Requires: libstdc++.so.6(CXXABI_1.3)(64bit)
+Requires: libfmcommon.so.1()(64bit)
+Requires: libc.so.6(GLIBC_2.7)(64bit)
+Requires: libc.so.6(GLIBC_2.2.5)(64bit)
+Requires: libstdc++.so.6(GLIBCXX_3.4.11)(64bit)
+Requires: /bin/sh
+Requires: libc.so.6(GLIBC_2.3)(64bit)
+Requires: libc.so.6(GLIBC_2.14)(64bit)
+Requires: librt.so.1(GLIBC_2.3.3)(64bit)
+Requires: libgcc_s.so.1(GCC_3.0)(64bit)
+Requires: librt.so.1(GLIBC_2.2.5)(64bit)
+Requires: libm.so.6()(64bit)
+Requires: rtld(GNU_HASH)
+Requires: libstdc++.so.6()(64bit)
+Requires: libc.so.6(GLIBC_2.4)(64bit)
+Requires: libc.so.6()(64bit)
+Requires: libgcc_s.so.1()(64bit)
+Requires: libstdc++.so.6(GLIBCXX_3.4)(64bit)
+Requires: libstdc++.so.6(GLIBCXX_3.4.15)(64bit)
+
+%description -n mtce-lmon
+Titanium Cloud Maintenance Link Monitor service (lmond) provides
+netlink monitoring for provisioned oam, mgmt and infra interfaces.
+
 %define local_dir /usr/local
 %define local_bindir %{local_dir}/bin
 %define local_sbindir %{local_dir}/sbin
@@ -321,6 +354,7 @@ install -m 644 -p -D %{_buildsubdir}/scripts/mtc.conf %{buildroot}%{_sysconfdir}
 install -m 644 -p -D %{_buildsubdir}/fsmon/scripts/fsmond.conf %{buildroot}%{_sysconfdir}/mtc/fsmond.conf
 install -m 644 -p -D %{_buildsubdir}/hwmon/scripts/hwmond.conf %{buildroot}%{_sysconfdir}/mtc/hwmond.conf
 install -m 644 -p -D %{_buildsubdir}/pmon/scripts/pmond.conf %{buildroot}%{_sysconfdir}/mtc/pmond.conf
+install -m 644 -p -D %{_buildsubdir}/lmon/scripts/lmond.conf %{buildroot}%{_sysconfdir}/mtc/lmond.conf
 install -m 644 -p -D %{_buildsubdir}/rmon/scripts/rmond.conf %{buildroot}%{_sysconfdir}/mtc/rmond.conf
 install -m 644 -p -D %{_buildsubdir}/hostw/scripts/hostwd.conf %{buildroot}%{_sysconfdir}/mtc/hostwd.conf
 
@@ -335,6 +369,7 @@ install -m 755 -p -D %{_buildsubdir}/maintenance/mtcClient %{buildroot}/%{local_
 install -m 755 -p -D %{_buildsubdir}/heartbeat/hbsAgent %{buildroot}/%{local_bindir}/hbsAgent
 install -m 755 -p -D %{_buildsubdir}/heartbeat/hbsClient %{buildroot}/%{local_bindir}/hbsClient
 install -m 755 -p -D %{_buildsubdir}/pmon/pmond %{buildroot}/%{local_bindir}/pmond
+install -m 755 -p -D %{_buildsubdir}/lmon/lmond %{buildroot}/%{local_bindir}/lmond
 install -m 755 -p -D %{_buildsubdir}/hostw/hostwd %{buildroot}/%{local_bindir}/hostwd
 install -m 755 -p -D %{_buildsubdir}/rmon/rmond %{buildroot}/%{local_bindir}/rmond
 install -m 755 -p -D %{_buildsubdir}/fsmon/fsmond %{buildroot}/%{local_bindir}/fsmond
@@ -355,6 +390,7 @@ install -m 755 -p -D %{_buildsubdir}/hwmon/scripts/lsb/hwmon %{buildroot}%{_sysc
 install -m 755 -p -D %{_buildsubdir}/fsmon/scripts/fsmon %{buildroot}%{_sysconfdir}/init.d/fsmon
 install -m 755 -p -D %{_buildsubdir}/scripts/mtclog %{buildroot}%{_sysconfdir}/init.d/mtclog
 install -m 755 -p -D %{_buildsubdir}/pmon/scripts/pmon %{buildroot}%{_sysconfdir}/init.d/pmon
+install -m 755 -p -D %{_buildsubdir}/lmon/scripts/lmon %{buildroot}%{_sysconfdir}/init.d/lmon
 install -m 755 -p -D %{_buildsubdir}/rmon/scripts/rmon %{buildroot}%{_sysconfdir}/init.d/rmon
 install -m 755 -p -D %{_buildsubdir}/hostw/scripts/hostw %{buildroot}%{_sysconfdir}/init.d/hostw
 install -m 755 -p -D %{_buildsubdir}/alarm/scripts/mtcalarm.init %{buildroot}%{_sysconfdir}/init.d/mtcalarm
@@ -377,6 +413,7 @@ install -m 644 -p -D %{_buildsubdir}/scripts/mtclog.service %{buildroot}%{_unitd
 install -m 644 -p -D %{_buildsubdir}/scripts/goenabled.service %{buildroot}%{_unitdir}/goenabled.service
 install -m 644 -p -D %{_buildsubdir}/scripts/runservices.service %{buildroot}%{_unitdir}/runservices.service
 install -m 644 -p -D %{_buildsubdir}/alarm/scripts/mtcalarm.service %{buildroot}%{_unitdir}/mtcalarm.service
+install -m 644 -p -D %{_buildsubdir}/lmon/scripts/lmon.service %{buildroot}%{_unitdir}/lmon.service
 
 # go enabled stuff
 install -m 755 -d %{buildroot}%{local_etc_goenabledd}
@@ -407,18 +444,15 @@ install -m 644 -p -D %{_buildsubdir}/rmon/scripts/rmon.conf %{buildroot}%{local_
 install -m 644 -p -D %{_buildsubdir}/fsmon/scripts/fsmon.conf %{buildroot}%{local_etc_pmond}/fsmon.conf
 install -m 644 -p -D %{_buildsubdir}/scripts/mtclogd.conf %{buildroot}%{local_etc_pmond}/mtclogd.conf
 install -m 644 -p -D %{_buildsubdir}/alarm/scripts/mtcalarm.pmon.conf %{buildroot}%{local_etc_pmond}/mtcalarm.conf
+install -m 644 -p -D %{_buildsubdir}/lmon/scripts/lmon.pmon.conf %{buildroot}%{local_etc_pmond}/lmon.conf
 
 # resource monitor config files
 install -m 755 -d %{buildroot}%{local_etc_rmond}
 install -m 755 -d %{buildroot}%{_sysconfdir}/rmonapi.d
 install -m 755 -d %{buildroot}%{_sysconfdir}/rmonfiles.d
-install -m 755 -d %{buildroot}%{_sysconfdir}/rmon_interfaces.d
 install -m 644 -p -D %{_buildsubdir}/rmon/scripts/remotelogging_resource.conf %{buildroot}%{local_etc_rmond}/remotelogging_resource.conf
 install -m 644 -p -D %{_buildsubdir}/rmon/scripts/cinder_virtual_resource.conf %{buildroot}%{local_etc_rmond}/cinder_virtual_resource.conf
 install -m 644 -p -D %{_buildsubdir}/rmon/scripts/nova_virtual_resource.conf %{buildroot}%{local_etc_rmond}/nova_virtual_resource.conf
-install -m 644 -p -D %{_buildsubdir}/rmon/scripts/oam_resource.conf %{buildroot}%{_sysconfdir}/rmon_interfaces.d/oam_resource.conf
-install -m 644 -p -D %{_buildsubdir}/rmon/scripts/management_resource.conf %{buildroot}%{_sysconfdir}/rmon_interfaces.d/management_resource.conf
-install -m 644 -p -D %{_buildsubdir}/rmon/scripts/infrastructure_resource.conf %{buildroot}%{_sysconfdir}/rmon_interfaces.d/infrastructure_resource.conf
 install -m 755 -p -D %{_buildsubdir}/rmon/scripts/rmon_reload_on_cpe.sh %{buildroot}%{local_etc_goenabledd}/rmon_reload_on_cpe.sh
 
 # log rotation
@@ -426,6 +460,7 @@ install -m 755 -d %{buildroot}%{_sysconfdir}/logrotate.d
 install -m 644 -p -D %{_buildsubdir}/scripts/mtce.logrotate %{buildroot}%{local_etc_logrotated}/mtce.logrotate
 install -m 644 -p -D %{_buildsubdir}/hostw/scripts/hostw.logrotate %{buildroot}%{local_etc_logrotated}/hostw.logrotate
 install -m 644 -p -D %{_buildsubdir}/pmon/scripts/pmon.logrotate %{buildroot}%{local_etc_logrotated}/pmon.logrotate
+install -m 644 -p -D %{_buildsubdir}/lmon/scripts/lmon.logrotate %{buildroot}%{local_etc_logrotated}/lmon.logrotate
 install -m 644 -p -D %{_buildsubdir}/rmon/scripts/rmon.logrotate %{buildroot}%{local_etc_logrotated}/rmon.logrotate
 install -m 644 -p -D %{_buildsubdir}/fsmon/scripts/fsmon.logrotate %{buildroot}%{local_etc_logrotated}/fsmon.logrotate
 install -m 644 -p -D %{_buildsubdir}/hwmon/scripts/hwmon.logrotate %{buildroot}%{local_etc_logrotated}/hwmon.logrotate
@@ -465,6 +500,9 @@ install -m 755 -d %{buildroot}/var/run
 
 %post -n mtce-rmon
 /bin/systemctl enable rmon.service
+
+%post -n mtce-lmon
+/bin/systemctl enable lmon.service
 
 ###############################
 # Maintenance RPM Files
@@ -583,10 +621,6 @@ install -m 755 -d %{buildroot}/var/run
 %{local_etc_rmond}/cinder_virtual_resource.conf
 %{local_etc_rmond}/nova_virtual_resource.conf
 
-%{_sysconfdir}/rmon_interfaces.d/management_resource.conf
-%{_sysconfdir}/rmon_interfaces.d/oam_resource.conf
-%{_sysconfdir}/rmon_interfaces.d/infrastructure_resource.conf
-
 %{_libdir}/librmonapi.so.1.0
 %{_libdir}/librmonapi.so.1
 %{_libdir}/librmonapi.so
@@ -627,6 +661,21 @@ install -m 755 -d %{buildroot}/var/run
 %{_unitdir}/hostw.service
 %{_sysconfdir}/init.d/hostw
 %{local_bindir}/hostwd
+
+###############################
+# Link Monitor RPM Files
+###############################
+%files -n mtce-lmon
+%defattr(-,root,root,-)
+
+# Config files - Non-Modifiable
+%{_sysconfdir}/mtc/lmond.conf
+
+%{_unitdir}/lmon.service
+%{local_etc_logrotated}/lmon.logrotate
+%{local_etc_pmond}/lmon.conf
+%{local_bindir}/lmond
+%{_sysconfdir}/init.d/lmon
 
 ###############################
 # Maintenance Software Development RPM

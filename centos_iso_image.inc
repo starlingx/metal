@@ -8,6 +8,7 @@ mtce-pmon
 mtce-rmon
 mtce-hwmon
 mtce-hostw
+mtce-lmon
 
 # mtce-compute
 mtce-compute
