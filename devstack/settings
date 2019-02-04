@@ -11,17 +11,33 @@
 # functionality maintenance services.
 #
 # Current configuration supports All-in-One simplex mode.
+#
+# Servcies
+# stx-metal - Overall enable for this plugin
+#
+# mtce
+# mtce-control
+# mtce-compute
+# mtce-storage
+#
+# mtce-components (include all of the below)
+# fsmon
+# hbs
+# hwmon
+# mtcalarm
+# mtclog
+# pmon
+# rmon
 
 STX_METAL_NAME=stx-metal
 
 ######### Plugin Specific ##########
 # Enable service for node type
-enable_service $STX_METAL_NAME mtce-compute mtce-control mtce-storage
+enable_service $STX_METAL_NAME
 
-# TODO:remove the services enabled by default once
-# stx-metal is completely enabled
-# Enable service for components
-enable_service hbs mtce pmon rmon hwmon mtclog mtcalarm fsmon
+if is_service_enabled mtce-components; then
+    enable_service fsmon hbs hwmon mtce mtcalarm mtclog pmon rmon
+fi
 
 # Be careful to enable hostw, it will restart your host
 # if some config is not correct
@@ -41,6 +57,9 @@ if is_service_enabled mtce; then
     # enable mtcAgent/mtcClient service as part of mtce service
     enable_service mtcAgent
     enable_service mtcClient
+fi
+if is_service_enabled hwmon && is_plugin_enabled stx-config; then
+    enable_service sysinv
 fi
 
 # Initial source of lib script
