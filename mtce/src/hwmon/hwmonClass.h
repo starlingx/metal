@@ -476,7 +476,7 @@ class hwmonHostClass
     int hosts ;
 
     /* This bool is set in the daemon_configure case to inform the
-     * FSM that there has been a configuraiton reload. 
+     * FSM that there has been a configuration reload. 
      * The initial purpose if this bool is to trigger a full sensor
      * dump of all hosts on demand */
     bool config_reload ;
