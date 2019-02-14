@@ -76,7 +76,7 @@ static bool add_host_to_awol_list ( string hostname, std::list<string> & mnfa_aw
  *
  * Name       : mnfa_add_host
  *
- * Description: Add a failed host the the mnfa count and manage
+ * Description: Add a failed host the mnfa count and manage
  *              the failed list
  *
  *****************************************************************************/

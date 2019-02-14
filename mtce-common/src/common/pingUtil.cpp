@@ -697,7 +697,7 @@ int pingUtil_acc_monitor ( ping_info_type & ping_info )
                 {
                     if ( ++ping_info.recv_retries > (PING_MAX_RECV_RETRIES) )
                     {
-                        /* only print this log once on the the resend attempt */
+                        /* only print this log once on the resend attempt */
                         if ( ping_info.send_retries >= PING_MAX_SEND_RETRIES )
                         {
                             mlog ("%s ping recv from %s missed ; identity:%04x sequence:%04x (try %d of %d)\n",

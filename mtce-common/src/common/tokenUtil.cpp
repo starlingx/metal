@@ -63,7 +63,7 @@ static void __retry_holdoff( int delay )
  *              The signal handler is serviced.
  *
  * Behavior   : Issue non-blocking token request. If the request fails
- *              immediately the the far end did not connect and we backoff
+ *              immediately the far end did not connect and we backoff
  *              for RETRY_DELAY seconds. With a successful send we loop for
  *              up to 2 seconds longer than the specified timeout, Any failure
  *              results in a retry after RETRY_DELAY seconds.

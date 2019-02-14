@@ -7283,7 +7283,7 @@ int nodeLinkClass::ar_manage ( struct nodeLinkClass::node * node_ptr,
  *
  * Name       : report_dor_recovery
  *
- * Description: Create a specifically formatted log for the the specified
+ * Description: Create a specifically formatted log for the specified
  *              hosts DOR recovery state and timing.
  *
  * Parameters : The node and a caller prefix string that states if the node

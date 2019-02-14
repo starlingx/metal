@@ -1596,7 +1596,7 @@ int hwmonHostClass::ipmi_sensor_monitor ( struct hwmonHostClass::hwmon_host * ho
                                   ptr->status.c_str(),
                                   get_severity(severity).c_str());
 
-                       /* debounce of the the transient 'na' case is debounced
+                       /* debounce of the transient 'na' case is debounced
                         * if ( host_ptr->sensor_query_count > 5 )
                         *    log_sensor_data ( host_ptr, ptr->sensorname,  ptr->status, get_ipmi_severity(ptr->sample_severity));
                         */

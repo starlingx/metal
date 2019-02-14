@@ -106,7 +106,7 @@ int mtcInvApi_read_inventory ( int batch )
 
     dlog ("Path:%s\n", obj_ptr->sysinvEvent.token.url.c_str());
 
-    /* The inventory server returns a path the the next element.
+    /* The inventory server returns a path the next element.
      * This code manages the setting the entity path that allows
      * a walk through the inventory on subsequent calls if the
      * batch number is less that the provisioned inventory number

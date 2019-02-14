@@ -780,7 +780,7 @@ int nodeLinkClass::workQueue_done ( struct nodeLinkClass::node * node_ptr )
 {
     int rc = PASS ;
 
-    /* have we timed out waiting the the work queue tom deplete */
+    /* have we timed out waiting the work queue to deplete */
     if ( node_ptr->mtcTimer.ring == true )
     {
         qlog ( "%s Ring handler\n" , node_ptr->hostname.c_str());

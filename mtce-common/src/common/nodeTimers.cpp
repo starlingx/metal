@@ -341,7 +341,7 @@ void mtcTimer_reset ( struct mtc_timer * mtcTimer_ptr )
  *            timers at that time. They are defaulted to zero and should
  *            remain that way. The mtcTimer_dump_data utility can be
  *            called periodically by a process audit, will create a Swerr
- *            log with the recorded data and then clear the these vars only
+ *            log with the recorded data and then clear these vars only
  *            to allow the next occurance to be recorded and loged on the
  *            next audit interval.
  *
