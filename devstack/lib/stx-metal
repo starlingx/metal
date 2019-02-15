@@ -38,12 +38,15 @@ set -o xtrace
 # --------
 
 STX_METAL_DIR=${GITDIR[$STX_METAL_NAME]}
-STX_BIN_DIR=$(get_python_exec_prefix)
-PREFIX=${STX_BIN_DIR%/*/*}
+
+# STX_INST_DIR should be a non-root-writable place to install build artifacts
+STX_INST_DIR=${STX_INST_DIR:-$DEST/usr}
 SYSCONFDIR=/etc
 OAM_ETH_NAME=ens3
 MGMT_ETH_NAME=lo
 SW_VERSION=18.10
+
+OCF_ROOT=/usr/lib/ocf
 
 # Functions
 # ---------
@@ -65,9 +68,9 @@ function build_mtce {
     fi
 
     # build
-    make \
-        MAJOR=${major} \
-        MINOR=${minor} \
+    CPATH=$STX_INST_DIR/include LIBRARY_PATH=$STX_INST_DIR/lib make \
+        VER_MJR=${major} \
+        VER=${major}.${minor} \
         CCFLAGS=' -g -O2 -Wall -Wextra -std=c++11 -DBUILDINFO="\"$$(date)\""' \
         build
 
@@ -77,22 +80,8 @@ function build_mtce {
 function build_mtce_common {
     pushd ${STX_METAL_DIR}/mtce-common/src
 
-    local major minor version x
-
-    if [[ -z $1 || -z $2 ]]; then
-        # get mtce-common version
-        read x version <<< $(grep '^Version:' ${STX_METAL_DIR}/mtce/PKG-INFO)
-        major=${version%%.*}
-        minor=${version##*.}
-    else
-        major=$1
-        minor=$2
-    fi
-
     # build
-    make \
-        MAJOR=${major} \
-        MINOR=${minor} \
+    CPATH=$STX_INST_DIR/include LIBRARY_PATH=$STX_INST_DIR/lib make \
         CCFLAGS=' -g -O2 -Wall -Wextra -std=c++11 -DBUILDINFO="\"$$(date)\""' \
         build
 
@@ -128,10 +117,10 @@ function install_mtce_common {
 
     build_mtce_common
 
-    local lib64_dir=${PREFIX}/lib64
-    local inc_dir=${PREFIX}/include
-    local inc_dir_common=${PREFIX}/include/mtce-common
-    local inc_dir_daemon=${PREFIX}/include/mtce-daemon
+    local lib64_dir=${STX_INST_DIR}/lib64
+    local inc_dir=${STX_INST_DIR}/include
+    local inc_dir_common=${STX_INST_DIR}/include/mtce-common
+    local inc_dir_daemon=${STX_INST_DIR}/include/mtce-daemon
 
     local libdaecom_file=( \
         "common/libcommon.a" \
@@ -143,10 +132,10 @@ function install_mtce_common {
         "common/libhostUtil.a" \
         "daemon/libdaemon.a" \
         )
-    sudo install -m 755 -d ${lib64_dir}
-    sudo install -m 644 -t ${lib64_dir} ${libdaecom_file[*]}
+    install -m 755 -d ${lib64_dir}
+    install -m 644 -t ${lib64_dir} ${libdaecom_file[*]}
 
-    sudo install -m 755 -d ${inc_dir}
+    install -m 755 -d ${inc_dir}
     local commonhdr_file=( \
         "common/fitCodes.h" \
         "common/logMacros.h" \
@@ -171,22 +160,22 @@ function install_mtce_common {
         "common/tokenUtil.h" \
         "common/secretUtil.h" \
         )
-    sudo install -m 755 -d ${inc_dir_common}
-    sudo install -m 644 -t ${inc_dir_common} ${commonhdr_file[*]}
+    install -m 755 -d ${inc_dir}
+    install -m 644 -t ${inc_dir} ${commonhdr_file[*]}
 
     local daemonhdr_file=( \
         "daemon/daemon_ini.h" \
         "daemon/daemon_common.h" \
         "daemon/daemon_option.h" \
         )
-    sudo install -m 755 -d ${inc_dir_daemon}
-    sudo install -m 644 -t ${inc_dir_daemon} ${daemonhdr_file[*]}
+    install -m 755 -d ${inc_dir}
+    install -m 644 -t ${inc_dir} ${daemonhdr_file[*]}
     popd
 }
 
 function install_mtce_compute {
     local sysconf_dir=${SYSCONFDIR}
-    local unit_dir=${PREFIX}/lib/systemd/system
+    local unit_dir=${SYSCONFDIR}/systemd/system
     local local_etc_pmond=${SYSCONFDIR}/pmon.d
     local local_etc_goenabledd=${SYSCONFDIR}/goenabled.d
     local local_etc_nova=${SYSCONFDIR}/nova
@@ -212,13 +201,13 @@ function install_mtce_compute {
     sudo install -m 755 -p -D scripts/virt-support-goenabled.sh ${local_etc_goenabledd}/virt-support-goenabled.sh
 
     # Install to systemd
-    sudo install -m 644 -p -D scripts/e_nova-init.service ${unit_dir}/e_nova-init.service
+    sudo install -m 644 -p -D scripts/e_nova-init.service ${unit_dir}/devstack@e_nova-init.service
     popd
 }
 
 function install_mtce_control {
     local sysconf_dir=${SYSCONFDIR}
-    local unit_dir=${PREFIX}/lib/systemd/system
+    local unit_dir=${SYSCONFDIR}/systemd/system
     local local_etc_pmond=${SYSCONFDIR}/pmon.d
     local local_etc_goenabledd=${SYSCONFDIR}/goenabled.d
 
@@ -231,7 +220,7 @@ function install_mtce_control {
     sudo install -m 755 -d ${local_etc_pmond}
     sudo install -m 644 -p -D scripts/hbsAgent.conf ${local_etc_pmond}/hbsAgent.conf
     # Controller-Only Heartbeat Service file
-    sudo install -m 644 -p -D scripts/hbsAgent.service ${unit_dir}/hbsAgent.service
+    sudo install -m 644 -p -D scripts/hbsAgent.service ${unit_dir}/devstack@hbsAgent.service
     # Controller-Only Go Enabled Test
     sudo install -m 755 -d ${local_etc_goenabledd}
     popd
@@ -239,7 +228,7 @@ function install_mtce_control {
 
 function install_mtce_storage {
     local sysconf_dir=${SYSCONFDIR}
-    local unit_dir=${PREFIX}/lib/systemd/system
+    local unit_dir=${SYSCONFDIR}/systemd/system
     local local_etc_pmond=${SYSCONFDIR}/pmon.d
     local local_etc_goenabledd=${SYSCONFDIR}/goenabled.d
     local local_etc_servicesd=${SYSCONFDIR}/services.d
@@ -269,13 +258,13 @@ function install_mtce {
 
     build_mtce $major $minor
 
-    local bin_dir=${PREFIX}/local/bin
-    local sbin_dir=${PREFIX}/local/sbin
-    local lib_dir=${PREFIX}/lib
-    local lib64_dir=${PREFIX}/lib64
-    local inc_dir=${PREFIX}/include
+    local bin_dir=/usr/local/bin
+    local sbin_dir=/usr/local/sbin
+    local lib_dir=${STX_INST_DIR}/lib
+    local lib64_dir=${STX_INST_DIR}/lib64
+    local inc_dir=${STX_INST_DIR}/include
     local sysconf_dir=${SYSCONFDIR}
-    local unit_dir=${PREFIX}/lib/systemd/system
+    local unit_dir=${SYSCONFDIR}/systemd/system
 
     local local_etc_pmond=${sysconf_dir}/pmon.d
     local local_etc_rmond=${sysconf_dir}/rmon.d
@@ -291,23 +280,21 @@ function install_mtce {
 
     # TODO: follow install_files way in install_mtce_common to install files
     # Resource Agent Stuff
-    sudo install -m 755 -d ${lib_dir}/ocf
-    sudo install -m 755 -d ${lib_dir}/ocf/resource.d
-    sudo install -m 755 -d ${lib_dir}/ocf/resource.d/platform
-    sudo install -m 755 -p -D scripts/mtcAgent ${lib_dir}/ocf/resource.d/platform/mtcAgent
-    sudo install -m 755 -p -D hwmon/scripts/ocf/hwmon ${lib_dir}/ocf/resource.d/platform/hwmon
+    sudo install -m 755 -d ${OCF_ROOT}/resource.d/platform
+    sudo install -m 755 -p -D scripts/mtcAgent ${OCF_ROOT}/resource.d/platform/mtcAgent
+    sudo install -m 755 -p -D hwmon/scripts/ocf/hwmon ${OCF_ROOT}/resource.d/platform/hwmon
 
     # TODO: fix this issue in multi-os task
     # The default shell of ubuntu is dash, causes loop syntax error
     if is_ubuntu; then
-        sudo sed -i "s|#!/bin/sh|#!/bin/bash|g" ${PREFIX}/lib/ocf/resource.d/platform/mtcAgent
-        sudo sed -i "s|#!/bin/sh|#!/bin/bash|g" ${PREFIX}/lib/ocf/resource.d/platform/hwmon
+        sudo sed -i "s|#!/bin/sh|#!/bin/bash|g" ${OCF_ROOT}/resource.d/platform/mtcAgent
+        sudo sed -i "s|#!/bin/sh|#!/bin/bash|g" ${OCF_ROOT}/resource.d/platform/hwmon
     fi
 
     # TODO: figure out why OCF_ROOT is not set when running stack.sh
     # workaround to hardcode OCF_ROOT
-    sudo sed -i "s|\${OCF_ROOT}|/usr/lib/ocf|g" ${PREFIX}/lib/ocf/resource.d/platform/mtcAgent
-    sudo sed -i "s|\${OCF_ROOT}|/usr/lib/ocf|g" ${PREFIX}/lib/ocf/resource.d/platform/hwmon
+    # sed -i "s|\${OCF_ROOT}|\${OCF_ROOT}|g" ${OCF_ROOT}/resource.d/platform/mtcAgent
+    # sed -i "s|\${OCF_ROOT}|\${OCF_ROOT}|g" ${OCF_ROOT}/resource.d/platform/hwmon
 
     # config files
     sudo install -m 755 -d ${sysconf_dir}/mtc
@@ -338,7 +325,7 @@ function install_mtce {
     sudo install -m 755 -p -D alarm/mtcalarmd ${bin_dir}/mtcalarmd
     sudo install -m 755 -p -D rmon/rmon_resource_notify/rmon_resource_notify ${bin_dir}/rmon_resource_notify
     sudo install -m 755 -p -D scripts/wipedisk ${bin_dir}/wipedisk
-    sudo install -m 755 -p -D fsync/fsync ${PREFIX}/sbin/fsync
+    sudo install -m 755 -p -D fsync/fsync ${STX_INST_DIR}/sbin/fsync
     sudo install -m 700 -p -D pmon/scripts/pmon-restart ${sbin_dir}/pmon-restart
     sudo install -m 700 -p -D pmon/scripts/pmon-start ${sbin_dir}/pmon-start
     sudo install -m 700 -p -D pmon/scripts/pmon-stop ${sbin_dir}/pmon-stop
@@ -356,33 +343,32 @@ function install_mtce {
 
     sudo install -m 755 -p -D scripts/config ${sysconf_dir}/init.d/config
     sudo install -m 755 -p -D scripts/hwclock.sh ${sysconf_dir}/init.d/hwclock.sh
-    sudo install -m 644 -p -D scripts/hwclock.service ${unit_dir}/hwclock.service
+    sudo install -m 644 -p -D scripts/hwclock.service ${unit_dir}/devstack@hwclock.service
 
     # systemd service files
-    sudo install -m 644 -p -D fsmon/scripts/fsmon.service ${unit_dir}/fsmon.service
-    sudo install -m 644 -p -D hwmon/scripts/hwmon.service ${unit_dir}/hwmon.service
-    sudo install -m 644 -p -D rmon/scripts/rmon.service ${unit_dir}/rmon.service
-    sudo install -m 644 -p -D pmon/scripts/pmon.service ${unit_dir}/pmon.service
-    sudo install -m 644 -p -D hostw/scripts/hostw.service ${unit_dir}/hostw.service
-    sudo install -m 644 -p -D scripts/mtcClient.service ${unit_dir}/mtcClient.service
-    sudo install -m 644 -p -D scripts/hbsClient.service ${unit_dir}/hbsClient.service
-    sudo install -m 644 -p -D scripts/mtclog.service ${unit_dir}/mtclog.service
-    sudo install -m 644 -p -D scripts/goenabled.service ${unit_dir}/goenabled.service
-    sudo install -m 644 -p -D scripts/runservices.service ${unit_dir}/runservices.service
-    sudo install -m 644 -p -D alarm/scripts/mtcalarm.service ${unit_dir}/mtcalarm.service
+    sudo install -m 644 -p -D fsmon/scripts/fsmon.service ${unit_dir}/devstack@fsmon.service
+    sudo install -m 644 -p -D hwmon/scripts/hwmon.service ${unit_dir}/devstack@hwmon.service
+    sudo install -m 644 -p -D rmon/scripts/rmon.service ${unit_dir}/devstack@rmon.service
+    sudo install -m 644 -p -D pmon/scripts/pmon.service ${unit_dir}/devstack@pmon.service
+    sudo install -m 644 -p -D hostw/scripts/hostw.service ${unit_dir}/devstack@hostw.service
+    sudo install -m 644 -p -D scripts/mtcClient.service ${unit_dir}/devstack@mtcClient.service
+    sudo install -m 644 -p -D scripts/hbsClient.service ${unit_dir}/devstack@hbsClient.service
+    sudo install -m 644 -p -D scripts/mtclog.service ${unit_dir}/devstack@mtclog.service
+    sudo install -m 644 -p -D scripts/goenabled.service ${unit_dir}/devstack@goenabled.service
+    sudo install -m 644 -p -D scripts/runservices.service ${unit_dir}/devstack@runservices.service
+    sudo install -m 644 -p -D alarm/scripts/mtcalarm.service ${unit_dir}/devstack@mtcalarm.service
 
     # go enabled stuff
     sudo install -m 755 -d ${local_etc_goenabledd}
     sudo install -m 755 -p -D scripts/goenabled ${sysconf_dir}/init.d/goenabled
 
     # start or stop services test script
-    sudo install -m 755 -d ${local_etc_servicesd}
     sudo install -m 755 -d ${local_etc_servicesd}/controller
-    sudo install -m 755 -d ${local_etc_servicesd}/worker
     sudo install -m 755 -d ${local_etc_servicesd}/storage
-    sudo install -m 755 -p -D scripts/mtcTest ${local_etc_servicesd}/worker
+    sudo install -m 755 -d ${local_etc_servicesd}/worker
     sudo install -m 755 -p -D scripts/mtcTest ${local_etc_servicesd}/controller
     sudo install -m 755 -p -D scripts/mtcTest ${local_etc_servicesd}/storage
+    sudo install -m 755 -p -D scripts/mtcTest ${local_etc_servicesd}/worker
     sudo install -m 755 -p -D scripts/runservices ${sysconf_dir}/init.d/runservices
 
     # test tools
@@ -426,22 +412,22 @@ function install_mtce {
     sudo install -m 644 -p -D alarm/scripts/mtcalarm.logrotate ${local_etc_logrotated}/mtcalarm.logrotate
 
     # software development files
-    sudo install -m 644 -p -D heartbeat/mtceHbsCluster.h ${inc_dir}/mtceHbsCluster.h
-    sudo install -m 755 -p -D public/libamon.so.${major} ${lib64_dir}/libamon.so.${major}
-    sudo install -m 755 -p -D rmon/rmonApi/librmonapi.so.${major} ${lib64_dir}/librmonapi.so.${major}
+    install -m 644 -p -D heartbeat/mtceHbsCluster.h ${inc_dir}/mtceHbsCluster.h
+    install -m 755 -p -D public/libamon.so.${major} ${lib64_dir}/libamon.so.${major}
+    install -m 755 -p -D rmon/rmonApi/librmonapi.so.${major} ${lib64_dir}/librmonapi.so.${major}
     popd
 
     pushd ${lib64_dir}
-    sudo ln -sf libamon.so.${major} libamon.so.${major}.${minor}
-    sudo ln -sf libamon.so.${major} libamon.so
+    ln -sf libamon.so.${major} libamon.so.${major}.${minor}
+    ln -sf libamon.so.${major} libamon.so
 
-    sudo ln -sf librmonapi.so.${major} librmonapi.so.${major}.${minor}
-    sudo ln -sf librmonapi.so.${major} librmonapi.so
+    ln -sf librmonapi.so.${major} librmonapi.so.${major}.${minor}
+    ln -sf librmonapi.so.${major} librmonapi.so
     popd
 }
 
 function configure_maintenance {
-    echo "${PREFIX}/lib64" | sudo tee /etc/ld.so.conf.d/stx-metal.conf
+    echo "${STX_INST_DIR}/lib64" | sudo tee /etc/ld.so.conf.d/stx-metal.conf
     sudo ldconfig
 
     sudo mkdir -p /etc/platform
@@ -485,19 +471,16 @@ function configure_maintenance {
     iniset -sudo /etc/mtc.ini "agent" "sm_server_port" "2124"
     iniset -sudo /etc/mtc.ini "agent" "sm_client_port" "2224"
 
-    # add port 5000 to keystone apache server
-    sudo sed -i '$aListen 5000' /etc/apache2/sites-available/keystone-wsgi-public.conf
-    sudo sed -i '$a<VirtualHost *:5000>' /etc/apache2/sites-available/keystone-wsgi-public.conf
-    sudo sed -i '$aProxyPass / "unix:/var/run/uwsgi/keystone-wsgi-public.socket|uwsgi://uwsgi-uds-keystone-wsgi-public/" retry=0"' /etc/apache2/sites-available/keystone-wsgi-public.conf
-    sudo sed -i '$a</VirtualHost>' /etc/apache2/sites-available/keystone-wsgi-public.conf
-    sudo systemctl restart apache2
+    # TODO(dtroyer): Do this with the devstack functions in lib/apache
+    # # add port 5000 to keystone apache server
+    # sudo sed -i '$aListen 5000' /etc/apache2/sites-available/keystone-wsgi-public.conf
+    # sudo sed -i '$a<VirtualHost *:5000>' /etc/apache2/sites-available/keystone-wsgi-public.conf
+    # sudo sed -i '$aProxyPass / "unix:/var/run/uwsgi/keystone-wsgi-public.socket|uwsgi://uwsgi-uds-keystone-wsgi-public/" retry=0"' /etc/apache2/sites-available/keystone-wsgi-public.conf
+    # sudo sed -i '$a</VirtualHost>' /etc/apache2/sites-available/keystone-wsgi-public.conf
+    # sudo systemctl restart apache2
 
     if is_ubuntu; then
         sudo ln -sf /lib/lsb/init-functions /etc/init.d/functions
-    fi
-
-    if [ -z "$OCF_ROOT" ]; then
-        export OCF_ROOT=/usr/lib/ocf
     fi
 }
 
@@ -511,17 +494,15 @@ function start_mtcAgent {
     # init mtcAgent
     iniset -sudo /etc/systemd/system/devstack@mtcAgent.service "Service" "Type" "forking"
     iniset -sudo /etc/systemd/system/devstack@mtcAgent.service "Service" "PIDFile" "/var/run/mtcAgent.pid"
+    iniset -sudo /etc/systemd/system/devstack@mtcAgent.service "Service" "Environment" "OCF_ROOT=${OCF_ROOT}"
 
     sudo sed -i "s|OCF_RESKEY_state_default=\"standby\"|OCF_RESKEY_state_default=\"active\"|g" \
-        ${PREFIX}/lib/ocf/resource.d/platform/mtcAgent
+        ${OCF_ROOT}/resource.d/platform/mtcAgent
 
-    run_process mtcAgent "${PREFIX}/lib/ocf/resource.d/platform/mtcAgent start" root root
+    run_process mtcAgent "${OCF_ROOT}/resource.d/platform/mtcAgent start" root root
 }
 
 function start_hbsAgent {
-    # copy hbsAgent.service template to devstack
-    sudo cp ${PREFIX}/lib/systemd/system/hbsAgent.service \
-        ${SYSCONFDIR}/systemd/system/devstack@hbsAgent.service
     run_process hbsAgent "${SYSCONFDIR}/rc.d/init.d/hbsAgent start" root root
 }
 
@@ -530,7 +511,7 @@ function start_hwmon {
     iniset -sudo /etc/systemd/system/devstack@hwmon.service "Service" "Type" "forking"
     iniset -sudo /etc/systemd/system/devstack@hwmon.service "Service" "PIDFile" "/var/run/hwmond.pid"
 
-    run_process hwmon "${PREFIX}/lib/ocf/resource.d/platform/hwmon start" root root
+    run_process hwmon "${OCF_ROOT}/resource.d/platform/hwmon start" root root
 }
 
 function start_mtce_control {
@@ -555,7 +536,7 @@ function start_mtce_compute {
     # TODO: It's not working until initial compute config applied by puppet
     # implemented in devstack
     # oneshot nova init service
-    #sudo cp ${PREFIX}/lib/systemd/system/e_nova-init.service \
+    #sudo cp ${STX_INST_DIR}/lib/systemd/system/e_nova-init.service \
     #    ${SYSCONFDIR}/systemd/system/devstack@e_nova-init.service
 
     #run_process e_nova-init "${SYSCONFDIR}/init.d/e_nova-init start" root root
@@ -606,48 +587,26 @@ function start_maintenance {
 }
 
 function start_mtcClient {
-    # copy mtcClient.service template to devstack
-    sudo cp ${PREFIX}/lib/systemd/system/mtcClient.service \
-        ${SYSCONFDIR}/systemd/system/devstack@mtcClient.service
     run_process mtcClient "${SYSCONFDIR}/rc.d/init.d/mtcClient start" root root
 }
 
 function start_hbsClient {
-    # copy hbsClient.service template to devstack
-    sudo cp ${PREFIX}/lib/systemd/system/hbsClient.service \
-        ${SYSCONFDIR}/systemd/system/devstack@hbsClient.service
     run_process hbsClient "${SYSCONFDIR}/rc.d/init.d/hbsClient start" root root
 }
 
 function start_pmon {
-    # copy pmon.service template to devstack
-    sudo cp ${PREFIX}/lib/systemd/system/pmon.service \
-        ${SYSCONFDIR}/systemd/system/devstack@pmon.service
-
     run_process pmon "${SYSCONFDIR}/rc.d/init.d/pmon start" root root
 }
 
 function start_rmon {
-    # copy rmon.service template to devstack
-    sudo cp ${PREFIX}/lib/systemd/system/rmon.service \
-        ${SYSCONFDIR}/systemd/system/devstack@rmon.service
-
     run_process rmon "${SYSCONFDIR}/rc.d/init.d/rmon start" root root
 }
 
 function start_mtclog {
-    # copy mtclog.service template to devstack
-    sudo cp ${PREFIX}/lib/systemd/system/mtclog.service \
-        ${SYSCONFDIR}/systemd/system/devstack@mtclog.service
-
     run_process mtclog "${SYSCONFDIR}/rc.d/init.d/mtclog start" root root
 }
 
 function start_mtcalarm {
-    # copy mtcalarm.service template to devstack
-    sudo cp ${PREFIX}/lib/systemd/system/mtcalarm.service \
-        ${SYSCONFDIR}/systemd/system/devstack@mtcalarm.service
-
     run_process mtcalarm "${SYSCONFDIR}/rc.d/init.d/mtcalarm start" root root
 }
 
@@ -656,18 +615,10 @@ function start_goenabled {
 }
 
 function start_fsmon {
-    # copy fsmon.service template to devstack
-    sudo cp ${PREFIX}/lib/systemd/system/fsmon.service \
-        ${SYSCONFDIR}/systemd/system/devstack@fsmon.service
-
     run_process fsmon "${SYSCONFDIR}/rc.d/init.d/fsmon start" root root
 }
 
 function start_hostw {
-    # copy hostw.service template to devstack
-    sudo cp ${PREFIX}/lib/systemd/system/hostw.service \
-        ${SYSCONFDIR}/systemd/system/devstack@hostw.service
-
     run_process hostw "${SYSCONFDIR}/rc.d/init.d/hostw start" root root
 }
 
@@ -790,13 +741,13 @@ function cleanup_metal {
     local major=${version%%.*}
     local minor=${version##*.}
 
-    local bin_dir=${PREFIX}/local/bin
-    local sbin_dir=${PREFIX}/local/sbin
-    local lib_dir=${PREFIX}/lib
-    local lib64_dir=${PREFIX}/lib64
-    local inc_dir=${PREFIX}/include
+    local bin_dir=/usr/local/bin
+    local sbin_dir=/usr/local/sbin
+    local lib_dir=${STX_INST_DIR}/lib
+    local lib64_dir=${STX_INST_DIR}/lib64
+    local inc_dir=${STX_INST_DIR}/include
     local sysconf_dir=${SYSCONFDIR}
-    local unit_dir=${PREFIX}/lib/systemd/system
+    local unit_dir=${SYSCONFDIR}/systemd/system
 
     local local_etc_pmond=${sysconf_dir}/pmon.d
     local local_etc_rmond=${sysconf_dir}/rmon.d
@@ -804,8 +755,8 @@ function cleanup_metal {
     local local_etc_servicesd=${sysconf_dir}/services.d
     local local_etc_logrotated=${sysconf_dir}/logrotate.d
 
-    sudo rm -rf ${lib_dir}/ocf/resource.d/platform/mtcAgent
-    sudo rm -rf ${lib_dir}/ocf/resource.d/platform/hwmon
+    sudo rm -rf ${OCF_ROOT}/resource.d/platform/mtcAgent
+    sudo rm -rf ${OCF_ROOT}/resource.d/platform/hwmon
 
     sudo rm -rf ${sysconf_dir}/mtc.ini
     sudo rm -rf ${sysconf_dir}/mtc.conf
@@ -833,7 +784,7 @@ function cleanup_metal {
     sudo rm -rf ${bin_dir}/mtcalarmd
     sudo rm -rf ${bin_dir}/rmon_resource_notify
     sudo rm -rf ${bin_dir}/wipedisk
-    sudo rm -rf ${PREFIX}/sbin/fsync
+    sudo rm -rf ${STX_INST_DIR}/sbin/fsync
     sudo rm -rf ${sbin_dir}/pmon-restart
     sudo rm -rf ${sbin_dir}/pmon-start
     sudo rm -rf ${sbin_dir}/pmon-stop
@@ -851,20 +802,20 @@ function cleanup_metal {
 
     sudo rm -rf ${sysconf_dir}/init.d/config
     sudo rm -rf ${sysconf_dir}/init.d/hwclock.sh
-    sudo rm -rf ${unit_dir}/hwclock.service
+    sudo rm -rf ${unit_dir}/devstack@hwclock.service
 
     # systemd service files
-    sudo rm -rf ${unit_dir}/fsmon.service
-    sudo rm -rf ${unit_dir}/hwmon.service
-    sudo rm -rf ${unit_dir}/rmon.service
-    sudo rm -rf ${unit_dir}/pmon.service
-    sudo rm -rf ${unit_dir}/hostw.service
-    sudo rm -rf ${unit_dir}/mtcClient.service
-    sudo rm -rf ${unit_dir}/hbsClient.service
-    sudo rm -rf ${unit_dir}/mtclog.service
-    sudo rm -rf ${unit_dir}/goenabled.service
-    sudo rm -rf ${unit_dir}/runservices.service
-    sudo rm -rf ${unit_dir}/mtcalarm.service
+    sudo rm -rf ${unit_dir}/devstack@fsmon.service
+    sudo rm -rf ${unit_dir}/devstack@hwmon.service
+    sudo rm -rf ${unit_dir}/devstack@rmon.service
+    sudo rm -rf ${unit_dir}/devstack@pmon.service
+    sudo rm -rf ${unit_dir}/devstack@hostw.service
+    sudo rm -rf ${unit_dir}/devstack@mtcClient.service
+    sudo rm -rf ${unit_dir}/devstack@hbsClient.service
+    sudo rm -rf ${unit_dir}/devstack@mtclog.service
+    sudo rm -rf ${unit_dir}/devstack@goenabled.service
+    sudo rm -rf ${unit_dir}/devstack@runservices.service
+    sudo rm -rf ${unit_dir}/devstack@mtcalarm.service
 
     # go enabled stuff
     sudo rm -rf ${sysconf_dir}/init.d/goenabled
@@ -921,8 +872,8 @@ function cleanup_metal {
     sudo rm -rf ${lib64_dir}/librmonapi.so
 
     #remove mtce_common
-    local inc_dir_common=${PREFIX}/include/mtce-common
-    local inc_dir_daemon=${PREFIX}/include/mtce-daemon
+    local inc_dir_common=${STX_INST_DIR}/include/mtce-common
+    local inc_dir_daemon=${STX_INST_DIR}/include/mtce-daemon
 
     local libdaecom_file=( \
         "libcommon.a" \
@@ -967,7 +918,7 @@ function cleanup_metal {
 
     if is_service_enabled mtce-compute; then
         local sysconf_dir=${SYSCONFDIR}
-        local unit_dir=${PREFIX}/lib/systemd/system
+        local unit_dir=${SYSCONFDIR}/systemd/system
         local local_etc_pmond=${SYSCONFDIR}/pmon.d
         local local_etc_goenabledd=${SYSCONFDIR}/goenabled.d
         local local_etc_nova=${SYSCONFDIR}/nova
@@ -987,11 +938,11 @@ function cleanup_metal {
         sudo rm -rf ${local_etc_goenabledd}/virt-support-goenabled.sh
 
         # systemd
-        sudo rm -rf ${unit_dir}/e_nova-init.service
+        sudo rm -rf ${unit_dir}/devstack@e_nova-init.service
     fi
     if is_service_enabled mtce-control; then
         local sysconf_dir=${SYSCONFDIR}
-        local unit_dir=${PREFIX}/lib/systemd/system
+        local unit_dir=${SYSCONFDIR}/systemd/system
         local local_etc_pmond=${SYSCONFDIR}/pmon.d
         local local_etc_goenabledd=${SYSCONFDIR}/goenabled.d
 
@@ -999,11 +950,11 @@ function cleanup_metal {
         sudo rm -rf  ${sysconf_dir}/init.d/goenabledControl
         sudo rm -rf  ${sysconf_dir}/init.d/hbsAgent
         sudo rm -rf  ${local_etc_pmond}/hbsAgent.conf
-        sudo rm -rf  ${unit_dir}/hbsAgent.service
+        sudo rm -rf  ${unit_dir}/devstack@hbsAgent.service
     fi
     if is_service_enabled mtce-storage; then
         local sysconf_dir=${SYSCONFDIR}
-        local unit_dir=${PREFIX}/lib/systemd/system
+        local unit_dir=${SYSCONFDIR}/systemd/system
         local local_etc_pmond=${SYSCONFDIR}/pmon.d
         local local_etc_goenabledd=${SYSCONFDIR}/goenabled.d
         local local_etc_servicesd=${SYSCONFDIR}/services.d
