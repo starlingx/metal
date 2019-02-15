@@ -1,7 +1,10 @@
 cppcheck
-libevent-2.0
+libevent-2.0 # dist:xenial
+libevent-2.1 # dist:bionic
 libevent-dev
-libjson0
-libjson0-dev
+libjson0 # dist:xenial
+libjson0-dev # dist:xenial
+libjson-c3 # dist:bionic
+libjson-c-dev # dist:bionic
 resource-agents
 facter

@@ -1,0 +1,7 @@
+cppcheck
+json-c
+json-c-devel
+libevent
+libevent-devel
+resource-agents
+facter
