@@ -334,13 +334,16 @@ int pmon_active_handler ( process_config_type * ptr )
                     else
                     {
                         ptr->recv_err_cnt++ ;
-                        ptr->b2b_miss_count++ ;
-                        elog ("%s missing pulse response (Miss:%d) (%d:%d)\n",
-                                  ptr->process,
-                                  ptr->b2b_miss_count,
-                                  ptr->tx_sequence,
-                                  ptr->rx_sequence);
 
+                        /* don't log the first single pulse miss. */
+                        if ( ptr->b2b_miss_count++ > 1 )
+                        {
+                            wlog ("%s missing pulse response (Miss:%d) (%d:%d)\n",
+                                      ptr->process,
+                                      ptr->b2b_miss_count,
+                                      ptr->tx_sequence,
+                                      ptr->rx_sequence);
+                        }
                         if ( ptr->b2b_miss_count >= ptr->threshold )
                         {
                             /*****************************************************
