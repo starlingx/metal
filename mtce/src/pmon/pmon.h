@@ -100,7 +100,6 @@
 #include <netdb.h>         /* for hostent                      */
 #include <errno.h>
 #include <sys/stat.h>
-#include <bits/siginfo.h>   /* for CLD_xxxx si_codes */
 
 using namespace std;
 
