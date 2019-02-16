@@ -29,7 +29,7 @@ else
 endif
 
 build: clean static_analysis $(OBJS)
-	$(CXX) $(CCFLAGS) $(OBJS) $(LDPATH) $(LDLIBS) -o lmond
+	$(CXX) $(CCFLAGS) $(OBJS) $(LDPATH) $(LDLIBS) $(EXTRALDFLAGS) -o lmond
 
 clean:
 	@rm -v -f $(OBJ) lmond *.o *.a

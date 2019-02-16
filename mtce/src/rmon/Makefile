@@ -29,7 +29,7 @@ else
 endif
 
 build: clean static_analysis $(OBJS)
-	$(CXX) $(CCFLAGS) $(OBJS) -L../daemon -L../common -LrmonApi/ $(LDLIBS) -o rmond
+	$(CXX) $(CCFLAGS) $(OBJS) -L../daemon -L../common -LrmonApi/ $(LDLIBS) $(EXTRALDFLAGS) -o rmond
 
 lib: build $(OBJS)
 

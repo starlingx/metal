@@ -33,15 +33,15 @@ endif
 all: static_analysis common agent client
 
 build: static_analysis $(OBJS)
-	$(CXX) $(CCFLAGS) hbsAlarm.o hbsAgent.o hbsUtil.o hbsCluster.o hbsStubs.o ../common/nodeClass.o -L../public -L../alarm $(LDLIBS) -o hbsAgent
-	$(CXX) $(CCFLAGS) hbsClient.o hbsPmon.o hbsUtil.o -L../public -L../alarm $(LDLIBS) -o hbsClient
+	$(CXX) $(CCFLAGS) hbsAlarm.o hbsAgent.o hbsUtil.o hbsCluster.o hbsStubs.o ../common/nodeClass.o -L../public -L../alarm $(LDLIBS) $(EXTRALDFLAGS) -o hbsAgent
+	$(CXX) $(CCFLAGS) hbsClient.o hbsPmon.o hbsUtil.o -L../public -L../alarm $(LDLIBS) $(EXTRALDFLAGS) -o hbsClient
 
 common:
 	( cd ../common ; make clean ; make lib VER=$(VER) VER_MJR=$(VER_MJR))
 
 agent: $(OBJS)
-	$(CXX) $(CCFLAGS) hbsAgent.o -L../alarm -L../public $(LDLIBS) -o hbsAgent
-	
+	$(CXX) $(CCFLAGS) hbsAgent.o -L../alarm -L../public $(LDLIBS) $(EXTRALDFLAGS) -o hbsAgent
+
 client: $(OBJS)
 	$(CXX) $(CCFLAGS) hbsClient.o -L../public $(LDLIBS) -o hbsClient
 
