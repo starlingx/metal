@@ -463,11 +463,11 @@ function configure_maintenance {
     # TODO: enable controllerconfig to do this
     # add floating ip hostname in hosts
     if ! cat /etc/hosts | grep controller$ > /dev/null; then
-        sudo echo "192.168.204.2 controller" >> /etc/hosts
+        echo "192.168.204.2 controller" | sudo tee -a /etc/hosts
     fi
     # add controller-0
     if ! cat /etc/hosts | grep [0-9]$'\s'controller-0$ > /dev/null; then
-        sudo echo "192.168.204.3 controller-0" >> /etc/hosts
+        echo "192.168.204.3 controller-0" | sudo tee -a /etc/hosts
     fi
 
     # puppet configuration for mtce
