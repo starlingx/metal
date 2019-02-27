@@ -49,3 +49,4 @@ swtpm-libs
 OVMF
 openvswitch
 openvswitch-config
+pci-irq-affinity-agent
