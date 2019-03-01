@@ -51,7 +51,6 @@ OCF_ROOT=/usr/lib/ocf
 # Functions
 # ---------
 
-
 function build_mtce {
     pushd ${STX_METAL_DIR}/mtce/src
 
