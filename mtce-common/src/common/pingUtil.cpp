@@ -204,7 +204,7 @@ int pingUtil_send ( ping_info_type & ping_info )
         ping4_tx.hdr.un.echo.id       = htons(ping_info.identity) ;
         ping4_tx.hdr.un.echo.sequence = htons(ping_info.sequence) ;
 
-        snprintf ( &ping4_tx.msg[0], PING_MESSAGE_LEN, ping_info.message );
+        snprintf ( &ping4_tx.msg[0], PING_MESSAGE_LEN, "%s", ping_info.message );
 
         /* checksum should not be converted to htons
          * - will get (wrong icmp cksum ) */
@@ -226,7 +226,7 @@ int pingUtil_send ( ping_info_type & ping_info )
         ping6_tx.icmphdr.icmp6_id = htons(ping_info.identity) ;
         ping6_tx.icmphdr.icmp6_seq = htons(ping_info.sequence) ;
 
-        snprintf ( &ping6_tx.msg[0], PING_MESSAGE_LEN, ping_info.message );
+        snprintf ( &ping6_tx.msg[0], PING_MESSAGE_LEN, "%s", ping_info.message );
 
         ping6_tx.icmphdr.icmp6_cksum = htons(checksum(&ping6_tx, sizeof(ping6_tx)));
 
