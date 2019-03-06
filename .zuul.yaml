@@ -50,6 +50,7 @@
         rmon: true
       devstack_plugins:
         stx-fault: git://git.starlingx.io/stx-fault
+        stx-metal: git://git.starlingx.io/stx-metal
         stx-nfv: git://git.starlingx.io/stx-nfv
         stx-update: git://git.starlingx.io/stx-update
     files:
