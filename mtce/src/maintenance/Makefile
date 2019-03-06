@@ -77,10 +77,10 @@ common:
 	( cd ../common ; make clean ; make lib VER=$(VER) VER_MJR=$(VER_MJR))
 
 mtcAgent: $(OBJS)
-	$(CXX) $(CONTROL_OBJS) -L../public -L../alarm -L../rmon/rmonApi $(LDLIBS) -o mtcAgent
+	$(CXX) $(CONTROL_OBJS) -L../public -L../alarm -L../rmon/rmonApi $(LDLIBS) $(EXTRALDFLAGS) -o mtcAgent
 
 mtcClient: $(OBJS)
-	$(CXX) $(COMPUTE_OBJS) -L../public -L../alarm -L../rmon/rmonApi $(LDLIBS) -o mtcClient
+	$(CXX) $(COMPUTE_OBJS) -L../public -L../alarm -L../rmon/rmonApi $(LDLIBS) $(EXTRALDFLAGS) -o mtcClient
 
 remove_bins:
 	@rm -v -f $(BINS)

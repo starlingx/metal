@@ -23,7 +23,7 @@ SRCS += hwmonFsm.cpp
 
 OBJS = $(SRCS:.cpp=.o)
 BIN = hwmond
-LDLIBS = -lstdc++ -ldaemon -lfmcommon -lcommon -lthreadUtil -lipmiUtil -lpthread -levent -ljson-c -lrt -lcrypto 
+LDLIBS = -lstdc++ -ldaemon -lfmcommon -lcommon -lthreadUtil -lipmiUtil -lpthread -levent -ljson-c -lrt -lcrypto
 INCLUDES = -I. -I/usr/include/mtce-daemon -I/usr/include/mtce-common
 INCLUDES += -I../maintenance
 CCFLAGS = -g -O2 -Wall -Wextra -Werror -std=c++11 -pthread
@@ -45,7 +45,7 @@ else
 endif
 
 build: clean static_analysis $(OBJS)
-	$(CXX) $(CCFLAGS) $(OBJS) -L../daemon -L../common $(LDLIBS) -o $(BIN)
+	$(CXX) $(CCFLAGS) $(OBJS) -L../daemon -L../common $(LDLIBS) $(EXTRALDFLAGS) -o $(BIN)
 
 common:
 	( cd ../common ; make lib VER=$(VER) VER_MJR=$(VER_MJR))
@@ -57,4 +57,4 @@ clean_bins:
 	@rm -v -f $(BIN)
 
 clean:
-	@rm -v -f $(OBJS) $(BIN) 
+	@rm -v -f $(OBJS) $(BIN)

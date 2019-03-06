@@ -72,6 +72,7 @@ function build_mtce {
         VER_MJR=${major} \
         VER=${major}.${minor} \
         CCFLAGS=' -g -O2 -Wall -Wextra -std=c++11 -DBUILDINFO="\"$$(date)\""' \
+        EXTRALDFLAGS="-L$STX_INST_DIR"/lib64 \
         build
 
     popd

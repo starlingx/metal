@@ -43,7 +43,7 @@ library:
 	 ar rcs libalarm.a alarm.o $(EXTRAARFLAGS)
 
 process: $(OBJS)
-	$(CXX) $(CCFLAGS) ${OBJS} -L../daemon -L../common $(LDLIBS) -o mtcalarmd
+	$(CXX) $(CCFLAGS) ${OBJS} -L../daemon -L../common $(LDLIBS) $(EXTRALDFLAGS) -o mtcalarmd
 
 clean_bins:
 	@rm -v -f $(BINS)
