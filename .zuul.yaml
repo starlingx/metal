@@ -36,8 +36,8 @@
         horizon: false
         # StarlingX services
         fm-common: true
-        fm-api: true
-        mtce: true
+        # fm-api: true
+        # mtce: true
         mtce-compute: true
         mtce-control: true
         mtce-storage: true
