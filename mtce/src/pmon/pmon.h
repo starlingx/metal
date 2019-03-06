@@ -4,7 +4,7 @@
 * SPDX-License-Identifier: Apache-2.0
 *
  */
- 
+
 /*
  * This implements the CGCS process Monitor ; /usr/local/bin/pmond
  *
@@ -24,7 +24,7 @@
  *            pmon_msg_init
  *            event_port_init
  *            pulse_port_init
- *        
+ *
  *    daemon_service_run
  *       wait for goenable signal
  *       pmon_send_event ( READY )
@@ -35,7 +35,7 @@
  *             service_events
  *             pmon_send_pulse
  *             pmon_send_hostwd
- *          
+ *
  * This daemon waits for a "goenabled" signal an then reads all the process
  * configuration files in /etc/pmon.d and begins monitoring them accordingly.
  * A process confguration file is expected to contain the following information
@@ -44,30 +44,30 @@
  * ...
  *
  * But who watches the watcher ? Well there is a built-in mechanism for that.
- * A 'failing' or 'not running' Process Monitor Daemon (pmond) will lead to a 
- * degrade condition for that host. 
+ * A 'failing' or 'not running' Process Monitor Daemon (pmond) will lead to a
+ * degrade condition for that host.
  *
  * Here is how it works ...
  *
  * Step 1: pmond is in inittab so that it will be respawned if it dies.
  *
  * Step 2: While running pmond periodically sends a pulse message to the
- *         the local heartbeat Client (hbsClient). 
+ *         the local heartbeat Client (hbsClient).
  *
  *   Note: The hbsClient pulse response message has a flags field with 1
- *         bit dedicated to indicate the presence of the pmond on that host. 
+ *         bit dedicated to indicate the presence of the pmond on that host.
  *
  * Step 3: Every time the hbsClient receives a pmond pulse message it sets
- *         the pmond bit in the flags field of its pulse response. 
+ *         the pmond bit in the flags field of its pulse response.
  *
  *   Note: So if the pmond dies it stops sending its pulse message that the
  *         pmond bit in the pulse response flags will not be set.
  *
  * Step 4: The heartbeat agent (hbsAgent) looks at the pulse response flags.
  *         For every response that does not contain a pmond flag it increments
- *         the pmond 'missing' counter for that host. 
+ *         the pmond 'missing' counter for that host.
  *
- * Step 5: Every time it sees the pmod flag it clears the counter. 
+ * Step 5: Every time it sees the pmod flag it clears the counter.
  *         If that counter reaches PMOND_MISSING_THRESHOLD then that host
  *         is set to degraded. The degrade condition is cleared as soon
  *         as a single pmond flag is observed.
@@ -129,7 +129,7 @@ using namespace std;
 #define UNUSED(_x_) ((void) _x_)
 #endif
 
-#define AMON_MAGIC_NUM 0x12345678 
+#define AMON_MAGIC_NUM 0x12345678
 
 #define CONFIG_DIR    ((const char *)"/etc/pmon.d")
 
@@ -144,7 +144,7 @@ using namespace std;
 /* New PRCTL Flag
  *
  * Set/get notification for task state changes */
-#define PR_DO_NOTIFY_TASK_STATE 17	
+#define PR_DO_NOTIFY_TASK_STATE 17
 
 /* This is the data structure for requestion process death
   * (and other state change) information.  Sig of -1 means
@@ -153,15 +153,15 @@ using namespace std;
   * and will be updated with the previous values on every
   * successful call.
   */
-struct task_state_notify_info 
+struct task_state_notify_info
 {
 	         pid_t pid   ;
 	         int   sig   ;
 	unsigned int   events;
 };
 
-/* The "events" bits in the struct correspond to the si_code values in the siginfo_t struct 
- * that would normally be sent along with a SIGCHLD to the parent process.  
+/* The "events" bits in the struct correspond to the si_code values in the siginfo_t struct
+ * that would normally be sent along with a SIGCHLD to the parent process.
  * The bits are mapped like this:
  *
  *     1 << (info->si_code & 0xFF)
@@ -170,7 +170,7 @@ The possible si_code values are defined in /usr/include/bits/siginfo.h and are:
 
 enum
 {
-   CLD_EXITED = 1,               Child has exited. 
+   CLD_EXITED = 1,               Child has exited.
    CLD_KILLED,                   Child was killed.
    CLD_DUMPED,                   Child terminated abnormally.
    CLD_TRAPPED,                  Traced child has trapped.
@@ -239,7 +239,7 @@ void pmon_set_ctrl_ptr ( pmon_ctrl_type * ctrl_ptr );
 #define PMON_RT_SIGNAL (SIGRTMIN+1)
 #define PMON_EVENT_FLAGS ( MON_EXITED | MON_KILLED )
                         // MON_DUMPED
-                        // MON_STOPPED 
+                        // MON_STOPPED
                         // MON_TRAPPED
 
 int setup_signal_handler ( int rt_signal_num );
