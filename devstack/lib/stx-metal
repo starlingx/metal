@@ -40,7 +40,13 @@ set -o xtrace
 STX_METAL_DIR=${GITDIR[$STX_METAL_NAME]}
 
 # STX_INST_DIR should be a non-root-writable place to install build artifacts
-STX_INST_DIR=${STX_INST_DIR:-$DEST/usr}
+STX_INST_DIR=${STX_INST_DIR:-/usr/local}
+STX_BIN_DIR=$STX_INST_DIR/bin
+
+# Set up so we don't use sudo for installs when not necessary
+STX_SUDO="sudo"
+[[ -w $STX_INST_DIR ]] && STX_SUDO="env"
+
 SYSCONFDIR=/etc
 OAM_ETH_NAME=ens3
 MGMT_ETH_NAME=lo
@@ -132,10 +138,10 @@ function install_mtce_common {
         "common/libhostUtil.a" \
         "daemon/libdaemon.a" \
         )
-    install -m 755 -d ${lib64_dir}
-    install -m 644 -t ${lib64_dir} ${libdaecom_file[*]}
+    $STX_SUDO install -m 755 -d ${lib64_dir}
+    $STX_SUDO install -m 644 -t ${lib64_dir} ${libdaecom_file[*]}
 
-    install -m 755 -d ${inc_dir}
+    $STX_SUDO install -m 755 -d ${inc_dir}
     local commonhdr_file=( \
         "common/fitCodes.h" \
         "common/logMacros.h" \
@@ -160,16 +166,16 @@ function install_mtce_common {
         "common/tokenUtil.h" \
         "common/secretUtil.h" \
         )
-    install -m 755 -d ${inc_dir}
-    install -m 644 -t ${inc_dir} ${commonhdr_file[*]}
+    $STX_SUDO install -m 755 -d ${inc_dir}
+    $STX_SUDO install -m 644 -t ${inc_dir} ${commonhdr_file[*]}
 
     local daemonhdr_file=( \
         "daemon/daemon_ini.h" \
         "daemon/daemon_common.h" \
         "daemon/daemon_option.h" \
         )
-    install -m 755 -d ${inc_dir}
-    install -m 644 -t ${inc_dir} ${daemonhdr_file[*]}
+    $STX_SUDO install -m 755 -d ${inc_dir}
+    $STX_SUDO install -m 644 -t ${inc_dir} ${daemonhdr_file[*]}
     popd
 }
 
@@ -325,7 +331,7 @@ function install_mtce {
     sudo install -m 755 -p -D alarm/mtcalarmd ${bin_dir}/mtcalarmd
     sudo install -m 755 -p -D rmon/rmon_resource_notify/rmon_resource_notify ${bin_dir}/rmon_resource_notify
     sudo install -m 755 -p -D scripts/wipedisk ${bin_dir}/wipedisk
-    sudo install -m 755 -p -D fsync/fsync ${STX_INST_DIR}/sbin/fsync
+    $STX_SUDO install -m 755 -p -D fsync/fsync ${STX_INST_DIR}/sbin/fsync
     sudo install -m 700 -p -D pmon/scripts/pmon-restart ${sbin_dir}/pmon-restart
     sudo install -m 700 -p -D pmon/scripts/pmon-start ${sbin_dir}/pmon-start
     sudo install -m 700 -p -D pmon/scripts/pmon-stop ${sbin_dir}/pmon-stop
@@ -412,17 +418,17 @@ function install_mtce {
     sudo install -m 644 -p -D alarm/scripts/mtcalarm.logrotate ${local_etc_logrotated}/mtcalarm.logrotate
 
     # software development files
-    install -m 644 -p -D heartbeat/mtceHbsCluster.h ${inc_dir}/mtceHbsCluster.h
-    install -m 755 -p -D public/libamon.so.${major} ${lib64_dir}/libamon.so.${major}
-    install -m 755 -p -D rmon/rmonApi/librmonapi.so.${major} ${lib64_dir}/librmonapi.so.${major}
+    $STX_SUDO install -m 644 -p -D heartbeat/mtceHbsCluster.h ${inc_dir}/mtceHbsCluster.h
+    $STX_SUDO install -m 755 -p -D public/libamon.so.${major} ${lib64_dir}/libamon.so.${major}
+    $STX_SUDO install -m 755 -p -D rmon/rmonApi/librmonapi.so.${major} ${lib64_dir}/librmonapi.so.${major}
     popd
 
     pushd ${lib64_dir}
-    ln -sf libamon.so.${major} libamon.so.${major}.${minor}
-    ln -sf libamon.so.${major} libamon.so
+    $STX_SUDO ln -sf libamon.so.${major} libamon.so.${major}.${minor}
+    $STX_SUDO ln -sf libamon.so.${major} libamon.so
 
-    ln -sf librmonapi.so.${major} librmonapi.so.${major}.${minor}
-    ln -sf librmonapi.so.${major} librmonapi.so
+    $STX_SUDO ln -sf librmonapi.so.${major} librmonapi.so.${major}.${minor}
+    $STX_SUDO ln -sf librmonapi.so.${major} librmonapi.so
     popd
 }
 
@@ -784,7 +790,7 @@ function cleanup_metal {
     sudo rm -rf ${bin_dir}/mtcalarmd
     sudo rm -rf ${bin_dir}/rmon_resource_notify
     sudo rm -rf ${bin_dir}/wipedisk
-    sudo rm -rf ${STX_INST_DIR}/sbin/fsync
+    rm -rf ${STX_INST_DIR}/sbin/fsync
     sudo rm -rf ${sbin_dir}/pmon-restart
     sudo rm -rf ${sbin_dir}/pmon-start
     sudo rm -rf ${sbin_dir}/pmon-stop
@@ -861,15 +867,15 @@ function cleanup_metal {
     sudo rm -rf ${local_etc_logrotated}/mtcalarm.logrotate
 
     # software development files
-    sudo rm -rf ${inc_dir}/mtceHbsCluster.h
-    sudo rm -rf ${lib64_dir}/libamon.so.${major}
-    sudo rm -rf ${lib64_dir}/librmonapi.so.${major}
+    $STX_SUDO rm -rf ${inc_dir}/mtceHbsCluster.h
+    $STX_SUDO rm -rf ${lib64_dir}/libamon.so.${major}
+    $STX_SUDO rm -rf ${lib64_dir}/librmonapi.so.${major}
 
-    sudo rm -rf ${lib64_dir}/libamon.so.${major}.${minor}
-    sudo rm -rf ${lib64_dir}/libamon.so
+    $STX_SUDO rm -rf ${lib64_dir}/libamon.so.${major}.${minor}
+    $STX_SUDO rm -rf ${lib64_dir}/libamon.so
 
-    sudo rm -rf ${lib64_dir}/librmonapi.so.${major}.${minor}
-    sudo rm -rf ${lib64_dir}/librmonapi.so
+    $STX_SUDO rm -rf ${lib64_dir}/librmonapi.so.${major}.${minor}
+    $STX_SUDO rm -rf ${lib64_dir}/librmonapi.so
 
     #remove mtce_common
     local inc_dir_common=${STX_INST_DIR}/include/mtce-common
@@ -971,7 +977,7 @@ function uninstall_files {
 
     for (( i=0; i<${#dest_file_array[*]}; i++ )); do
         file=${dest_file_array[$i]##*/}
-        sudo rm -rf $dest_dir/$file
+        $STX_SUDO rm -rf $dest_dir/$file
     done
 }
 
