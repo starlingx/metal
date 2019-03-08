@@ -41,6 +41,9 @@
         mtce-compute: true
         mtce-control: true
         mtce-storage: true
+        inventory-api: true
+        inventory-conductor: true
+        inventory-agent: true
         fsmon: true
         hbs: true
         hwmon: true
