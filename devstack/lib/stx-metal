@@ -107,6 +107,14 @@ function build_inventory {
     popd
 }
 
+function build_inventory_client {
+    pushd ${STX_METAL_DIR}/python-inventoryclient/inventoryclient
+
+    python setup.py build
+
+    popd
+}
+
 function install_metal {
     install_mtce_common
     # components could be seperately installed if
@@ -125,6 +133,9 @@ function install_metal {
 
     if is_service_enabled inventory-api || is_service_enabled inventory-conductor || is_service_enabled inventory-agent; then
         install_inventory
+    fi
+    if is_service_enabled inventory-client; then
+        install_inventory_client
     fi
 }
 
@@ -274,6 +285,24 @@ function install_inventory {
 
     sudo install -m 644 -p -D scripts/inventory-api.service ${unit_dir}/inventory-api.service
     sudo install -m 644 -p -D scripts/inventory-conductor.service ${unit_dir}/inventory-conductor.service
+
+    popd
+}
+
+function install_inventory_client {
+    pushd ${STX_METAL_DIR}/python-inventoryclient/inventoryclient
+
+    build_inventory_client
+
+    sudo python setup.py install \
+        --root=/ \
+        --install-lib=$PYTHON_SITE_DIR \
+        --prefix=/usr \
+        --install-data=/usr/share \
+        --single-version-externally-managed
+
+    sudo install -d -m 755 /etc/bash_completion.d/
+    sudo install -p -D -m 664 tools/inventory.bash_completion /etc/bash_completion.d/inventory.bash_completion
 
     popd
 }
@@ -940,6 +969,9 @@ function cleanup_metal {
     if is_service_enabled inventory-api || is_service_enabled inventory-conductor || is_service_enabled inventory-agent; then
         cleanup_inventory
     fi
+    if is_service_enabled inventory-client; then
+        cleanup_inventory_client
+    fi
 }
 
 function cleanup_inventory {
@@ -962,6 +994,12 @@ function cleanup_inventory {
     sudo rm -rf  ${lib_dir}/ocf/resource.d/platform/inventory-conductor
     sudo rm -rf  ${unit_dir}/inventory-api.service
     sudo rm -rf  ${unit_dir}/inventory-conductor.service
+}
+
+function cleanup_inventory_client {
+    sudo pip uninstall -y inventoryclient
+
+    sudo rm -rf /etc/bash_completion.d/inventory.bash_completion
 }
 
 function uninstall_files {
