@@ -124,7 +124,6 @@ python-cinder
 python-django
 python-django-appconf
 python-django-compressor
-python-django-openstack-auth
 python-fmclient
 python-glance
 python2-gunicorn
