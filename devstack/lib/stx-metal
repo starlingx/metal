@@ -48,8 +48,13 @@ STX_SUDO="sudo"
 [[ -w $STX_INST_DIR ]] && STX_SUDO="env"
 
 SYSCONFDIR=/etc
-OAM_ETH_NAME=ens3
-MGMT_ETH_NAME=lo
+# Todo:
+# For the time being, we use the same interface for oam and management
+# network as a temporal solution. In the future, stx devstack common
+# module should create multiple inteface, then we need make changes here
+# accordingly.
+OAM_ETH_NAME=$(ip -f inet route | awk '/default/ {print $5}' | head -1)
+MGMT_ETH_NAME=$(ip -f inet route | awk '/default/ {print $5}' | head -1)
 SW_VERSION=18.10
 
 OCF_ROOT=/usr/lib/ocf
@@ -102,7 +107,7 @@ function build_inventory {
     popd
 }
 
-function install_maintenance {
+function install_metal {
     install_mtce_common
     # components could be seperately installed if
     # installation is well controlled in Makefile
@@ -447,7 +452,7 @@ function install_mtce {
     popd
 }
 
-function configure_maintenance {
+function configure_metal {
     echo "${STX_INST_DIR}/lib64" | sudo tee /etc/ld.so.conf.d/stx-metal.conf
     sudo ldconfig
 
@@ -468,25 +473,29 @@ function configure_maintenance {
     fi
 
     # TODO: enable controllerconfig to do this
+    # Todo:
+    # For the time being, we use the same ips as fixed and float ip.  In
+    # the future, we need stx devstack common module to enable float ip and
+    # write them in /etc/hosts, then we can remove below code.
     # add floating ip hostname in hosts
     if ! grep -q 'controller$' /etc/hosts; then
-        echo "192.168.204.2 controller" | sudo tee -a /etc/hosts
+        echo "$HOST_IP controller" | sudo tee -a /etc/hosts
     fi
     # add controller-0
     if ! grep -q 'controller-0$' /etc/hosts; then
-        echo "192.168.204.3 controller-0" | sudo tee -a /etc/hosts
+        echo "$HOST_IP controller-0" | sudo tee -a /etc/hosts
     fi
 
     # puppet configuration for mtce
     iniset -sudo /etc/mtc.ini "agent" "keystone_auth_username" "admin"
-    iniset -sudo /etc/mtc.ini "agent" "keystone_auth_pw" "secret"
+    iniset -sudo /etc/mtc.ini "agent" "keystone_auth_pw" "$SERVICE_PASSWORD"
     iniset -sudo /etc/mtc.ini "agent" "keystone_auth_project" "admin"
-    iniset -sudo /etc/mtc.ini "agent" "keystone_user_domain" "Default"
-    iniset -sudo /etc/mtc.ini "agent" "keystone_project_domain" "Default"
+    iniset -sudo /etc/mtc.ini "agent" "keystone_user_domain" "$SERVICE_DOMAIN_NAME"
+    iniset -sudo /etc/mtc.ini "agent" "keystone_project_domain" "$SERVICE_DOMAIN_NAME"
     iniset -sudo /etc/mtc.ini "agent" "keystone_auth_host" "127.0.0.1"
-    iniset -sudo /etc/mtc.ini "agent" "keystone_auth_uri" "http://127.0.0.1:5000"
+    iniset -sudo /etc/mtc.ini "agent" "keystone_auth_uri" "$KEYSTONE_SERVICE_URI"
     iniset -sudo /etc/mtc.ini "agent" "keystone_auth_port" "5000"
-    iniset -sudo /etc/mtc.ini "agent" "keystone_region_name" "RegionOne"
+    iniset -sudo /etc/mtc.ini "agent" "keystone_region_name" "$REGION_NAME"
     iniset -sudo /etc/mtc.ini "agent" "keyring_directory" "/opt/platform/.keyring/${SW_VERSION}"
     # sm port add to config file
     iniset -sudo /etc/mtc.ini "agent" "sm_server_port" "2124"
@@ -531,6 +540,7 @@ function start_hwmon {
     # init hwmon
     iniset -sudo /etc/systemd/system/devstack@hwmon.service "Service" "Type" "forking"
     iniset -sudo /etc/systemd/system/devstack@hwmon.service "Service" "PIDFile" "/var/run/hwmond.pid"
+    iniset -sudo /etc/systemd/system/devstack@hwmon.service "Service" "Environment" "OCF_ROOT=${OCF_ROOT}"
 
     run_process hwmon "${OCF_ROOT}/resource.d/platform/hwmon start" root root
 }
@@ -539,10 +549,10 @@ function start_mtce_control {
     # Oneshot goenabled control
     sudo ${SYSCONFDIR}/init.d/goenabledControl start
 
-    if is_service_enabled mtce-agent || is_service_enabled mtce; then
+    if is_service_enabled mtcAgent; then
         start_mtcAgent
     fi
-    if is_service_enabled hbs-agent || is_service_enabled hbs; then
+    if is_service_enabled hbsAgent; then
         start_hbsAgent
     fi
     if is_service_enabled hwmon && is_service_enabled sysinv; then
@@ -560,7 +570,7 @@ function start_mtce_storage {
     sudo ${SYSCONFDIR}/init.d/goenabledStorage start
 }
 
-function start_maintenance {
+function start_metal {
     if is_service_enabled mtce-control; then
         start_mtce_control
     fi
@@ -573,10 +583,10 @@ function start_maintenance {
 
     start_goenabled
 
-    if is_service_enabled hbs; then
+    if is_service_enabled hbsClient; then
         start_hbsClient
     fi
-    if is_service_enabled mtce; then
+    if is_service_enabled mtcClient; then
         start_mtcClient
     fi
     if is_service_enabled mtclog; then
@@ -643,10 +653,10 @@ function stop_hwmon {
 function stop_mtce_control {
     sudo ${SYSCONFDIR}/init.d/goenabledControl stop
 
-    if is_service_enabled mtce-agent || is_service_enabled mtce; then
+    if is_service_enabled mtcAgent; then
         stop_mtcAgent
     fi
-    if is_service_enabled hbs-agent || is_service_enabled hbs; then
+    if is_service_enabled hbsAgent; then
         stop_hbsAgent
     fi
     if is_service_enabled hwmon && is_service_enabled sysinv; then
@@ -694,7 +704,7 @@ function stop_hostw {
     stop_process hostw
 }
 
-function stop_maintenance {
+function stop_metal {
     stop_goenabled
 
     if is_service_enabled pmon; then

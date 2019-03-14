@@ -14,16 +14,16 @@ if is_service_enabled stx-metal; then
         # Perform installation of source
         echo_summary "Install stx-metal"
         # maintenance components should be installed in each node
-        install_maintenance
+        install_metal
     elif [[ "$1" == "stack" && "$2" == "post-config" ]]; then
         # Configure after the other layer 1 and 2 services have been configured
         echo_summary "Configure metal"
-        configure_maintenance
+        configure_metal
     elif [[ "$1" == "stack" && "$2" == "extra" ]]; then
         # Initialize and start the metal services
         echo_summary "Initialize and start metal "
         # Start services on each node
-        start_maintenance
+        start_metal
     elif [[ "$1" == "stack" && "$2" == "test" ]]; then
         # do sanity test for metal
         echo_summary "do test"
@@ -33,7 +33,7 @@ if is_service_enabled stx-metal; then
         # Shut down metal services
         echo_summary "Stop metal services"
         # Stop client services on each node
-        stop_maintenance
+        stop_metal
     fi
 
     if [[ "$1" == "clean" ]]; then

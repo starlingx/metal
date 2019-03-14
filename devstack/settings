@@ -71,5 +71,13 @@ if is_service_enabled hwmon && is_plugin_enabled stx-config; then
     enable_service sysinv
 fi
 
+if is_service_enabled mtcAgent; then
+    if [ $(hostname) != "controller-0" ] && [ $(hostname) != "controller-1" ]; then
+        # mtcAgent requires that hostname must be "controller-0" or "controller-1"
+        echo_summary "hostname doesn't meet requirements, so disable mtcAgent"
+        disable_service mtcAgent
+    fi
+fi
+
 # Initial source of lib script
 source $DEST/stx-metal/devstack/lib/stx-metal
