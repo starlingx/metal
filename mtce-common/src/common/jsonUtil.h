@@ -53,7 +53,7 @@ typedef struct
     string tokenid ; /**< The long encrypted toke.n                       */
     string issued  ; /**< The "issued_at": "<date-time>".                 */
     string expiry  ; /**< The "expires": "<date-time>".                   */
-    string adminURL; /**< path to the nova server.                        */
+    string adminURL; /**< path to the token server.                        */
 } jsonUtil_auth_type ;
 
 #define MAX_JSON_SECRET_CONTENTS_NUM 7
@@ -113,7 +113,7 @@ int jsonUtil_get_key_val_int ( char   * json_str_ptr,
                                string   key,
                                int    & value );
 
-/** Submit a request to get an authorization token and nova URL */
+/** Submit a request to get an authorization token */
 int jsonApi_auth_request ( string & hostname, string & payload );
 
 /** Parse through the authorization request's response json string

@@ -1,6 +1,5 @@
 %define local_etc_pmond      %{_sysconfdir}/pmon.d
 %define local_etc_goenabledd %{_sysconfdir}/goenabled.d
-%define local_etc_nova       %{_sysconfdir}/nova
 
 %define debug_package %{nil}
 
@@ -35,23 +34,14 @@ make install buildroot=%{buildroot} _sysconfdir=%{_sysconfdir} _unitdir=%{_unitd
 
 %post
 /bin/systemctl enable goenabled-worker.service
-/bin/systemctl enable e_nova-init.service
 /bin/systemctl enable qemu_clean.service
 
 %files
 %defattr(-,root,root,-)
 
 %{_sysconfdir}/init.d/goenabledWorker
-%{_sysconfdir}/init.d/e_nova-init
-%{_sysconfdir}/init.d/nova-cleanup
-%{_sysconfdir}/init.d/nova-startup
-%{local_etc_nova}/nova-cleanup.conf
-%{local_etc_nova}/nova-compute.conf
-%{local_etc_pmond}/libvirtd.conf
-%{local_etc_goenabledd}/nova-goenabled.sh
 %{local_etc_goenabledd}/virt-support-goenabled.sh
 %{_unitdir}/goenabled-worker.service
-%{_unitdir}/e_nova-init.service
 
 %license %{_datarootdir}/licenses/mtce-compute-1.0/LICENSE
 

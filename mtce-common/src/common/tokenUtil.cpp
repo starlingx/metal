@@ -592,19 +592,9 @@ int tokenUtil_handler ( libEvent & event )
     {
         /* Response: {"services":
            [
-           {"id": "49fc93c32d734c78a9d9f975c22f1703", "type": "network", "name": "neutron", "description": "Neutron Networking Service"},
-           {"id": "0900a982ff114e7ba62c317443b43362", "type": "metering", "name": "ceilometer", "description": "Openstack Metering Service"}, 
-           {"id": "97940d057bec47cc989cc190b4293aad", "type": "ec2", "name": "nova_ec2", "description": "EC2 Service"},
-           {"id": "7ce51d481d024b1f8b80bb1127b80752", "type": "volumev2", "name": "cinderv2", "description": "Cinder Service v2"},
-           {"id": "3ed8ae6ccf85445ebdf2e93bbce9f5fb", "type": "computev3", "name": "novav3", "description": "Openstack Compute Service v3"},
            {"id": "564bf663693c49cf9fee24e2fdbdba3a", "type": "identity", "name": "keystone", "description": "OpenStack Identity Service"},
            {"id": "7e0cadd9db444342b7fddb0005c4ce5f", "type": "platform", "name": "sysinv", "description": "SysInv Service"},
-           {"id": "be7afccda91c4ba19ac2e53f613c6b63", "type": "volume", "name": "cinder", "description": "Cinder Service"},
-           {"id": "edf60a37f4f84b9baba215d8346b814f", "type": "image", "name": "glance", "description": "Openstack Image Service"},
            {"id": "0673921c7b094178989455a5b157fb60", "type": "patching", "name": "patching", "description": "Patching Service"},
-           {"id": "d7621026166f43c0a1c74e0e9784cce6", "type": "compute", "name": "nova", "description": "Openstack Compute Service"},
-           {"id": "aef585311e3144e0b1267ea25dc40b70", "type": "orchestration", "name": "heat", "description": "Openstack Orchestration Service"}, 
-           {"id": "0a67bc174fa0469e9b837daf23d83aaf", "type": "cloudformation", "name": "heat-cfn", "description": "Openstack Cloudformation Service"}
            ]} */
 
         bool   found = false ;

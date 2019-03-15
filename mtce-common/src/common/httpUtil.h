@@ -192,7 +192,7 @@ typedef enum {
 
 /** Local event control structure for REST API services
  *
- *  Nova, Neutron, Keystone, Barbican and Inventory
+ *  Keystone, Barbican and Inventory
  *
  */
 struct libEvent
