@@ -109,10 +109,6 @@ typedef struct
     int   pmon_event_port       ; /**< process monitor tx event port          */
     int   pmon_pulse_port       ; /**< process Monitor I'm Alive pulse port   */
     int   pmon_cmd_port         ; /**< process Monitor command receive port   */
-    int   rmon_api_tx_port      ; /**< resource monitor api tx port           */
-    int   rmon_event_port       ; /**< resource monitor api event port        */
-    int   rmon_critical_thr     ; /**< resmon critical threshold in use       */
-    int   rmon_tx_port          ; /**< resource monitor tx event port         */
     int   log_step              ; /**< used to throttle logging at step rate  */
     int   event_port            ; /**< daemon specific event tx port          */
     int   cmd_port              ; /**< daemon specific command rx port        */

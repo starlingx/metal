@@ -691,9 +691,7 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
 
     ptr->degrade_mask = ptr->degrade_mask_save = DEGRADE_MASK_NONE ;
 
-    ptr->degraded_resources_list.clear () ;
     ptr->pmond_ready = false ;
-    ptr->rmond_ready = false ;
     ptr->hwmond_ready = false ;
     ptr->hbsClient_ready = false ;
 
@@ -4766,12 +4764,6 @@ int nodeLinkClass::declare_service_ready  ( string & hostname,
         }
         return (PASS);
     }
-    else if ( service == MTC_SERVICE_RMOND )
-    {
-        node_ptr->rmond_ready = true ;
-        plog ("%s got rmond ready event\n", hostname.c_str());
-        return (PASS);
-    }
     else if ( service == MTC_SERVICE_HEARTBEAT )
     {
         if ( node_ptr->hbsClient_ready == false )
@@ -4857,73 +4849,6 @@ int nodeLinkClass::collectd_notify_handler ( string & hostname,
     return (rc);
 }
 
-/** Resource Monitor 'Clear' Event handler.
-  *
-  * The resource specified will be removed from the
-  * 'degraded_resources_list' for specified host.
-  * if there are no other degraded resources or other
-  * degraded services/reasons against that host then
-  * this handler will clear the degrade state for the
-  * specified host all together. */
-int nodeLinkClass::degrade_resource_clear  ( string & hostname,
-                                             string & resource )
-{
-    /* lr - Log Prefix Rmon */
-    string lr = hostname ;
-    lr.append (" rmond:");
-
-    nodeLinkClass::node * node_ptr = nodeLinkClass::getNode ( hostname );
-    if ( node_ptr == NULL )
-    {
-        wlog ("%s Unknown Host\n", lr.c_str());
-        return FAIL_UNKNOWN_HOSTNAME ;
-    }
-    else if ( node_ptr->adminState == MTC_ADMIN_STATE__UNLOCKED )
-    {
-        /* Clear all resource degrade conditions if there is no resource specified */
-        /* this is used as a cleanup audit just in case things get stuck */
-        if ( resource.empty() )
-        {
-            node_ptr->degrade_mask &= ~DEGRADE_MASK_RESMON ;
-            node_ptr->degraded_resources_list.clear () ;
-        }
-        else if (( node_ptr->degraded_resources_list.empty()) ||
-             ( node_ptr->degrade_mask == DEGRADE_MASK_NONE ))
-        {
-            dlog ("%s '%s' Non-Degraded Clear\n", 
-                      lr.c_str(), resource.c_str());
-        }
-        else
-        {
-            if (is_string_in_string_list (node_ptr->degraded_resources_list, resource))
-            {
-                node_ptr->degraded_resources_list.remove(resource);
-                ilog ("%s '%s' Degrade Clear\n", 
-                          lr.c_str(), resource.c_str());
-            }
-            else
-            {
-                wlog ("%s '%s' Unexpected Degrade Clear\n", 
-                          lr.c_str(), resource.c_str());
-            }
-
-            if ( node_ptr->degraded_resources_list.empty() )
-            {
-                node_ptr->degrade_mask &= ~DEGRADE_MASK_RESMON ; ;
-            }
-            else
-            {
-                string degraded_resources = 
-                get_strings_in_string_list ( node_ptr->degraded_resources_list );
-                wlog ("%s Degraded Resource List: %s\n", 
-                          lr.c_str(), degraded_resources.c_str());
-            }
-        }
-
-    }
-    return (PASS);
-}
-
 /*********************************************************************************
  *
  * Name       : node_degrade_control
@@ -4939,9 +4864,6 @@ int nodeLinkClass::degrade_resource_clear  ( string & hostname,
  *              Supported 'services' include
  *
  *              "hwmon" - The Hardware Monitor process
- *
- *
- * Future services might be rmon and pmon
  *
  **********************************************************************************/
 int nodeLinkClass::node_degrade_control ( string & hostname, int state, string service  )
@@ -5266,28 +5188,6 @@ int nodeLinkClass::alarm_process_failure  ( string & hostname, string & process 
     return (PASS);
 }
 
-/* Generate a log for the reported failed resource if that host is
- * unlocked */
-int nodeLinkClass::log_resource_failure  ( string & hostname, string & resource )
-{
-    /* lr - Log Prefix Rmond */
-    string lr = hostname ;
-    lr.append (" rmond:");
-    nodeLinkClass::node * node_ptr = nodeLinkClass::getNode ( hostname );
-    if ( node_ptr == NULL )
-    {
-        wlog ("%s Unknown Host ; '%s' failed (minor)\n", 
-                  lr.c_str(), resource.c_str());
-        return FAIL_UNKNOWN_HOSTNAME ;
-    }
-    else if ( node_ptr->operState == MTC_OPER_STATE__ENABLED )
-    {
-       ilog ("%s '%s' failed (minor)\n", 
-                 lr.c_str(), resource.c_str());
-    }
-    return (PASS);
-}
-
 /** Process Monitor Degrade Event handler.
  *
  *  The host will enter degrade state due to the specified process
@@ -5443,54 +5343,6 @@ int nodeLinkClass::update_dport_states ( struct nodeLinkClass::node * node_ptr, 
     return (rc);
 }
 
-/** Resource Monitor 'Raise' Event handler.
- *
- *  The host will enter degrade state due to the specified resource
- *  threshold being surpased. The resource name is recorded in the
- *  'degraded_resources_list' for specified host.
- *  Clearing degrade against this resource requires that host to
- *  send a clear event against that resource or for that host to
- *  fully re-enable */
-int nodeLinkClass::degrade_resource_raise  ( string & hostname,
-                                            string & resource )
-{
-    /* lr - Log Prefix Rmond */
-    string lr = hostname ;
-    lr.append (" rmond:");
-
-    nodeLinkClass::node * node_ptr = nodeLinkClass::getNode ( hostname );
-    if ( node_ptr == NULL )
-    {
-        wlog ("%s Unknown Host\n", lr.c_str());
-        return FAIL_UNKNOWN_HOSTNAME ;
-    }
-    else if ( node_ptr->adminState == MTC_ADMIN_STATE__UNLOCKED )
-    {
-        if ( is_string_in_string_list ( node_ptr->degraded_resources_list, resource ) == false )
-        {
-            string degraded_resources = "";
-
-            ilog ("%s '%s' Degraded\n", lr.c_str(), resource.c_str());
-            node_ptr->degraded_resources_list.push_back (resource);
-            node_ptr->degrade_mask |= DEGRADE_MASK_RESMON ;
-
-            /* Cleanup the list */
-            node_ptr->degraded_resources_list.sort ();
-            node_ptr->degraded_resources_list.unique ();
-
-            degraded_resources =
-            get_strings_in_string_list ( node_ptr->degraded_resources_list );
-            wlog ("%s Failing Resources: %s\n",
-                      lr.c_str(), degraded_resources.c_str());
-        }
-        else
-        {
-            dlog ("%s '%s' Degraded (again)\n", lr.c_str(), resource.c_str());
-        }
-    }
-    return (PASS);
-}
-
 /** Process Monitor 'Critical Process Failed' Event handler.
   *
   * This utility handles critical process failure event notifications.
@@ -5555,36 +5407,6 @@ int nodeLinkClass::critical_process_failed( string & hostname,
                   get_enableStages_str(node_ptr->enableStage).c_str());
     }
     return (PASS);
-}
-
-/** Resource Monitor 'Failed' Event handler.
-  *
-  *  The host will go out of service, be reset and 
-  *  automatically re-enabled. */
-int nodeLinkClass::critical_resource_failed( string & hostname, 
-                                             string & resource )
-{
-    nodeLinkClass::node * node_ptr = nodeLinkClass::getNode ( hostname );
-    if ( node_ptr == NULL )
-    {
-        wlog ("%s rmond: Unknown host\n", hostname.c_str());
-        return FAIL_UNKNOWN_HOSTNAME ;
-    }
-
-    if (( node_ptr->adminState == MTC_ADMIN_STATE__UNLOCKED ) &&
-        ( node_ptr->operState == MTC_OPER_STATE__ENABLED ))
-    {
-        /* Start fresh the next time we enter graceful recovery handler */
-        node_ptr->graceful_recovery_counter = 0 ;
-
-        elog ("%s rmond: Critical Resource '%s' Failure\n", hostname.c_str(), resource.c_str());
-        
-        /* Set node as unlocked-enabled */
-        allStateChange ( node_ptr, MTC_ADMIN_STATE__UNLOCKED, 
-                                   MTC_OPER_STATE__DISABLED,
-                                   MTC_AVAIL_STATUS__FAILED );
-    }
-        return (PASS);
 }
 
 bool nodeLinkClass::is_active_controller ( string hostname )

@@ -40,7 +40,6 @@
 # ntpd                            does not support restart
 # ptp4l                           does not support restart
 # phc2sys                         does not support restart
-# rmond                           restart PASSED [13893]:[5129]
 # sm-api                          restart PASSED [8896]:[8460]
 # skipping 'sm' process
 # sm-eru                          restart PASSED [8904]:[10993]

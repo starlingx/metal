@@ -602,9 +602,9 @@ private:
           * @addtogroup private_monitoring_services_variables
           * @{
           *
-          * A grouping a of flags, mask and degrade resource lists 
-          * used to manage the degrade state of a host for process
-          * and resource monitoring services.
+          * A grouping a of flags, mask and lists used to
+          * manage the degrade state of a host for process
+          * monitoring services.
           */
 
         /* Bit mask of degrade reasons */
@@ -630,16 +630,6 @@ private:
         /** hwmon reset and powercycle recovery control structure */
         recovery_ctrl_type hwmon_reset ;
         recovery_ctrl_type hwmon_powercycle ;
-
-        /** Resource Monitor Daemon Flag Missing count */
-        int  rmond_missing_count ;
-
-        /** Host degraded due to loss of Resource Monitor running flag */
-        bool rmond_degraded ;
-
-        /** Resource Monitor Ready flag and degrade list */
-        bool rmond_ready ;
-        std::list<string> degraded_resources_list   ;
 
         /** process or resource list string iterator */
         std::list<string>::iterator string_iter_ptr ;
@@ -1797,16 +1787,6 @@ public:
       * specified host all together. */
     int degrade_pmond_clear  ( string & hostname );
 
-    /** Resource Monitor 'Clear' Event handler.
-      *
-      * The resource specified will be removed from the
-      * 'degraded_resources_list' for specified host.
-      * if there are no other degraded resources or other
-      * degraded services/reasons against that host then
-      * this handler will clear the degrade state for the
-      * specified host all together. */
-    int degrade_resource_clear  ( string & hostname, string & resource );
-
     /**
       *  If the pmond degrade flag is not set then do so.
       *  if the host is not degraded then set it to degraded. */
@@ -1817,19 +1797,6 @@ public:
 
     /** if host is unlocked-enabled generate a process failure alarm */
     int alarm_process_failure  ( string & hostname, string & process );
-
-    /** Resource Monitor Raise Event handler.
-     *
-     *  The host will enter degrade state due to the specified resource
-     *  not running properly. The resource name is recorded in the
-     *  'degraded_resources_list' for specified host.
-     *  Clearing degrade against this resource requires that host to
-     *  send a clear event against that resource or for that host to
-     *  fully re-enable */
-    int degrade_resource_raise  ( string & hostname, string & resource );
-
-    /** Generate a resource failure log if the host is unlocked */
-    int log_resource_failure  ( string & hostname, string & resource );
 
     /** Hardware Process Monitor Degrade Event handler.
      *  see implementation for details */
@@ -1848,12 +1815,6 @@ public:
       *  The host will go out of service and be reset and
       *  automatically re-enabled. */
     int critical_process_failed( string & hostname, string & process, unsigned int nodetype );
-
-    /** Resource Monitor Failed Event handler.
-      *
-      *  The host will go out of service and be reset and
-      *  automatically re-enabled. */
-    int critical_resource_failed( string & hostname, string & resource );
 
     /************************************************************/
 

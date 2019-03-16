@@ -5,7 +5,6 @@
 # mtce
 mtce
 mtce-pmon
-mtce-rmon
 mtce-hwmon
 mtce-hostw
 mtce-lmon

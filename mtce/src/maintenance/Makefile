@@ -51,9 +51,9 @@ CONTROL_OBJS += ../common/nodeClass.o
 
 OBJS = $(SRCS:.cpp=.o)
 BINS = mtcAgent mtcClient
-LDLIBS += -lstdc++ -ldaemon -lcommon -lthreadUtil -lipmiUtil -lfmcommon -lrmonapi -lalarm -lpthread -lrt -levent -ljson-c -lamon -lcrypto -luuid
+LDLIBS += -lstdc++ -ldaemon -lcommon -lthreadUtil -lipmiUtil -lfmcommon -lalarm -lpthread -lrt -levent -ljson-c -lamon -lcrypto -luuid
 INCLUDES = -I. -I/usr/include/mtce-daemon -I/usr/include/mtce-common
-INCLUDES += -I../common -I../alarm -I../heartbeat -I../hwmon -I../public -I../rmon/rmonApi
+INCLUDES += -I../common -I../alarm -I../heartbeat -I../hwmon -I../public
 CCFLAGS += -g -O2 -Wall -Wextra -Werror -Wno-missing-braces
 
 STATIC_ANALYSIS_TOOL = cppcheck
@@ -77,10 +77,10 @@ common:
 	( cd ../common ; make clean ; make lib VER=$(VER) VER_MJR=$(VER_MJR))
 
 mtcAgent: $(OBJS)
-	$(CXX) $(CONTROL_OBJS) -L../public -L../alarm -L../rmon/rmonApi $(LDLIBS) $(EXTRALDFLAGS) -o mtcAgent
+	$(CXX) $(CONTROL_OBJS) -L../public -L../alarm $(LDLIBS) $(EXTRALDFLAGS) -o mtcAgent
 
 mtcClient: $(OBJS)
-	$(CXX) $(COMPUTE_OBJS) -L../public -L../alarm -L../rmon/rmonApi $(LDLIBS) $(EXTRALDFLAGS) -o mtcClient
+	$(CXX) $(COMPUTE_OBJS) -L../public -L../alarm $(LDLIBS) $(EXTRALDFLAGS) -o mtcClient
 
 remove_bins:
 	@rm -v -f $(BINS)

@@ -396,12 +396,6 @@ void daemon_exit ( void );
 #define MAX_MTCE_EVENT_NAME_LEN 64
 #define MAX_RESOURCE_NAME_LEN   64
 
-/** RMON message codes **/
-#define RMON_CRITICAL (3)
-#define RMON_MAJOR    (2)
-#define RMON_MINOR    (1)
-#define RMON_CLEAR    (0)
-
 /** Interface Codes **/
 #define MGMNT_INTERFACE (0)
 #define INFRA_INTERFACE (1)
@@ -545,7 +539,6 @@ typedef struct
 #define MTC_CMD_NOTIFY_INST             (0x11110025) /* Notify           Inst */
 
 #define MTC_SERVICE_PMOND               (0xB00BF00D)
-#define MTC_SERVICE_RMOND               (0xFAABF00D)
 #define MTC_SERVICE_HWMOND              (0xF00BF00D)
 #define MTC_SERVICE_HEARTBEAT           (0xBABEF00D)
 
@@ -564,22 +557,12 @@ typedef struct
 /* Generic Monitor Service ready event */
 #define MTC_EVENT_MONITOR_READY         (0xf0f0f0f0)
 
-/* TODO: Obsolete code */
-#define MTC_EVENT_RMON_READY            (0x0f0f0f0f)
-
 /** Process Monitor Event codes */ 
 #define MTC_EVENT_PMON_CLEAR            (0x02020202) /**< Clear Action         */
 #define MTC_EVENT_PMON_CRIT             (0x04040404) /**< Crit Failed Action   */
 #define MTC_EVENT_PMON_MAJOR            (0x05050505) /**< Major Degrade Action */
 #define MTC_EVENT_PMON_MINOR            (0x08080808) /**< Minor Log action     */
 #define MTC_EVENT_PMON_LOG              (0x03030303) /**< Minor Log action     */
-
-/** Process Monitor Event codes */
-#define MTC_EVENT_RMON_CLEAR            (0x10101010) /**< Clear Action         */
-#define MTC_EVENT_RMON_CRIT             (0x20202020) /**< Crit Failed Action   */
-#define MTC_EVENT_RMON_MAJOR            (0x30303030) /**< Major Degrade Action */
-#define MTC_EVENT_RMON_MINOR            (0x40404040) /**< Minor Log action     */
-#define MTC_EVENT_RMON_LOG              (0x50505050) /**< Minor Log action     */
 
 /** Process Monitor Daemon Running - Event Raise / Clear Codes */
 #define MTC_EVENT_PMOND_CLEAR           (0x06060606)

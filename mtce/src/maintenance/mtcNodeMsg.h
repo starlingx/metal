@@ -109,9 +109,6 @@ typedef struct
     /** Active Monitor Socket */
     int  amon_socket ;
 
-    /** Resource Monitor Socket */
-    int  rmon_socket ;
-
     bool main_go_enabled_reply_ack ;
     bool subf_go_enabled_reply_ack ;
 
@@ -131,7 +128,6 @@ int recv_mtc_reply_noblock ( void );
 int send_mtc_cmd ( string & hostname, int cmd, int interface );
 int mtc_service_command ( mtc_socket_type * sock_ptr , int interface );
 int mtc_set_availStatus ( string & hostname, mtc_nodeAvailStatus_enum status );
-int service_rmon_inbox ( mtc_socket_type * sock_ptr, int & rmon_code, string & resource_name );
 int mtce_send_event    ( mtc_socket_type * sock_ptr, int cmd , const char * mtce_name_ptr );
 int mtc_infra_init     ( mtc_socket_type * sock_ptr , char * iface );
 string get_who_i_am ( void );

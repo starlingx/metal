@@ -86,24 +86,6 @@ typedef struct
     char          bond[IF_NAMESIZE]          ; /* bonded interface name */
     bool          lagged                     ; /* Lagged interface=true or not=false     */
 
-//    unsigned int     debounce_cnt   ; /* running monitor debounce count         */
-//    unsigned int     minorlog_cnt   ; /* track minor log count for thresholding */
-//    unsigned int     count          ; /* track the number of times the condition has been occured */
-//    bool             failed         ; /* track if the resource needs to be serviced by the resource handler */
-//    int              resource_value ; /* 1 if the interface is up and 0 if it is down   */
-//    int     resource_value_lagged   ; /* 1 if the interface is up and 0 if it is down for lagged interfaces  */
-//    int              sev            ; /* The severity of the failed resource */
-//  rmonStage_enum   stage          ; /* The stage the resource is in within the resource handler fsm */
-//    char alarm_id[FM_MAX_BUFFER_LENGTH] ; /* Used by FM API, type of alarm being raised */
-//    char alarm_id_port[FM_MAX_BUFFER_LENGTH] ; /* Used by FM API, type of alarm being raised for the ports */
-//    char errorMsg[ERR_SIZE];
-//    rmon_api_socket_type msg;
-//    bool link_up_and_running; /* whether the interface is up or down initially */
-
-//    bool alarm_raised;
-//    int failed_send; /* The number of times the rmon api failed to send a message */
-
-
 } interface_ctrl_type ;
 
 
