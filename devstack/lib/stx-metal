@@ -196,30 +196,19 @@ function install_mtce_compute {
     local unit_dir=${SYSCONFDIR}/systemd/system
     local local_etc_pmond=${SYSCONFDIR}/pmon.d
     local local_etc_goenabledd=${SYSCONFDIR}/goenabled.d
-    local local_etc_nova=${SYSCONFDIR}/nova
 
     # install
     pushd ${STX_METAL_DIR}/mtce-compute/src
     # Worker-Only Init Scripts
     sudo install -m 755 -p -D scripts/goenabled ${sysconf_dir}/init.d/goenabledWorker
-    sudo install -m 755 -p -D scripts/e_nova-init ${sysconf_dir}/init.d/e_nova-init
-    sudo install -m 755 -p -D scripts/nova-cleanup ${sysconf_dir}/init.d/nova-cleanup
-    sudo install -m 755 -p -D scripts/nova-startup ${sysconf_dir}/init.d/nova-startup
 
     # Worker-Only Process Monitor Config files
     sudo install -m 755 -d ${local_etc_pmond}
-    sudo install -m 755 -d ${local_etc_nova}
-    sudo install -m 644 -p -D scripts/nova-cleanup.conf ${local_etc_nova}/nova-cleanup.conf
-    sudo install -m 644 -p -D scripts/nova-compute.conf ${local_etc_nova}/nova-compute.conf
-    sudo install -m 644 -p -D scripts/libvirtd.conf ${local_etc_pmond}/libvirtd.conf
 
     # Worker-Only Go Enabled Test
     sudo install -m 755 -d ${local_etc_goenabledd}
-    sudo install -m 755 -p -D scripts/nova-goenabled.sh ${local_etc_goenabledd}/nova-goenabled.sh
     sudo install -m 755 -p -D scripts/virt-support-goenabled.sh ${local_etc_goenabledd}/virt-support-goenabled.sh
 
-    # Install to systemd
-    sudo install -m 644 -p -D scripts/e_nova-init.service ${unit_dir}/devstack@e_nova-init.service
     popd
 }
 
@@ -564,14 +553,6 @@ function start_mtce_control {
 function start_mtce_compute {
     # Oneshot goenabled worker
     sudo ${SYSCONFDIR}/init.d/goenabledWorker start
-
-    # TODO: It's not working until initial compute config applied by puppet
-    # implemented in devstack
-    # oneshot nova init service
-    #sudo cp ${STX_INST_DIR}/lib/systemd/system/e_nova-init.service \
-    #    ${SYSCONFDIR}/systemd/system/devstack@e_nova-init.service
-
-    #run_process e_nova-init "${SYSCONFDIR}/init.d/e_nova-init start" root root
 }
 
 function start_mtce_storage {
@@ -917,24 +898,11 @@ function cleanup_metal {
         local unit_dir=${SYSCONFDIR}/systemd/system
         local local_etc_pmond=${SYSCONFDIR}/pmon.d
         local local_etc_goenabledd=${SYSCONFDIR}/goenabled.d
-        local local_etc_nova=${SYSCONFDIR}/nova
 
         sudo rm -rf ${sysconf_dir}/init.d/goenabledWorker
-        sudo rm -rf ${sysconf_dir}/init.d/e_nova-init
-        sudo rm -rf ${sysconf_dir}/init.d/nova-cleanup
-        sudo rm -rf ${sysconf_dir}/init.d/nova-startup
-
-        # Worker-Only Process Monitor Config files
-        sudo rm -rf ${local_etc_nova}/nova-cleanup.conf
-        sudo rm -rf ${local_etc_nova}/nova-compute.conf
-        sudo rm -rf ${local_etc_pmond}/libvirtd.conf
 
         # Worker-Only Go Enabled Test
-        sudo rm -rf ${local_etc_goenabledd}/nova-goenabled.sh
         sudo rm -rf ${local_etc_goenabledd}/virt-support-goenabled.sh
-
-        # systemd
-        sudo rm -rf ${unit_dir}/devstack@e_nova-init.service
     fi
     if is_service_enabled mtce-control; then
         local sysconf_dir=${SYSCONFDIR}
