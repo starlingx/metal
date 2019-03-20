@@ -89,8 +89,8 @@ function helpMessage {
     echo ""
     echo "sudo memchk -t 60 --C mtcClient mtcAgent            ... Check PSS and RSS values of the processes belonging to mtcClient"
     echo "                                                        and mtcAgent every 60 seconds (1 minute)"
-    echo "sudo memchk -t 3600 --C pmond rmond hwmond          ... Check PSS and RSS values of pmond, rmond and hwmond every 3600s (1h)"
-    echo "sudo memchl --C pmond rmond hwmond                  ... Check PSS and RSS values of commands using default period of 3600s (1h)"
+    echo "sudo memchk -t 3600 --C pmond hwmond                ... Check PSS and RSS values of pmond, and hwmond every 3600s (1h)"
+    echo "sudo memchl --C pmond hwmond                        ... Check PSS and RSS values of commands using default period of 3600s (1h)"
     echo "--------------------------------------------------------------------------------------"
     exit 0
 }

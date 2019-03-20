@@ -342,7 +342,6 @@ void daemon_dump_cfg ( void )
     if ( ptr->hbs_to_mtc_event_port) { ilog ("hbs_to_mtc_event_port = %d\n", ptr->hbs_to_mtc_event_port);}
     if ( ptr->inv_event_port       ) { ilog ("inv_event_port        = %d\n", ptr->inv_event_port       );}
 
-    /* rmond */
     if ( ptr->per_node     ) { ilog ("per_node              = %d\n", ptr->per_node             );}
     if ( ptr->audit_period ) { ilog ("audit_period          = %d\n", ptr->audit_period         );}
     if ( ptr->pm_period    ) { ilog ("pm_period             = %d\n", ptr->pm_period            );}
@@ -350,10 +349,6 @@ void daemon_dump_cfg ( void )
     if ( ptr->pmon_amon_port     ) { ilog ("pmon_amon_port        = %d\n", ptr->pmon_amon_port       );}
     if ( ptr->pmon_event_port    ) { ilog ("pmon_event_port       = %d\n", ptr->pmon_event_port      );}
     if ( ptr->pmon_pulse_port    ) { ilog ("pmon_pulse_port       = %d\n", ptr->pmon_pulse_port      );}
-    if ( ptr->rmon_api_tx_port   ) { ilog ("rmon_api_tx_port      = %d\n", ptr->rmon_api_tx_port     );}
-    if ( ptr->rmon_event_port    ) { ilog ("rmon_event_port       = %d\n", ptr->rmon_event_port      );}
-    if ( ptr->rmon_critical_thr  ) { ilog ("rmon_critical_thr     = %d\n", ptr->rmon_critical_thr    );}
-    if ( ptr->rmon_tx_port       ) { ilog ("rmon_tx_port          = %d\n", ptr->rmon_tx_port         );}
     if ( ptr->event_port         ) { ilog ("event_port            = %d\n", ptr->event_port           );}
     if ( ptr->cmd_port           ) { ilog ("cmd_port              = %d\n", ptr->cmd_port             );}
     if ( ptr->sensor_port        ) { ilog ("sensor_port           = %d\n", ptr->sensor_port          );}

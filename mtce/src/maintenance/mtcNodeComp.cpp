@@ -63,7 +63,6 @@ using namespace std;
 extern "C"
 {
 #include "amon.h"           /* for ... active monitoring utilities        */
-#include "rmon_api.h"       /* for ... resource monitoring utilities      */
 
 }
 
@@ -181,15 +180,6 @@ void _close_infra_tx_socket ( void )
     }
 }
 
-void _close_rmon_sock ( void )
-{
-    if ( mtc_sock.rmon_socket )
-    {
-        close (mtc_sock.rmon_socket);
-        mtc_sock.rmon_socket = 0 ;
-    }
-}
-
 void _close_amon_sock ( void )
 {
     if ( mtc_sock.amon_socket )
@@ -207,7 +197,6 @@ void daemon_exit ( void )
     _close_infra_rx_socket ();
     _close_mgmnt_tx_socket ();
     _close_infra_tx_socket ();
-    _close_rmon_sock       ();
     _close_amon_sock       ();
 
     exit (0) ;
@@ -231,11 +220,6 @@ static int mtc_config_handler ( void * user,
     {
         config_ptr->mtc_rx_mgmnt_port = atoi(value);
         config_ptr->mask |= CONFIG_CLIENT_MTC_MGMNT_PORT ;
-    }
-    else if (MATCH("client", "rmon_event_port"))
-    {
-        config_ptr->rmon_event_port = atoi(value);
-        config_ptr->mask |= CONFIG_CLIENT_RMON_PORT ;
     }
     else if (MATCH("timeouts", "failsafe_shutdown_delay"))
     {
@@ -471,33 +455,6 @@ void setup_amon_socket ( void )
     }
     mtc_sock.amon_socket = 0 ;
 }
-   
-void setup_rmon_socket ( void )
-{
-    mtc_sock.rmon_socket =
-    resource_monitor_initialize ( program_invocation_short_name,  mtc_config.rmon_event_port, ALL_USAGE );
-    if ( mtc_sock.rmon_socket )
-    {
-        int  val = 1;
-
-    /* Make the active monitor socket non-blocking */
-        if ( 0 > ioctl(mtc_sock.rmon_socket, FIONBIO, (char *)&val) )
-    {
-        elog ("failed to set rmon event port non-blocking (%d:%s),\n", errno, strerror(errno));
-            close ( mtc_sock.rmon_socket );
-    }
-        else
-    {
-            ilog ("Resource Monitor Socket %d\n", mtc_sock.rmon_socket );
-            return ;
-    }
-    }
-    else
-    {
-        elog ("failed to register as client with rmond\n");
-    }
-    mtc_sock.rmon_socket = 0 ;
-}
 
 /******************************************************************
  *
@@ -509,7 +466,6 @@ void setup_rmon_socket ( void )
  * 4. Unicast transmit socket infra (mtc_client_infra_tx_socket)
  *
  * 5. socket for pmond acive monitoring
- * 6. socket to receive rmond events (including AVS)
  *
  *******************************************************************/
 int mtc_socket_init ( void )
@@ -556,11 +512,6 @@ int mtc_socket_init ( void )
     /* Setup and Open the active monitoring socket               */
     /*************************************************************/
     setup_amon_socket ();
-
-    /*************************************************************/
-    /* Setup and Open the resource monitor event socket          */
-    /*************************************************************/
-    setup_rmon_socket ();
 
     return (PASS);
 }
@@ -1059,9 +1010,6 @@ int daemon_init ( string iface, string nodetype_str )
 int select_log_count = 0 ;
 void daemon_service_run ( void )
 {
-    int rmon_code;
-    string resource_name;
-
     int rc = PASS ;
     int file_not_present_count = 0 ;
 
@@ -1075,7 +1023,7 @@ void daemon_service_run ( void )
 
     std::list<int> socks ;
 
-    /* Run heartbeat service forever or until stop condition */ 
+    /* Run heartbeat service forever or until stop condition */
     for ( ; ; )
     {
         /* set the master fd_set */
@@ -1103,13 +1051,6 @@ void daemon_service_run ( void )
             FD_SET(mtc_sock.amon_socket,          &mtc_sock.readfds);
         }
 
-        mtc_sock.rmon_socket = resource_monitor_get_sel_obj ();
-        if ( mtc_sock.rmon_socket )
-        {
-            socks.push_front (mtc_sock.rmon_socket);
-            FD_SET(mtc_sock.rmon_socket,          &mtc_sock.readfds);
-        }
-
         /* Initialize the timeval struct to wait for 50 mSec */
         mtc_sock.waitd.tv_sec  = 0;
         mtc_sock.waitd.tv_usec = SOCKET_WAIT;
@@ -1118,11 +1059,10 @@ void daemon_service_run ( void )
         socks.sort();
 
 #ifdef WANT_SELECTS
-        ilog_throttled ( select_log_count, 200 , "Selects: mgmnt:%d infra:%d amon:%d rmon:%d - Size:%ld  First:%d Last:%d\n",
+        ilog_throttled ( select_log_count, 200 , "Selects: mgmnt:%d infra:%d amon:%d - Size:%ld  First:%d Last:%d\n",
                 mtc_sock.mtc_client_rx_socket,
                 mtc_sock.mtc_client_infra_rx_socket,
                 mtc_sock.amon_socket,
-                mtc_sock.rmon_socket,
                 socks.size(), socks.front(), socks.back());
 #endif
 
@@ -1159,40 +1099,6 @@ void daemon_service_run ( void )
                  dlog3 ("Active Monitor Select Fired\n");
                  active_monitor_dispatch ();
              }
-             if ( FD_ISSET(mtc_sock.rmon_socket, &mtc_sock.readfds))
-             {
-                 dlog3 ("Resource Monitor Select Fired\n");
-                 rc = service_rmon_inbox( sock_ptr, rmon_code, resource_name );
-
-                 if (rc == PASS) {
-
-                 switch ( rmon_code ) {
-                 case RMON_CLEAR:
-                    mtce_send_event ( sock_ptr, MTC_EVENT_RMON_CLEAR, resource_name.c_str() );
-                    break;
-
-                 case  RMON_MINOR:
-                    mtce_send_event ( sock_ptr, MTC_EVENT_RMON_MINOR, resource_name.c_str() );
-                    break;
-
-                 case  RMON_MAJOR:
-                    mtce_send_event ( sock_ptr, MTC_EVENT_RMON_MAJOR, resource_name.c_str() );
-                    break;
-
-                 case  RMON_CRITICAL:
-                    mtce_send_event ( sock_ptr, MTC_EVENT_RMON_CRIT, resource_name.c_str() );
-                    break;
-                 case MTC_EVENT_AVS_CLEAR:
-                 case MTC_EVENT_AVS_MAJOR:
-                 case MTC_EVENT_AVS_CRITICAL:
-                    mtce_send_event ( sock_ptr, rmon_code, "" );
-                    break;
-                 default:
-                    break;
-                 }
-
-               }
-            }
         }
 
         if (( ctrl.active_script_set == GOENABLED_MAIN_SCRIPTS ) ||
@@ -1353,14 +1259,6 @@ void daemon_service_run ( void )
                 socket_reinit = true ;
             }
 
-            /* RMON event notifications */
-            else if ( mtc_sock.rmon_socket <= 0 )
-            {
-                setup_rmon_socket ();
-                wlog ("calling setup_rmon_socket (auto-recovery)\n");
-                socket_reinit = true ;
-            }
-
             else if ( mtc_sock.amon_socket <= 0 )
             {
                 setup_amon_socket ();
@@ -1425,10 +1323,6 @@ void daemon_service_run ( void )
                         mtc_sock.mtc_client_infra_tx_socket->sock_ok (false);
                         _close_infra_tx_socket ();
                     }
-                }
-                if ( daemon_is_file_present ( MTC_CMD_FIT__RMON_SOCK ))
-                {
-                    _close_rmon_sock ();
                 }
                 if ( daemon_is_file_present ( MTC_CMD_FIT__AMON_SOCK ))
                 {

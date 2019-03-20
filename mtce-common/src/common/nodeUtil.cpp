@@ -1368,26 +1368,21 @@ string get_event_str ( int event_code )
 {
     switch ( event_code )
     {
-        case MTC_EVENT_RMON_READY:
         case MTC_EVENT_MONITOR_READY:
             return "ready" ;
         case MTC_EVENT_PMOND_CLEAR:
         case MTC_EVENT_PMON_CLEAR:
-        case MTC_EVENT_RMON_CLEAR:
         case MTC_EVENT_HWMON_CLEAR:
             return "clear" ;
         case MTC_EVENT_PMON_CRIT:
-        case MTC_EVENT_RMON_CRIT:
         case MTC_EVENT_HWMON_CRIT:
             return "critical" ;
         case MTC_EVENT_PMON_LOG:
             return "log" ;
         case MTC_EVENT_PMON_MAJOR:
-        case MTC_EVENT_RMON_MAJOR:
         case MTC_EVENT_HWMON_MAJOR:
             return "major" ;
         case MTC_EVENT_PMON_MINOR:
-        case MTC_EVENT_RMON_MINOR:
         case MTC_EVENT_HWMON_MINOR:
             return "minor" ;
         case MTC_EVENT_HWMON_CONFIG:

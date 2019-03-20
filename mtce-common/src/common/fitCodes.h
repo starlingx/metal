@@ -47,7 +47,6 @@
 #define MTC_CMD_FIT__MGMNT_TXSOCK ("/var/run/fit/mgmnt_txsock") /* mtcClient */
 #define MTC_CMD_FIT__INFRA_RXSOCK ("/var/run/fit/infra_rxsock") /* mtcClient */
 #define MTC_CMD_FIT__INFRA_TXSOCK ("/var/run/fit/infra_txsock") /* mtcClient */
-#define MTC_CMD_FIT__RMON_SOCK    ("/var/run/fit/rmon_sock")    /* mtcClient */
 #define MTC_CMD_FIT__AMON_SOCK    ("/var/run/fit/amon_sock")    /* mtcClient */
 #define MTC_CMD_FIT__NO_INFRA_RSP ("/var/run/fit/no_infra_rsp") /* hbsClient */
 #define MTC_CMD_FIT__NO_MGMNT_RSP ("/var/run/fit/no_mgmnt_rsp") /* hbsClient */

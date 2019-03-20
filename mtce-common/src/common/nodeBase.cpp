@@ -201,14 +201,6 @@ const char * get_mtcNodeCommand_str ( int cmd )
         case MTC_EVENT_PMON_LOG:   return("pmon log");
         case MTC_EVENT_PMOND_RAISE: return("pmon raise");
 
-        /* rmon events */
-        case MTC_EVENT_RMON_READY: return("rmon ready event");
-        case MTC_EVENT_RMON_CLEAR: return("rmon clear");
-        case MTC_EVENT_RMON_CRIT:  return("rmon critical event");
-        case MTC_EVENT_RMON_MAJOR: return("rmon major event");
-        case MTC_EVENT_RMON_MINOR: return("rmon minor event");
-        case MTC_EVENT_RMON_LOG:   return("rmon log");
-
         /* data port events */
         case MTC_EVENT_AVS_CLEAR:    return("AVS clear");
         case MTC_EVENT_AVS_MAJOR:    return("AVS major");
@@ -246,7 +238,6 @@ const char * get_mtcNodeCommand_str ( int cmd )
 
         /* service events */
         case MTC_SERVICE_PMOND:     return ("pmond service");
-        case MTC_SERVICE_RMOND:     return ("rmond service");
         case MTC_SERVICE_HWMOND:    return ("hwmond service");
         case MTC_SERVICE_HEARTBEAT: return ("heartbeat service");
         default:

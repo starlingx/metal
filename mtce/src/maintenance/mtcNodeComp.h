@@ -19,8 +19,7 @@
 
 /** Compute Config mask */
 #define CONFIG_CLIENT_MASK  (CONFIG_AGENT_PORT            |\
-                             CONFIG_CLIENT_MTC_MGMNT_PORT |\
-                             CONFIG_CLIENT_RMON_PORT)
+                             CONFIG_CLIENT_MTC_MGMNT_PORT)
 
 #define MAX_RUN_SCRIPTS         (20)
 

@@ -725,7 +725,6 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
 
             /* Clear all degrade flags except for the HWMON one */
             clear_host_degrade_causes ( node_ptr->degrade_mask );
-            node_ptr->degraded_resources_list.clear();
 
             /* Purge this hosts work and done queues */
             workQueue_purge    ( node_ptr );
@@ -1840,7 +1839,6 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
 
                 /* Clear all degrade flags except for the HWMON one */
                 clear_host_degrade_causes ( node_ptr->degrade_mask );
-                node_ptr->degraded_resources_list.clear();
 
                 if ( is_controller(node_ptr) )
                 {
@@ -2754,7 +2752,6 @@ int nodeLinkClass::disable_handler  ( struct nodeLinkClass::node * node_ptr )
 
             /* Clear all degrade flags except for the HWMON one */
             clear_host_degrade_causes ( node_ptr->degrade_mask );
-            node_ptr->degraded_resources_list.clear();
 
             if ( is_controller(node_ptr) )
             {

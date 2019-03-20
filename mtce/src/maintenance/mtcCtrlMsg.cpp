@@ -502,44 +502,6 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
                     break ;
                 }
 
-               /*****************************************************************
-                *                Resource Monitor Events                        *
-                *****************************************************************/
-
-                /* TODO: Remove - Suspecting OBS Command */
-                case MTC_EVENT_RMON_READY:
-                {
-                    mlog ("%s RMON Ready\n", hostname.c_str());
-                    obj_ptr->declare_service_ready ( hostname, MTC_SERVICE_RMOND );
-                    break ;
-                }
-                case MTC_EVENT_RMON_CLEAR:
-                {
-                    mlog ("%s rmond: '%s' recovered (clear)\n", hostname.c_str(), event.c_str());
-                    obj_ptr->degrade_resource_clear ( hostname , event );
-                    break ;
-                }
-                case MTC_EVENT_RMON_CRIT:
-                {
-                    mlog ("%s rmond: '%s' failed (critical)\n", hostname.c_str(), event.c_str());
-                    obj_ptr->critical_resource_failed ( hostname, event );
-                    break ;
-                }
-                case MTC_EVENT_RMON_MAJOR:
-                {
-                    mlog ("%s rmond: '%s' failed (major)\n", hostname.c_str(), event.c_str());
-                    obj_ptr->degrade_resource_raise ( hostname, event );
-                    break ;
-                }
-                case MTC_EVENT_RMON_MINOR:
-                {
-                    mlog ("%s rmond: '%s' failed (minor)\n", hostname.c_str(), event.c_str());
-                    /* Clear the degrade condition if one is present */
-                    obj_ptr->degrade_resource_clear ( hostname , event );
-                    obj_ptr->log_resource_failure ( hostname, event );
-                    break ;
-                }
-
                 case MTC_EVENT_HWMON_CLEAR:
                 case MTC_DEGRADE_CLEAR:
                 {
