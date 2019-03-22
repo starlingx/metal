@@ -155,7 +155,6 @@ tgt
 nfv-plugins
 nfv-vim
 vm-topology
-remote-clients
 lighttpd-fastcgi
 lighttpd-mod_geoip
 lighttpd-mod_mysql_vhost

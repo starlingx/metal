@@ -26,7 +26,6 @@ host-guest-comm
 host-guest-comm-dev
 nfscheck
 radvd
-remote-clients
 config-gate-worker
 kernel-rt
 kernel-module-igb-uio

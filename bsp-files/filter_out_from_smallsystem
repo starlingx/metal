@@ -6,7 +6,6 @@ kernel-module-openvswitch
 platform-util-noncontroller
 storageconfig
 nfscheck
-remote-clients
 kernel-rt
 kernel-module-igb-uio-rt
 kernel-rt-kvm

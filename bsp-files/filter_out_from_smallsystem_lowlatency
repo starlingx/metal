@@ -6,7 +6,6 @@ kernel-module-openvswitch
 platform-util-noncontroller
 storageconfig
 nfscheck
-remote-clients
 kernel
 kernel-module-igb-uio
 kmod-e1000e

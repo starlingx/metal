@@ -275,7 +275,6 @@ nfv-plugins
 nfv-vim
 nfv-tools
 vm-topology
-remote-clients
 python-networking-odl
 config-gate-worker
 tis-extensions-controller
