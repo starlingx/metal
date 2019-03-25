@@ -37,7 +37,12 @@ enable_service $STX_METAL_NAME
 # This must not use any variables to work properly in OpenStack's DevStack playbook
 define_plugin stx-metal
 # This works for Zuul jobs using OpenStack's DevStack roles
+plugin_requires stx-metal barbican
 plugin_requires stx-metal stx-fault
+
+if ! is_service_enabled barbican; then
+    die $LINENO "Barbican is required"
+fi
 
 if is_service_enabled mtce-components; then
     enable_service fsmon hbs hwmon mtce mtcalarm mtclog pmon
