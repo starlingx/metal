@@ -6,14 +6,14 @@
       jobs:
         - build-openstack-api-ref
         - build-openstack-releasenotes
+        - flock-devstack-metal
         - openstack-tox-linters
         - openstack-tox-pep8
-        - stx-devstack-metal:
-            voting: false
     gate:
       jobs:
         - build-openstack-api-ref
         - build-openstack-releasenotes
+        - flock-devstack-metal
         - openstack-tox-linters
         - openstack-tox-pep8
     post:
@@ -23,19 +23,18 @@
         - publish-stx-releasenotes
 
 - job:
-    name: stx-devstack-metal
-    parent: stx-devstack-base
-    timeout: 7800
+    name: flock-devstack-metal
+    parent: flock-devstack-base
     required-projects:
       - openstack/barbican
       - openstack/python-barbicanclient
-      - openstack/stx-update
       - openstack/stx-fault
+      - openstack/stx-integ
       - openstack/stx-nfv
+      - openstack/stx-update
     vars:
       tox_envlist: functional
       devstack_services:
-        horizon: false
         # StarlingX services
         fm-common: true
         # fm-api: true
@@ -55,9 +54,8 @@
         rmon: true
       devstack_plugins:
         barbican: https://git.openstack.org/openstack/barbican
-        stx-fault: git://git.starlingx.io/stx-fault
-        stx-metal: git://git.starlingx.io/stx-metal
-        stx-nfv: git://git.starlingx.io/stx-nfv
-        stx-update: git://git.starlingx.io/stx-update
-    files:
-      - ^devstack/.*
+        stx-fault: https:://git.starlingx.io/stx-fault
+        stx-integ: https://git.starlingx.io/stx-integ
+        stx-metal: https:://git.starlingx.io/stx-metal
+        stx-nfv: https:://git.starlingx.io/stx-nfv
+        stx-update: https:://git.starlingx.io/stx-update
