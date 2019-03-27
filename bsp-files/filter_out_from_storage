@@ -65,7 +65,6 @@ heat-tests
 horizon
 horizon-standalone
 horizon-tests
-host-guest-comm
 influxdb
 influxdb-extensions
 io-monitor
