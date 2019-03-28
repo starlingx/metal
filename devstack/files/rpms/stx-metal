@@ -5,3 +5,4 @@ libevent
 libevent-devel
 resource-agents
 facter
+ipmitool
