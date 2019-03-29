@@ -474,6 +474,44 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
             else
                 aio = false ;
 
+            if (( this->hosts == 1 ) &&
+                ( daemon_is_file_present (PLATFORM_SIMPLEX_MODE) == true ))
+            {
+                /* Check for first pass through case where we need to
+                 * start the timer */
+                if ( this->unlock_ready_wait == false )
+                {
+                    if ( daemon_is_file_present(UNLOCK_READY_FILE) == false )
+                    {
+                        mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_MINS_5 );
+                        mtcInvApi_update_task_now   ( node_ptr, MTC_TASK_MANIFEST_APPLY );
+                        this->unlock_ready_wait = true ;
+                        return (PASS);
+                    }
+                }
+                else
+                {
+                    if ( daemon_is_file_present(UNLOCK_READY_FILE) == true )
+                    {
+                        mtcTimer_reset(node_ptr->mtcTimer);
+
+                        /* fall through to proceed with self reboot */
+                    }
+                    else if ( node_ptr->mtcTimer.ring == true )
+                    {
+                        this->unlock_ready_wait = false ;
+                        mtcInvApi_update_task_now   ( node_ptr, "Manifest apply timeout ; Unlock to retry" );
+                        mtcInvApi_update_states_now ( node_ptr, "locked", "disabled" , "online", "disabled", "offline" );
+                        adminActionChange ( node_ptr, MTC_ADMIN_ACTION__NONE );
+                        return (PASS);
+                    }
+                    else
+                    {
+                        /* wait longer */
+                        return (RETRY);
+                    }
+                }
+            }
             mtcInvApi_update_states_now ( node_ptr, "unlocked", "disabled" , "offline", "disabled", "offline" );
             mtcInvApi_update_task_now   ( node_ptr, aio ? MTC_TASK_CPE_SX_UNLOCK_MSG : MTC_TASK_SELF_UNLOCK_MSG );
 
