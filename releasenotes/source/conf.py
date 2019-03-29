@@ -46,6 +46,9 @@ source_suffix = '.rst'
 # The master toctree document.
 master_doc = 'index'
 
+# General information about the project.
+project = 'stx-metal'
+
 # Release notes are version independent, no need to set version and release
 release = ''
 version = ''
