@@ -1003,7 +1003,7 @@ int _self_provision ( void )
     for ( ;; )
     {
         get_ip_addresses ( mtcInv.my_hostname, mtcInv.my_local_ip , mtcInv.my_float_ip );
-        if ( mtcInv.my_float_ip.empty() || mtcInv.my_float_ip.empty() )
+        if ( mtcInv.my_local_ip.empty() || mtcInv.my_float_ip.empty() )
         {
             if ( waiting_msg == false )
             {
