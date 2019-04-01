@@ -237,7 +237,6 @@ python-keystone
 python-novaclient-doc
 python-panko
 python2-pankoclient
-configutilities
 drbd-bash-completion
 drbd-udev
 drbd-utils
