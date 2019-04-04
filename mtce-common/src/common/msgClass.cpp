@@ -68,6 +68,25 @@ int msgClassAddr::initAddr(const char* address, int port, int proto)
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_family = AF_INET6;
     rc = getaddrinfo(this->address_str, NULL, &hints, &res);
+    if (!rc) {
+        // It is to resolve the issue of devstack found on Ubuntu Bionic. To
+        // avoid impacting normal StarlingX, add below control gate to only
+        // enable the code on Ubuntu Bionic.
+        if (getenv("UBUNTU_BIONIC")) {
+            /* check if returned ipv6 address is correct*/
+            if (res->ai_addr->sa_family == AF_INET6) {
+                struct sockaddr_in6 *in6 = (struct sockaddr_in6 *)res->ai_addr;
+                if ((in6->sin6_scope_id == 0) &&
+                    (in6->sin6_addr.s6_addr[0] == 0xFE) &&
+                    ((in6->sin6_addr.s6_addr[1] & 0xC0) == 0x80))
+                {
+                    /* ipv6 link-local address should has non-zero sin6_scope_id */
+                    ilog("link-local ipv6 address has zero sin6_scope_id, switch to ipv4\n");
+                    rc = 1;
+                }
+            }
+        }
+    }
     if(rc)
     {
         dlog("IPv6 address resolution failed, rc=%d", rc);
