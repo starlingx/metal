@@ -5831,7 +5831,17 @@ int nodeLinkClass::bm_handler ( struct nodeLinkClass::node * node_ptr )
                     mtcTimer_start ( node_ptr->bmc_access_timer, mtcTimer_handler, MTC_MINS_2 );
                 }
 
-                if (( node_ptr->thread_extra_info.bm_pw.empty ()) && ( node_ptr->bm_ping_info.ok == true ))
+                if ( node_ptr->bm_ping_info.ok == false )
+                {
+                    /* Auto correct key ping information ; should ever occur but if it does ... */
+                    if (( node_ptr->bm_ping_info.hostname.empty()) || ( node_ptr->bm_ping_info.ip.empty()))
+                    {
+                         node_ptr->bm_ping_info.hostname = node_ptr->hostname ;
+                         node_ptr->bm_ping_info.ip       = node_ptr->bm_ip    ;
+                    }
+                }
+
+                if ( node_ptr->thread_extra_info.bm_pw.empty() )
                 {
                     barbicanSecret_type * secret = secretUtil_manage_secret( node_ptr->secretEvent,
                                                                              node_ptr->uuid,
@@ -5842,9 +5852,8 @@ int nodeLinkClass::bm_handler ( struct nodeLinkClass::node * node_ptr )
                         node_ptr->thread_extra_info.bm_pw = node_ptr->bm_pw = secret->payload ;
                     }
                 }
-
                 /* This block queries and logs BMC Info and last Reset Cause */
-                if (( node_ptr->bm_accessible == false ) &&
+                else if (( node_ptr->bm_accessible == false ) &&
                     ( node_ptr->bm_ping_info.ok == true ) &&
                     (( node_ptr->mc_info_query_done == false ) ||
                      ( node_ptr->reset_cause_query_done == false ) ||
@@ -6002,20 +6011,6 @@ int nodeLinkClass::bm_handler ( struct nodeLinkClass::node * node_ptr )
                                 node_ptr->ipmitool_thread_ctrl.done = true ;
                             }
                         }
-                    }
-                }
-                if ( node_ptr->bm_ping_info.ok == false )
-                {
-                    /* Auto correct key ping information ; should ever occur but if it does ... */
-                    if (( node_ptr->bm_ping_info.hostname.empty()) || ( node_ptr->bm_ping_info.ip.empty()))
-                    {
-                        /* if the bm ip is not yet learned then this log will flood */
-                        //slog ("%s host ping info missing ; (%d:%d)\n",
-                        //          node_ptr->hostname.c_str(),
-                        //          node_ptr->bm_ping_info.hostname.empty(),
-                        //          node_ptr->bm_ping_info.ip.empty());
-                         node_ptr->bm_ping_info.hostname = node_ptr->hostname ;
-                         node_ptr->bm_ping_info.ip       = node_ptr->bm_ip    ;
                     }
                 }
 

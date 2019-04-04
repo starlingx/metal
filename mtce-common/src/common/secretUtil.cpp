@@ -51,7 +51,6 @@ barbicanSecret_type * secretUtil_find_secret ( string & host_uuid )
     return NULL;
 }
 
-
 barbicanSecret_type * secretUtil_manage_secret ( libEvent & event,
                                                  string & host_uuid,
                                                  struct mtc_timer & secret_timer,
@@ -142,14 +141,18 @@ barbicanSecret_type * secretUtil_manage_secret ( libEvent & event,
             {
                 wlog ( "%s getting secret reference timeout \n", host_uuid.c_str() );
                 it->second.stage = MTC_SECRET__GET_REF_FAIL ;
+                mtcTimer_reset( secret_timer );
                 mtcTimer_start( secret_timer, handler, SECRET_RETRY_DELAY );
+
             }
             if ( it->second.stage == MTC_SECRET__GET_PWD )
             {
                 wlog ( "%s getting secret payload timeout \n", host_uuid.c_str() );
                 it->second.stage = MTC_SECRET__GET_PWD_FAIL ;
+                mtcTimer_reset( secret_timer );
                 mtcTimer_start( secret_timer, handler, SECRET_RETRY_DELAY );
             }
+
             httpUtil_free_conn ( event );
             httpUtil_free_base ( event );
         }
@@ -221,7 +224,7 @@ int secretUtil_read_secret ( libEvent & event, string & host_uuid )
 {
     httpUtil_event_init ( &event,
                           host_uuid,
-                          "secretUtil_get_secret",
+                          "secretUtil_read_secret",
                           hostUtil_getServiceIp  (SERVICE_SECRET),
                           hostUtil_getServicePort(SERVICE_SECRET));
 
@@ -320,6 +323,7 @@ int secretUtil_handler ( libEvent & event )
             }
             else
             {
+                ilog ("%s barbican secret reference found \n", hn.c_str() );
                 it->second.stage = MTC_SECRET__GET_REF_RECV;
             }
         }
@@ -337,6 +341,7 @@ int secretUtil_handler ( libEvent & event )
             return ( rc ) ;
         }
 
+        ilog ("%s barbican secret payload found \n", hn.c_str() );
         it->second.payload = event.response;
         it->second.stage = MTC_SECRET__GET_PWD_RECV;
     }

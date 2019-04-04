@@ -153,7 +153,7 @@ void hwmonHostClass::hwmon_fsm ( void )
                         host_ptr->thread_extra_info.bm_pw = "" ;
                     }
 #endif
-                    if (( host_ptr->thread_extra_info.bm_pw.empty ()) && ( host_ptr->ping_info.ok == true ))
+                    if ( host_ptr->thread_extra_info.bm_pw.empty () )
                     {
                         string host_uuid = hostBase.get_uuid(host_ptr->hostname);
                         wlog_throttled ( host_ptr->empty_secret_log_throttle, 20,
