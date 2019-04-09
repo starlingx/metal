@@ -1,4 +1,10 @@
 #!/bin/bash
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Copyright (C) 2019 Intel Corporation
+#
+
 # Devstack settings
 
 # This plugin is to enable StarlingX stx-metal services and follows the
