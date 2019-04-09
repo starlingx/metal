@@ -844,10 +844,6 @@ void mtcHttpSvr_handler (struct evhttp_request *req, void *arg)
             size_t len = strlen(CLIENT_SYSINV_URL) ;
             uuid = (url_ptr+len) ;
             hostname = obj_ptr->get_host(uuid) ;
-            if ( uuid.length() == UUID_LEN )
-            {
-                hostname = obj_ptr->get_host(uuid) ;
-            }
             if (( http_cmd == EVHTTP_REQ_GET ) && ( client == CLIENT_VIM_SYSTEMS ))
             {
                 http_status_code = obj_ptr->mtcVimApi_system_info ( response );
