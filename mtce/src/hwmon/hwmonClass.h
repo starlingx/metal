@@ -345,7 +345,7 @@ class hwmonHostClass
      *
      * ipmi_load_sensor_samples   - loads the samples into the sample list.
      *
-     * ipmi_update_sensors        - updates the the hwmond with the latest sensor
+     * ipmi_update_sensors        - updates the hwmond with the latest sensor
      *                              sample severity level for the specified host.
      *
      *************************************************************************/
