@@ -107,6 +107,7 @@ void daemon_exit ( void );
 #define NODE_RESET_FILE         ((const char *)"/var/run/.node_reset")
 #define SMGMT_DEGRADED_FILE     ((const char *)"/var/run/.sm_degraded")
 #define SMGMT_UNHEALTHY_FILE    ((const char *)"/var/run/.sm_node_unhealthy")
+#define UNLOCK_READY_FILE       ((const char *)"/etc/platform/.unlock_ready")
 
 /** path to and module init file name */
 #define MTCE_CONF_FILE          ((const char *)"/etc/mtc.conf")
@@ -284,6 +285,7 @@ void daemon_exit ( void );
 #define MTC_TASK_SELF_UNLOCK_MSG   "Unlocking active controller, please stand-by while it reboots"
 #define MTC_TASK_FAILED_SWACT_REQ  "Critical failure.Requesting SWACT to enabled standby controller"
 #define MTC_TASK_FAILED_NO_BACKUP  "Critical failure.Please provision/enable standby controller"
+#define MTC_TASK_MANIFEST_APPLY    "Applying manifest, please stand-by ..."
 
 #define COMMAND_RETRY_DELAY         (8)      /* from sshUtil.h */
 #define COMMAND_DELAY               (2)      /* from sshUtil.h */

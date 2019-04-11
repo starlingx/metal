@@ -1414,6 +1414,9 @@ public:
     /** Number of provisioned hosts (nodes) */
     int hosts  ;
 
+    /* Set to True while waiting for UNLOCK_READY_FILE in simplex mode */
+    bool unlock_ready_wait ;
+
     /** Host has been deleted */
     bool host_deleted ;
 
