@@ -404,8 +404,8 @@ void hbs_cluster_update ( iface_enum iface,
     mtce_hbs_network_enum n ;
     if ( iface == MGMNT_IFACE )
         n = MTCE_HBS_NETWORK_MGMT ;
-    else if ( iface == INFRA_IFACE )
-        n = MTCE_HBS_NETWORK_INFRA ;
+    else if ( iface == CLSTR_IFACE )
+        n = MTCE_HBS_NETWORK_CLSTR ;
 #ifdef MONITORED_OAM_NETWORK
     else if ( iface == OAM_IFACE )
         n = MTCE_HBS_NETWORK_OAM ;

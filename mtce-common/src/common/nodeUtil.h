@@ -59,7 +59,7 @@ int  get_ip_addresses   ( string & my_hostname , string & my_local_ip , string &
 int  get_iface_address  ( const char * iface_ptr, string & ip_addr , bool retry );
 int  get_iface_hostname ( const char * iface_ptr, char * hostname_ptr);
 int  get_iface_macaddr  ( const char * iface_ptr , string & macaddr );
-void get_infra_iface    ( char ** infra_iface_ptr );
+void get_clstr_iface    ( char ** clstr_iface_ptr );
 int  get_hostname ( char * hostname_ptr, int max_len );
 string get_iface_mac ( const char * iface_ptr );
 

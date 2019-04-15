@@ -31,11 +31,11 @@ using namespace std;
 #include "hbsAlarm.h"      /* for ... this module header                */
 #include "alarm.h"         /* for ... alarm send message to mtcalarmd   */
 
-void hbsAlarm_clear_all ( string hostname, bool infra )
+void hbsAlarm_clear_all ( string hostname, bool clstr )
 {
     alarm_clear ( hostname, MGMNT_HB_ALARM_ID, MGMNT_NAME );
-    if ( infra )
-        alarm_clear ( hostname, INFRA_HB_ALARM_ID, INFRA_NAME );
+    if ( clstr )
+        alarm_clear ( hostname, CLSTR_HB_ALARM_ID, CLSTR_NAME );
     alarm_clear ( hostname ,   PMOND_ALARM_ID,  PMON_NAME );
 }
 

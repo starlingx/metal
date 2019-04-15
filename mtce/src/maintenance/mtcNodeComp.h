@@ -63,13 +63,13 @@ typedef struct
     char             hostname [MAX_HOST_NAME_SIZE+1];
     string           macaddr ;
     string           address ;
-    string           address_infra ;
+    string           address_clstr ;
     string           who_i_am ;
 
     string           nodetype_str ;
 
     string        mgmnt_iface ;
-    string        infra_iface ;
+    string        clstr_iface ;
 
     unsigned int     nodetype ;
     unsigned int     function ;
@@ -77,7 +77,7 @@ typedef struct
 
     struct mtc_timer timer ; /* mtcAlive timer */
 
-    bool             infra_iface_provisioned ;
+    bool             clstr_iface_provisioned ;
 
     /* tracks the time the level specific goenabled file was last created */
     time_t           goenabled_main_time ;

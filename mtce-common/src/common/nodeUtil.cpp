@@ -766,26 +766,26 @@ int get_iface_address ( const char * iface_ptr, string & ip_addr , bool retry )
     return (rc);
 }
 
-void get_infra_iface ( char ** infra_iface_ptr )
+void get_clstr_iface ( char ** clstr_iface_ptr )
 {
     char * iface_ptr ;
-    string infra = daemon_infra_iface();
+    string clstr = daemon_clstr_iface();
 
     /* remove .None from the interface name if it exists */
-    size_t found = infra.find(".None");
+    size_t found = clstr.find(".None");
     if ( found != string::npos)
     {
-        infra.erase(found, string::npos);
+        clstr.erase(found, string::npos);
     }
-    if ( infra.size() )
+    if ( clstr.size() )
     {
-        iface_ptr = daemon_get_iface_master ( (char*)infra.data());
-        *infra_iface_ptr = strdup((const char*)iface_ptr);
-        dlog("Infra iface : %s\n", *infra_iface_ptr );
+        iface_ptr = daemon_get_iface_master ( (char*)clstr.data());
+        *clstr_iface_ptr = strdup((const char*)iface_ptr);
+        dlog("Clstr iface : %s\n", *clstr_iface_ptr );
     }
     else
     {
-        *infra_iface_ptr = strdup((const char*)"");
+        *clstr_iface_ptr = strdup((const char*)"");
     }
 }
 
@@ -1347,7 +1347,7 @@ int get_pid_by_name_proc ( string procname )
 
 
 const char mgmnt_iface_str[] = { "Mgmnt" } ;
-const char infra_iface_str[] = { "Infra" } ;
+const char clstr_iface_str[] = { "Clstr" } ;
 const char  null_iface_str[] = { "Null" } ;
 
 const char * get_iface_name_str ( int iface )
@@ -1356,8 +1356,8 @@ const char * get_iface_name_str ( int iface )
     {
         case MGMNT_IFACE:
             return mgmnt_iface_str;     
-        case INFRA_IFACE:
-            return infra_iface_str;      
+        case CLSTR_IFACE:
+            return clstr_iface_str;
         default:
             return null_iface_str ;
     }

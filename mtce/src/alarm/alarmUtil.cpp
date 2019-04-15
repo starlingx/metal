@@ -46,9 +46,9 @@ EFmAlarmSeverityT alarmUtil_getSev_enum ( string sev )
 int alarmUtil_getId_enum ( string alarmid, alarm_id_enum & id )
 {
     /* Get the ID */
-    if ( alarmid.compare(INFRA_HB_ALARM_ID) == 0 )
+    if ( alarmid.compare(CLSTR_HB_ALARM_ID) == 0 )
     {
-        id = HBS_ALARM_ID__HB_INFRA ;
+        id = HBS_ALARM_ID__HB_CLSTR ;
     }
     else if ( alarmid.compare(MGMNT_HB_ALARM_ID) == 0 )
     {

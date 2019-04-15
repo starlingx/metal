@@ -60,8 +60,8 @@ void alarmData_init ( void )
 
     alarm_id_table[HBS_ALARM_ID__HB_MGMNT].identity_str = MGMNT_HB_ALARM_ID ;
     alarm_id_table[HBS_ALARM_ID__HB_MGMNT].identity_num = HBS_ALARM_ID__HB_MGMNT ;
-    alarm_id_table[HBS_ALARM_ID__HB_INFRA].identity_str = INFRA_HB_ALARM_ID;
-    alarm_id_table[HBS_ALARM_ID__HB_INFRA].identity_num = HBS_ALARM_ID__HB_INFRA;
+    alarm_id_table[HBS_ALARM_ID__HB_CLSTR].identity_str = CLSTR_HB_ALARM_ID;
+    alarm_id_table[HBS_ALARM_ID__HB_CLSTR].identity_num = HBS_ALARM_ID__HB_CLSTR;
     alarm_id_table[HBS_ALARM_ID__PMOND].identity_str = PMOND_ALARM_ID;
     alarm_id_table[HBS_ALARM_ID__PMOND].identity_num = HBS_ALARM_ID__PMOND;
     alarm_id_table[HBS_ALARM_ID__SERVICE].identity_str = SERVICESTATUS_LOG_ID;
@@ -99,23 +99,23 @@ void alarmData_init ( void )
               "If problem consistently occurs after that and Host is reset, then"
               "contact next level of support or lock and replace failing Host.");
 
-    /** Infrastructure Network Heartbeat Alarm ************************************/
+    /** Cluster-host Network Heartbeat Alarm ************************************/
 
-    ptr = &alarm_list[HBS_ALARM_ID__HB_INFRA];
+    ptr = &alarm_list[HBS_ALARM_ID__HB_CLSTR];
     memset  (&ptr->alarm, 0, (sizeof(SFmAlarmDataT)));
-    snprintf(&ptr->alarm.alarm_id[0], FM_MAX_BUFFER_LENGTH, "%s", INFRA_HB_ALARM_ID);
+    snprintf(&ptr->alarm.alarm_id[0], FM_MAX_BUFFER_LENGTH, "%s", CLSTR_HB_ALARM_ID);
 
-    ptr->name = "Infrastructure Network' Heartbeat" ;
+    ptr->name = "Cluster-host Network' Heartbeat" ;
     ptr->instc_prefix = "network=" ;
 
-    ptr->critl_reason = "experienced a persistent critical 'Infrastructure Network' "
+    ptr->critl_reason = "experienced a persistent critical 'Cluster-host Network' "
                         "communication failure.";
 
     ptr->major_reason =
-    ptr->minor_reason = "is experiencing intermittent 'Infrastructure Network' "
+    ptr->minor_reason = "is experiencing intermittent 'Cluster-host Network' "
                         "communication failures that have exceeded its lower alarming threshold.";
 
-    ptr->clear_reason = "'Infrastructure Network' Heartbeat has 'resumed' if host is 'unlocked' "
+    ptr->clear_reason = "'Cluster-host Network' Heartbeat has 'resumed' if host is 'unlocked' "
                         "or 'stopped' if host is 'locked or deleted'";
 
     ptr->alarm.alarm_type        = FM_ALARM_COMM ;
@@ -128,7 +128,7 @@ void alarmData_init ( void )
     ptr->alarm.alarm_state       = FM_ALARM_STATE_CLEAR    ; /* Dynamic */
 
     snprintf( ptr->alarm.proposed_repair_action, FM_MAX_BUFFER_LENGTH,
-              "Check 'Infrastructure Network' connectivity and support for multicast messaging."
+              "Check 'Cluster-host Network' connectivity and support for multicast messaging."
               "If problem consistently occurs after that and Host is reset, then"
               "contact next level of support or lock and replace failing Host.");
 

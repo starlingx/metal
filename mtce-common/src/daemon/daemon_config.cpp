@@ -42,7 +42,7 @@ void daemon_config_default ( daemon_config_type* config_ptr )
     config_ptr->keystone_region_name  = strdup("none");
     config_ptr->sysinv_mtc_inv_label  = strdup("none");
     config_ptr->mgmnt_iface           = strdup("none");
-    config_ptr->infra_iface           = strdup("none");
+    config_ptr->clstr_iface           = strdup("none");
     config_ptr->sysinv_api_bind_ip    = strdup("none");
     config_ptr->mode                  = strdup("none");
     config_ptr->fit_host              = strdup("none");
@@ -294,8 +294,8 @@ void daemon_dump_cfg ( void )
     ilog ("Configuration Settings ...\n");
     if ( ptr->scheduling_priority ) { ilog ("scheduling_priority   = %d\n", ptr->scheduling_priority   ); }
 
-    if ( ptr->infra_degrade_only )    { ilog ("infra_degrade_only    = %s\n", ptr->infra_degrade_only ? "Yes" : "No" );}
-    if ( ptr->need_infra_poll_audit ) { ilog ("need_infra_poll_audit = %s\n", ptr->need_infra_poll_audit ? "Yes" : "No" );}
+    if ( ptr->clstr_degrade_only )    { ilog ("clstr_degrade_only    = %s\n", ptr->clstr_degrade_only ? "Yes" : "No" );}
+    if ( ptr->need_clstr_poll_audit ) { ilog ("need_clstr_poll_audit = %s\n", ptr->need_clstr_poll_audit ? "Yes" : "No" );}
     if ( ptr->active )                { ilog ("active                = %s\n", ptr->active ? "Yes" : "No"  );}
 
     /* hbsAgent */
@@ -305,7 +305,7 @@ void daemon_dump_cfg ( void )
     if ( ptr->hbs_failure_threshold ) { ilog ("hbs_failure_threshold = %d\n", ptr->hbs_failure_threshold );}
     
     if ( strcmp(ptr->mgmnt_iface, "none" )) { ilog ("mgmnt_iface           = %s\n", ptr->mgmnt_iface    ); }
-    if ( strcmp(ptr->infra_iface, "none" )) { ilog ("infra_iface           = %s\n", ptr->infra_iface    );}
+    if ( strcmp(ptr->clstr_iface, "none" )) { ilog ("clstr_iface           = %s\n", ptr->clstr_iface    );}
     if ( strcmp(ptr->multicast, "none"   )) { ilog ("multicast             = %s\n", ptr->multicast );}
 
     if ( ptr->ha_port        ) { ilog ("ha_port               = %d\n", ptr->ha_port               );}
@@ -331,9 +331,9 @@ void daemon_dump_cfg ( void )
     if ( ptr->barbican_api_host     ) { ilog ("barbican_api_host     = %s\n", ptr->barbican_api_host     );}
 
     if ( ptr->mtc_rx_mgmnt_port    ) { ilog ("mtc_rx_mgmnt_port     = %d\n", ptr->mtc_rx_mgmnt_port    );}
-    if ( ptr->mtc_rx_infra_port    ) { ilog ("mtc_rx_infra_port     = %d\n", ptr->mtc_rx_infra_port    );}
+    if ( ptr->mtc_rx_clstr_port    ) { ilog ("mtc_rx_clstr_port     = %d\n", ptr->mtc_rx_clstr_port    );}
     if ( ptr->mtc_tx_mgmnt_port    ) { ilog ("mtc_tx_mgmnt_port     = %d\n", ptr->mtc_tx_mgmnt_port    );}
-    if ( ptr->mtc_tx_infra_port    ) { ilog ("mtc_tx_infra_port     = %d\n", ptr->mtc_tx_infra_port    );}
+    if ( ptr->mtc_tx_clstr_port    ) { ilog ("mtc_tx_clstr_port     = %d\n", ptr->mtc_tx_clstr_port    );}
     if ( ptr->agent_rx_port        ) { ilog ("agent_rx_port         = %d\n", ptr->agent_rx_port        );}
     if ( ptr->client_rx_port       ) { ilog ("client_rx_port        = %d\n", ptr->client_rx_port       );}
     if ( ptr->mtc_to_hbs_cmd_port  ) { ilog ("mtc_to_hbs_cmd_port   = %d\n", ptr->mtc_to_hbs_cmd_port  );}

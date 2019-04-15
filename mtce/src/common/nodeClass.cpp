@@ -291,14 +291,14 @@ nodeLinkClass::nodeLinkClass()
     /* Start with no failures */
     mnfa_awol_list.clear();
     mnfa_host_count[MGMNT_IFACE] = 0 ;
-    mnfa_host_count[INFRA_IFACE] = 0 ;
+    mnfa_host_count[CLSTR_IFACE] = 0 ;
     mnfa_occurances = 0 ;
     mnfa_active     = false ;
 
     mgmnt_link_up_and_running = false ;
-    infra_link_up_and_running = false ;
-    infra_network_provisioned = false ;
-    infra_degrade_only        = false ;
+    clstr_link_up_and_running = false ;
+    clstr_network_provisioned = false ;
+    clstr_degrade_only        = false ;
 
     dor_mode_active = false ;
     dor_start_time  = 0 ;
@@ -497,8 +497,8 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
 
     ptr->ip        = "" ;
     ptr->mac       = "" ;
-    ptr->infra_ip  = "" ;
-    ptr->infra_mac = "" ;
+    ptr->clstr_ip  = "" ;
+    ptr->clstr_mac = "" ;
 
     ptr->patching              = false ;
     ptr->patched               = false ;
@@ -554,9 +554,9 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
 
     ptr->offline_search_count = 0 ;
     ptr->mtcAlive_mgmnt = false ;
-    ptr->mtcAlive_infra = false ;
+    ptr->mtcAlive_clstr = false ;
     ptr->reboot_cmd_ack_mgmnt = false ;
-    ptr->reboot_cmd_ack_infra = false ;
+    ptr->reboot_cmd_ack_clstr = false ;
 
     ptr->offline_log_throttle = 0     ;
     ptr->offline_log_reported = true  ;
@@ -783,8 +783,8 @@ struct nodeLinkClass::node* nodeLinkClass::getNode ( string hostname )
        {
            return ptr ;
        }
-       /* Node can be looked up by infra_ip addr too */
-       if ( !hostname.compare ( ptr->infra_ip ))
+       /* Node can be looked up by cluster_host_ip addr too */
+       if ( !hostname.compare ( ptr->clstr_ip ))
        {
            return ptr ;
        }
@@ -1172,7 +1172,7 @@ void nodeLinkClass::print_node_info ( void )
     {
         for ( int i = 0 ; i < MAX_IFACES ; i++ )
         {
-            if (( i == INFRA_IFACE ) && ( infra_network_provisioned == false ))
+            if (( i == CLSTR_IFACE ) && ( clstr_network_provisioned == false ))
                 continue ;
 
             syslog ( LOG_INFO, "+--------------+-----+-------+-------+-------+-------+------------+----------+-----------------+\n");
@@ -2330,17 +2330,17 @@ int nodeLinkClass::mod_host ( node_inv_type & inv )
 
             modify = true ; /* we have a delta */
         }
-        if ( node_ptr->infra_ip.compare ( inv.infra_ip ) )
+        if ( node_ptr->clstr_ip.compare ( inv.clstr_ip ) )
         {
-            if (( hostUtil_is_valid_ip_addr ( inv.infra_ip )) || ( hostUtil_is_valid_ip_addr ( node_ptr->infra_ip )))
+            if (( hostUtil_is_valid_ip_addr ( inv.clstr_ip )) || ( hostUtil_is_valid_ip_addr ( node_ptr->clstr_ip )))
             {
-                plog ("%s Modify 'infra_ip' from %s -> %s\n",
+                plog ("%s Modify 'clstr_ip' from %s -> %s\n",
                       node_ptr->hostname.c_str(),
-                      node_ptr->infra_ip.c_str(), inv.infra_ip.c_str() );
+                      node_ptr->clstr_ip.c_str(), inv.clstr_ip.c_str() );
 
                 modify = true ; /* we have a delta */
             }
-            node_ptr->infra_ip = inv.infra_ip ;
+            node_ptr->clstr_ip = inv.clstr_ip ;
         }
         if ( (!inv.name.empty()) && (node_ptr->hostname.compare ( inv.name)) )
         {
@@ -2708,7 +2708,7 @@ int nodeLinkClass::add_host ( node_inv_type & inv )
             node_ptr->ip   = inv.ip   ;
             node_ptr->mac  = inv.mac  ;
             node_ptr->uuid = inv.uuid ;
-            node_ptr->infra_ip  = inv.infra_ip  ;
+            node_ptr->clstr_ip  = inv.clstr_ip  ;
 
             if ( inv.uptime.length() )
             {
@@ -3256,13 +3256,13 @@ string nodeLinkClass::get_hostaddr ( string & hostname )
     return ( null_str );
 }
 
-string nodeLinkClass::get_infra_hostaddr ( string & hostname )
+string nodeLinkClass::get_clstr_hostaddr ( string & hostname )
 {
     nodeLinkClass::node* node_ptr ;
     node_ptr = nodeLinkClass::getNode ( hostname );
     if ( node_ptr != NULL )
     {
-        return ( node_ptr->infra_ip );
+        return ( node_ptr->clstr_ip );
     }
     return ( null_str );
 }
@@ -3275,8 +3275,8 @@ string nodeLinkClass::get_hostIfaceMac ( string & hostname, int iface )
     {
         if ( iface == MGMNT_IFACE )
             return ( node_ptr->mac );
-        if ( iface == INFRA_IFACE )
-            return ( node_ptr->infra_mac );
+        if ( iface == CLSTR_IFACE )
+            return ( node_ptr->clstr_mac );
     }
     ilog ("%s has unknown mac address for %s interface\n", hostname.c_str(), get_iface_name_str(iface));
     return ( null_str );
@@ -3296,7 +3296,7 @@ int nodeLinkClass::set_hostaddr ( string & hostname, string & ip )
     return ( rc );
 }
 
-int nodeLinkClass::set_infra_hostaddr ( string & hostname, string & ip )
+int nodeLinkClass::set_clstr_hostaddr ( string & hostname, string & ip )
 {
     int rc = FAIL ;
 
@@ -3304,7 +3304,7 @@ int nodeLinkClass::set_infra_hostaddr ( string & hostname, string & ip )
     node_ptr = nodeLinkClass::getNode ( hostname );
     if ( node_ptr != NULL )
     {
-        node_ptr->infra_ip = ip ;
+        node_ptr->clstr_ip = ip ;
         rc = PASS ;
     }
     return ( rc );
@@ -3499,9 +3499,9 @@ void nodeLinkClass::set_mtcAlive ( string & hostname, int interface )
             node_ptr->mtcAlive_offline = false ;
             node_ptr->mtcAlive_count++ ;
 
-            if ( interface == INFRA_INTERFACE )
+            if ( interface == CLSTR_INTERFACE )
             {
-                node_ptr->mtcAlive_infra = true ;
+                node_ptr->mtcAlive_clstr = true ;
             }
             else
             {
@@ -4265,7 +4265,7 @@ int nodeLinkClass::service_netlink_events ( int nl_socket , int ioctl_socket )
     if ( get_netlink_events ( nl_socket, links_gone_down, links_gone_up )) 
     {
          const char * mgmnt_iface_ptr = daemon_get_cfg_ptr()->mgmnt_iface ;
-         const char * infra_iface_ptr = daemon_get_cfg_ptr()->infra_iface ;
+         const char * clstr_iface_ptr = daemon_get_cfg_ptr()->clstr_iface ;
          bool running = false ;
          if ( !links_gone_down.empty() )
          {
@@ -4285,11 +4285,11 @@ int nodeLinkClass::service_netlink_events ( int nl_socket , int ioctl_socket )
                      mgmnt_link_up_and_running = false ; 
                      wlog ("Management link %s is down\n", mgmnt_iface_ptr );
                  }
-                 if ( !strcmp (infra_iface_ptr, iter_curr_ptr->data()))
+                 if ( !strcmp (clstr_iface_ptr, iter_curr_ptr->data()))
                  {
                      care = true ;
-                     infra_link_up_and_running = false ; 
-                     wlog ("Infrastructure link %s is down\n", infra_iface_ptr );
+                     clstr_link_up_and_running = false ;
+                     wlog ("Cluster-host link %s is down\n", clstr_iface_ptr );
                  }
 
                  if ( care == true )
@@ -4321,10 +4321,10 @@ int nodeLinkClass::service_netlink_events ( int nl_socket , int ioctl_socket )
                      mgmnt_link_up_and_running = true ; 
                      wlog ("Management link %s is up\n", mgmnt_iface_ptr );
                  }
-                 if ( !strcmp (infra_iface_ptr, iter_curr_ptr->data()))
+                 if ( !strcmp (clstr_iface_ptr, iter_curr_ptr->data()))
                  {
-                     infra_link_up_and_running = true ; 
-                     wlog ("Infrastructure link %s is up\n", infra_iface_ptr );
+                     clstr_link_up_and_running = true ;
+                     wlog ("Cluster-host link %s is up\n", clstr_iface_ptr );
                  }
                  if ( care == true )
                  {
@@ -4515,8 +4515,8 @@ void nodeLinkClass::manage_heartbeat_failure ( string hostname, iface_enum iface
 
         plog ("%s %s Heartbeat failure clear\n", hostname.c_str(), get_iface_name_str(iface));
 
-        // if (( mnfa_host_count == 0 ) || ( iface == INFRA_IFACE ))
-        if ( mnfa_host_count[iface] == 0 ) // || ( iface == INFRA_IFACE ))
+        // if (( mnfa_host_count == 0 ) || ( iface == CLSTR_IFACE ))
+        if ( mnfa_host_count[iface] == 0 ) // || ( iface == CLSTR_IFACE ))
         {
              slog ("%s %s Heartbeat failure clear\n", hostname.c_str(), get_iface_name_str(iface)); 
              node_ptr->hbs_failure[iface] = false ;
@@ -4553,9 +4553,9 @@ void nodeLinkClass::manage_heartbeat_failure ( string hostname, iface_enum iface
         if ( mnfa_active == false )
         {
             elog ("%s %s *** Heartbeat Loss ***\n", hostname.c_str(), get_iface_name_str(iface));
-            if ( iface == INFRA_IFACE )
+            if ( iface == CLSTR_IFACE )
             {
-                node_ptr->heartbeat_failed[INFRA_IFACE] = true ;
+                node_ptr->heartbeat_failed[CLSTR_IFACE] = true ;
             }
             else if ( iface == MGMNT_IFACE )
             {
@@ -4610,10 +4610,10 @@ void nodeLinkClass::manage_heartbeat_clear ( string hostname, iface_enum iface )
                 node_ptr->alarms[HBS_ALARM_ID__HB_MGMNT] = FM_ALARM_SEVERITY_CLEAR ;
                 node_ptr->degrade_mask &= ~DEGRADE_MASK_HEARTBEAT_MGMNT ;
             }
-            if ( i == INFRA_IFACE )
+            if ( i == CLSTR_IFACE )
             {
-                node_ptr->alarms[HBS_ALARM_ID__HB_INFRA] = FM_ALARM_SEVERITY_CLEAR ;
-                node_ptr->degrade_mask &= ~DEGRADE_MASK_HEARTBEAT_INFRA ;
+                node_ptr->alarms[HBS_ALARM_ID__HB_CLSTR] = FM_ALARM_SEVERITY_CLEAR ;
+                node_ptr->degrade_mask &= ~DEGRADE_MASK_HEARTBEAT_CLSTR ;
             }
         }
     }
@@ -4625,10 +4625,10 @@ void nodeLinkClass::manage_heartbeat_clear ( string hostname, iface_enum iface )
             node_ptr->alarms[HBS_ALARM_ID__HB_MGMNT] = FM_ALARM_SEVERITY_CLEAR ;
             node_ptr->degrade_mask &= ~DEGRADE_MASK_HEARTBEAT_MGMNT ;
         }
-        else if ( iface == INFRA_IFACE )
+        else if ( iface == CLSTR_IFACE )
         {
-            node_ptr->alarms[HBS_ALARM_ID__HB_INFRA] = FM_ALARM_SEVERITY_CLEAR ;
-            node_ptr->degrade_mask &= ~DEGRADE_MASK_HEARTBEAT_INFRA ;
+            node_ptr->alarms[HBS_ALARM_ID__HB_CLSTR] = FM_ALARM_SEVERITY_CLEAR ;
+            node_ptr->degrade_mask &= ~DEGRADE_MASK_HEARTBEAT_CLSTR ;
         }
     }
 }
@@ -4655,10 +4655,10 @@ void nodeLinkClass::manage_heartbeat_degrade ( string hostname, iface_enum iface
             node_ptr->degrade_mask &= ~DEGRADE_MASK_HEARTBEAT_MGMNT ;
         }
 
-        else if ( iface == INFRA_IFACE )
+        else if ( iface == CLSTR_IFACE )
         {
             node_ptr->no_work_log_throttle = 0 ; 
-            node_ptr->degrade_mask &= ~DEGRADE_MASK_HEARTBEAT_INFRA ;
+            node_ptr->degrade_mask &= ~DEGRADE_MASK_HEARTBEAT_CLSTR ;
         }
 
         hbs_minor_clear ( node_ptr, iface );
@@ -4686,11 +4686,11 @@ void nodeLinkClass::manage_heartbeat_degrade ( string hostname, iface_enum iface
                     node_ptr->degrade_mask |= DEGRADE_MASK_HEARTBEAT_MGMNT ;
                 }
             }
-            if ( iface == INFRA_IFACE )
+            if ( iface == CLSTR_IFACE )
             {
-                if ( !(node_ptr->degrade_mask & DEGRADE_MASK_HEARTBEAT_INFRA) )
+                if ( !(node_ptr->degrade_mask & DEGRADE_MASK_HEARTBEAT_CLSTR) )
                 {
-                    node_ptr->degrade_mask |= DEGRADE_MASK_HEARTBEAT_INFRA ;
+                    node_ptr->degrade_mask |= DEGRADE_MASK_HEARTBEAT_CLSTR ;
                 }
             }
         }
@@ -7310,9 +7310,9 @@ int nodeLinkClass::mon_host ( const string & hostname, bool true_false, bool sen
         bool want_log = true ;
         for ( int iface = 0 ; iface < MAX_IFACES ; iface++ )
         {
-            if ( iface == INFRA_IFACE )
+            if ( iface == CLSTR_IFACE )
             {
-                if ( this->infra_network_provisioned == false )
+                if ( this->clstr_network_provisioned == false )
                     continue ;
 
                 if ( node_ptr->monitor[MGMNT_IFACE] == true_false )
@@ -7438,21 +7438,21 @@ void nodeLinkClass::manage_pulse_flags ( struct nodeLinkClass::node * node_ptr, 
         return ;
     }
 
-    /* Code that manages enabling of Infrastructrure network moonitoring
+    /* Code that manages enabling of Cluster-host network monitoring
      *
-     * Algorithm: Only monitor a hosts infrastructure network while the
+     * Algorithm: Only monitor a hosts cluster-host network while the
      *            management network of that same host is being monitored
-     *            and while that host indicates support for the infrastructure
-     *            network by setting the INFRA_FLAG in its management network
+     *            and while that host indicates support for the cluster-host
+     *            network by setting the CLSTR_FLAG in its management network
      *            pulse responses. */
     if ( node_ptr->monitor[MGMNT_IFACE] == false )
     {
-        node_ptr->monitor[INFRA_IFACE] = false ;
+        node_ptr->monitor[CLSTR_IFACE] = false ;
     }
-    else if ( flags & INFRA_FLAG )
+    else if ( flags & CLSTR_FLAG )
     {
         /* TODO: Does this need to be debounced ??? */
-        node_ptr->monitor[INFRA_IFACE] = true ;
+        node_ptr->monitor[CLSTR_IFACE] = true ;
     }
     
     /* A host indicates that its process monitor is running by setting the
@@ -8034,9 +8034,9 @@ void nodeLinkClass::manage_heartbeat_alarm ( struct nodeLinkClass::node * node_p
     }
     else
     {
-        entity_ptr = INFRA_NAME ;
-        id     = HBS_ALARM_ID__HB_INFRA ;
-        alarm_id_ptr = INFRA_HB_ALARM_ID;
+        entity_ptr = CLSTR_NAME ;
+        id     = HBS_ALARM_ID__HB_CLSTR ;
+        alarm_id_ptr = CLSTR_HB_ALARM_ID;
     }
 
     if ( sev == FM_ALARM_SEVERITY_CLEAR )
@@ -8239,11 +8239,11 @@ int nodeLinkClass::lost_pulses ( iface_enum iface, bool & storage_0_responding )
                 }
             }
 
-            /* Turn the infra heartbeat loss into a degrade only
-             * condition if the infra_degrade_only flag is set */
-            if (( iface == INFRA_IFACE ) &&
+            /* Turn the cluster-host heartbeat loss into a degrade only
+             * condition if the clstr_degrade_only flag is set */
+            if (( iface == CLSTR_IFACE ) &&
                 ( pulse_ptr->b2b_misses_count[iface] >= hbs_failure_threshold ) &&
-                ( infra_degrade_only == true ))
+                ( clstr_degrade_only == true ))
             {
                 /* Only print the log at the threshold boundary */
                 if (( pulse_ptr->b2b_misses_count[iface]%HBS_LOSS_REPORT_THROTTLE) == hbs_failure_threshold )
@@ -8260,9 +8260,9 @@ int nodeLinkClass::lost_pulses ( iface_enum iface, bool & storage_0_responding )
                 }
             }
 
-            /* Turn the infra heartbeat loss into a degrade only
+            /* Turn the clstr heartbeat loss into a degrade only
              * condition for inactive controller on normal system. */
-            else if (( iface == INFRA_IFACE ) &&
+            else if (( iface == CLSTR_IFACE ) &&
                      ( pulse_ptr->b2b_misses_count[iface] >= hbs_failure_threshold ) &&
                      ( this->system_type == SYSTEM_TYPE__NORMAL ) &&
                      (( pulse_ptr->nodetype & CONTROLLER_TYPE) == CONTROLLER_TYPE ))
@@ -8405,8 +8405,8 @@ void nodeLinkClass::mem_log_general ( void )
                 my_float_ip.c_str(),
                 daemon_get_cfg_ptr()->mgmnt_iface,
                 mgmnt_link_up_and_running ? "Up" : "Down",
-                daemon_get_cfg_ptr()->infra_iface,
-                infra_link_up_and_running ? "Up" : "Down");
+                daemon_get_cfg_ptr()->clstr_iface,
+                clstr_link_up_and_running ? "Up" : "Down");
     mem_log (str);
 }
 
@@ -8433,7 +8433,7 @@ void nodeLinkClass::mem_log_mnfa ( void )
                 my_hostname.c_str(),
                 mnfa_active ? "ACTIVE" : "inactive",
                 mnfa_host_count[MGMNT_IFACE],
-                mnfa_host_count[INFRA_IFACE],
+                mnfa_host_count[CLSTR_IFACE],
                 mnfa_threshold,
                 mnfa_occurances);
     mem_log (str);
@@ -8591,11 +8591,11 @@ void nodeLinkClass::mem_log_reset_info ( struct nodeLinkClass::node * node_ptr )
 void nodeLinkClass::mem_log_network ( struct nodeLinkClass::node * node_ptr )
 {
     char str[MAX_MEM_LOG_DATA] ;
-    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\t%s %s infra_ip: %s Uptime: %u\n", 
+    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\t%s %s cluster_host_ip: %s Uptime: %u\n",
                 node_ptr->hostname.c_str(), 
                 node_ptr->mac.c_str(), 
                 node_ptr->ip.c_str(),
-                node_ptr->infra_ip.c_str(),
+                node_ptr->clstr_ip.c_str(),
                 node_ptr->uptime );
     mem_log (str);
 }

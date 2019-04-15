@@ -202,10 +202,10 @@ void daemon_exit ( void )
                              CONFIG_MTC_TO_HBS_CMD_PORT   |\
                              CONFIG_HBS_TO_MTC_EVENT_PORT |\
                              CONFIG_AGENT_HBS_MGMNT_PORT  |\
-                             CONFIG_AGENT_HBS_INFRA_PORT  |\
+                             CONFIG_AGENT_HBS_CLSTR_PORT  |\
                              CONFIG_CLIENT_HBS_MGMNT_PORT |\
                              CONFIG_CLIENT_MTCALARM_PORT  |\
-                             CONFIG_CLIENT_HBS_INFRA_PORT |\
+                             CONFIG_CLIENT_HBS_CLSTR_PORT |\
                              CONFIG_AGENT_SM_SERVER_PORT      |\
                              CONFIG_AGENT_SM_CLIENT_PORT)
 
@@ -342,15 +342,15 @@ static int hbs_config_handler ( void * user,
         config_ptr->hbs_client_mgmnt_port = atoi(value);
         config_ptr->mask |= CONFIG_CLIENT_HBS_MGMNT_PORT ;
     }
-    else if (MATCH("agent", "hbs_agent_infra_port"))
+    else if (MATCH("agent", "hbs_agent_clstr_port"))
     {
-        config_ptr->hbs_agent_infra_port = atoi(value);
-        config_ptr->mask |= CONFIG_AGENT_HBS_INFRA_PORT ;
+        config_ptr->hbs_agent_clstr_port = atoi(value);
+        config_ptr->mask |= CONFIG_AGENT_HBS_CLSTR_PORT ;
     }
-    else if (MATCH("client", "hbs_client_infra_port"))
+    else if (MATCH("client", "hbs_client_clstr_port"))
     {
-        config_ptr->hbs_client_infra_port = atoi(value);
-        config_ptr->mask |= CONFIG_CLIENT_HBS_INFRA_PORT ;
+        config_ptr->hbs_client_clstr_port = atoi(value);
+        config_ptr->mask |= CONFIG_CLIENT_HBS_CLSTR_PORT ;
     }
     else if ( MATCH("client", "mtcalarm_req_port") )
     {
@@ -414,22 +414,22 @@ int daemon_configure ( void )
     ilog("Mgmnt Port  : %d (rx)", hbs_config.hbs_agent_mgmnt_port );
     ilog("Mgmnt Port  : %d (tx)\n", hbs_config.hbs_client_mgmnt_port );
 
-    /* Fetch the infrastructure interface name.
+    /* Fetch the cluster-host interface name.
      * calls daemon_get_iface_master inside so the
      * aggrigated name is returned if it exists */
-    get_infra_iface (&hbs_config.infra_iface );
-    if ( strlen(hbs_config.infra_iface) )
+    get_clstr_iface (&hbs_config.clstr_iface );
+    if ( strlen(hbs_config.clstr_iface) )
     {
-        if (!strcmp(hbs_config.infra_iface, hbs_config.mgmnt_iface))
+        if (!strcmp(hbs_config.clstr_iface, hbs_config.mgmnt_iface))
         {
-            hbsInv.infra_network_provisioned = false ;
+            hbsInv.clstr_network_provisioned = false ;
         }
         else
         {
-            hbsInv.infra_network_provisioned = true ;
-            ilog ("Infra Name  : %s", hbs_config.infra_iface );
-            ilog ("Infra Port  : %d (rx)", hbs_config.hbs_agent_infra_port );
-            ilog ("Infra Port  : %d (tx)", hbs_config.hbs_client_infra_port );
+            hbsInv.clstr_network_provisioned = true ;
+            ilog ("Clstr Name  : %s", hbs_config.clstr_iface );
+            ilog ("Clstr Port  : %d (rx)", hbs_config.hbs_agent_clstr_port );
+            ilog ("Clstr Port  : %d (tx)", hbs_config.hbs_client_clstr_port );
         }
     }
 
@@ -440,7 +440,7 @@ int daemon_configure ( void )
     hbsInv.hbs_state_change = true ;
 
     /* pull in the degrade only config option */
-    hbsInv.infra_degrade_only = hbs_config.infra_degrade_only ;
+    hbsInv.clstr_degrade_only = hbs_config.clstr_degrade_only ;
 
     if ( hbsInv.hbs_degrade_threshold >= hbsInv.hbs_failure_threshold )
     {
@@ -543,13 +543,13 @@ int _setup_pulse_messaging ( iface_enum i, int rmem_max )
     {
         iface = hbs_config.mgmnt_iface ;
     }
-    else if (( i == INFRA_IFACE ) && ( hbs_config.infra_iface != NULL ))
+    else if (( i == CLSTR_IFACE ) && ( hbs_config.clstr_iface != NULL ))
     {
-        iface = hbs_config.infra_iface ;
+        iface = hbs_config.clstr_iface ;
     }
     else
     {
-        wlog ("No Infrastructure Interface\n");
+        wlog ("No Cluster-host Interface\n");
         return (RETRY);
     }
 
@@ -860,11 +860,11 @@ int hbs_socket_init ( void )
      */
     hbs_sock.rx_port[MGMNT_IFACE] = hbs_config.hbs_agent_mgmnt_port ;
     hbs_sock.tx_port[MGMNT_IFACE] = hbs_config.hbs_client_mgmnt_port;
-    hbs_sock.rx_port[INFRA_IFACE] = hbs_config.hbs_agent_infra_port ;
-    hbs_sock.tx_port[INFRA_IFACE] = hbs_config.hbs_client_infra_port;
+    hbs_sock.rx_port[CLSTR_IFACE] = hbs_config.hbs_agent_clstr_port ;
+    hbs_sock.tx_port[CLSTR_IFACE] = hbs_config.hbs_client_clstr_port;
 
     /* Setup the pulse messaging interfaces */
-    SETUP_PULSE_MESSAGING ( hbsInv.infra_network_provisioned, rmem_max ) ;
+    SETUP_PULSE_MESSAGING ( hbsInv.clstr_network_provisioned, rmem_max ) ;
 
     if (( hbs_sock.netlink_sock = open_netlink_socket ( RTMGRP_LINK )) <= 0 )
     {
@@ -1117,7 +1117,7 @@ int _pulse_receive ( iface_enum iface , unsigned int seq_num )
                                 if ( iface == MGMNT_IFACE )
                                     hbs_cluster_save ( hostname, MTCE_HBS_NETWORK_MGMT , hbs_sock.rx_mesg[iface]);
                                 else
-                                    hbs_cluster_save ( hostname, MTCE_HBS_NETWORK_INFRA , hbs_sock.rx_mesg[iface]);
+                                    hbs_cluster_save ( hostname, MTCE_HBS_NETWORK_CLSTR , hbs_sock.rx_mesg[iface]);
                             }
                         }
                     }
@@ -1612,16 +1612,16 @@ void daemon_service_run ( void )
                         ilog ("Mgmnt %s link is %s\n", hbs_config.mgmnt_iface, hbsInv.mgmnt_link_up_and_running ? "Up" : "Down" );
                     }
 
-                    if ( hbsInv.infra_network_provisioned == true )
+                    if ( hbsInv.clstr_network_provisioned == true )
                     {
-                        if ( get_link_state ( hbs_sock.ioctl_sock, hbs_config.infra_iface, &hbsInv.infra_link_up_and_running ) )
+                        if ( get_link_state ( hbs_sock.ioctl_sock, hbs_config.clstr_iface, &hbsInv.clstr_link_up_and_running ) )
                         {
-                            hbsInv.infra_link_up_and_running = false ;
-                            wlog ("Failed to query %s operational state ; defaulting to down\n", hbs_config.infra_iface );
+                            hbsInv.clstr_link_up_and_running = false ;
+                            wlog ("Failed to query %s operational state ; defaulting to down\n", hbs_config.clstr_iface );
                         }
                         else
                         {
-                            ilog ("Infra %s link is %s\n", hbs_config.infra_iface, hbsInv.infra_link_up_and_running ? "Up" : "Down" );
+                            ilog ("Cluster-host %s link is %s\n", hbs_config.clstr_iface, hbsInv.clstr_link_up_and_running ? "Up" : "Down" );
                         }
                     }
 
@@ -1664,7 +1664,7 @@ void daemon_service_run ( void )
 
                     /* tell the cluster which controller this is and
                      * how many networks are being monitored */
-                    hbs_cluster_nums (hbs_ctrl.controller,hbsInv.infra_network_provisioned ?2:1);
+                    hbs_cluster_nums (hbs_ctrl.controller,hbsInv.clstr_network_provisioned ?2:1);
 
                     socket_init_fail_count = 0 ;
                     wait_log_throttle = 0 ;
@@ -1703,7 +1703,7 @@ void daemon_service_run ( void )
                       hostname_ptr != hostname_inventory.end() ;
                       hostname_ptr++ )
                 {
-                    hbsAlarm_clear_all ( hostname_ptr->data(), hbsInv.infra_network_provisioned );
+                    hbsAlarm_clear_all ( hostname_ptr->data(), hbsInv.clstr_network_provisioned );
                     hbsInv.manage_heartbeat_clear ( hostname_ptr->data(), MAX_IFACES );
                 }
             }
@@ -1769,13 +1769,13 @@ void daemon_service_run ( void )
                     FD_SET(hbs_sock.rx_sock[MGMNT_INTERFACE]->getFD(), &hbs_sock.readfds );
                 }
 
-                /* Add the INFRA network pulse rx socket if its provisioned and have a valid socket */
-                if (( hbsInv.infra_network_provisioned == true ) &&
-                    ( hbs_sock.rx_sock[INFRA_INTERFACE] ) &&
-                    ( hbs_sock.rx_sock[INFRA_INTERFACE]->getFD()))
+                /* Add the cluster-host network pulse rx socket if its provisioned and have a valid socket */
+                if (( hbsInv.clstr_network_provisioned == true ) &&
+                    ( hbs_sock.rx_sock[CLSTR_INTERFACE] ) &&
+                    ( hbs_sock.rx_sock[CLSTR_INTERFACE]->getFD()))
                 {
-                    socks.push_back  (hbs_sock.rx_sock[INFRA_INTERFACE]->getFD());
-                    FD_SET(hbs_sock.rx_sock[INFRA_INTERFACE]->getFD(), &hbs_sock.readfds );
+                    socks.push_back  (hbs_sock.rx_sock[CLSTR_INTERFACE]->getFD());
+                    FD_SET(hbs_sock.rx_sock[CLSTR_INTERFACE]->getFD(), &hbs_sock.readfds );
                 }
             }
 
@@ -1880,7 +1880,7 @@ void daemon_service_run ( void )
                                 ( hbsInv.active_controller == true ))
                             {
                                 hbsAlarm_clear_all ( hostname,
-                                hbsInv.infra_network_provisioned );
+                                hbsInv.clstr_network_provisioned );
                             }
                         }
                         else if ( msg.cmd == MTC_CMD_DEL_HOST )
@@ -1895,7 +1895,7 @@ void daemon_service_run ( void )
                                 ( hbsInv.active_controller == true ))
                             {
                                 hbsAlarm_clear_all ( hostname,
-                                hbsInv.infra_network_provisioned );
+                                hbsInv.clstr_network_provisioned );
                             }
                         }
                         else if ( msg.cmd == MTC_CMD_STOP_HOST )
@@ -1970,12 +1970,12 @@ void daemon_service_run ( void )
                     hbs_sock.fired[MGMNT_INTERFACE] = true ;
                 }
 
-                if (( hbsInv.infra_network_provisioned == true ) &&
-                    ( hbs_sock.rx_sock[INFRA_INTERFACE] ) &&
-                    (  hbs_sock.rx_sock[INFRA_INTERFACE]->getFD()) &&
-                    ( FD_ISSET(hbs_sock.rx_sock[INFRA_INTERFACE]->getFD(), &hbs_sock.readfds)))
+                if (( hbsInv.clstr_network_provisioned == true ) &&
+                    ( hbs_sock.rx_sock[CLSTR_INTERFACE] ) &&
+                    (  hbs_sock.rx_sock[CLSTR_INTERFACE]->getFD()) &&
+                    ( FD_ISSET(hbs_sock.rx_sock[CLSTR_INTERFACE]->getFD(), &hbs_sock.readfds)))
                 {
-                    hbs_sock.fired[INFRA_INTERFACE] = true ;
+                    hbs_sock.fired[CLSTR_INTERFACE] = true ;
                 }
             }
 
@@ -2137,8 +2137,8 @@ void daemon_service_run ( void )
                 /* Load the expected pulses and zero detected */
                 for ( int iface = 0 ; iface < MAX_IFACES ; iface++ )
                 {
-                    /* Don't service the infrastructure network if it is not provisioned */
-                    if (( iface == INFRA_IFACE ) && ( hbsInv.infra_network_provisioned == false ))
+                    /* Don't service the cluster-host network if it is not provisioned */
+                    if (( iface == CLSTR_IFACE ) && ( hbsInv.clstr_network_provisioned == false ))
                         continue ;
 
 #ifdef WANT_HBS_MEM_LOGS
@@ -2198,9 +2198,9 @@ void daemon_service_run ( void )
              * the pulse responses that have come in */
             for ( int iface = 0 ; iface < MAX_IFACES ; iface++ )
             {
-                /* Do not service the infrastructure interface if it is not provisioned
+                /* Do not service the cluster-host interface if it is not provisioned
                  * We won't get here anyway ... gate above prevents it */
-                if (( iface == INFRA_IFACE ) && ( hbsInv.infra_network_provisioned != true ))
+                if (( iface == CLSTR_IFACE ) && ( hbsInv.clstr_network_provisioned != true ))
                     continue ;
 
                 if ( hbs_sock.fired[iface] == true )
@@ -2274,8 +2274,8 @@ void daemon_service_run ( void )
 
             for ( int iface = 0 ; iface < MAX_IFACES ; iface++ )
             {
-                /* Do not service the infrastructure interface if it is not provisioned */
-                if (( iface == INFRA_IFACE ) && ( hbsInv.infra_network_provisioned != true ))
+                /* Do not service the cluster-host interface if it is not provisioned */
+                if (( iface == CLSTR_IFACE ) && ( hbsInv.clstr_network_provisioned != true ))
                     continue ;
 
 #ifdef WANT_HBS_MEM_LOGS

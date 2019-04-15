@@ -167,14 +167,14 @@ int get_netlink_events ( int nl_socket , std::list<string> & links_gone_down,
 void log_link_events ( int netlink_sock,
                        int ioctl_sock, 
                        const char * mgmnt_iface_ptr, 
-                       const char * infra_iface_ptr,
+                       const char * clstr_iface_ptr,
                        bool & mgmnt_link_up_and_running,
-                       bool & infra_link_up_and_running)
+                       bool & clstr_link_up_and_running)
 {
     std::list<string> links_gone_down ;
     std::list<string> links_gone_up   ;
     std::list<string>::iterator iter_curr_ptr ;
-    dlog3 ("logging for interfaces %s and %s\n", mgmnt_iface_ptr, infra_iface_ptr);
+    dlog3 ("logging for interfaces %s and %s\n", mgmnt_iface_ptr, clstr_iface_ptr);
     if ( get_netlink_events ( netlink_sock, links_gone_down, links_gone_up )) 
     {
         bool running = false ;
@@ -190,7 +190,7 @@ void log_link_events ( int netlink_sock,
                 dlog3 ( "downed link: %s (running:%d:%d)\n", 
                         iter_curr_ptr->c_str(), 
                         mgmnt_link_up_and_running, 
-                        infra_link_up_and_running );
+                        clstr_link_up_and_running );
 
                 if ( !strcmp (mgmnt_iface_ptr, iter_curr_ptr->data()))
                 {
@@ -200,12 +200,12 @@ void log_link_events ( int netlink_sock,
                         wlog ("Mgmnt link %s is down\n", mgmnt_iface_ptr );
                     }
                 }
-                if ( !strcmp (infra_iface_ptr, iter_curr_ptr->data()))
+                if ( !strcmp (clstr_iface_ptr, iter_curr_ptr->data()))
                 {
-                    if ( infra_link_up_and_running == true )
+                    if ( clstr_link_up_and_running == true )
                     {
-                        infra_link_up_and_running = false ; 
-                        wlog ("Infra link %s is down\n", infra_iface_ptr );
+                        clstr_link_up_and_running = false ;
+                        wlog ("Cluster-host link %s is down\n", clstr_iface_ptr );
                     }
                 }
      
@@ -231,17 +231,17 @@ void log_link_events ( int netlink_sock,
                 dlog3 ( "recovered link: %s (running:%d:%d)\n", 
                         iter_curr_ptr->c_str(), 
                         mgmnt_link_up_and_running, 
-                        infra_link_up_and_running );
+                        clstr_link_up_and_running );
 
                 if ( !strcmp (mgmnt_iface_ptr, iter_curr_ptr->data()))
                 {
                     mgmnt_link_up_and_running = true ; 
                     wlog ("Mgmnt link %s is up\n", mgmnt_iface_ptr );
                 }
-                if ( !strcmp (infra_iface_ptr, iter_curr_ptr->data()))
+                if ( !strcmp (clstr_iface_ptr, iter_curr_ptr->data()))
                 {
-                    infra_link_up_and_running = true ; 
-                    wlog ("Infra link %s is up\n", infra_iface_ptr );
+                    clstr_link_up_and_running = true ;
+                    wlog ("Cluster-host link %s is up\n", clstr_iface_ptr );
                 }
 
                 if ( get_link_state ( ioctl_sock, iter_curr_ptr->data(), &running ) == PASS )

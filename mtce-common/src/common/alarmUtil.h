@@ -35,7 +35,7 @@
 #define MGMNT_HB_ALARM_ID    ((const char *)"200.005")
 #define PMOND_ALARM_ID       ((const char *)"200.006")
 #define SENSOR_ALARM_ID      ((const char *)"200.007") /* Sensor read alarm ; i.e. the sensor read value bad  */
-#define INFRA_HB_ALARM_ID    ((const char *)"200.009")
+#define CLSTR_HB_ALARM_ID    ((const char *)"200.009")
 #define BM_ALARM_ID          ((const char *)"200.010")
 #define CONFIG_ALARM_ID      ((const char *)"200.011")
 #define CH_CONT_ALARM_ID     ((const char *)"200.012") /* Combo Host Controller Failure - with Active Compute */

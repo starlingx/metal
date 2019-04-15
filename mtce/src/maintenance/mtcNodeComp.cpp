@@ -153,12 +153,12 @@ void _close_mgmnt_rx_socket ( void )
     }
 }
 
-void _close_infra_rx_socket ( void )
+void _close_clstr_rx_socket ( void )
 {
-    if ( mtc_sock.mtc_client_infra_rx_socket )
+    if ( mtc_sock.mtc_client_clstr_rx_socket )
     {
-        delete(mtc_sock.mtc_client_infra_rx_socket);
-        mtc_sock.mtc_client_infra_rx_socket = 0 ;
+        delete(mtc_sock.mtc_client_clstr_rx_socket);
+        mtc_sock.mtc_client_clstr_rx_socket = 0 ;
     }
 }
 
@@ -171,12 +171,12 @@ void _close_mgmnt_tx_socket ( void )
     }
 }
 
-void _close_infra_tx_socket ( void )
+void _close_clstr_tx_socket ( void )
 {
-    if (mtc_sock.mtc_client_infra_tx_socket)
+    if (mtc_sock.mtc_client_clstr_tx_socket)
     {
-        delete (mtc_sock.mtc_client_infra_tx_socket);
-        mtc_sock.mtc_client_infra_tx_socket = 0 ;
+        delete (mtc_sock.mtc_client_clstr_tx_socket);
+        mtc_sock.mtc_client_clstr_tx_socket = 0 ;
     }
 }
 
@@ -194,9 +194,9 @@ void daemon_exit ( void )
     daemon_files_fini ();
 
     _close_mgmnt_rx_socket ();
-    _close_infra_rx_socket ();
+    _close_clstr_rx_socket ();
     _close_mgmnt_tx_socket ();
-    _close_infra_tx_socket ();
+    _close_clstr_tx_socket ();
     _close_amon_sock       ();
 
     exit (0) ;
@@ -316,50 +316,50 @@ void setup_mgmnt_rx_socket ( void )
 }
 
 
-void setup_infra_rx_socket ( void )
+void setup_clstr_rx_socket ( void )
 {
-    if ( ctrl.infra_iface_provisioned == false )
+    if ( ctrl.clstr_iface_provisioned == false )
     {
         return ;
     }
 
-    dlog ("setup of infra RX\n");
-    /* Fetch the infrastructure interface name.
+    dlog ("setup of cluster-host RX\n");
+    /* Fetch the cluster-host interface name.
      * calls daemon_get_iface_master inside so the
      * aggrigated name is returned if it exists */
-    get_infra_iface (&mtc_config.infra_iface );
-    if ( strlen(mtc_config.infra_iface) )
+    get_clstr_iface (&mtc_config.clstr_iface );
+    if ( strlen(mtc_config.clstr_iface) )
     {
-        /* Only get the infrastructure network address if it is provisioned */ 
-        if ( get_iface_address  ( mtc_config.infra_iface, ctrl.address_infra, false ) == PASS )
+        /* Only get the cluster-host network address if it is provisioned */
+        if ( get_iface_address  ( mtc_config.clstr_iface, ctrl.address_clstr, false ) == PASS )
         {
-            ilog ("Infra iface : %s\n", mtc_config.infra_iface );
-            ilog ("Infra addr  : %s\n", ctrl.address_infra.c_str());
+            ilog ("Cluster-host iface : %s\n", mtc_config.clstr_iface );
+            ilog ("Cluster-host addr  : %s\n", ctrl.address_clstr.c_str());
         }
     }
-    if ( !ctrl.address_infra.empty() )
+    if ( !ctrl.address_clstr.empty() )
     {
-        _close_infra_rx_socket ();
+        _close_clstr_rx_socket ();
 
-        /* Only set up the socket if an infra interface is provisioned */
-        mtc_sock.mtc_client_infra_rx_socket = new msgClassRx(ctrl.address_infra.c_str(),mtc_sock.mtc_cmd_port, IPPROTO_UDP, ctrl.infra_iface.data(), false );
+        /* Only set up the socket if an cluster-host interface is provisioned */
+        mtc_sock.mtc_client_clstr_rx_socket = new msgClassRx(ctrl.address_clstr.c_str(),mtc_sock.mtc_cmd_port, IPPROTO_UDP, ctrl.clstr_iface.data(), false );
 
         /* update health of socket */
-        if ( mtc_sock.mtc_client_infra_rx_socket )
+        if ( mtc_sock.mtc_client_clstr_rx_socket )
         {
             /* look for fault insertion request */
-            if ( daemon_is_file_present ( MTC_CMD_FIT__INFRA_RXSOCK ) )
-                mtc_sock.mtc_client_infra_rx_socket->return_status = FAIL ;
+            if ( daemon_is_file_present ( MTC_CMD_FIT__CLSTR_RXSOCK ) )
+                mtc_sock.mtc_client_clstr_rx_socket->return_status = FAIL ;
 
-            if ( mtc_sock.mtc_client_infra_rx_socket->return_status  == PASS )
+            if ( mtc_sock.mtc_client_clstr_rx_socket->return_status  == PASS )
             {
-                mtc_sock.mtc_client_infra_rx_socket->sock_ok (true);
+                mtc_sock.mtc_client_clstr_rx_socket->sock_ok (true);
             }
             else
             {
-                elog ("failed to init 'infrastructure rx' socket (rc:%d)\n",
-                mtc_sock.mtc_client_infra_rx_socket->return_status );
-                mtc_sock.mtc_client_infra_rx_socket->sock_ok (false);
+                elog ("failed to init 'cluster-host rx' socket (rc:%d)\n",
+                mtc_sock.mtc_client_clstr_rx_socket->return_status );
+                mtc_sock.mtc_client_clstr_rx_socket->sock_ok (false);
             }
         }
     }
@@ -390,32 +390,32 @@ void setup_mgmnt_tx_socket ( void )
     }
 }
 
-void setup_infra_tx_socket ( void )
+void setup_clstr_tx_socket ( void )
 {
-    if ( ctrl.infra_iface_provisioned == false )
+    if ( ctrl.clstr_iface_provisioned == false )
     {
         return ;
     }
 
-    dlog ("setup of infra TX\n");
-    _close_infra_tx_socket ();
-    mtc_sock.mtc_client_infra_tx_socket = new msgClassTx(CONTROLLER_NFS,mtc_sock.mtc_agent_port, IPPROTO_UDP, mtc_config.infra_iface);
+    dlog ("setup of cluster-host TX\n");
+    _close_clstr_tx_socket ();
+    mtc_sock.mtc_client_clstr_tx_socket = new msgClassTx(CONTROLLER_NFS,mtc_sock.mtc_agent_port, IPPROTO_UDP, mtc_config.clstr_iface);
 
-    if ( mtc_sock.mtc_client_infra_tx_socket )
+    if ( mtc_sock.mtc_client_clstr_tx_socket )
     {
         /* look for fault insertion request */
-        if ( daemon_is_file_present ( MTC_CMD_FIT__INFRA_TXSOCK ) )
-            mtc_sock.mtc_client_infra_tx_socket->return_status = FAIL ;
+        if ( daemon_is_file_present ( MTC_CMD_FIT__CLSTR_TXSOCK ) )
+            mtc_sock.mtc_client_clstr_tx_socket->return_status = FAIL ;
 
-        if ( mtc_sock.mtc_client_infra_tx_socket->return_status == PASS )
+        if ( mtc_sock.mtc_client_clstr_tx_socket->return_status == PASS )
         {
-            mtc_sock.mtc_client_infra_tx_socket->sock_ok(true);
+            mtc_sock.mtc_client_clstr_tx_socket->sock_ok(true);
         }
         else
         {
-            elog ("failed to init 'infrastructure tx' socket (rc:%d)\n",
-            mtc_sock.mtc_client_infra_tx_socket->return_status );
-            mtc_sock.mtc_client_infra_tx_socket->sock_ok(false);
+            elog ("failed to init 'cluster-host tx' socket (rc:%d)\n",
+            mtc_sock.mtc_client_clstr_tx_socket->return_status );
+            mtc_sock.mtc_client_clstr_tx_socket->sock_ok(false);
         }
     }
 }
@@ -461,9 +461,9 @@ void setup_amon_socket ( void )
  * Construct the messaging sockets
  *
  * 1. Unicast receive socket mgmnt (mtc_client_rx_socket)
- * 2. Unicast receive socket infra (mtc_client_infra_rx_socket)
+ * 2. Unicast receive socket clstr (mtc_client_clstr_rx_socket)
  * 3. Unicast transmit socket mgmnt (mtc_client_tx_socket)
- * 4. Unicast transmit socket infra (mtc_client_infra_tx_socket)
+ * 4. Unicast transmit socket clstr (mtc_client_clstr_tx_socket)
  *
  * 5. socket for pmond acive monitoring
  *
@@ -488,23 +488,23 @@ int mtc_socket_init ( void )
     /************************************************************/
     setup_mgmnt_tx_socket ();
 
-    /* Manage Infrastructure network setup */
-    string infra_iface_name = daemon_infra_iface();
+    /* Manage Cluster-host network setup */
+    string clstr_iface_name = daemon_clstr_iface();
     string mgmnt_iface_name = daemon_mgmnt_iface();
-    if ( !infra_iface_name.empty() )
+    if ( !clstr_iface_name.empty() )
     {
-        if ( infra_iface_name != mgmnt_iface_name )
+        if ( clstr_iface_name != mgmnt_iface_name )
         {
-            ctrl.infra_iface_provisioned = true ;
+            ctrl.clstr_iface_provisioned = true ;
             /************************************************************/
-            /* Setup the Infra Interface Receive Socket                 */
+            /* Setup the Clstr Interface Receive Socket                 */
             /************************************************************/
-            setup_infra_rx_socket () ;
+            setup_clstr_rx_socket () ;
 
             /*************************************************************/
-            /* Setup the Infra Interface Transmit Messaging to mtcAgent  */
+            /* Setup the Clstr Interface Transmit Messaging to mtcAgent  */
             /*************************************************************/
-            setup_infra_tx_socket () ;
+            setup_clstr_tx_socket () ;
         }
     }
 
@@ -524,7 +524,7 @@ int mtc_socket_init ( void )
  * personality
  * mac address
  * mgmnt ip address
- * infra ip address
+ * clstr ip address
  *
  ***************************************************************************************/
 string _self_identify ( string nodetype )
@@ -544,8 +544,8 @@ string _self_identify ( string nodetype )
     ctrl.who_i_am.append( ctrl.address.data() );
     ctrl.who_i_am.append( "\"");
 
-    ctrl.who_i_am.append( ",\"infra_ip\":\"");
-    ctrl.who_i_am.append( ctrl.address_infra.data() );
+    ctrl.who_i_am.append( ",\"cluster_host_ip\":\"");
+    ctrl.who_i_am.append( ctrl.address_clstr.data() );
     ctrl.who_i_am.append( "\"");
     
     ctrl.who_i_am.append( ",\"mgmt_mac\":\"");
@@ -917,12 +917,12 @@ int daemon_init ( string iface, string nodetype_str )
     ctrl.who_i_am = "" ;
     ctrl.macaddr = "" ;
     ctrl.address = "" ;
-    ctrl.address_infra = "" ;
+    ctrl.address_clstr = "" ;
     ctrl.mtcAgent_ip = "";
     ctrl.function    = 0 ;
     ctrl.subfunction = 0 ;
     ctrl.system_type = daemon_system_type ();
-    ctrl.infra_iface_provisioned = false ;
+    ctrl.clstr_iface_provisioned = false ;
 
     /* convert node type to integer */
     ctrl.nodetype = get_host_function_mask ( nodetype_str ) ;
@@ -1036,12 +1036,12 @@ void daemon_service_run ( void )
             FD_SET(mtc_sock.mtc_client_rx_socket->getFD(), &mtc_sock.readfds);
         }
 
-        if (( ctrl.infra_iface_provisioned == true ) &&
-            ( mtc_sock.mtc_client_infra_rx_socket ) &&
-            ( mtc_sock.mtc_client_infra_rx_socket->return_status==PASS ))
+        if (( ctrl.clstr_iface_provisioned == true ) &&
+            ( mtc_sock.mtc_client_clstr_rx_socket ) &&
+            ( mtc_sock.mtc_client_clstr_rx_socket->return_status==PASS ))
         {
-            socks.push_front (mtc_sock.mtc_client_infra_rx_socket->getFD());
-            FD_SET(mtc_sock.mtc_client_infra_rx_socket->getFD(), &mtc_sock.readfds);
+            socks.push_front (mtc_sock.mtc_client_clstr_rx_socket->getFD());
+            FD_SET(mtc_sock.mtc_client_clstr_rx_socket->getFD(), &mtc_sock.readfds);
         }
 
         mtc_sock.amon_socket = active_monitor_get_sel_obj ();
@@ -1059,9 +1059,9 @@ void daemon_service_run ( void )
         socks.sort();
 
 #ifdef WANT_SELECTS
-        ilog_throttled ( select_log_count, 200 , "Selects: mgmnt:%d infra:%d amon:%d - Size:%ld  First:%d Last:%d\n",
+        ilog_throttled ( select_log_count, 200 , "Selects: mgmnt:%d clstr:%d amon:%d - Size:%ld  First:%d Last:%d\n",
                 mtc_sock.mtc_client_rx_socket,
-                mtc_sock.mtc_client_infra_rx_socket,
+                mtc_sock.mtc_client_clstr_rx_socket,
                 mtc_sock.amon_socket,
                 socks.size(), socks.front(), socks.back());
 #endif
@@ -1086,13 +1086,13 @@ void daemon_service_run ( void )
              {
                  mtc_service_command ( sock_ptr, MGMNT_INTERFACE );
              }
-             if (( ctrl.infra_iface_provisioned == true ) &&
-                 ( !ctrl.address_infra.empty() ) &&
-                 ( mtc_sock.mtc_client_infra_rx_socket ) &&
-                 ( mtc_sock.mtc_client_infra_rx_socket->return_status==PASS) &&
-                 ( FD_ISSET(mtc_sock.mtc_client_infra_rx_socket->getFD(), &mtc_sock.readfds)))
+             if (( ctrl.clstr_iface_provisioned == true ) &&
+                 ( !ctrl.address_clstr.empty() ) &&
+                 ( mtc_sock.mtc_client_clstr_rx_socket ) &&
+                 ( mtc_sock.mtc_client_clstr_rx_socket->return_status==PASS) &&
+                 ( FD_ISSET(mtc_sock.mtc_client_clstr_rx_socket->getFD(), &mtc_sock.readfds)))
              {
-                 mtc_service_command ( sock_ptr, INFRA_INTERFACE );
+                 mtc_service_command ( sock_ptr, CLSTR_INTERFACE );
              }
              if ( FD_ISSET(mtc_sock.amon_socket, &mtc_sock.readfds))
              {
@@ -1218,7 +1218,7 @@ void daemon_service_run ( void )
              *  Look for failing sockets and try to recover them,
              *  but only one at a time if there are multiple failing.
              *  Priority is the command receiver, thehn transmitter,
-             *  followed by the infra and others.
+             *  followed by the cluster-host and others.
              **/
 
             /* Mgmnt Rx */
@@ -1239,23 +1239,23 @@ void daemon_service_run ( void )
                 socket_reinit = true ;
             }
 
-            /* Infra Rx */
-            else if (( ctrl.infra_iface_provisioned == true ) &&
-                     (( mtc_sock.mtc_client_infra_rx_socket == NULL ) ||
-                      ( mtc_sock.mtc_client_infra_rx_socket->sock_ok() == false )))
+            /* Clstr Rx */
+            else if (( ctrl.clstr_iface_provisioned == true ) &&
+                     (( mtc_sock.mtc_client_clstr_rx_socket == NULL ) ||
+                      ( mtc_sock.mtc_client_clstr_rx_socket->sock_ok() == false )))
             {
-                setup_infra_rx_socket();
-                wlog ("calling setup_infra_rx_socket (auto-recovery)\n");
+                setup_clstr_rx_socket();
+                wlog ("calling setup_clstr_rx_socket (auto-recovery)\n");
                 socket_reinit = true ;
             }
 
-            /* Infra Tx */
-            else if (( ctrl.infra_iface_provisioned == true ) &&
-                     (( mtc_sock.mtc_client_infra_tx_socket == NULL ) ||
-                      ( mtc_sock.mtc_client_infra_tx_socket->sock_ok() == false )))
+            /* Clstr Tx */
+            else if (( ctrl.clstr_iface_provisioned == true ) &&
+                     (( mtc_sock.mtc_client_clstr_tx_socket == NULL ) ||
+                      ( mtc_sock.mtc_client_clstr_tx_socket->sock_ok() == false )))
             {
-                setup_infra_tx_socket();
-                wlog ("calling setup_infra_tx_socket (auto-recovery)\n");
+                setup_clstr_tx_socket();
+                wlog ("calling setup_clstr_tx_socket (auto-recovery)\n");
                 socket_reinit = true ;
             }
 
@@ -1277,17 +1277,17 @@ void daemon_service_run ( void )
             }
 
             send_mtcAlive_msg ( sock_ptr, ctrl.who_i_am, MGMNT_INTERFACE );
-            if (( ctrl.infra_iface_provisioned == true ) &&
-                ( mtc_sock.mtc_client_infra_rx_socket != NULL ) &&
-                ( mtc_sock.mtc_client_infra_rx_socket->sock_ok() == true ))
+            if (( ctrl.clstr_iface_provisioned == true ) &&
+                ( mtc_sock.mtc_client_clstr_rx_socket != NULL ) &&
+                ( mtc_sock.mtc_client_clstr_rx_socket->sock_ok() == true ))
             {
-                send_mtcAlive_msg ( sock_ptr, ctrl.who_i_am, INFRA_INTERFACE );
+                send_mtcAlive_msg ( sock_ptr, ctrl.who_i_am, CLSTR_INTERFACE );
             }
 
             /* Re-Start mtcAlive message timer */
             mtcTimer_start ( ctrl.timer, timer_handler, MTC_ALIVE_TIMER );
 
-            dlog3 ("Infra is %senabled", ctrl.infra_iface_provisioned ? "" : "NOT ");
+            dlog3 ("Clstr is %senabled", ctrl.clstr_iface_provisioned ? "" : "NOT ");
 
             if ( daemon_is_file_present ( MTC_CMD_FIT__DIR ) )
             {
@@ -1308,20 +1308,20 @@ void daemon_service_run ( void )
                         _close_mgmnt_tx_socket ();
                     }
                 }
-                if ( daemon_is_file_present ( MTC_CMD_FIT__INFRA_RXSOCK ))
+                if ( daemon_is_file_present ( MTC_CMD_FIT__CLSTR_RXSOCK ))
                 {
-                    if ( mtc_sock.mtc_client_infra_rx_socket )
+                    if ( mtc_sock.mtc_client_clstr_rx_socket )
                     {
-                        mtc_sock.mtc_client_infra_rx_socket->sock_ok (false);
-                        _close_infra_rx_socket ();
+                        mtc_sock.mtc_client_clstr_rx_socket->sock_ok (false);
+                        _close_clstr_rx_socket ();
                     }
                 }
-                if ( daemon_is_file_present ( MTC_CMD_FIT__INFRA_TXSOCK ))
+                if ( daemon_is_file_present ( MTC_CMD_FIT__CLSTR_TXSOCK ))
                 {
-                    if ( mtc_sock.mtc_client_infra_tx_socket )
+                    if ( mtc_sock.mtc_client_clstr_tx_socket )
                     {
-                        mtc_sock.mtc_client_infra_tx_socket->sock_ok (false);
-                        _close_infra_tx_socket ();
+                        mtc_sock.mtc_client_clstr_tx_socket->sock_ok (false);
+                        _close_clstr_tx_socket ();
                     }
                 }
                 if ( daemon_is_file_present ( MTC_CMD_FIT__AMON_SOCK ))

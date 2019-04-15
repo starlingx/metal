@@ -388,7 +388,7 @@ int jsonUtil_inv_load ( char * json_str_ptr,
         info.host[i].uptime = _json_get_key_value_string ( node_obj, MTC_JSON_INV_UPTIME  );
         info.host[i].oper_subf  = _json_get_key_value_string ( node_obj, MTC_JSON_INV_OPER_SUBF );
         info.host[i].avail_subf = _json_get_key_value_string ( node_obj, MTC_JSON_INV_AVAIL_SUBF);
-        info.host[i].infra_ip = _json_get_key_value_string   ( node_obj, MTC_JSON_INV_INFRAIP );
+        info.host[i].clstr_ip = _json_get_key_value_string   ( node_obj, MTC_JSON_INV_CLSTRIP );
 
         if ( info.host[i].uuid.length() != UUID_LEN )
         {
@@ -445,7 +445,7 @@ int jsonUtil_patch_load ( char * json_str_ptr,
     info.uptime= _json_get_key_value_string ( node_obj, MTC_JSON_INV_UPTIME  );
     info.oper_subf  = _json_get_key_value_string ( node_obj, MTC_JSON_INV_OPER_SUBF );
     info.avail_subf = _json_get_key_value_string ( node_obj, MTC_JSON_INV_AVAIL_SUBF);
-    info.infra_ip    = _json_get_key_value_string ( node_obj, MTC_JSON_INV_INFRAIP );
+    info.clstr_ip    = _json_get_key_value_string ( node_obj, MTC_JSON_INV_CLSTRIP );
 
     if (node_obj) json_object_put(node_obj);
 
@@ -504,7 +504,7 @@ int jsonUtil_load_host ( char * json_str_ptr, node_inv_type & info )
         info.id    = _json_get_key_value_string ( node_obj, "id" );
         info.oper_subf  = _json_get_key_value_string ( node_obj, MTC_JSON_INV_OPER_SUBF );
         info.avail_subf = _json_get_key_value_string ( node_obj, MTC_JSON_INV_AVAIL_SUBF);
-        info.infra_ip    = _json_get_key_value_string ( node_obj, MTC_JSON_INV_INFRAIP );
+        info.clstr_ip    = _json_get_key_value_string ( node_obj, MTC_JSON_INV_CLSTRIP );
 
         if ( info.uuid.length() != UUID_LEN )
         {

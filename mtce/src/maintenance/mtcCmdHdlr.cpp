@@ -332,7 +332,7 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
          * This target handler FSM is responsible for resetting a host through
          * progression escalation of interfaces. First a reboot by command is
          * attempted over the management network. If that fails the same operation
-         * is tried over the infrastructure network. If both reboot command
+         * is tried over the cluster-host network. If both reboot command
          * attempts fail and the board management network for this host is
          * provisioned then reset through it is attempted.
          * Number of reset retries is specified in the command parameter 1
@@ -359,7 +359,7 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
             bool send_reboot_ok = false ;
 
             node_ptr->reboot_cmd_ack_mgmnt = false ;
-            node_ptr->reboot_cmd_ack_infra = false ;
+            node_ptr->reboot_cmd_ack_clstr = false ;
 
             /* send reboot command */
             node_ptr->cmdReq = MTC_CMD_REBOOT ;
@@ -375,12 +375,12 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
                  send_reboot_ok = true ;
             }
 
-            if ( infra_network_provisioned == true )
+            if ( clstr_network_provisioned == true )
             {
-                plog ("%s Performing REBOOT (infra network)\n", node_ptr->hostname.c_str());
-                if ( send_mtc_cmd ( node_ptr->hostname, MTC_CMD_REBOOT, INFRA_INTERFACE ) != PASS )
+                plog ("%s Performing REBOOT (cluster-host network)\n", node_ptr->hostname.c_str());
+                if ( send_mtc_cmd ( node_ptr->hostname, MTC_CMD_REBOOT, CLSTR_INTERFACE ) != PASS )
                 {
-                    wlog ("%s REBOOT Request Failed (infra network)\n",
+                    wlog ("%s REBOOT Request Failed (cluster-host network)\n",
                         node_ptr->hostname.c_str());
                 }
                 else

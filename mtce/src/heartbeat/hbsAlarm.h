@@ -24,9 +24,9 @@ using namespace std;
 #include "alarm.h"   /* for .. mtcAlarm    */
 
 #define MGMNT_NAME ((const char *)"Management")
-#define INFRA_NAME ((const char *)"Infrastructure")
+#define CLSTR_NAME ((const char *)"Cluster-host")
 #define PMON_NAME ((char *)"pmond")
 
-void hbsAlarm_clear_all ( string hostname, bool infra );
+void hbsAlarm_clear_all ( string hostname, bool clstr );
 
 #endif /* __HBSALARM_H__ */

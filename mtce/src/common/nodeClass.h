@@ -115,11 +115,11 @@ private:
         /** The Mac address of the host node */
         std::string mac ;
 
-        /** The infrastructure network IP address of the host node */
-        std::string infra_ip  ;
+        /** The cluster-host network IP address of the host node */
+        std::string clstr_ip  ;
 
-        /** The Mac address of the host's infra interface */
-        std::string infra_mac  ;
+        /** The Mac address of the host's cluster-host interface */
+        std::string clstr_mac  ;
 
         /** The type of node 'controller' or 'worker' node */
         std::string type ;
@@ -305,7 +305,7 @@ private:
         int mtcAlive_purge     ;
 
         bool mtcAlive_mgmnt ; /* set true when mtcAlive is rx'd from mgmnt network */
-        bool mtcAlive_infra ; /* set true when mtcAlive is rx'd from infra network */
+        bool mtcAlive_clstr ; /* set true when mtcAlive is rx'd from clstr network */
 
         /* Both of these booleans are set true upon receipt of a mtcAlive message. */
         bool mtcAlive_online  ; /* this is consumed by online and offline handler  */
@@ -436,7 +436,7 @@ private:
         string       cmdRsp_status_string  ;
 
         bool reboot_cmd_ack_mgmnt ;
-        bool reboot_cmd_ack_infra ;
+        bool reboot_cmd_ack_clstr ;
 
         /** Tracks back to back Fast Fault Recovery counts */
         int  graceful_recovery_counter;
@@ -1361,14 +1361,14 @@ public:
     /** get mac address for any hostname and specified interface */
     string get_hostIfaceMac ( string & hostname, int iface );
 
-    /** get infrastructure network ip address for any hostname */
-    string get_infra_hostaddr ( string & hostname );
+    /** get cluster-host network ip address for any hostname */
+    string get_clstr_hostaddr ( string & hostname );
 
     /** set a node's ip address */
     int set_hostaddr ( string & hostname, string & ip );
 
-    /** set a node's infrastructure ip address */
-    int set_infra_hostaddr ( string & hostname, string & ip );
+    /** set a node's cluster-host ip address */
+    int set_clstr_hostaddr ( string & hostname, string & ip );
 
     /** get hostname for any hostname */
     string get_hostname ( string & hostaddr );
@@ -1592,15 +1592,15 @@ public:
 
     /** true if the management link's operational state is up and running */
     bool mgmnt_link_up_and_running ;
-    bool infra_link_up_and_running ;
+    bool clstr_link_up_and_running ;
 
-    /** A boolean that is used to quickly determine if the infrastructure
+    /** A boolean that is used to quickly determine if the cluster-host
       * network is provisioned and configured for this daemon to use */
-    bool infra_network_provisioned ;
+    bool clstr_network_provisioned ;
 
-    /** A debug bool hat allows infrastructure heartbeat failures to only
+    /** A debug bool hat allows cluster-host heartbeat failures to only
      *  cause host degrade rather than failure */
-    bool infra_degrade_only ;
+    bool clstr_degrade_only ;
 
     int  service_netlink_events   ( int nl_socket  , int ioctl_socket );
     void manage_heartbeat_minor   ( string hostname, iface_enum iface, bool clear_event );

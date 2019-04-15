@@ -289,7 +289,7 @@ int daemon_get_rmem_max ( void )
  * Read the platform.conf file looking for the management_interface label.
  * If found return that value as string ; otherwise return empty string.
  *
- *  const char infra_mgmt_label [] = {"management_interface"} ;
+ *  const char clstr_mgmt_label [] = {"management_interface"} ;
  *
  * Stay here till we get the data we need
  * Warning: Don't enable logging here
@@ -464,13 +464,13 @@ system_type_enum daemon_system_type ( void )
 
 /* ********************************************************************
  *
- * Name:        daemon_infra_iface
+ * Name:        daemon_clstr_iface
  *
- * Description: Read the platform.conf file looking for the infra
+ * Description: Read the platform.conf file looking for the cluster-host
  *              interface label. If found return that value as string ;
  *              otherwise return empty string.
  **/
-string daemon_infra_iface ( void )
+string daemon_clstr_iface ( void )
 {
     char   buffer   [BUFFER];
     int    line  = 0        ;
@@ -482,17 +482,17 @@ string daemon_infra_iface ( void )
         int rc ;
         while ( fgets (buffer, BUFFER, cfg_file_stream) != NULL )
         {
-            char* s = strstr ( buffer, "infrastructure_interface" );
+            char* s = strstr ( buffer, "cluster_host_interface" );
             if(s!=NULL)
             {
                 char iface_str[BUFFER];
                 memset ( iface_str, 0 , BUFFER );
-                rc = sscanf ( &buffer[0], "infrastructure_interface=%1023s", &iface_str[0] );
+                rc = sscanf ( &buffer[0], "cluster_host_interface=%1023s", &iface_str[0] );
                 if ( rc == 1 )
                 {
                     iface = iface_str ;
                     fclose(cfg_file_stream);
-                    // ilog("Infra iface : %s\n", iface.c_str() );
+                    // ilog("Cluster-host iface : %s\n", iface.c_str() );
                     return ( iface ) ;
                 }
             }
@@ -501,7 +501,7 @@ string daemon_infra_iface ( void )
         /* Close the file */
         fclose(cfg_file_stream);
     }
-    dlog("Infra iface : none\n");
+    dlog("Cluster-host iface : none\n");
     return ( "" );
 }
 

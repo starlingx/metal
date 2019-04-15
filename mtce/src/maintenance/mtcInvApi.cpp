@@ -1478,7 +1478,7 @@ void nodeLinkClass::mtcInvApi_get_handler ( struct evhttp_request *req, void *ar
 
                 node.oper_subf  = json_info.host[i].oper_subf ;
                 node.avail_subf = json_info.host[i].avail_subf ;
-                node.infra_ip    = json_info.host[i].infra_ip ;
+                node.clstr_ip = json_info.host[i].clstr_ip ;
 
                 if (node.name.compare("none"))
                 {
