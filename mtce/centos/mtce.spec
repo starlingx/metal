@@ -23,7 +23,6 @@ BuildRequires: fm-mgr
 BuildRequires: expect
 BuildRequires: postgresql
 BuildRequires: libuuid-devel
-BuildRequires: guest-client-devel
 BuildRequires: systemd-devel
 BuildRequires: cppcheck
 BuildRequires: mtce-common-dev >= 1.0

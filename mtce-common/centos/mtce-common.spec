@@ -21,7 +21,6 @@ BuildRequires: fm-mgr
 BuildRequires: expect
 BuildRequires: postgresql
 BuildRequires: libuuid-devel
-BuildRequires: guest-client-devel
 BuildRequires: systemd-devel
 BuildRequires: cppcheck
 Requires: util-linux
