@@ -28,10 +28,10 @@
     required-projects:
       - openstack/barbican
       - openstack/python-barbicanclient
-      - openstack/stx-fault
-      - openstack/stx-integ
-      - openstack/stx-nfv
-      - openstack/stx-update
+      - starlingx/fault
+      - starlingx/integ
+      - starlingx/nfv
+      - starlingx/update
     vars:
       tox_envlist: functional
       devstack_services:
@@ -54,7 +54,7 @@
         pmon: true
         rmon: true
       devstack_plugins:
-        barbican: https://git.openstack.org/openstack/barbican
+        barbican: https://opendev.org/openstack/barbican
         stx-fault: https:://git.starlingx.io/stx-fault
         stx-integ: https://git.starlingx.io/stx-integ
         stx-metal: https:://git.starlingx.io/stx-metal
