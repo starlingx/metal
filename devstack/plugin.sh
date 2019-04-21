@@ -11,7 +11,7 @@
 echo_summary "Metal devstack plugin.sh called: $1/$2"
 
 # check for service enabled
-if is_service_enabled stx-metal; then
+if is_service_enabled metal; then
     if [[ "$1" == "stack" && "$2" == "pre-install" ]]; then
         # Pre-install requirties
         echo_summary "Pre-requires of stx-metal"

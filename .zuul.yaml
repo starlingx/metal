@@ -55,8 +55,8 @@
         rmon: true
       devstack_plugins:
         barbican: https://opendev.org/openstack/barbican
-        stx-fault: https:://git.starlingx.io/stx-fault
-        stx-integ: https://git.starlingx.io/stx-integ
-        stx-metal: https:://git.starlingx.io/stx-metal
-        stx-nfv: https:://git.starlingx.io/stx-nfv
-        stx-update: https:://git.starlingx.io/stx-update
+        fault: https:://opendev.org/starlingx/fault
+        integ: https://opendev.org/starlingx/integ
+        metal: https:://opendev.org/starlingx/metal
+        # nfv: https:://opendev.org/starlingx/nfv
+        update: https:://opendev.org/starlingx/update

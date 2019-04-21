@@ -4,8 +4,8 @@
 #
 # Copyright (C) 2019 Intel Corporation
 #
-# lib/stx-metal
-# Functions to control the configuration and operation of stx-metal
+# lib/metal
+# Functions to control the configuration and operation of metal
 #
 # To add a new maintenance service, the following functions should be
 # added/modified.

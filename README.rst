@@ -1,5 +1,5 @@
-=========
-stx-metal
-=========
+=====
+metal
+=====
 
 StarlingX Bare Metal Management

@@ -7,7 +7,7 @@
 
 # Devstack settings
 
-# This plugin is to enable StarlingX stx-metal services and follows the
+# This plugin is to enable StarlingX metal services and follows the
 # devstack plugin contract:
 # https://docs.openstack.org/devstack/latest/plugins.html#plugin-sh-contract
 #
@@ -19,7 +19,7 @@
 # Current configuration supports All-in-One simplex mode.
 #
 # Servcies
-# stx-metal - Overall enable for this plugin
+# metal - Overall enable for this plugin
 #
 # mtce
 # mtce-control
@@ -34,17 +34,17 @@
 # mtclog
 # pmon
 
-STX_METAL_NAME=stx-metal
+STX_METAL_NAME=metal
 
 ######### Plugin Specific ##########
 # Enable service for node type
 enable_service $STX_METAL_NAME
 
 # This must not use any variables to work properly in OpenStack's DevStack playbook
-define_plugin stx-metal
+define_plugin metal
 # This works for Zuul jobs using OpenStack's DevStack roles
-plugin_requires stx-metal barbican
-plugin_requires stx-metal stx-fault
+plugin_requires metal barbican
+plugin_requires metal fault
 
 if ! is_service_enabled barbican; then
     die $LINENO "Barbican is required"
@@ -59,7 +59,7 @@ fi
 #enable_service hostw
 
 if is_service_enabled mtce-compute; then
-    # stx-update
+    # update
     enable_service tsconfig
 fi
 # run_process checks whether the service name is enabled or not
@@ -73,7 +73,7 @@ if is_service_enabled mtce; then
     enable_service mtcAgent
     enable_service mtcClient
 fi
-if is_service_enabled hwmon && is_plugin_enabled stx-config; then
+if is_service_enabled hwmon && is_plugin_enabled config; then
     enable_service sysinv
 fi
 
@@ -86,4 +86,4 @@ if is_service_enabled mtcAgent; then
 fi
 
 # Initial source of lib script
-source $DEST/stx-metal/devstack/lib/stx-metal
+source $DEST/metal/devstack/lib/metal
