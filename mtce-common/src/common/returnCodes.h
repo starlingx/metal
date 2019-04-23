@@ -121,7 +121,7 @@
 #define FAIL_JSON_OBJECT      (97)
 #define FAIL_EXTERNAL_API     (98)
 #define FAIL_PATCH_INPROGRESS (99)
-#define FAIL_NO_INFRA_PROV    (100)
+#define FAIL_NO_CLSTR_PROV    (100)
 #define FAIL_PATCHED_NOREBOOT (101)
 #define FAIL_NOT_SUPPORTED    (102)
 #define FAIL_NO_DATA          (103)

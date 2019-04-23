@@ -126,9 +126,9 @@ void nodeLinkClass::mnfa_add_host ( struct nodeLinkClass::node * node_ptr , ifac
                  mnfa_host_count[MGMNT_IFACE],
                  get_iface_name_str(MGMNT_IFACE),
                  node_ptr->hbs_minor_count[MGMNT_IFACE],
-                 mnfa_host_count[INFRA_IFACE],
-                 get_iface_name_str(INFRA_IFACE),
-                 node_ptr->hbs_minor_count[INFRA_IFACE]);
+                 mnfa_host_count[CLSTR_IFACE],
+                 get_iface_name_str(CLSTR_IFACE),
+                 node_ptr->hbs_minor_count[CLSTR_IFACE]);
 
         log_mnfa_pool ( mnfa_awol_list );
 
@@ -217,7 +217,7 @@ void nodeLinkClass::mnfa_enter ( void )
      for ( struct node * ptr = head ;  ; ptr = ptr->next )
      {
          if ((( ptr->hbs_minor[MGMNT_IFACE] == true ) ||
-              ( ptr->hbs_minor[INFRA_IFACE] == true )) &&
+              ( ptr->hbs_minor[CLSTR_IFACE] == true )) &&
               ( ptr->operState == MTC_OPER_STATE__ENABLED ))
          {
              /* Give all the hosts in the mnfa list a graceful
@@ -294,12 +294,12 @@ void nodeLinkClass::mnfa_exit ( bool force )
          * Clear heartbeat degrades */
         for ( struct node * ptr = head ;  ; ptr = ptr->next )
         {
-            if ((( ptr->hbs_minor[INFRA_IFACE] == true ) ||
+            if ((( ptr->hbs_minor[CLSTR_IFACE] == true ) ||
                  ( ptr->hbs_minor[MGMNT_IFACE] == true )) &&
                  ( ptr->operState == MTC_OPER_STATE__ENABLED ))
             {
                 ptr->hbs_minor[MGMNT_IFACE] = false ;
-                ptr->hbs_minor[INFRA_IFACE] = false ;
+                ptr->hbs_minor[CLSTR_IFACE] = false ;
 
                 if ( force == true )
                 {
@@ -348,7 +348,7 @@ void nodeLinkClass::mnfa_exit ( bool force )
     }
 
     mnfa_host_count[MGMNT_IFACE] = 0 ;
-    mnfa_host_count[INFRA_IFACE] = 0 ;
+    mnfa_host_count[CLSTR_IFACE] = 0 ;
     mnfa_awol_list.clear();
 }
 
@@ -378,8 +378,8 @@ void nodeLinkClass::mnfa_cancel ( void )
             if ( node_ptr != NULL )
             {
                 node_ptr->degrade_mask &= ~DEGRADE_MASK_HEARTBEAT_MGMNT ;
-                node_ptr->degrade_mask &= ~DEGRADE_MASK_HEARTBEAT_INFRA ;
-                node_ptr->hbs_minor[INFRA_IFACE] = false ;
+                node_ptr->degrade_mask &= ~DEGRADE_MASK_HEARTBEAT_CLSTR ;
+                node_ptr->hbs_minor[CLSTR_IFACE] = false ;
                 node_ptr->hbs_minor[MGMNT_IFACE] = false ;
                 node_ptr->mnfa_graceful_recovery = false ;
                 mtcInvApi_update_task ( node_ptr, "" );
@@ -387,7 +387,7 @@ void nodeLinkClass::mnfa_cancel ( void )
         }
         send_hbs_command ( this->my_hostname, MTC_RECOVER_HBS );
         this->mnfa_host_count[MGMNT_IFACE] = 0 ;
-        this->mnfa_host_count[INFRA_IFACE] = 0 ;
+        this->mnfa_host_count[CLSTR_IFACE] = 0 ;
         this->mnfa_active = false ;
     }
     mnfa_awol_list.clear();

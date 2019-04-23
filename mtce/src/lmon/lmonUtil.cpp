@@ -186,7 +186,7 @@ int lmon_get_link_state ( int    ioctl_socket,
  *
  * Name    : lmon_interfaces_init
  *
- * Purpose : Map an interface (mgmt, oam or infra) to a physical port.
+ * Purpose : Map an interface (mgmt, oam or cluster-host) to a physical port.
  *           See interface_type enum in lmon.h
  *
  *****************************************************************************/
@@ -201,8 +201,8 @@ int lmon_interfaces_init ( interface_ctrl_type * ptr )
     /* iface enum to pltform.conf iface name */
     if ( strcmp(ptr->name, MGMT_INTERFACE_NAME) == 0 )
         str = MGMT_INTERFACE_FULLNAME;
-    else if ( strcmp(ptr->name, INFRA_INTERFACE_NAME) == 0 )
-        str = INFRA_INTERFACE_FULLNAME;
+    else if ( strcmp(ptr->name, CLUSTER_HOST_INTERFACE_NAME) == 0 )
+        str = CLUSTER_HOST_INTERFACE_FULLNAME;
     else if ( strcmp(ptr->name, OAM_INTERFACE_NAME) == 0 )
         str = OAM_INTERFACE_FULLNAME;
     else

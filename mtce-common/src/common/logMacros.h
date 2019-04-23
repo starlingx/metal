@@ -47,7 +47,7 @@ typedef struct
     char* hbs_failure_action    ; /**< action to take on host heartbeat falure*/
 
     char* mgmnt_iface           ; /**< management interface name pointer      */
-    char* infra_iface           ; /**< infrastructure interface name pointer  */
+    char* clstr_iface           ; /**< cluster-host interface name pointer    */
     char* multicast             ; /**< Multicast address                      */
     int   ha_port               ; /**< HA REST API Port Number                */
     int   vim_cmd_port          ; /**< Mtce -> VIM Command REST API Port      */
@@ -79,14 +79,14 @@ typedef struct
     int   barbican_api_port     ; /**< Barbican REST API port number          */
 
     int   mtc_rx_mgmnt_port     ; /**< mtcClient listens mgmnt nwk cmd reqs   */
-    int   mtc_rx_infra_port     ; /**< mtcClient listens infra nwk cmd reqs   */
+    int   mtc_rx_clstr_port     ; /**< mtcClient listens clstr nwk cmd reqs   */
     int   mtc_tx_mgmnt_port     ; /**< mtcClient sends mgmnt nwk cmds/resp's  */
-    int   mtc_tx_infra_port     ; /**< mtcClient sends infra nwk cmds/resp's  */
+    int   mtc_tx_clstr_port     ; /**< mtcClient sends clstr nwk cmds/resp's  */
 
     int   hbs_agent_mgmnt_port  ; /**< hbsAgent mgmnt network pulse resp port */
     int   hbs_client_mgmnt_port ; /**< hbsClient mgmnt network pulse req port */
-    int   hbs_agent_infra_port  ; /**< hbsAgent infra network pulse resp port */
-    int   hbs_client_infra_port ; /**< hbsClient infra network pulse req port */
+    int   hbs_agent_clstr_port  ; /**< hbsAgent clstr network pulse resp port */
+    int   hbs_client_clstr_port ; /**< hbsClient clstr network pulse req port */
     int   daemon_log_port       ; /**< daemon log port                        */
 
     int   mtcalarm_req_port     ; /**< port daemons send alarm requests to    */
@@ -94,7 +94,7 @@ typedef struct
     int   agent_rx_port ;
     int   client_rx_port ;
 
-    bool  infra_degrade_only    ; /**< Only degrade on infra heartbeat failure */
+    bool  clstr_degrade_only    ; /**< Only degrade on clstr heartbeat failure */
     int   mtc_to_hbs_cmd_port   ; /**< mtcAgent to hbsAgent command port      */
     int   mtc_to_guest_cmd_port ; /**< mtcAgent to guestAgent command port    */
     int   hwmon_cmd_port        ; /**< mtcAgent to hwmon command port         */
@@ -121,7 +121,7 @@ typedef struct
     int   hostwd_failure_threshold ; /**< allowed # of missed pmon/hostwd messages */
     bool  hostwd_reboot_on_err  ; /**< should hostwd reboot on fault detected */
     bool  hostwd_use_kern_wd    ; /**< use the kernel watchdog for extra safety */
-    bool  need_infra_poll_audit ; /**< true if we need to poll for infra      */
+    bool  need_clstr_poll_audit ; /**< true if we need to poll for clstr      */
     char *hostwd_console_path   ; /**< console on which to log extreme events */
     char *mode                  ; /**< Test Mode String                       */
     int   testmode              ; /**< Test Head Test Mode                    */

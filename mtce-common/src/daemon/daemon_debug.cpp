@@ -267,12 +267,12 @@ int debug_config_handler (        void * user,
             ilog ("Event Filter: %s\n", config_ptr->debug_event );
         }
     }
-    else if (MATCH("debug", "infra_degrade_only"))
+    else if (MATCH("debug", "clstr_degrade_only"))
     {
-        config_ptr->infra_degrade_only = atoi(value);
-        if ( config_ptr->infra_degrade_only )
+        config_ptr->clstr_degrade_only = atoi(value);
+        if ( config_ptr->clstr_degrade_only )
         {
-            ilog ("Infra Degrad: true\n" );
+            ilog ("Cluster-host Degrad: true\n" );
         }
     }
     else if (MATCH("debug", "testmode"))

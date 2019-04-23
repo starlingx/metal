@@ -97,8 +97,8 @@ string hbs_cluster_network_name ( mtce_hbs_network_enum network )
     {
         case MTCE_HBS_NETWORK_MGMT:
             return ("Mgmnt");
-        case MTCE_HBS_NETWORK_INFRA:
-            return ("Infra");
+        case MTCE_HBS_NETWORK_CLSTR:
+            return ("Clstr");
 
 #ifdef MONITORED_OAM_NETWORK
         case MTCE_HBS_NETWORK_OAM:

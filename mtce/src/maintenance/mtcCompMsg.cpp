@@ -53,7 +53,7 @@ extern "C"
 extern char *program_invocation_short_name;
 
 int mtcAlive_mgmnt_sequence = 0 ;
-int mtcAlive_infra_sequence = 0 ;
+int mtcAlive_clstr_sequence = 0 ;
 
 /* Receive and process commands from controller maintenance */
 int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
@@ -62,9 +62,9 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
     mtc_message_type msg ;
     int rc = FAIL ;
 
-    if ( interface == INFRA_INTERFACE )
+    if ( interface == CLSTR_INTERFACE )
     {
-        if ( ! get_ctrl_ptr()->infra_iface_provisioned )
+        if ( ! get_ctrl_ptr()->clstr_iface_provisioned )
         {
             wlog ("cannot receive from unprovisioned %s interface\n",
                    get_iface_name_str(interface) );
@@ -88,16 +88,16 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
             return (FAIL_TO_RECEIVE);
         }
     }
-    else if ( interface == INFRA_INTERFACE )
+    else if ( interface == CLSTR_INTERFACE )
     {
-        if (( sock_ptr->mtc_client_infra_rx_socket ) &&
-            ( sock_ptr->mtc_client_infra_rx_socket->sock_ok() == true ))
+        if (( sock_ptr->mtc_client_clstr_rx_socket ) &&
+            ( sock_ptr->mtc_client_clstr_rx_socket->sock_ok() == true ))
         {
-            bytes = sock_ptr->mtc_client_infra_rx_socket->read((char*)&msg.hdr[0], sizeof(mtc_message_type));
+            bytes = sock_ptr->mtc_client_clstr_rx_socket->read((char*)&msg.hdr[0], sizeof(mtc_message_type));
         }
         else
         {
-            elog ("cannot read from null or failed 'mtc_client_infra_rx_socket'\n");
+            elog ("cannot read from null or failed 'mtc_client_clstr_rx_socket'\n");
             return (FAIL_TO_RECEIVE);
         }
     }
@@ -360,13 +360,13 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
                       get_mtcNodeCommand_str(msg.cmd),
                       get_iface_name_str (interface) );
         }
-        else if (( interface == INFRA_INTERFACE ) && ( daemon_is_file_present ( MTC_CMD_FIT__NO_INFRA_ACK )))
+        else if (( interface == CLSTR_INTERFACE ) && ( daemon_is_file_present ( MTC_CMD_FIT__NO_CLSTR_ACK )))
         {
             wlog ("%s reply ack message - fit bypass (%s)\n",
                       get_mtcNodeCommand_str(msg.cmd),
                       get_iface_name_str (interface) );
         }
-        /* Otherwise, send the message back either over the mgmnt or infra interface */
+        /* Otherwise, send the message back either over the mgmnt or clstr interface */
         else if ( interface == MGMNT_INTERFACE )
         {
             if (( sock_ptr->mtc_client_tx_socket ) &&
@@ -380,12 +380,12 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
                        get_iface_name_str (interface) );
             }
         }
-        else if ( interface == INFRA_INTERFACE )
+        else if ( interface == CLSTR_INTERFACE )
         {
-            if (( sock_ptr->mtc_client_infra_tx_socket ) &&
-                ( sock_ptr->mtc_client_infra_tx_socket->sock_ok() == true ))
+            if (( sock_ptr->mtc_client_clstr_tx_socket ) &&
+                ( sock_ptr->mtc_client_clstr_tx_socket->sock_ok() == true ))
             {
-                rc = sock_ptr->mtc_client_infra_tx_socket->write((char*)&msg.hdr[0], bytes);
+                rc = sock_ptr->mtc_client_clstr_tx_socket->write((char*)&msg.hdr[0], bytes);
             }
             else
             {
@@ -669,9 +669,9 @@ int create_mtcAlive_msg ( mtc_message_type & msg, int cmd, string identity, int 
     identity.append (get_iface_name_str(interface));
     identity.append("\",\"sequence\":");
 
-    if ( interface == INFRA_INTERFACE )
+    if ( interface == CLSTR_INTERFACE )
     {
-        identity.append(itos(mtcAlive_infra_sequence++));
+        identity.append(itos(mtcAlive_clstr_sequence++));
     }
     else
     {
@@ -752,8 +752,8 @@ int send_mtcAlive_msg ( mtc_socket_type * sock_ptr, string identity, int interfa
     msgClassSock * mtcAlive_tx_sock_ptr = NULL ;
     int rc = FAIL ;
 
-    if (( interface == INFRA_INTERFACE ) &&
-        ( get_ctrl_ptr()->infra_iface_provisioned != true ))
+    if (( interface == CLSTR_INTERFACE ) &&
+        ( get_ctrl_ptr()->clstr_iface_provisioned != true ))
     {
         dlog2 ("cannot send to unprovisioned %s interface\n",
                get_iface_name_str(interface) );
@@ -766,10 +766,10 @@ int send_mtcAlive_msg ( mtc_socket_type * sock_ptr, string identity, int interfa
         /* management interface */
         mtcAlive_tx_sock_ptr = sock_ptr->mtc_client_tx_socket ;
     }
-    else if ( interface == INFRA_INTERFACE )
+    else if ( interface == CLSTR_INTERFACE )
     {
-        /* infrastructure interface */
-        mtcAlive_tx_sock_ptr = sock_ptr->mtc_client_infra_tx_socket ;
+        /* cluster-host interface */
+        mtcAlive_tx_sock_ptr = sock_ptr->mtc_client_clstr_tx_socket ;
     }
     else
     {

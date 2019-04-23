@@ -34,7 +34,7 @@
 #define MGMNT_HB_ALARM_ID    ((const char *)"200.005")
 #define PMOND_ALARM_ID       ((const char *)"200.006")
 #define SENSOR_ALARM_ID      ((const char *)"200.007") /* Sensor read alarm ; i.e. the sensor read value bad  */
-#define INFRA_HB_ALARM_ID    ((const char *)"200.009")
+#define CLSTR_HB_ALARM_ID    ((const char *)"200.009")
 #define BM_ALARM_ID          ((const char *)"200.010")
 #define CONFIG_ALARM_ID      ((const char *)"200.011")
 #define CH_CONT_ALARM_ID     ((const char *)"200.012") /* Combo Host Controller Failure - with Active Compute */
@@ -52,7 +52,7 @@
 typedef enum
 {
     HBS_ALARM_ID__HB_MGMNT    = 0,
-    HBS_ALARM_ID__HB_INFRA    = 1,
+    HBS_ALARM_ID__HB_CLSTR    = 1,
     HBS_ALARM_ID__PMOND       = 2,
     HBS_ALARM_ID__SERVICE     = 3,
     HBS_ALARM_ID__LAST        = 4,
@@ -103,7 +103,7 @@ typedef struct
 
 /* Test Commandss
  *
-STR="{\"mtcalarm\":[{\"alarmid\":\"200.009\",\"hostname\":\"compute-3\",\"operation\":\"clear\",\"severity\":\"clear\",\"entity\":\"Infrastructure\",\"prefix\":\"service=heartbeat\"}, {\"alarmid\":\"200.005\",\"hostname\":\"compute-3\",\"operation\":\"set\",\"severity\":\"major\",\"entity\":\"Management\",\"prefix\":\"service=heartbeat\"}]}"
+STR="{\"mtcalarm\":[{\"alarmid\":\"200.009\",\"hostname\":\"compute-3\",\"operation\":\"clear\",\"severity\":\"clear\",\"entity\":\"cluster-host\",\"prefix\":\"service=heartbeat\"}, {\"alarmid\":\"200.005\",\"hostname\":\"compute-3\",\"operation\":\"set\",\"severity\":\"major\",\"entity\":\"Management\",\"prefix\":\"service=heartbeat\"}]}"
 PROTOCOL="UDP4-DATAGRAM"
 ADDRESS="127.0.0.1"
 port="2122"

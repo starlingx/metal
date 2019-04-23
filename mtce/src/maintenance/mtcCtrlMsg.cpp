@@ -128,17 +128,17 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
     mtc_message_type msg ;
     int bytes = 0    ;
     int rc    = PASS ;
-    if ( iface == INFRA_INTERFACE )
+    if ( iface == CLSTR_INTERFACE )
     {
         if ( ( obj_ptr ) &&
-             ( obj_ptr->infra_network_provisioned == true ) &&
-             ( sock_ptr->mtc_agent_infra_rx_socket ))
+             ( obj_ptr->clstr_network_provisioned == true ) &&
+             ( sock_ptr->mtc_agent_clstr_rx_socket ))
         {
-            bytes = sock_ptr->mtc_agent_infra_rx_socket->read((char*)&msg, sizeof(msg));
+            bytes = sock_ptr->mtc_agent_clstr_rx_socket->read((char*)&msg, sizeof(msg));
         }
         else
         {
-            return ( FAIL_NO_INFRA_PROV );
+            return ( FAIL_NO_CLSTR_PROV );
         }
     }
     else
@@ -165,9 +165,9 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
 
     string hostaddr = "" ;
     string hostname = "" ;
-    if ( iface == INFRA_INTERFACE )
+    if ( iface == CLSTR_INTERFACE )
     {
-        hostaddr = sock_ptr->mtc_agent_infra_rx_socket->get_src_str();
+        hostaddr = sock_ptr->mtc_agent_clstr_rx_socket->get_src_str();
         hostname = obj_ptr->get_hostname ( hostaddr ) ;
     }
     else
@@ -275,16 +275,16 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
                           msg.parm[MTC_PARM_FLAGS_IDX],
                           obj_ptr->get_mtcAlive_gate ( hostname ) ? "gated" : "open");
 
-                string infra_ip = "";
-                /* Get the infra ip address if it is provisioned */
-                rc =  jsonUtil_get_key_val ( &msg.buf[0], "infra_ip", infra_ip );
+                string cluster_host_ip = "";
+                /* Get the clstr ip address if it is provisioned */
+                rc =  jsonUtil_get_key_val ( &msg.buf[0], "cluster_host_ip", cluster_host_ip );
                 if ( rc == PASS )
                 {
-                    obj_ptr->set_infra_hostaddr ( hostname, infra_ip );
+                    obj_ptr->set_clstr_hostaddr ( hostname, cluster_host_ip );
                 }
                 else
                 {
-                    mlog ("%s null or missing 'infra_ip' value (rc:%d)\n", hostname.c_str(), rc);
+                    mlog ("%s null or missing 'cluster_host_ip' value (rc:%d)\n", hostname.c_str(), rc);
                 }
             }
             else if ( msg.cmd == MTC_MSG_MAIN_GOENABLED )
@@ -697,23 +697,23 @@ int send_mtc_cmd ( string & hostname, int cmd , int interface )
             /* rc = message size */
             rc = sock_ptr->mtc_agent_tx_socket->write((char *)&mtc_cmd, bytes, hostaddr.c_str(), sock_ptr->mtc_cmd_port);
         }
-        else if ((interface == INFRA_INTERFACE) &&
-                 ( obj_ptr->infra_network_provisioned == true ) &&
-                 ( sock_ptr->mtc_agent_infra_tx_socket != NULL ))
+        else if ((interface == CLSTR_INTERFACE) &&
+                 ( obj_ptr->clstr_network_provisioned == true ) &&
+                 ( sock_ptr->mtc_agent_clstr_tx_socket != NULL ))
         {
-            /* SETUP TX -> COMPUTE SOCKET INFRA INTERFACE */
-            string infra_hostaddr = obj_ptr->get_infra_hostaddr(hostname);
+            /* SETUP TX -> COMPUTE SOCKET CLSTR INTERFACE */
+            string clstr_hostaddr = obj_ptr->get_clstr_hostaddr(hostname);
 
 #ifdef WANT_FIT_TESTING
-            if ( daemon_want_fit ( FIT_CODE__INVALIDATE_INFRA_IP, hostname ) )
-                infra_hostaddr = "none" ;
+            if ( daemon_want_fit ( FIT_CODE__INVALIDATE_CLSTR_IP, hostname ) )
+                clstr_hostaddr = "none" ;
 #endif
 
-            if ( hostUtil_is_valid_ip_addr( infra_hostaddr ) != true )
+            if ( hostUtil_is_valid_ip_addr( clstr_hostaddr ) != true )
             {
-                return (FAIL_NO_INFRA_PROV);
+                return (FAIL_NO_CLSTR_PROV);
             }
-            rc = sock_ptr->mtc_agent_infra_tx_socket->write((char *)&mtc_cmd, bytes, infra_hostaddr.c_str(), sock_ptr->mtc_cmd_port);
+            rc = sock_ptr->mtc_agent_clstr_tx_socket->write((char *)&mtc_cmd, bytes, clstr_hostaddr.c_str(), sock_ptr->mtc_cmd_port);
         }
 
         if ( 0 > rc )
@@ -868,16 +868,16 @@ int service_events ( nodeLinkClass * obj_ptr, mtc_socket_type * sock_ptr )
             /* The interface that the heartbeat loss occurred over is
              * specified in parm[0 for this command
              * 0 = MGMNT_IFACE
-             * 1 = INFRA_IFACE
+             * 1 = CLSTR_IFACE
              * else default to 0 (MGMNT_IFACE) to be backwards compatible
              *
              * */
             iface_enum iface = MGMNT_IFACE;
             if ( msg.num > 0 )
             {
-                if ( msg.parm[0] == INFRA_IFACE )
+                if ( msg.parm[0] == CLSTR_IFACE )
                 {
-                    iface = INFRA_IFACE ;
+                    iface = CLSTR_IFACE ;
                 }
             }
             if ( msg.cmd == MTC_EVENT_HEARTBEAT_MINOR_SET )
@@ -910,16 +910,16 @@ int service_events ( nodeLinkClass * obj_ptr, mtc_socket_type * sock_ptr )
             /* The interface that the heartbeat loss occurred over is
              * specified in parm[0 for this command
              * 0 = MGMNT_IFACE
-             * 1 = INFRA_IFACE
+             * 1 = CLSTR_IFACE
              * else default to 0 (MGMNT_IFACE) to be backwards compatible
              *
              * */
             iface_enum iface = MGMNT_IFACE;
             if ( msg.num > 0 )
             {
-                if ( msg.parm[0] == INFRA_IFACE )
+                if ( msg.parm[0] == CLSTR_IFACE )
                 {
-                    iface = INFRA_IFACE ;
+                    iface = CLSTR_IFACE ;
                 }
             }
 
@@ -961,16 +961,16 @@ int service_events ( nodeLinkClass * obj_ptr, mtc_socket_type * sock_ptr )
             /* The interface that the heartbeat loss occurred over is
              * specified in parm[0 for this command
              * 0 = MGMNT_IFACE
-             * 1 = INFRA_IFACE
+             * 1 = CLSTR_IFACE
              * else default to 0 (MGMNT_IFACE) to be backwards compatible
              *
              * */
             iface_enum iface = MGMNT_IFACE;
             if ( msg.num > 0 )
             {
-                if ( msg.parm[0] == INFRA_IFACE )
+                if ( msg.parm[0] == CLSTR_IFACE )
                 {
-                    iface = INFRA_IFACE ;
+                    iface = CLSTR_IFACE ;
                 }
             }
             string hostname = &msg.buf[0] ;

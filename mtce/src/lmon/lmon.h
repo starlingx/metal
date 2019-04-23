@@ -54,12 +54,12 @@ typedef struct
 
     /* primary interface names */
     #define MGMT_INTERFACE_NAME  ((const char *)"mgmt")
-    #define INFRA_INTERFACE_NAME ((const char *)"infra")
+    #define CLUSTER_HOST_INTERFACE_NAME ((const char *)"cluster-host")
     #define OAM_INTERFACE_NAME   ((const char *)"oam")
 
     /* name labels used in platform.conf */
     #define MGMT_INTERFACE_FULLNAME  ((const char *)"management_interface")
-    #define INFRA_INTERFACE_FULLNAME ((const char *)"infrastructure_interface")
+    #define CLUSTER_HOST_INTERFACE_FULLNAME ((const char *)"cluster_host_interface")
     #define OAM_INTERFACE_FULLNAME   ((const char *)"oam_interface")
 
     /* true if the interface is configured.

@@ -18,7 +18,7 @@ int    get_netlink_events ( int nl_socket ,
 void log_link_events ( int netlink_sock,
                        int ioctl_sock, 
                        const char * mgmnt_iface_ptr, 
-                       const char * infra_iface_ptr,
+                       const char * clstr_iface_ptr,
                        bool & mgmnt_link_up_and_running,
-                       bool & infra_link_up_and_running);
+                       bool & clstr_link_up_and_running);
 

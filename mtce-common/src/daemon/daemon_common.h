@@ -78,7 +78,7 @@ int  daemon_get_file_int ( const char * filename );
 string daemon_get_file_str ( const char * filename );
 
 string daemon_nodetype       ( void );
-string daemon_infra_iface    ( void );
+string daemon_clstr_iface    ( void );
 string daemon_mgmnt_iface    ( void );
 string daemon_sw_version     ( void );
 string daemon_bmc_hosts_file ( void );
@@ -206,7 +206,7 @@ int daemon_run_testhead ( void );
 #define CONFIG_AGENT_MULTICAST       0x00000004 /**< Multicase Addr            */
 #define CONFIG_SCHED_PRIORITY        0x00000008 /**< Scheduling priority       */
 #define CONFIG_AGENT_HBS_MGMNT_PORT  0x00000010 /**< Management Pulse Rx  Port */
-#define CONFIG_AGENT_HBS_INFRA_PORT  0x00000020 /**< Infra Pulse Rx Port       */
+#define CONFIG_AGENT_HBS_CLSTR_PORT  0x00000020 /**< Cluster-host Pulse Rx Port*/
 #define CONFIG_AGENT_HBS_DEGRADE     0x00000040 /**< Heartbeat degrade         */
 #define CONFIG_AGENT_HBS_FAILURE     0x00000080 /**< Heartbeat failure         */
 #define CONFIG_AGENT_INV_PORT        0x00000100 /**< Inventory Port Number     */
@@ -218,13 +218,13 @@ int daemon_run_testhead ( void );
 #define CONFIG_AGENT_HBS_MTC_PORT    0x00004000 /**< Heartbeat Service Port    */
 #define CONFIG_AGENT_INV_EVENT_PORT  0x00008000 /**< Inventory Event Port      */
 #define CONFIG_AGENT_API_RETRIES     0x00010000 /**< Num api retries b4 fail   */
-#define CONFIG_AGENT_MTC_INFRA_PORT  0x00020000 /**< Agent Infr network port   */
-#define CONFIG_AGENT_MTC_MGMNT_PORT  0x00040000 /**< Agent Infr network port   */
+#define CONFIG_AGENT_MTC_CLSTR_PORT  0x00020000 /**< Agent Clstr network port  */
+#define CONFIG_AGENT_MTC_MGMNT_PORT  0x00040000 /**< Agent Mgmnt network port  */
 #define CONFIG_AGENT_TOKEN_REFRESH   0x00080000 /**< Token refresh rate mask   */
-#define CONFIG_CLIENT_MTC_INFRA_PORT 0x00100000 /**< Client Infra nwk mtc port */
+#define CONFIG_CLIENT_MTC_CLSTR_PORT 0x00100000 /**< Client Clstr nwk mtc port */
 #define CONFIG_CLIENT_MTC_MGMNT_PORT 0x00200000 /**< Client mgmnt nwk mtc port */
 #define CONFIG_AGENT_SM_SERVER_PORT  0x00400000 /**< Port to RX data from SM   */
-#define CONFIG_CLIENT_HBS_INFRA_PORT 0x00800000 /**< Infrastructure ntwk Port  */
+#define CONFIG_CLIENT_HBS_CLSTR_PORT 0x00800000 /**< Cluster-host ntwk Port    */
 #define CONFIG_CLIENT_HBS_MGMNT_PORT 0x01000000 /**< Management network Port   */
 #define CONFIG_CLIENT_HBS_EVENT_PORT 0x02000000 /**< Heartbeat Event Messaging */
 #define CONFIG_MTC_TO_HBS_CMD_PORT   0x04000000 /**< Mtce to Hbs Command Port  */

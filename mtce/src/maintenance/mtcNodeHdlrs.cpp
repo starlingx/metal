@@ -90,9 +90,9 @@ int nodeLinkClass::calc_reset_prog_timeout ( struct nodeLinkClass::node * node_p
 
     ilog ("%s Reboot/Reset progression has %d sec 'wait for offline' timeout\n",
               node_ptr->hostname.c_str(), to );
-    ilog ("%s ... sources - mgmnt:Yes  infra:%s  bmc:%s\n",
+    ilog ("%s ... sources - mgmnt:Yes  clstr:%s  bmc:%s\n",
               node_ptr->hostname.c_str(),
-              infra_network_provisioned ? "Yes" : "No",
+              clstr_network_provisioned ? "Yes" : "No",
               node_ptr->bm_provisioned ? "Yes" : "No" );
     return (to);
 }
@@ -1906,17 +1906,17 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
              * NOT in Dead Office Recovery (DOR) mode. */
             if ( node_ptr->dor_recovery_mode == false )
             {
-                /* If the infrastructure network is provisioned then try
+                /* If the cluster-host network is provisioned then try
                  * and issue a reset over it to expedite the recovery
                  * for the case where the management heartbeat has
-                 * failed but the infra has not.
-                 * Keeping it simple by just issing the command and not looping on it */
-                if (( node_ptr->infra_ip.length () > 5 ) &&
+                 * failed but the cluster-host has not.
+                 * Keeping it simple by just issuing the command and not looping on it */
+                if (( node_ptr->clstr_ip.length () > 5 ) &&
                     ( node_ptr->heartbeat_failed[MGMNT_IFACE] == true ) &&
-                    ( node_ptr->heartbeat_failed[INFRA_IFACE] == false ))
+                    ( node_ptr->heartbeat_failed[CLSTR_IFACE] == false ))
                 {
-                    ilog ("%s issuing one time graceful recovery reboot over infra network\n", node_ptr->hostname.c_str());
-                    send_mtc_cmd ( node_ptr->hostname, MTC_CMD_REBOOT, INFRA_INTERFACE ) ;
+                    ilog ("%s issuing one time graceful recovery reboot over cluster-host network\n", node_ptr->hostname.c_str());
+                    send_mtc_cmd ( node_ptr->hostname, MTC_CMD_REBOOT, CLSTR_INTERFACE ) ;
                 }
 
                 if ((node_ptr->bm_provisioned) && (node_ptr->bm_accessible))
@@ -3027,9 +3027,9 @@ int nodeLinkClass::disable_handler  ( struct nodeLinkClass::node * node_ptr )
 
             /* Tell the host that it is locked */
             send_mtc_cmd ( node_ptr->hostname , MTC_MSG_LOCKED, MGMNT_INTERFACE );
-            if ( infra_network_provisioned )
+            if ( clstr_network_provisioned )
             {
-                send_mtc_cmd ( node_ptr->hostname , MTC_MSG_LOCKED, INFRA_INTERFACE );
+                send_mtc_cmd ( node_ptr->hostname , MTC_MSG_LOCKED, CLSTR_INTERFACE );
             }
 
             /* Change the oper and avail states in the database */
@@ -3219,7 +3219,7 @@ int nodeLinkClass::offline_handler ( struct nodeLinkClass::node * node_ptr )
         case MTC_OFFLINE__START:
         {
             node_ptr->mtcAlive_mgmnt = false ;
-            node_ptr->mtcAlive_infra = false ;
+            node_ptr->mtcAlive_clstr = false ;
             node_ptr->offline_log_throttle = 0 ;
             node_ptr->offline_search_count = 0 ;
 
@@ -3242,13 +3242,13 @@ int nodeLinkClass::offline_handler ( struct nodeLinkClass::node * node_ptr )
 
             node_ptr->mtcAlive_gate  = false ;
             node_ptr->mtcAlive_mgmnt = false ;
-            node_ptr->mtcAlive_infra = false ;
+            node_ptr->mtcAlive_clstr = false ;
 
-            /* Request a mtcAlive from host from Mgmnt and Infra (if provisioned) */
+            /* Request a mtcAlive from host from Mgmnt and Clstr (if provisioned) */
             send_mtc_cmd ( node_ptr->hostname, MTC_REQ_MTCALIVE, MGMNT_INTERFACE );
-            if ( infra_network_provisioned )
+            if ( clstr_network_provisioned )
             {
-                send_mtc_cmd ( node_ptr->hostname, MTC_REQ_MTCALIVE, INFRA_INTERFACE );
+                send_mtc_cmd ( node_ptr->hostname, MTC_REQ_MTCALIVE, CLSTR_INTERFACE );
             }
 
             /* reload the timer */
@@ -3269,7 +3269,7 @@ int nodeLinkClass::offline_handler ( struct nodeLinkClass::node * node_ptr )
                     plog ("%s offline (external)\n", node_ptr->hostname.c_str());
                     node_ptr->offlineStage = MTC_OFFLINE__IDLE ;
                 }
-                else if ( !node_ptr->mtcAlive_mgmnt && !node_ptr->mtcAlive_infra )
+                else if ( !node_ptr->mtcAlive_mgmnt && !node_ptr->mtcAlive_clstr )
                 {
                     if ( ++node_ptr->offline_search_count > offline_threshold )
                     {
@@ -3298,20 +3298,20 @@ int nodeLinkClass::offline_handler ( struct nodeLinkClass::node * node_ptr )
                 else
                 {
                     node_ptr->mtcAlive_online = true ;
-                    if ( node_ptr->mtcAlive_mgmnt || node_ptr->mtcAlive_infra )
+                    if ( node_ptr->mtcAlive_mgmnt || node_ptr->mtcAlive_clstr )
                     {
                         ilog_throttled ( node_ptr->offline_log_throttle, 10,
                                          "%s still seeing mtcAlive (%c:%c)\n",
                                          node_ptr->hostname.c_str(),
                                          node_ptr->mtcAlive_mgmnt ? 'Y' : 'n',
-                                         node_ptr->mtcAlive_infra ? 'Y' : 'n');
+                                         node_ptr->mtcAlive_clstr ? 'Y' : 'n');
                     }
                     else
                     {
                         alog ("%s still seeing mtcAlive (%c:%c)\n",
                                   node_ptr->hostname.c_str(),
                                   node_ptr->mtcAlive_mgmnt ? 'Y' : 'n',
-                                  node_ptr->mtcAlive_infra ? 'Y' : 'n');
+                                  node_ptr->mtcAlive_clstr ? 'Y' : 'n');
                     }
                 }
 

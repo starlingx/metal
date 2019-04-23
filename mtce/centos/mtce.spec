@@ -250,7 +250,7 @@ Requires: libstdc++.so.6(GLIBCXX_3.4.15)(64bit)
 
 %description -n mtce-lmon
 Titanium Cloud Maintenance Link Monitor service (lmond) provides
-netlink monitoring for provisioned oam, mgmt and infra interfaces.
+netlink monitoring for provisioned oam, mgmt and cluster-host interfaces.
 
 %define local_dir /usr/local
 %define local_bindir %{local_dir}/bin

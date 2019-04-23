@@ -267,39 +267,39 @@ socklen_t msgClassAddr::getSockLen() const
 /**
  * Given an interface, find the hostname that resolves on this interface
  * and use that to get the IP address of this interface. Will only resolve
- * hostnames on the Management or Infra interfaces
+ * hostnames on the Management or Cluster-host interfaces
  *
  * @param Name of the interface to get address for
  * @param Character pointer to pass back address of interface
  * @param Length of character array.
- * @return Returns PASS if (mgmnt or infra) interface has address, FAIL otherwise
+ * @return Returns PASS if (mgmnt or clstr) interface has address, FAIL otherwise
  */
 int msgClassAddr::getAddressFromInterface(const char* interface, char* address, int len)
 {
     int rc = FAIL;
 
     // before proceeding further, confirm if the interface
-    // is either the management interface or the infra interface.
+    // is either the management interface or the cluster-host interface.
     // Mtce doesn't care about others besides these.
     iface_enum interface_type = iface_enum(0);
-    char *infra_iface_name = NULL;
+    char *clstr_iface_name = NULL;
 
-    get_infra_iface(&infra_iface_name);
-    if (infra_iface_name && strlen(infra_iface_name)) {
-        if (!strcmp(interface, infra_iface_name)) {
-            if (!strcmp(infra_iface_name, daemon_mgmnt_iface().data())) {
-                // infra and mgmt interface name are the same
+    get_clstr_iface(&clstr_iface_name);
+    if (clstr_iface_name && strlen(clstr_iface_name)) {
+        if (!strcmp(interface, clstr_iface_name)) {
+            if (!strcmp(clstr_iface_name, daemon_mgmnt_iface().data())) {
+                // cluster-host and mgmt interface name are the same
                 interface_type = MGMNT_IFACE;
             }
             else {
-                // requesting address for the infra interface
-                interface_type = INFRA_IFACE;
+                // requesting address for the cluster-host interface
+                interface_type = CLSTR_IFACE;
             }
         }
-        free (infra_iface_name);
+        free (clstr_iface_name);
     }
 
-    if (interface_type != INFRA_IFACE) {
+    if (interface_type != CLSTR_IFACE) {
         // check if this is the mgmt interface
         // otherwise return error
         if (!strcmp(interface, daemon_mgmnt_iface().data())) {
@@ -325,16 +325,16 @@ int msgClassAddr::getAddressFromInterface(const char* interface, char* address, 
        return rc;
     }
 
-    // if it is infra then we need to determine the interface
+    // if it is cluster-host then we need to determine the interface
     // host name. For management interface, the system hostname
     // is the intf hostname
-    const char* infra_suffix = "-infra";
-    size_t infra_suffix_len = sizeof(infra_suffix);
-    char iface_hostname[MAX_HOST_NAME_SIZE+infra_suffix_len];
+    const char* cluster_host_suffix = "-cluster-host";
+    size_t cluster_host_suffix_len = sizeof(cluster_host_suffix);
+    char iface_hostname[MAX_HOST_NAME_SIZE+cluster_host_suffix_len];
     memset(iface_hostname, 0, sizeof(iface_hostname));
     snprintf(iface_hostname, sizeof(iface_hostname),
              "%s%s", hostname,
-             (((interface_type == INFRA_IFACE)) ? infra_suffix : ""));
+             (((interface_type == CLSTR_IFACE)) ? cluster_host_suffix : ""));
 
     struct addrinfo *res = NULL;
     int ret = getaddrinfo(iface_hostname, NULL, NULL, &res);

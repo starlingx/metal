@@ -53,7 +53,7 @@ void alarm_unregister_user ( void )
 }
 
 /* Construct an alarm request json string in the following form
-   {\"mtcalarm\":[{\"alarmid\":\"200.009\",\"hostname\":\"compute-3\",\"operation\":\"set\",\"severity\":\"major\",\"entity\":\"Infrastructure\",\"prefix\":\"service=heartbeat\"}, {\"alarmid\":\"200.005\",\"hostname\":\"compute-3\",\"operation\":\"set\",\"severity\":\"major\",\"entity\":\"Management\",\"prefix\":\"service=heartbeat\"}]}"
+   {\"mtcalarm\":[{\"alarmid\":\"200.009\",\"hostname\":\"compute-3\",\"operation\":\"set\",\"severity\":\"major\",\"entity\":\"cluster-host\",\"prefix\":\"service=heartbeat\"}, {\"alarmid\":\"200.005\",\"hostname\":\"compute-3\",\"operation\":\"set\",\"severity\":\"major\",\"entity\":\"Management\",\"prefix\":\"service=heartbeat\"}]}"
 
    or
 
@@ -64,7 +64,7 @@ void alarm_unregister_user ( void )
              \"hostname\":\"compute-3\",
              \"operation\":\"set\",
              \"severity\":\"major\",
-             \"entity\":\"Infrastructure\",
+             \"entity\":\"cluster-host\",
              \"prefix\":\"service=heartbeat\"
           }
        ]

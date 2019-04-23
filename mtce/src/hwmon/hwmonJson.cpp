@@ -51,7 +51,7 @@ int hwmonJson_load_inv ( char * json_str_ptr, node_inv_type & info )
 {
     int rc = PASS ;
     string error = "" ;
-    string infra_ip = "" ;
+    string cluster_host_ip = "" ;
 
     /* init to null to avoid trap on early cleanup call with
      * bad non-null default pointer value */
@@ -79,11 +79,11 @@ int hwmonJson_load_inv ( char * json_str_ptr, node_inv_type & info )
     //info.ip    = _get_key_value_string ( node_obj, MTC_JSON_INV_HOSTIP );
     info.name    = _get_key_value_string ( node_obj, MTC_JSON_INV_NAME  );
 
-    infra_ip = _get_key_value_string ( node_obj, MTC_JSON_INV_INFRAIP );
-    if ( infra_ip.length() )
+    cluster_host_ip = _get_key_value_string ( node_obj, MTC_JSON_INV_CLSTRIP );
+    if ( cluster_host_ip.length() )
     {
-        dlog ("%s inventory has infra_ip=%s\n", info.name.c_str(), infra_ip.c_str());
-        info.infra_ip = infra_ip;
+        dlog ("%s inventory has cluster_host_ip=%s\n", info.name.c_str(), cluster_host_ip.c_str());
+        info.clstr_ip = cluster_host_ip;
     }
     info.type    = _get_key_value_string ( node_obj, MTC_JSON_INV_TYPE  );
     info.uuid    = _get_key_value_string ( node_obj, MTC_JSON_INV_UUID  );

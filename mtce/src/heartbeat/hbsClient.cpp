@@ -71,9 +71,9 @@ extern "C"
 /* Where to send events */
 string mtcAgent_ip = "" ;
 
-/* A boolean that is used to quickly determine if the infrastructure
+/* A boolean that is used to quickly determine if the cluster-host
  * network is provisioned and configured for this daemon to use */
-static bool infra_network_provisioned = false ;
+static bool clstr_network_provisioned = false ;
 
 /* pmon pulse count clear timer */
 struct mtc_timer pmonPulse_timer ;
@@ -300,9 +300,9 @@ void stallMon_init ( void )
 
 /** Client Config mask */
 #define CONFIG_CLIENT_MASK      (CONFIG_AGENT_MULTICAST       |\
-                                 CONFIG_AGENT_HBS_INFRA_PORT  |\
+                                 CONFIG_AGENT_HBS_CLSTR_PORT  |\
                                  CONFIG_AGENT_HBS_MGMNT_PORT  |\
-                                 CONFIG_CLIENT_HBS_INFRA_PORT |\
+                                 CONFIG_CLIENT_HBS_CLSTR_PORT |\
                                  CONFIG_CLIENT_HBS_MGMNT_PORT |\
                                  CONFIG_CLIENT_PULSE_PORT     |\
                                  CONFIG_SCHED_PRIORITY)
@@ -338,15 +338,15 @@ static int hbs_config_handler ( void * user,
     {
         config_ptr->start_delay = atoi(value);
     }
-    else if (MATCH("agent", "hbs_agent_infra_port"))
+    else if (MATCH("agent", "hbs_agent_clstr_port"))
     {
-        config_ptr->hbs_agent_infra_port = atoi(value);
-        config_ptr->mask |= CONFIG_AGENT_HBS_INFRA_PORT ;
+        config_ptr->hbs_agent_clstr_port = atoi(value);
+        config_ptr->mask |= CONFIG_AGENT_HBS_CLSTR_PORT ;
     }
-    else if (MATCH("client", "hbs_client_infra_port"))
+    else if (MATCH("client", "hbs_client_clstr_port"))
     {
-        config_ptr->hbs_client_infra_port = atoi(value);
-        config_ptr->mask |= CONFIG_CLIENT_HBS_INFRA_PORT ;
+        config_ptr->hbs_client_clstr_port = atoi(value);
+        config_ptr->mask |= CONFIG_CLIENT_HBS_CLSTR_PORT ;
     }
     else if (MATCH("client", "scheduling_priority"))
     {
@@ -429,22 +429,22 @@ int daemon_configure ( void )
         get_hostname       ( &my_hostname[0], MAX_HOST_NAME_SIZE );
         hostname = my_hostname ;
 
-        /* Fetch the infrastructure interface name.
+        /* Fetch the cluster-host interface name.
          * calls daemon_get_iface_master inside so the
          * aggrigated name is returned if it exists */
-        get_infra_iface (&hbs_config.infra_iface );
-        if ( strlen(hbs_config.infra_iface)  )
+        get_clstr_iface (&hbs_config.clstr_iface );
+        if ( strlen(hbs_config.clstr_iface)  )
         {
-            if (strcmp(hbs_config.infra_iface, hbs_config.mgmnt_iface))
+            if (strcmp(hbs_config.clstr_iface, hbs_config.mgmnt_iface))
             {
-                infra_network_provisioned = true ;
-                ilog ("Infra Name  : %s\n", hbs_config.infra_iface );
+                clstr_network_provisioned = true ;
+                ilog ("Cluster-host Name  : %s\n", hbs_config.clstr_iface );
             }
         }
-        if ( infra_network_provisioned == true )
+        if ( clstr_network_provisioned == true )
         {
-            ilog("Infra Port  : %d (rx)", hbs_config.hbs_client_infra_port );
-            ilog("Infra Port  : %d (tx)", hbs_config.hbs_agent_infra_port );
+            ilog("Cluster-host Port  : %d (rx)", hbs_config.hbs_client_clstr_port );
+            ilog("Cluster-host Port  : %d (tx)", hbs_config.hbs_agent_clstr_port );
         }
 
         /* initialize the stall detection monitor */
@@ -481,13 +481,13 @@ int _setup_pulse_messaging ( iface_enum i, int rmem )
     {
         iface = hbs_config.mgmnt_iface ;
     }
-    else if (( i == INFRA_IFACE ) && ( hbs_config.infra_iface != NULL ))
+    else if (( i == CLSTR_IFACE ) && ( hbs_config.clstr_iface != NULL ))
     {
-        iface = hbs_config.infra_iface ;
+        iface = hbs_config.clstr_iface ;
     }
     else
     {
-        wlog ("No Infrastructure Interface\n");
+        wlog ("No Cluster-host Interface\n");
         return (RETRY);
     }
 
@@ -584,11 +584,11 @@ int hbs_socket_init ( void )
      */
     hbs_sock.rx_port[MGMNT_IFACE] = hbs_config.hbs_client_mgmnt_port;
     hbs_sock.tx_port[MGMNT_IFACE] = hbs_config.hbs_agent_mgmnt_port ;
-    hbs_sock.rx_port[INFRA_IFACE] = hbs_config.hbs_client_infra_port;
-    hbs_sock.tx_port[INFRA_IFACE] = hbs_config.hbs_agent_infra_port ;
+    hbs_sock.rx_port[CLSTR_IFACE] = hbs_config.hbs_client_clstr_port;
+    hbs_sock.tx_port[CLSTR_IFACE] = hbs_config.hbs_agent_clstr_port ;
 
     /* Setup the pulse messaging interfaces */
-    SETUP_PULSE_MESSAGING(infra_network_provisioned, rmem_max ) ;
+    SETUP_PULSE_MESSAGING(clstr_network_provisioned, rmem_max ) ;
 
     /***********************************************************/
     /* Setup the PMON I'm Alive Pulse Receive Socket           */
@@ -719,7 +719,7 @@ static unsigned int rri[MTCE_HBS_MAX_CONTROLLERS] = {0,0} ;
  * This utility supports the following networks
  *
  *  - management network
- *  - infrastructure network (if configured)
+ *  - cluster-host network (if configured)
  *
  * For each message, look inside the message for
  *
@@ -756,7 +756,7 @@ static int missing_history_count[MAX_IFACES] = {0,0} ;
 
 int _service_pulse_request ( iface_enum iface , unsigned int flags )
 {
-    if (( iface != MGMNT_IFACE ) && ( iface != INFRA_IFACE ))
+    if (( iface != MGMNT_IFACE ) && ( iface != CLSTR_IFACE ))
         return (FAIL_BAD_CASE);
 
     if ( ! hbs_sock.rx_sock[iface] )
@@ -844,9 +844,9 @@ int _service_pulse_request ( iface_enum iface , unsigned int flags )
         hbs_sock.rx_mesg[iface].f |= ( PMOND_FLAG ) ;
     }
 
-    if ( infra_network_provisioned == true )
+    if ( clstr_network_provisioned == true )
     {
-        hbs_sock.rx_mesg[iface].f |= INFRA_FLAG ;
+        hbs_sock.rx_mesg[iface].f |= CLSTR_FLAG ;
     }
 
     /*************************************************************************
@@ -1017,7 +1017,7 @@ int _service_pulse_request ( iface_enum iface , unsigned int flags )
     memcpy ( &hbs_sock.rx_mesg[iface].m[0], &pulse_resp_tx_hdr[0], HBS_MAX_MSG );
 
 #ifdef WANT_PULSE_RESPONSE_FIT
-    if (( iface == INFRA_IFACE ) && ( daemon_is_file_present ( MTC_CMD_FIT__NO_INFRA_RSP )))
+    if (( iface == CLSTR_IFACE ) && ( daemon_is_file_present ( MTC_CMD_FIT__NO_CLSTR_RSP )))
     {
         wlog ("refusing to send %s pulse reply ; due to FIT\n", get_iface_name_str(iface));
         return PASS ;
@@ -1362,9 +1362,9 @@ void daemon_service_run ( void )
                      &hbs_sock.readfds, NULL, NULL,
                      &hbs_sock.waitd);
 
-        if ( infra_network_provisioned == true )
+        if ( clstr_network_provisioned == true )
         {
-            flags |= INFRA_FLAG ;
+            flags |= CLSTR_FLAG ;
         }
 
         /* Select error */
@@ -1414,20 +1414,20 @@ void daemon_service_run ( void )
                  flags = 0 ;
             }
 
-            if (hbs_sock.rx_sock[INFRA_IFACE]&&FD_ISSET(hbs_sock.rx_sock[INFRA_IFACE]->getFD(), &hbs_sock.readfds))
+            if (hbs_sock.rx_sock[CLSTR_IFACE]&&FD_ISSET(hbs_sock.rx_sock[CLSTR_IFACE]->getFD(), &hbs_sock.readfds))
             {
-                /* Receive pulse request from the infrastructure interface and send a response */
+                /* Receive pulse request from the cluster-host interface and send a response */
                 /* Note: The flags are taken from the last round of get_pmon_pulses below */
-                int rc = _service_pulse_request ( INFRA_IFACE, flags );
+                int rc = _service_pulse_request ( CLSTR_IFACE, flags );
                 if ( rc != PASS )
                 {
                     if ( rc == FAIL_TO_RECEIVE )
                     {
-                        mlog ("Failed to receive pulse request on infrastructure network (rc:%d)\n",rc);
+                        mlog ("Failed to receive pulse request on cluster-host network (rc:%d)\n",rc);
                     }
                     else
                     {
-                        wlog_throttled ( count, 200, "Failed to service pulse request on infrastructure network (rc:%d)\n",rc);
+                        wlog_throttled ( count, 200, "Failed to service pulse request on cluster-host network (rc:%d)\n",rc);
                     }
                 }
             }
@@ -1456,9 +1456,9 @@ void daemon_service_run ( void )
                 log_link_events ( hbs_sock.netlink_sock,
                                   hbs_sock.ioctl_sock,
                                   hbs_config.mgmnt_iface,
-                                  hbs_config.infra_iface,
+                                  hbs_config.clstr_iface,
                                   hbs_sock.mgmnt_link_up_and_running,
-                                  hbs_sock.infra_link_up_and_running) ;
+                                  hbs_sock.clstr_link_up_and_running) ;
             }
         }
 

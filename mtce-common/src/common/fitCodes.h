@@ -23,7 +23,7 @@
  *
  * - touch the 'no_mgmnt_ack' file on the mtcClient to cause
  *   it to handle command requests but drop/not send the ack message
- *   if it came in on themanagement network ; same for infra
+ *   if it came in on the management network ; same for cluster-host
  *
  * - touch the 'no_mtcAlive file to tell mtcClient to stop sending
  *   its mtcAlive messages while this file is present.
@@ -41,14 +41,14 @@
 #define MTC_CMD_FIT__NO_RESET     ("/var/run/fit/no_reset")     /* mtcClient */
 #define MTC_CMD_FIT__NO_WIPEDISK  ("/var/run/fit/no_wipedisk")  /* mtcClient */
 #define MTC_CMD_FIT__NO_MGMNT_ACK ("/var/run/fit/no_mgmnt_ack") /* mtcClient */
-#define MTC_CMD_FIT__NO_INFRA_ACK ("/var/run/fit/no_infra_ack") /* mtcClient */
+#define MTC_CMD_FIT__NO_CLSTR_ACK ("/var/run/fit/no_clstr_ack") /* mtcClient */
 #define MTC_CMD_FIT__NO_MTCALIVE  ("/var/run/fit/no_mtcalive")  /* mtcClient */
 #define MTC_CMD_FIT__MGMNT_RXSOCK ("/var/run/fit/mgmnt_rxsock") /* mtcClient */
 #define MTC_CMD_FIT__MGMNT_TXSOCK ("/var/run/fit/mgmnt_txsock") /* mtcClient */
-#define MTC_CMD_FIT__INFRA_RXSOCK ("/var/run/fit/infra_rxsock") /* mtcClient */
-#define MTC_CMD_FIT__INFRA_TXSOCK ("/var/run/fit/infra_txsock") /* mtcClient */
+#define MTC_CMD_FIT__CLSTR_RXSOCK ("/var/run/fit/clstr_rxsock") /* mtcClient */
+#define MTC_CMD_FIT__CLSTR_TXSOCK ("/var/run/fit/clstr_txsock") /* mtcClient */
 #define MTC_CMD_FIT__AMON_SOCK    ("/var/run/fit/amon_sock")    /* mtcClient */
-#define MTC_CMD_FIT__NO_INFRA_RSP ("/var/run/fit/no_infra_rsp") /* hbsClient */
+#define MTC_CMD_FIT__NO_CLSTR_RSP ("/var/run/fit/no_clstr_rsp") /* hbsClient */
 #define MTC_CMD_FIT__NO_MGMNT_RSP ("/var/run/fit/no_mgmnt_rsp") /* hbsClient */
 #define MTC_CMD_FIT__LINKLIST     ("/var/run/fit/linklist") /* hbsAgent */
 #define MTC_CMD_FIT__HBSSILENT    ("/var/run/fit/hbs_silent_fault") /* hbsAgent */
@@ -96,7 +96,7 @@
 #define FIT_CODE__DO_NOTHING_THREAD                   (9)
 #define FIT_CODE__EMPTY_BM_PASSWORD                  (10)
 #define FIT_CODE__INVALIDATE_MGMNT_IP                (11)
-#define FIT_CODE__INVALIDATE_INFRA_IP                (12)
+#define FIT_CODE__INVALIDATE_CLSTR_IP                (12)
 #define FIT_CODE__WORK_QUEUE                         (13)
 #define FIT_CODE__NO_READY_EVENT                     (14)
 #define FIT_CODE__NO_PULSE_REQUEST                   (15)

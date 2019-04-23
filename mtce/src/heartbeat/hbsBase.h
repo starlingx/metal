@@ -94,7 +94,7 @@ typedef struct
     /* Status Flags
      * ------------
      * bit 0: Process Monitor Status: 1=running
-     * bit 1: Infrastructure Network: 1=provisioned
+     * bit 1: Cluster-host Network: 1=provisioned
      *
      * */
     unsigned int   f ;
@@ -167,9 +167,9 @@ typedef struct
     int   ioctl_sock ; /* general ioctl socket */
 
     bool mgmnt_link_up_and_running ;
-    bool infra_link_up_and_running ;
+    bool clstr_link_up_and_running ;
     bool mgmnt_link_up_and_running_last ;
-    bool infra_link_up_and_running_last ;
+    bool clstr_link_up_and_running_last ;
 
 
 } hbs_socket_type ;
@@ -199,7 +199,7 @@ int  hbs_self_recovery   ( unsigned int cmd );
 unsigned int hbs_get_controller_number ( void );
 
 /* Setup the pulse messaging interfaces
- * 'p' is a boot that indicates if the infrastructure network is provisioned
+ * 'p' is a bool that indicates if the cluster-host network is provisioned
  * 'p' = true means it is provisioned */
 #define SETUP_PULSE_MESSAGING(p,g) \
 { \
@@ -209,9 +209,9 @@ unsigned int hbs_get_controller_number ( void );
     } \
     if ( p == true ) \
     { \
-        if (( rc = _setup_pulse_messaging ( INFRA_IFACE , g)) != PASS ) \
+        if (( rc = _setup_pulse_messaging ( CLSTR_IFACE , g)) != PASS ) \
         { \
-            elog ("Failed to setup 'Infra' network pulse messaging (rc:%d)\n", rc ); \
+            elog ("Failed to setup 'Cluster-host' network pulse messaging (rc:%d)\n", rc ); \
         } \
     } \
 }

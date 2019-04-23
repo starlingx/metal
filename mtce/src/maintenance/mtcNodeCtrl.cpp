@@ -161,11 +161,11 @@ void daemon_exit ( void )
     if (mtc_sock.mtc_client_tx_socket)
         delete (mtc_sock.mtc_client_tx_socket);
 
-    if (mtc_sock.mtc_client_infra_rx_socket)
-        delete (mtc_sock.mtc_client_infra_rx_socket);
+    if (mtc_sock.mtc_client_clstr_rx_socket)
+        delete (mtc_sock.mtc_client_clstr_rx_socket);
 
-    if (mtc_sock.mtc_client_infra_tx_socket)
-        delete (mtc_sock.mtc_client_infra_tx_socket);
+    if (mtc_sock.mtc_client_clstr_tx_socket)
+        delete (mtc_sock.mtc_client_clstr_tx_socket);
 
     if (mtc_sock.mtc_event_rx_sock)
         delete (mtc_sock.mtc_event_rx_sock);
@@ -615,30 +615,30 @@ int daemon_configure ( void )
     mtc_config.mgmnt_iface = daemon_get_iface_master ( mtc_config.mgmnt_iface );
     ilog("Mgmnt iface : %s\n", mtc_config.mgmnt_iface );
 
-    /* Fetch the infrastructure interface name.
+    /* Fetch the cluster-host interface name.
      * calls daemon_get_iface_master inside so the
      * aggrigated name is returned if it exists */
-    get_infra_iface (&mtc_config.infra_iface );
-    if ( strlen (mtc_config.infra_iface) )
+    get_clstr_iface (&mtc_config.clstr_iface );
+    if ( strlen (mtc_config.clstr_iface) )
     {
-        string infra_ip = "" ;
-        rc = get_iface_address ( mtc_config.infra_iface, infra_ip, false );
+        string clstr_ip = "" ;
+        rc = get_iface_address ( mtc_config.clstr_iface, clstr_ip, false );
         if ( rc )
         {
-            elog ("failed to get IP address fron infra interface '%s' (rc:%d)\n", mtc_config.infra_iface, rc );
+            elog ("failed to get IP address for cluster-host interface '%s' (rc:%d)\n", mtc_config.clstr_iface, rc );
         }
         else
         {
-            ilog ("Infra iface : %s\n", mtc_config.infra_iface );
-            ilog ("Infra addr  : %s\n", infra_ip.c_str());
+            ilog ("Clstr iface : %s\n", mtc_config.clstr_iface );
+            ilog ("Clstr addr  : %s\n", clstr_ip.c_str());
         }
-        if (!strcmp(mtc_config.infra_iface, mtc_config.mgmnt_iface))
+        if (!strcmp(mtc_config.clstr_iface, mtc_config.mgmnt_iface))
         {
-            mtcInv.infra_network_provisioned = false ;
+            mtcInv.clstr_network_provisioned = false ;
         }
         else
         {
-            mtcInv.infra_network_provisioned = true ;
+            mtcInv.clstr_network_provisioned = true ;
         }
     }
 
@@ -712,17 +712,17 @@ int mtc_socket_init ( void )
     }
 
    /***********************************************************/
-   /* Setup UDP Maintenance Command Transmit Socket Infra I/F */
+   /* Setup UDP Maintenance Command Transmit Socket Clstr I/F */
    /***********************************************************/
-    if ( strlen( mtc_config.infra_iface ) )
+    if ( strlen( mtc_config.clstr_iface ) )
     {
-        /* create infra transmit socket only if the interface is provisioned */
-        msgClassAddr::getAddressFromInterface(mtc_config.infra_iface, ip_address, INET6_ADDRSTRLEN);
-        sock_ptr->mtc_agent_infra_tx_socket  = new msgClassTx(ip_address, mtc_config.mtc_agent_port, IPPROTO_UDP, mtc_config.infra_iface);
-        rc = sock_ptr->mtc_agent_infra_tx_socket->return_status;
+        /* create clstr transmit socket only if the interface is provisioned */
+        msgClassAddr::getAddressFromInterface(mtc_config.clstr_iface, ip_address, INET6_ADDRSTRLEN);
+        sock_ptr->mtc_agent_clstr_tx_socket  = new msgClassTx(ip_address, mtc_config.mtc_agent_port, IPPROTO_UDP, mtc_config.clstr_iface);
+        rc = sock_ptr->mtc_agent_clstr_tx_socket->return_status;
         if(rc != PASS)
         {
-            delete sock_ptr->mtc_agent_infra_tx_socket;
+            delete sock_ptr->mtc_agent_clstr_tx_socket;
             return rc;
         }
     }
@@ -773,26 +773,26 @@ int mtc_socket_init ( void )
 
 
     /*********************************************************************
-     * Setup Maintenance message receiver on the infrastructure network
+     * Setup Maintenance message receiver on the cluster-host network
      * if it is provisioned
      *
      *********************************************************************/
 
-    if ( mtcInv.infra_network_provisioned == true )
+    if ( mtcInv.clstr_network_provisioned == true )
     {
-        sock_ptr->mtc_agent_infra_rx_socket =
+        sock_ptr->mtc_agent_clstr_rx_socket =
         new msgClassRx(CONTROLLER_NFS, sock_ptr->mtc_agent_port, IPPROTO_UDP );
-        if (( sock_ptr->mtc_agent_infra_rx_socket == NULL ) ||
-            ( sock_ptr->mtc_agent_infra_rx_socket->return_status ))
+        if (( sock_ptr->mtc_agent_clstr_rx_socket == NULL ) ||
+            ( sock_ptr->mtc_agent_clstr_rx_socket->return_status ))
         {
             elog("failed to create mtcClient receive socket on port %d for %s\n",
                   sock_ptr->mtc_agent_port,
-                  mtc_config.infra_iface );
+                  mtc_config.clstr_iface );
 
-            if ( sock_ptr->mtc_agent_infra_rx_socket )
+            if ( sock_ptr->mtc_agent_clstr_rx_socket )
             {
-                delete (sock_ptr->mtc_agent_infra_rx_socket);
-                sock_ptr->mtc_agent_infra_rx_socket = NULL ;
+                delete (sock_ptr->mtc_agent_clstr_rx_socket);
+                sock_ptr->mtc_agent_clstr_rx_socket = NULL ;
             }
             return (FAIL_SOCKET_CREATE);
         }
@@ -800,21 +800,21 @@ int mtc_socket_init ( void )
         /* Set messaging buffer size */
         /* if we need a bigger then default we can use a sysctl to raise the max */
         socket_size = MTC_AGENT_RX_BUFF_SIZE ;
-        if (( rc = sock_ptr->mtc_agent_infra_rx_socket->setSocketMemory ( mtc_config.infra_iface, "mtce command and event receiver (Infra network)", socket_size )) != PASS )
+        if (( rc = sock_ptr->mtc_agent_clstr_rx_socket->setSocketMemory ( mtc_config.clstr_iface, "mtce command and event receiver (cluster-host network)", socket_size )) != PASS )
         {
             elog ("setsockopt failed for SO_RCVBUF (%d:%m)\n", errno );
-            delete (sock_ptr->mtc_agent_infra_rx_socket);
-            sock_ptr->mtc_agent_infra_rx_socket = NULL ;
+            delete (sock_ptr->mtc_agent_clstr_rx_socket);
+            sock_ptr->mtc_agent_clstr_rx_socket = NULL ;
             return (FAIL_SOCKET_OPTION);
         }
-        socklen_t optlen = sizeof(sock_ptr->mtc_agent_infra_rx_socket_size);
-        getsockopt (   sock_ptr->mtc_agent_infra_rx_socket->getFD(), SOL_SOCKET, SO_RCVBUF,
-                      &sock_ptr->mtc_agent_infra_rx_socket_size, &optlen );
+        socklen_t optlen = sizeof(sock_ptr->mtc_agent_clstr_rx_socket_size);
+        getsockopt (   sock_ptr->mtc_agent_clstr_rx_socket->getFD(), SOL_SOCKET, SO_RCVBUF,
+                      &sock_ptr->mtc_agent_clstr_rx_socket_size, &optlen );
 
         ilog ("Listening On: 'mtc client receive' socket %d (%d rx bytes - req:%d) (%s)\n",
                   sock_ptr->mtc_agent_port,
-                  sock_ptr->mtc_agent_infra_rx_socket_size, MTC_AGENT_RX_BUFF_SIZE,
-                  mtc_config.infra_iface);
+                  sock_ptr->mtc_agent_clstr_rx_socket_size, MTC_AGENT_RX_BUFF_SIZE,
+                  mtc_config.clstr_iface);
     }
 
 
@@ -1250,16 +1250,16 @@ void daemon_service_run ( void )
             ilog ("Mgmnt %s link is %s\n", mtc_config.mgmnt_iface, mtcInv.mgmnt_link_up_and_running ? "Up" : "Down" );
         }
 
-        if ( mtcInv.infra_network_provisioned == true )
+        if ( mtcInv.clstr_network_provisioned == true )
         {
-            if ( get_link_state ( mtc_sock.ioctl_sock, mtc_config.infra_iface, &mtcInv.infra_link_up_and_running ) )
+            if ( get_link_state ( mtc_sock.ioctl_sock, mtc_config.clstr_iface, &mtcInv.clstr_link_up_and_running ) )
             {
-                mtcInv.infra_link_up_and_running = false ;
-                wlog ("Failed to query %s operational state ; defaulting to down\n", mtc_config.infra_iface );
+                mtcInv.clstr_link_up_and_running = false ;
+                wlog ("Failed to query %s operational state ; defaulting to down\n", mtc_config.clstr_iface );
             }
             else
             {
-                ilog ("Infra %s link is %s\n", mtc_config.infra_iface, mtcInv.infra_link_up_and_running ? "Up" : "Down" );
+                ilog ("Cluster-host %s link is %s\n", mtc_config.clstr_iface, mtcInv.clstr_link_up_and_running ? "Up" : "Down" );
             }
         }
 
@@ -1336,9 +1336,9 @@ void daemon_service_run ( void )
     socks.push_front (mtc_sock.mtc_event_rx_sock->getFD());   // service_events
     socks.push_front (mtc_sock.mtc_agent_rx_socket->getFD()); // mtc_service_inbox
 
-    if ( mtcInv.infra_network_provisioned == true )
+    if ( mtcInv.clstr_network_provisioned == true )
     {
-        socks.push_front (mtc_sock.mtc_agent_infra_rx_socket->getFD()); // mtc_service_inbox
+        socks.push_front (mtc_sock.mtc_agent_clstr_rx_socket->getFD()); // mtc_service_inbox
     }
 
     socks.push_front (mtc_sock.netlink_sock);
@@ -1430,9 +1430,9 @@ void daemon_service_run ( void )
         FD_ZERO(&mtc_sock.readfds);
         FD_SET(mtc_sock.mtc_event_rx_sock->getFD(),        &mtc_sock.readfds);
         FD_SET(mtc_sock.mtc_agent_rx_socket->getFD(),      &mtc_sock.readfds);
-        if ( mtcInv.infra_network_provisioned == true )
+        if ( mtcInv.clstr_network_provisioned == true )
         {
-            FD_SET(mtc_sock.mtc_agent_infra_rx_socket->getFD(),&mtc_sock.readfds);
+            FD_SET(mtc_sock.mtc_agent_clstr_rx_socket->getFD(),&mtc_sock.readfds);
         }
 
         if ( mtce_event.fd )
@@ -1512,18 +1512,18 @@ void daemon_service_run ( void )
                 }
             }
 
-            if (( mtcInv.infra_network_provisioned == true ) &&
-                ( sock_ptr->mtc_agent_infra_rx_socket != NULL ) &&
-                ( FD_ISSET(sock_ptr->mtc_agent_infra_rx_socket->getFD(), &mtc_sock.readfds)))
+            if (( mtcInv.clstr_network_provisioned == true ) &&
+                ( sock_ptr->mtc_agent_clstr_rx_socket != NULL ) &&
+                ( FD_ISSET(sock_ptr->mtc_agent_clstr_rx_socket->getFD(), &mtc_sock.readfds)))
             {
                 int cnt = 0 ;
                 /* Service up to MAX_RX_MSG_BATCH of messages at once */
                 for ( ; cnt < MAX_RX_MSG_BATCH ; cnt++ )
                 {
-                    rc =  mtc_service_inbox ( &mtcInv, &mtc_sock, INFRA_INTERFACE ) ;
+                    rc =  mtc_service_inbox ( &mtcInv, &mtc_sock, CLSTR_INTERFACE ) ;
                     if ( rc > RETRY )
                     {
-                        mlog2 ("mtc_service_inbox failed (rc:%d) (Infra)\n", rc );
+                        mlog2 ("mtc_service_inbox failed (rc:%d) (Clstr)\n", rc );
                         break ;
                     }
                     if ( rc == RETRY )
@@ -1531,7 +1531,7 @@ void daemon_service_run ( void )
                 }
                 if ( cnt > 1 )
                 {
-                   mlog2 ("serviced %d messages in one batch (Infra)\n", cnt ); // ERIC dlog
+                   mlog2 ("serviced %d messages in one batch (Clstr)\n", cnt ); // ERIC dlog
                 }
             }
             if (FD_ISSET(mtcInv.inotify_shadow_file_fd, &mtc_sock.readfds))

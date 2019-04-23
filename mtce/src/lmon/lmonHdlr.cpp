@@ -22,7 +22,7 @@ static lmon_ctrl_type lmon_ctrl ;
 static interface_ctrl_type interfaces[INTERFACES_MAX];
 
 static const char * iface_list[INTERFACES_MAX] = { MGMT_INTERFACE_NAME,
-                                                   INFRA_INTERFACE_NAME,
+                                                   CLUSTER_HOST_INTERFACE_NAME,
                                                    OAM_INTERFACE_NAME };
 
 /* httpUtil needs a mtclog socket pointer */
@@ -140,7 +140,7 @@ void lmonHdlr_http_handler (struct evhttp_request *req, void *arg)
               { "name":"enp0s8.1", "state":"Up/Down", "time":5674323454567 },
               { "name":"enp0s8.2", "state":"Up/Down", "time":5674323454567 }]
       },
-      { "network":"infra",
+      { "network":"cluster-host",
         "type":"bond",
         "bond":"bond0",
         "links": [

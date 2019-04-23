@@ -64,21 +64,21 @@ typedef struct
      *  maintenance commands to the client (compute) node and
      *  receive the compute node reply in the receive direction   */
     msgClassSock*  mtc_agent_tx_socket      ; /**< tx to mtc client mgmnt   */
-    msgClassSock*  mtc_agent_infra_tx_socket; /**< tx to mtc client infra   */
+    msgClassSock*  mtc_agent_clstr_tx_socket; /**< tx to mtc client clstr   */
     msgClassSock*  mtc_agent_rx_socket      ; /**< rx from mtc client mgmnt */
-    msgClassSock*  mtc_agent_infra_rx_socket; /**< rx from mtc client infra */
+    msgClassSock*  mtc_agent_clstr_rx_socket; /**< rx from mtc client clstr */
     int  mtc_agent_port                     ; /**< the agent rx port number */
 
     struct sockaddr_in  agent_addr; /**< socket attributes struct */
     int  mtc_agent_rx_socket_size ;
-    int  mtc_agent_infra_rx_socket_size ;
+    int  mtc_agent_clstr_rx_socket_size ;
 
     /** UDP sockets used by the mtcClient to receive maintenance
       * commands from and transmit replies to the mtcAgent              */
     msgClassSock*  mtc_client_rx_socket             ; /**< rx from controller       */
     msgClassSock*  mtc_client_tx_socket             ; /**< tx to controller mgmnt   */
-    msgClassSock*  mtc_client_infra_tx_socket       ; /**< tx to controller infra   */
-    msgClassSock*  mtc_client_infra_rx_socket       ; /**< rx from controller infra */
+    msgClassSock*  mtc_client_clstr_tx_socket       ; /**< tx to controller clstr   */
+    msgClassSock*  mtc_client_clstr_rx_socket       ; /**< rx from controller clstr */
     int                mtc_cmd_port       ; /**< mtc command port number  */
     struct sockaddr_in mtc_cmd_addr       ; /**< socket attributes mgmnt  */
 
@@ -129,7 +129,7 @@ int send_mtc_cmd ( string & hostname, int cmd, int interface );
 int mtc_service_command ( mtc_socket_type * sock_ptr , int interface );
 int mtc_set_availStatus ( string & hostname, mtc_nodeAvailStatus_enum status );
 int mtce_send_event    ( mtc_socket_type * sock_ptr, int cmd , const char * mtce_name_ptr );
-int mtc_infra_init     ( mtc_socket_type * sock_ptr , char * iface );
+int mtc_clstr_init     ( mtc_socket_type * sock_ptr , char * iface );
 string get_who_i_am ( void );
 
 #endif

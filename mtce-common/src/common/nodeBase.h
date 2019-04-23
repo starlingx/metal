@@ -184,7 +184,7 @@ void daemon_exit ( void );
 #define MTC_JSON_INV_NAME      "hostname"
 #define MTC_JSON_INV_HOSTIP    "mgmt_ip"
 #define MTC_JSON_INV_HOSTMAC   "mgmt_mac"
-#define MTC_JSON_INV_INFRAIP   "infra_ip"
+#define MTC_JSON_INV_CLSTRIP   "cluster_host_ip"
 #define MTC_JSON_INV_AVAIL     "availability"
 #define MTC_JSON_INV_OPER      "operational"
 #define MTC_JSON_INV_ADMIN     "administrative"
@@ -376,12 +376,7 @@ void daemon_exit ( void );
 #define STORAGE_0   ((const char *)"storage-0")
 #define STORAGE_1   ((const char *)"storage-1")
 
-/* The infrastructure networking floating IP
- *
- * Note: If there is no infra then this label will resolve
- *       to another floating IP on the management network.
- *
- * If there is no Infra network then this label is not and should not be used */
+/* This label will resolve to an IP on the management network */
 #define CONTROLLER_NFS ((const char *)"controller-nfs")
 
 #define CGTS_NODE_TYPES      4
@@ -400,7 +395,7 @@ void daemon_exit ( void );
 
 /** Interface Codes **/
 #define MGMNT_INTERFACE (0)
-#define INFRA_INTERFACE (1)
+#define CLSTR_INTERFACE (1)
 
 
 /** Maintenance Inventory struct */
@@ -412,7 +407,7 @@ typedef struct
     std::string name     ;
     std::string ip       ;
     std::string mac      ;
-    std::string infra_ip ;
+    std::string clstr_ip ;
     std::string admin    ;
     std::string oper     ;
     std::string avail    ;
@@ -634,7 +629,7 @@ typedef struct
 #define PMOND_MISSING_THRESHOLD    (100) /**< Count before degrade                  */
 #define NULL_PULSE_FLAGS    (0xffffffff) /**< Unknown flags value                   */
 #define PMOND_FLAG          (0x00000001) /**< Process Monitor O.K. Flag             */
-#define INFRA_FLAG          (0x00000002) /**< Infrastructure iface provisioned Flag */
+#define CLSTR_FLAG          (0x00000002) /**< Cluster-host iface provisioned Flag   */
 
 #define CTRLX_MASK          (0x00000300) /**< From/To Controller-0/1/2/3 Number     */
 #define CTRLX_BIT      ((unsigned int)8) /**< used to shift right mask into bit 0   */
@@ -961,7 +956,7 @@ string get_configStages_str ( mtc_configStages_enum stage );
   * inservice test, etc. */
 #define DEGRADE_MASK_NONE             0x00000000
 #define DEGRADE_MASK_HEARTBEAT_MGMNT  0x00000001
-#define DEGRADE_MASK_HEARTBEAT_INFRA  0x00000002
+#define DEGRADE_MASK_HEARTBEAT_CLSTR  0x00000002
 #define DEGRADE_MASK_PMON             0x00000004
 #define DEGRADE_MASK_INSV_TEST        0x00000008
 #define DEGRADE_MASK_AVS_MAJOR        0x00000010
@@ -1189,7 +1184,7 @@ typedef enum
 typedef enum
 {
     MGMNT_IFACE  = 0,
-    INFRA_IFACE  = 1,
+    CLSTR_IFACE  = 1,
       MAX_IFACES = 2
 } iface_enum ;
 
