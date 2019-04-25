@@ -127,7 +127,7 @@ void hostw_service ( void )
                     ilog ("Did not receive expected message from PMON - first missed message\n");
                 }
                 ctrl->pmon_grace_loops--;
-                if ( ctrl->pmon_grace_loops <= 2 )
+                if ( ctrl->pmon_grace_loops )
                 {
                     ilog ("Did not receive expected message from PMON - %d more missed messages allowed\n",
                           ctrl->pmon_grace_loops);
