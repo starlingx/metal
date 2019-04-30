@@ -23,7 +23,6 @@
 # controller-0:~#  /home/wrsroot/pmon-test.sh restart
 #
 # acpid                           restart PASSED [651]:[19095]
-# ceilometer-polling              restart PASSED [13844]:[22519]
 # fsmond                          restart PASSED [8719]:[26343]
 # guestServer                     restart PASSED [8710]:[29108]
 # hbsClient                       restart PASSED [8729]:[31248]

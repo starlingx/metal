@@ -72,9 +72,6 @@ typedef struct
     int   sysinv_api_port       ; /**< =6385                                  */
     char* sysinv_api_bind_ip    ; /**< =<local floating IP>                   */
 
-    char* ceilometer_url        ; /**< ceilometer sensor sample database url  */
-    int   ceilometer_port       ; /**< ceilometer REST API port number        */
-
     char* barbican_api_host     ; /**< Barbican REST API host IP address      */
     int   barbican_api_port     ; /**< Barbican REST API port number          */
 

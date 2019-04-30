@@ -36,10 +36,6 @@
 #include "hwmonSensor.h"     /* for ... hwmonSensor_print               */
 #include "hwmonAlarm.h"      /* for ... hwmonAlarm                      */
 
-//ceilometer/ceilometer.conf port=8777
-//ceilometer/ceilometer.conf host=192.168.204.2
-
-
 static event_type hwmon_event ;
 
 

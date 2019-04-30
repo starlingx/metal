@@ -858,10 +858,5 @@ int keystone_config_handler ( void * user,
         config_ptr->keystone_region_name = strdup(value);
         ilog("Region Name : %s\n", config_ptr->keystone_region_name );
     }
-    else if (MATCH("agent", "ceilometer_port"))
-    {
-        config_ptr->ceilometer_port = atoi(value);
-        dlog("Ceilometer Port : %d\n", config_ptr->ceilometer_port );
-    }
     return (PASS);
 }

@@ -47,7 +47,6 @@ typedef struct
   *  1. the HTTP Client API for 
   *     - configuring sysinv with sensor data records as well as modifying
   *       and querying those records.
-  *     - pushing sensor samples to ceilometer
   *
   *  2. the HTTP Server handler that services sysinv sensor configuration
   *     change notifications.
