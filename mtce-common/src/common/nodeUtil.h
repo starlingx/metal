@@ -2,7 +2,7 @@
 #define __INCLUDE_NODEUTIL_H__
 
 /*
-* Copyright (c) 2013-2014, 2016 Wind River Systems, Inc.
+* Copyright (c) 2013-2014, 2016, 2019 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -104,7 +104,7 @@ string lltos (long long unsigned int val );
 string ftos ( float val, int resolution );
 unsigned short checksum(void *b, int len);
 
-std::string tolowercase ( const std::string & in );
+std::string tolowercase ( const std::string in );
 
 
 int get_delimited_list ( string str , char delimiter, list<string> & the_list, bool remove_whitespace );

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2016 Wind River Systems, Inc.
+ * Copyright (c) 2013-2019 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -32,6 +32,7 @@ using namespace std;
 #include "daemon_common.h"
 #include "daemon_option.h"
 #include "nodeBase.h"
+#include "nodeUtil.h"
 
 /* GNU Extension
  * program_invocation_name contains the name that was used to invoke the
@@ -365,7 +366,8 @@ system_type_enum daemon_system_type ( void )
                 if ( sscanf ( &buffer[0], "system_type=%1023s",  &type_str[0] ) == 1 )
                 {
                     string type_string = type_str ;
-                    if ( !type_string.empty() && ( type_string == "Standard"))
+                    type_string = tolowercase(type_string);
+                    if ( !type_string.empty() && ( type_string == "standard"))
                     {
                         system_type = SYSTEM_TYPE__NORMAL ;
                     }
@@ -400,6 +402,7 @@ system_type_enum daemon_system_type ( void )
                     if ( sscanf ( &buffer[0], "system_mode=%1023s",  &mode_str[0] ) == 1 )
                     {
                         string mode = mode_str ;
+                        mode = tolowercase(mode);
                         if ( !mode.empty() )
                         {
                             if ( mode.compare("duplex") == 0 )

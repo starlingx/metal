@@ -1472,7 +1472,7 @@ unsigned short checksum(void *b, int len)
 }
 
 
-std::string tolowercase ( const std::string & in )
+std::string tolowercase ( const std::string in )
 {
   std::string out;
 
