@@ -8299,8 +8299,8 @@ int nodeLinkClass::lost_pulses ( iface_enum iface, bool & storage_0_responding )
                 else
                 {
                     pulse_ptr->hbs_failure[iface] = true ;
-                    hbs_cluster_change ( pulse_ptr->hostname + " heartbeat loss" );
                 }
+                hbs_cluster_change ( pulse_ptr->hostname + " heartbeat loss" );
                 pulse_ptr->hbs_failure_count[iface]++ ;
             }
             if ( pulse_ptr->b2b_misses_count[iface] > pulse_ptr->max_count[iface] )

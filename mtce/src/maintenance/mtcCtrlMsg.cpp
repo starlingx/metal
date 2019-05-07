@@ -833,6 +833,27 @@ int service_events ( nodeLinkClass * obj_ptr, mtc_socket_type * sock_ptr )
         return (RETRY) ;
     }
 
+    string hostaddr = sock_ptr->mtc_event_rx_sock->get_src_str();
+    string hostname = obj_ptr->get_hostname ( hostaddr ) ;
+    if ( hostname.empty() )
+    {
+        wlog ("%s ignoring service event from unknown host (%s)",
+                obj_ptr->my_hostname.c_str(), hostaddr.c_str());
+        return (PASS);
+    }
+    if (( hostname != obj_ptr->my_hostname ) &&
+        (( msg.cmd == MTC_EVENT_HEARTBEAT_LOSS )       ||
+         ( msg.cmd == MTC_EVENT_HEARTBEAT_MINOR_SET )  ||
+         ( msg.cmd == MTC_EVENT_HEARTBEAT_MINOR_CLR )  ||
+         ( msg.cmd == MTC_EVENT_HEARTBEAT_DEGRADE_SET )||
+         ( msg.cmd == MTC_EVENT_HEARTBEAT_DEGRADE_CLR )))
+    {
+        wlog ("%s %s from %s heartbeat service",
+                &msg.buf[0],
+                get_mtcNodeCommand_str(msg.cmd),
+                hostname.c_str());
+        return (PASS);
+    }
     if ( msg.cmd == MTC_EVENT_LOOPBACK )
     {
         const char * event_hdr_ptr = get_loopback_header() ;

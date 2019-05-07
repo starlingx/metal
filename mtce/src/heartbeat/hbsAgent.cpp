@@ -128,9 +128,9 @@ void monitor_scheduling ( unsigned long long & this_time, unsigned long long & p
     this_time = gettime_monotonic_nsec () ;
     if ( label_ptr && strncmp ( label_ptr, NODEUTIL_LATENCY_MON_START, strlen(NODEUTIL_LATENCY_MON_START)))
     {
-        if ( ! strcmp (SCHED_MONITOR__RECEIVER, label_ptr ) && ( data > 10 ))
+        if ( ! strcmp (SCHED_MONITOR__RECEIVER, label_ptr ) && ( data > (int)hostname_inventory.size() ))
         {
-            ilog ("===> receive latency : batch of %d pulses in under scheduling threshold of %d msec\n", data , hbs_config.latency_thld );
+            wlog ("===> receive latency : batch of %d pulses in under scheduling threshold of %d msec\n", data , hbs_config.latency_thld );
         }
         else if ( this_time > (prev_time + (NSEC_TO_MSEC*(hbs_config.latency_thld))))
         {
