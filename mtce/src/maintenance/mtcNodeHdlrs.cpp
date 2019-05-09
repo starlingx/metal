@@ -6115,7 +6115,7 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
         {
             adminActionChange ( node_ptr, MTC_ADMIN_ACTION__NONE );
 
-            /* Send sysinv the wrsroot password hash
+            /* Send sysinv the sysadmin password hash
              * and aging data as an install command */
             if ( SIMPLEX && THIS_HOST &&
                 ( node_ptr->adminState == MTC_ADMIN_STATE__LOCKED ))

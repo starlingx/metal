@@ -20,7 +20,7 @@
 #
 # process                       operation status [before pid]:[after pid]
 #
-# controller-0:~#  /home/wrsroot/pmon-test.sh restart
+# controller-0:~#  /home/sysadmin/pmon-test.sh restart
 #
 # acpid                           restart PASSED [651]:[19095]
 # fsmond                          restart PASSED [8719]:[26343]

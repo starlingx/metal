@@ -147,7 +147,7 @@ void daemon_exit ( void );
 #define SERVER_PROFILE_DIR      ((const char *)"/etc/bmc/server_profiles.d")
 #define PASSWORD_FILE           ((const char *)"/etc/passwd")
 #define SHADOW_FILE             ((const char *)"/etc/shadow")
-#define USERNAME_ROOT           ("wrsroot")
+#define USERNAME_ROOT           ("sysadmin")
 
 #define PMON_CONF_FILE_DIR      ((const char *)"/etc/pmon.d")
 

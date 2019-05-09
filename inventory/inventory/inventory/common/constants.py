@@ -471,10 +471,10 @@ SERVICE_TYPE_BARBICAN = 'barbican'
 TIS_STD_BUILD = 'Standard'
 TIS_AIO_BUILD = 'All-in-one'
 
-# wrsroot password aging.
+# sysadmin password aging.
 # Setting aging to max defined value qualifies
 # as "never" on certain Linux distros including WRL
-WRSROOT_PASSWORD_NO_AGING = 99999
+SYSADMIN_PASSWORD_NO_AGING = 99999
 
 # Partition table size in bytes.
 PARTITION_TABLE_SIZE = 2097152

@@ -213,7 +213,7 @@ using namespace std;
 // #define IPMITOOL_SENSOR_OUTPUT_FILE   ((const char *)("/tmp/ipmitool_sensor_data"))
 #define IPMITOOL_SENSOR_OUTPUT_FILE   ((const char *)("/var/run/ipmitool_sensor_data"))
 #define IPMITOOL_PATH_AND_FILENAME    ((const char *)("/usr/bin/ipmitool"))
-#define IPMITOOL_PATH_AND_FILENAME_V  ((const char *)("/home/wrsroot/test/ipmitool"))
+#define IPMITOOL_PATH_AND_FILENAME_V  ((const char *)("/home/sysadmin/test/ipmitool"))
 
 #define IPMITOOL_MAX_FIELD_LEN      (64)
 
