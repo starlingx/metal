@@ -2181,6 +2181,25 @@ int nodeLinkClass::mod_host ( node_inv_type & inv )
             else if ( !inv.action.compare ( "reinstall" ) )
             {
                 plog ("%s Reinstall Action\n", node_ptr->hostname.c_str());
+                if ( node_ptr->adminAction == MTC_ADMIN_ACTION__REINSTALL )
+                {
+                    /* Allow user to restart the re-install if
+                     *  - its in progress,
+                     *  - there is a BMC provisioned and
+                     *  - are waiting while the actual install is in progress */
+                    if (( node_ptr->bm_provisioned == true ) &&
+                        ( node_ptr->reinstallStage == MTC_REINSTALL__ONLINE_WAIT))
+                    {
+                        reinstallStageChange ( node_ptr , MTC_REINSTALL__START );
+                    }
+                    else
+                    {
+                        /* Otherwise allow the current install to continue
+                         * remind the user that there is a reinstall
+                         * in progress */
+                        mtcInvApi_update_task ( node_ptr, MTC_TASK_REINSTALL);
+                    }
+                }
                 adminActionChange ( node_ptr , MTC_ADMIN_ACTION__REINSTALL );
 
                 /* generate command=reinstall log */

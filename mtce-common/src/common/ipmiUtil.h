@@ -43,6 +43,9 @@
 
 #define IPMITOOL_RESTART_CAUSE_CMD     ((const char *)("chassis restart_cause"))
 
+#define IPMITOOL_BOOTDEV_PXE_CMD       ((const char *)("chassis bootdev pxe"))
+#define IPMITOOL_BOOTDEV_PXE_RESP      ((const char *)("Set Boot Device to pxe"))
+
 #define IPMITOOL_MC_INFO_CMD           ((const char *)("mc info"))
 
 #define IPMITOOL_CMD_FILE_SUFFIX            ((const char *)("_power_cmd_result"))
@@ -65,6 +68,7 @@ typedef enum
     IPMITOOL_THREAD_CMD__MC_INFO,
     IPMITOOL_THREAD_CMD__POWER_STATUS,
     IPMITOOL_THREAD_CMD__RESTART_CAUSE,
+    IPMITOOL_THREAD_CMD__BOOTDEV_PXE,
 
     IPMITOOL_THREAD_CMD__READ_SENSORS,
 

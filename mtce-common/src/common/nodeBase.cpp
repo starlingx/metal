@@ -325,7 +325,7 @@ static std::string     sensorStages_str [MTC_SENSOR__STAGES     +1] ;
 static std::string      powerStages_str [MTC_POWER__STAGES      +1] ; 
 static std::string powercycleStages_str [MTC_POWERCYCLE__STAGES +1] ; 
 static std::string      resetStages_str [MTC_RESET__STAGES      +1] ;
-static std::string  reinstallStages_str [MTC_RESET__STAGES      +1] ;
+static std::string  reinstallStages_str [MTC_REINSTALL__STAGES  +1] ;
 static std::string    oosTestStages_str [MTC_OOS_TEST__STAGES   +1] ; 
 static std::string   insvTestStages_str [MTC_INSV_TEST__STAGES  +1] ; 
 static std::string     configStages_str [MTC_CONFIG__STAGES     +1] ; 
@@ -451,7 +451,17 @@ void mtc_stages_init ( void )
    resetStages_str   [MTC_RESET__STAGES                ] = "Reset-Unknown";
 
    reinstallStages_str   [MTC_REINSTALL__START         ] = "Reinstall-Start";
-   reinstallStages_str   [MTC_REINSTALL__RESP_WAIT     ] = "Reinstall-Response-Wait";
+   reinstallStages_str   [MTC_REINSTALL__START_WAIT    ] = "Reinstall-Start-Wait";
+   reinstallStages_str   [MTC_REINSTALL__RESTART       ] = "Reinstall-ReStart";
+   reinstallStages_str   [MTC_REINSTALL__RESTART_WAIT  ] = "Reinstall-ReStart-Wait";
+   reinstallStages_str   [MTC_REINSTALL__POWERON       ] = "Reinstall-PowerOn";
+   reinstallStages_str   [MTC_REINSTALL__POWERON_WAIT  ] = "Reinstall-PowerOn-Wait";
+   reinstallStages_str   [MTC_REINSTALL__NETBOOT       ] = "Reinstall-Netboot";
+   reinstallStages_str   [MTC_REINSTALL__NETBOOT_WAIT  ] = "Reinstall-Netboot-Wait";
+   reinstallStages_str   [MTC_REINSTALL__RESET         ] = "Reinstall-Reset";
+   reinstallStages_str   [MTC_REINSTALL__RESET_WAIT    ] = "Reinstall-Reset-Wait";
+   reinstallStages_str   [MTC_REINSTALL__WIPEDISK      ] = "Reinstall-Wipedisk";
+   reinstallStages_str   [MTC_REINSTALL__WIPEDISK_WAIT ] = "Reinstall-Wipedisk-Wait";
    reinstallStages_str   [MTC_REINSTALL__OFFLINE_WAIT  ] = "Reinstall-Offline-Wait";
    reinstallStages_str   [MTC_REINSTALL__ONLINE_WAIT   ] = "Reinstall-Online-Wait";
    reinstallStages_str   [MTC_REINSTALL__FAIL          ] = "Reinstall-Failure";

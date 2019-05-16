@@ -220,7 +220,17 @@ void daemon_exit ( void );
 #define MTC_TASK_REBOOT_FAIL_RETRY "Reboot Failed, retrying (%d of %d)"
 #define MTC_TASK_REBOOT_ABORT      "Reboot Failed, try again when host is 'online'"
 #define MTC_TASK_RESET_PROG        "Rebooting/Resetting Host"
-#define MTC_TASK_REINSTALL         "Reinstalling Host"
+#define MTC_TASK_REINSTALL         "Reinstalling"
+#define MTC_TASK_REINSTALL_WAIT_NA "Reinstall Wait ; BMC not accessible"
+#define MTC_TASK_REINSTALL_RTRY_PC "Reinstall Retry ; BMC provisioned change during install"
+#define MTC_TASK_REINSTALL_FAIL_CL "Reinstall Failed ; BMC connectivity lost"
+#define MTC_TASK_REINSTALL_FAIL_OL "Reinstall Failed ; timeout waiting for offline"
+#define MTC_TASK_REINSTALL_FAIL_TO "Reinstall Failed ; timeout waiting for online"
+#define MTC_TASK_REINSTALL_FAIL_BA "Reinstall Failed ; timeout waiting BMC access"
+#define MTC_TASK_REINSTALL_FAIL_PO "Reinstall Failed ; could not power on host"
+#define MTC_TASK_REINSTALL_FAIL_NB "Reinstall Failed ; netboot request"
+#define MTC_TASK_REINSTALL_FAIL_PR "Reinstall Failed ; power reset request"
+
 #define MTC_TASK_REINSTALL_FAIL    "Reinstall Failed"
 #define MTC_TASK_REINSTALL_SUCCESS "Reinstall Succeeded"
 #define MTC_TASK_BOOTING           "Booting"
@@ -1008,7 +1018,17 @@ string get_resetStages_str ( mtc_resetStages_enum stage );
 typedef enum
 {
     MTC_REINSTALL__START = 0,
-    MTC_REINSTALL__RESP_WAIT,
+    MTC_REINSTALL__START_WAIT,
+    MTC_REINSTALL__RESTART,
+    MTC_REINSTALL__RESTART_WAIT,
+    MTC_REINSTALL__POWERON,
+    MTC_REINSTALL__POWERON_WAIT,
+    MTC_REINSTALL__NETBOOT,
+    MTC_REINSTALL__NETBOOT_WAIT,
+    MTC_REINSTALL__RESET,
+    MTC_REINSTALL__RESET_WAIT,
+    MTC_REINSTALL__WIPEDISK,
+    MTC_REINSTALL__WIPEDISK_WAIT,
     MTC_REINSTALL__OFFLINE_WAIT,
     MTC_REINSTALL__ONLINE_WAIT,
     MTC_REINSTALL__FAIL,
