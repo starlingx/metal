@@ -407,7 +407,7 @@ int daemon_configure ( void )
     ilog("Failure Thld: %i misses\n", hbsInv.hbs_failure_threshold );
     ilog("Multicast   : %s\n", hbs_config.multicast );
 
-    ilog("Mgmnt Name  : %s\n", hbs_config.mgmnt_iface ); /* TODO: Remove me */
+    ilog("Mgmnt Name  : %s\n", hbs_config.mgmnt_iface );
 
     hbs_config.mgmnt_iface = daemon_get_iface_master ( hbs_config.mgmnt_iface );
     ilog("Mgmnt Master: %s\n", hbs_config.mgmnt_iface );
@@ -866,6 +866,8 @@ int hbs_socket_init ( void )
     /* Setup the pulse messaging interfaces */
     SETUP_PULSE_MESSAGING ( hbsInv.clstr_network_provisioned, rmem_max ) ;
 
+    /* Handle re-init case */
+    close_netlink_socket ( hbs_sock.netlink_sock );
     if (( hbs_sock.netlink_sock = open_netlink_socket ( RTMGRP_LINK )) <= 0 )
     {
         elog ("Failed to create netlink listener socket");
@@ -1556,7 +1558,6 @@ void daemon_service_run ( void )
             else // ( sockets_init == false )
             {
                 string mgmnt_iface = daemon_mgmnt_iface ();
-                hbs_config.mgmnt_iface = (char*)mgmnt_iface.data();
                 if ( mgmnt_iface.empty() || ( mgmnt_iface == "none" ))
                 {
                     ilog_throttled ( wait_log_throttle, 5, "MGMNT wait ...");
@@ -1564,6 +1565,14 @@ void daemon_service_run ( void )
                     continue ;
                 }
 
+                /* update management interface name pointer with the master
+                 * name if different from current config name */
+                if ( hbs_config.mgmnt_iface != mgmnt_iface )
+                {
+                    if ( hbs_config.mgmnt_iface )
+                        free ( hbs_config.mgmnt_iface );
+                    hbs_config.mgmnt_iface = strdup((char*)mgmnt_iface.data());
+                }
                 if ( (rc = daemon_configure ( )) != PASS )
                 {
                     elog ("Daemon service configuration failed (rc:%i)\n", rc );
