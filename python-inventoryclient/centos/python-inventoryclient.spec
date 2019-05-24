@@ -32,12 +32,6 @@ A python client library for Inventory
 
 %define debug_package %{nil}
 
-%package          sdk
-Summary:          SDK files for %{name}
-
-%description      sdk
-Contains SDK files for %{name} package
-
 %prep
 %autosetup -n %{name}-%{version} -S git
 
