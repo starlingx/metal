@@ -331,3 +331,4 @@ openstack-swift-account
 openstack-swift-container
 openstack-swift-proxy
 pci-irq-affinity-agent
+pm-qos-mgr
