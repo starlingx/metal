@@ -234,7 +234,7 @@ int _timer_stop ( struct mtc_timer * mtcTimer_ptr , bool int_safe)
         }
     else if ( int_safe == false )
     {
-        elog ("%s (%s) called with null TID (count:%d)\n",
+        wlog ("%s (%s) called with null TID (count:%d)\n",
                   mtcTimer_ptr->hostname.c_str(),
                   mtcTimer_ptr->service.c_str(),
                   timer_count);

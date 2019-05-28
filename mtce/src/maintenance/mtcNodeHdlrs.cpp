@@ -1971,12 +1971,12 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
         {
             if ( mtcTimer_expired ( node_ptr->mtcTimer ))
             {
-                    rc = ipmi_command_recv ( node_ptr );
-                    if ( rc == RETRY )
-                    {
-                        mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_RETRY_WAIT );
-                        break ;
-                    }
+                rc = ipmi_command_recv ( node_ptr );
+                if ( rc == RETRY )
+                {
+                    mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_RETRY_WAIT );
+                    break ;
+                }
 
                 if ( rc )
                 {
@@ -4011,63 +4011,364 @@ int nodeLinkClass::reset_handler ( struct nodeLinkClass::node * node_ptr )
     return (PASS);
 }
 
-/* Reinstall handler
- * --------------
+/****************************************************************************
+ *
+ * Name       : reinstall_handler
+ *
+ * Purpose    : Perform actions that result in a network boot so that a new
+ *              image is installed on the specified node's boot partition.
+ *
+ * Description: This FSM handles node (re)install with and without
+ *              a provisioned Board Management Controller (BMC).
+ *
+ *              BMC provisioned case: using IPMI commands to BMC ...
+ *
+ *                  - ensure host power is on
+ *                  - force network boot on next reset
+ *                  - issue node reset
+ *
+ *              BMC not provisioned case: using mtce messaging to node ...
+ *
+ *                  - send mtcClient wipedisk command
+ *                       fail reinstall if no ACK
+ *                  - send mtcClient reboot command
+ *
+ *              Both casess:
+ *
+ *                  - wait for offline
+ *                  - wait for online
+ *                  - install complete
+ *
+ * Failure Handling:
+ *
+ *     BMC provisioned cases:
+ *
+ *          BMC won't power on
+ *          BMC ipmi command failure
+ *          BMC connectivity lost mid-FSM.
+ *          BMC access timeout
+ *
+ *     BMC not provisioned cases:
+ *
+ *          no  wipedisk ACK\
+ *
+ *     failure to go offline after resaet/reboot
+ *     timeout waiting for online after reset/reboot
+ *
  * Manage reinstall operations for a locked-disabled host */
 int nodeLinkClass::reinstall_handler ( struct nodeLinkClass::node * node_ptr )
 {
+    /* Handle 'lost BMC connectivity during the install' case */
+    if (( node_ptr->bm_provisioned == true ) &&
+        ( node_ptr->bm_accessible == false ))
+    {
+        if (( node_ptr->reinstallStage != MTC_REINSTALL__START )       &&
+            ( node_ptr->reinstallStage != MTC_REINSTALL__START_WAIT )  &&
+            ( node_ptr->reinstallStage != MTC_REINSTALL__FAIL )        &&
+            ( node_ptr->reinstallStage != MTC_REINSTALL__MSG_DISPLAY ) &&
+            ( node_ptr->reinstallStage != MTC_REINSTALL__DONE ))
+        {
+            mtcTimer_reset ( node_ptr->mtcTimer );
+
+            elog ("%s Reinstall lost bmc connection",
+                      node_ptr->hostname.c_str());
+
+            mtcInvApi_update_task ( node_ptr, MTC_TASK_REINSTALL_FAIL_CL );
+            reinstallStageChange ( node_ptr , MTC_REINSTALL__FAIL );
+        }
+
+        /* fall into switch to ...
+         *  - handle failure
+         *  - finish the FSM
+         */
+    }
     switch ( node_ptr->reinstallStage )
     {
         case MTC_REINSTALL__START:
         {
-            int host_reinstall_wait_timer = node_ptr->mtcalive_timeout + node_reinstall_timeout ;
-            node_ptr->retries = host_reinstall_wait_timer / MTC_REINSTALL_WAIT_TIMER ;
+            LOAD_NODETYPE_TIMERS ;
+            mtcInvApi_update_task ( node_ptr, MTC_TASK_REINSTALL );
+            node_ptr->retries = ( node_ptr->mtcalive_timeout +
+                                  this->node_reinstall_timeout) /
+                                  MTC_REINSTALL_WAIT_TIMER ;
+            mtcTimer_reset ( node_ptr->mtcTimer );
+            if ( node_ptr->bm_provisioned == true )
+            {
+                if ( node_ptr->bm_accessible == false )
+                {
+                    /* Handle 'lost BMC connectivity during the install' case */
+                    wlog ("%s Reinstall wait for BMC access ; %d second timeout",
+                              node_ptr->hostname.c_str(),
+                              MTC_REINSTALL_TIMEOUT_BMC_ACC);
 
-            start_offline_handler ( node_ptr );
+                    mtcInvApi_update_task ( node_ptr, MTC_TASK_REINSTALL_WAIT_NA );
+                    mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_REINSTALL_TIMEOUT_BMC_ACC );
+                    reinstallStageChange ( node_ptr, MTC_REINSTALL__START_WAIT );
+                }
+                else if ( node_ptr->power_on == false )
+                {
+                    /* need to power on node */
+                    wlog ("%s Reinstall power-on required", node_ptr->hostname.c_str());
+                    reinstallStageChange ( node_ptr, MTC_REINSTALL__POWERON );
+                }
+                else
+                {
+                    /* power is on so issue net boot command */
+                    ilog ("%s Reinstall power is on", node_ptr->hostname.c_str());
+                    reinstallStageChange ( node_ptr , MTC_REINSTALL__NETBOOT );
+                }
+            }
+            else
+            {
+                /* If the BMC is not provisioned coming into this handler
+                 * then service the install by mtce commands by starting
+                 * the install by wipedisk. */
+                reinstallStageChange ( node_ptr, MTC_REINSTALL__WIPEDISK );
+            }
+            break ;
+        }
+        /* BMC provisioned but bm_handler has not reported accessability yet.
+         * Need to wait ... */
+        case MTC_REINSTALL__START_WAIT:
+        {
+            if ( node_ptr->bm_provisioned == true )
+            {
+                if ( node_ptr->bm_accessible == false )
+                {
+                    if ( mtcTimer_expired ( node_ptr->mtcTimer ) )
+                    {
+                        /* wait period has timed out ; fail the install */
+                        elog ("%s %s", node_ptr->hostname.c_str(), MTC_TASK_REINSTALL_FAIL_BA);
+                        mtcInvApi_update_task ( node_ptr, MTC_TASK_REINSTALL_FAIL_BA );
+                        reinstallStageChange ( node_ptr , MTC_REINSTALL__FAIL );
+                    }
+                    else
+                    {
+                        ; /* ... wait longer */
+                    }
+                }
+                else
+                {
+                    /* the BMC is not accessible to start the install over */
+                    plog ("%s BMC access established ; starting install",
+                              node_ptr->hostname.c_str());
+                    mtcTimer_reset ( node_ptr->mtcTimer );
+                    reinstallStageChange ( node_ptr , MTC_REINSTALL__START );
+                }
+            }
+            else
+            {
+                /*
+                 * Handle case where BMC gets deprovisioned
+                 * while waiting for accessibility.
+                 *
+                 * Restart the install in that case after a monitored
+                 * wait period for reprovision.
+                 *
+                 * Has the side effect of allowing the admin to
+                 * reprovision the BMC during a re-install.
+                 */
 
+                mtcTimer_reset ( node_ptr->mtcTimer );
+                wlog ("%s %s", node_ptr->hostname.c_str(), MTC_TASK_REINSTALL_RTRY_PC );
+
+                mtcInvApi_update_task ( node_ptr, MTC_TASK_REINSTALL_RTRY_PC );
+                mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_MINS_5 );
+                reinstallStageChange ( node_ptr, MTC_REINSTALL__RESTART_WAIT );
+            }
+            break ;
+        }
+        case MTC_REINSTALL__RESTART_WAIT:
+        {
+            if ( mtcTimer_expired ( node_ptr->mtcTimer ) )
+            {
+                reinstallStageChange ( node_ptr , MTC_REINSTALL__START );
+            }
+            else if ( node_ptr->bm_provisioned == true )
+            {
+                mtcTimer_reset ( node_ptr->mtcTimer );
+                wlog ("%s %s", node_ptr->hostname.c_str(), MTC_TASK_REINSTALL_RTRY_PC );
+                reinstallStageChange ( node_ptr , MTC_REINSTALL__START );
+            }
+            else
+            {
+                ; /* ... wait longer */
+            }
+            break ;
+        }
+        case MTC_REINSTALL__POWERON:
+        {
+            powerStageChange ( node_ptr , MTC_POWERON__REQ_SEND );
+            reinstallStageChange ( node_ptr , MTC_REINSTALL__POWERON_WAIT );
+            break ;
+        }
+        case MTC_REINSTALL__POWERON_WAIT:
+        {
+            /* The power handler manages timeout */
+            if ( node_ptr->powerStage == MTC_POWER__DONE )
+            {
+                if ( node_ptr->power_on == true )
+                {
+                    if ( node_ptr->task != MTC_TASK_REINSTALL )
+                        mtcInvApi_update_task ( node_ptr, MTC_TASK_REINSTALL );
+
+                    mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_SECS_5 );
+                    reinstallStageChange ( node_ptr , MTC_REINSTALL__NETBOOT );
+                }
+                else
+                {
+                    elog ("%s %s", node_ptr->hostname.c_str(), MTC_TASK_REINSTALL_FAIL_PO);
+
+                    mtcInvApi_update_task ( node_ptr, MTC_TASK_REINSTALL_FAIL_PO );
+                    reinstallStageChange ( node_ptr , MTC_REINSTALL__FAIL );
+                }
+            }
+            else
+            {
+                /* run the power handler till the host's power is on or
+                 * the power-on handler times out */
+                power_handler ( node_ptr );
+            }
+            break ;
+        }
+        case MTC_REINSTALL__NETBOOT:
+        {
+            /* Issue netboot command after timed delay */
+            if ( mtcTimer_expired ( node_ptr->mtcTimer ) )
+            {
+                int rc = ipmi_command_send ( node_ptr, IPMITOOL_THREAD_CMD__BOOTDEV_PXE );
+                if ( rc )
+                {
+                    elog ("%s Reinstall netboot request failed (rc:%d)",
+                              node_ptr->hostname.c_str(), rc );
+                    mtcInvApi_update_task ( node_ptr, MTC_TASK_REINSTALL_FAIL_NB );
+                    reinstallStageChange ( node_ptr, MTC_REINSTALL__FAIL );
+                }
+                else
+                {
+                    ilog ("%s Reinstall netboot request sent", node_ptr->hostname.c_str() );
+                    mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_SECS_5 );
+                    reinstallStageChange ( node_ptr, MTC_REINSTALL__NETBOOT_WAIT );
+                }
+            }
+            break ;
+        }
+        case MTC_REINSTALL__NETBOOT_WAIT:
+        {
+            if ( mtcTimer_expired ( node_ptr->mtcTimer ) )
+            {
+                int rc = ipmi_command_recv ( node_ptr );
+                if ( rc == PASS )
+                {
+                    ilog ("%s Reinstall netboot request completed", node_ptr->hostname.c_str());
+                    reinstallStageChange ( node_ptr, MTC_REINSTALL__RESET);
+                }
+                else if ( rc == RETRY )
+                {
+                    wlog ("%s Reinstall netboot receive retry", node_ptr->hostname.c_str());
+                    mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_SECS_5 );
+                }
+                else
+                {
+                    elog ("%s Reinstall netboot receive failed (rc:%d)",
+                              node_ptr->hostname.c_str(), rc );
+                    mtcInvApi_update_task ( node_ptr, MTC_TASK_REINSTALL_FAIL_NB );
+                    reinstallStageChange ( node_ptr, MTC_REINSTALL__FAIL );
+                }
+            }
+            break ;
+        }
+        case MTC_REINSTALL__RESET:
+        {
+            int rc = ipmi_command_send ( node_ptr, IPMITOOL_THREAD_CMD__POWER_RESET );
+            if ( rc )
+            {
+                elog ("%s Reinstall reset request failed (rc:%d)",
+                          node_ptr->hostname.c_str(), rc );
+                mtcInvApi_update_task ( node_ptr, MTC_TASK_REINSTALL_FAIL_PR );
+                reinstallStageChange ( node_ptr, MTC_REINSTALL__FAIL );
+            }
+            else
+            {
+                ilog ("%s Reinstall reset request sent", node_ptr->hostname.c_str());
+                mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_POWER_ACTION_RETRY_DELAY );
+                reinstallStageChange ( node_ptr, MTC_REINSTALL__RESET_WAIT );
+            }
+            break ;
+        }
+        case MTC_REINSTALL__RESET_WAIT:
+        {
+            if ( mtcTimer_expired ( node_ptr->mtcTimer ) )
+            {
+                int rc = ipmi_command_recv ( node_ptr );
+                if ( rc == PASS )
+                {
+                    ilog ("%s Reinstall reset request completed", node_ptr->hostname.c_str());
+
+                    start_offline_handler ( node_ptr );
+
+                    /* Wait for the host to go offline */
+                    mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_RESET_TO_OFFLINE_TIMEOUT );
+                    reinstallStageChange ( node_ptr, MTC_REINSTALL__OFFLINE_WAIT);
+                }
+                else if ( rc == RETRY )
+                {
+                    wlog ("%s Reinstall reset receive retry", node_ptr->hostname.c_str());
+                    mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_SECS_5 );
+                }
+                else
+                {
+                    elog ("%s Reinstall reset receive failed ; rc:%d",
+                              node_ptr->hostname.c_str(), rc );
+                    mtcInvApi_update_task ( node_ptr, MTC_TASK_REINSTALL_FAIL_PR );
+                    reinstallStageChange ( node_ptr, MTC_REINSTALL__FAIL );
+                }
+            }
+            break ;
+        }
+        /* BMC not provisioned case */
+        case MTC_REINSTALL__WIPEDISK:
+        {
             node_ptr->cmdReq = MTC_CMD_WIPEDISK ;
 
-            plog ("%s Administrative Reinstall Requested\n", node_ptr->hostname.c_str());
+            plog ("%s Reinstall wipedisk requested", node_ptr->hostname.c_str());
             if ( send_mtc_cmd ( node_ptr->hostname, MTC_CMD_WIPEDISK, MGMNT_INTERFACE ) != PASS )
             {
-                elog ("Failed to send 'reinstall' request to %s\n", node_ptr->hostname.c_str());
+                elog ("%s Reinstall request send failed", node_ptr->hostname.c_str());
+                mtcInvApi_update_task ( node_ptr, MTC_TASK_REINSTALL_FAIL );
                 reinstallStageChange ( node_ptr , MTC_REINSTALL__FAIL );
             }
             else
             {
                 node_ptr->cmdRsp = MTC_CMD_NONE ;
 
-                if ( node_ptr->mtcTimer.tid )
-                {
-                    mtcTimer_stop ( node_ptr->mtcTimer );
-                }
-
+                mtcTimer_reset ( node_ptr->mtcTimer );
                 mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_CMD_RSP_TIMEOUT );
 
-                ilog ("%s waiting for REINSTALL ACK \n", node_ptr->hostname.c_str() );
-
-                reinstallStageChange ( node_ptr , MTC_REINSTALL__RESP_WAIT );
+                reinstallStageChange ( node_ptr , MTC_REINSTALL__WIPEDISK_WAIT );
             }
             break ;
         }
-        case MTC_REINSTALL__RESP_WAIT:
+        case MTC_REINSTALL__WIPEDISK_WAIT:
         {
             if ( node_ptr->cmdRsp != MTC_CMD_WIPEDISK )
             {
                 if ( node_ptr->mtcTimer.ring == true )
                 {
-                    elog ("%s REINSTALL ACK Timeout\n",
+                    elog ("%s Reinstall wipedisk ACK timeout",
                         node_ptr->hostname.c_str());
-
+                    mtcInvApi_update_task ( node_ptr, MTC_TASK_REINSTALL_FAIL );
                     reinstallStageChange ( node_ptr , MTC_REINSTALL__FAIL );
                 }
             }
             else
             {
                 /* declare successful reinstall request */
-                plog ("%s REINSTALL Request Succeeded\n", node_ptr->hostname.c_str());
+                plog ("%s Reinstall request succeeded", node_ptr->hostname.c_str());
 
-                mtcTimer_stop ( node_ptr->mtcTimer );
+                mtcTimer_reset ( node_ptr->mtcTimer );
+
+                start_offline_handler ( node_ptr );
 
                 /* We need to wait for the host to go offline */
                 mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_RESET_TO_OFFLINE_TIMEOUT );
@@ -4085,49 +4386,57 @@ int nodeLinkClass::reinstall_handler ( struct nodeLinkClass::node * node_ptr )
 
                 clear_service_readies ( node_ptr );
 
-                ilog ("%s Reinstall Progress: host is offline ; waiting for host to come back\n", node_ptr->hostname.c_str());
+                ilog ("%s Reinstall in-progress ; waiting for 'online' state",
+                          node_ptr->hostname.c_str());
 
                 mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_REINSTALL_WAIT_TIMER );
                 reinstallStageChange ( node_ptr , MTC_REINSTALL__ONLINE_WAIT );
             }
-            else if ( node_ptr->mtcTimer.ring == true )
+            else if ( mtcTimer_expired (  node_ptr->mtcTimer ) )
             {
-                elog ("%s offline timeout - reinstall failed\n", node_ptr->hostname.c_str());
+                elog ("%s failed to go offline ; timeout", node_ptr->hostname.c_str());
+                stop_offline_handler ( node_ptr );
+                mtcInvApi_update_task ( node_ptr, MTC_TASK_REINSTALL_FAIL_OL );
                 reinstallStageChange ( node_ptr , MTC_REINSTALL__FAIL );
+            }
+            else
+            {
+                ; // wait longer ...
             }
             break ;
         }
         case MTC_REINSTALL__ONLINE_WAIT:
         {
-            if ( node_ptr->mtcTimer.ring == true )
+            if ( mtcTimer_expired ( node_ptr->mtcTimer ) )
             {
-                if ( node_ptr->availStatus == MTC_AVAIL_STATUS__ONLINE )
+                if ( --node_ptr->retries < 0 )
                 {
-                    mtcInvApi_update_task ( node_ptr, MTC_TASK_REINSTALL_SUCCESS);
-                    mtcTimer_stop ( node_ptr->mtcTimer );
-                    mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_TASK_UPDATE_DELAY );
-                    reinstallStageChange ( node_ptr , MTC_REINSTALL__MSG_DISPLAY );
-                    mtcAlarm_log ( node_ptr->hostname, MTC_LOG_ID__STATUSCHANGE_REINSTALL_COMPLETE );
+                    elog ("%s %s", node_ptr->hostname.c_str(), MTC_TASK_REINSTALL_FAIL_TO);
+                    mtcInvApi_update_task ( node_ptr, MTC_TASK_REINSTALL_FAIL_TO );
+                    reinstallStageChange ( node_ptr , MTC_REINSTALL__FAIL );
                 }
                 else
                 {
-                    if ( --node_ptr->retries < 0 )
-                    {
-                        elog ("%s online timeout - reinstall failed\n", node_ptr->hostname.c_str());
-                        reinstallStageChange ( node_ptr , MTC_REINSTALL__FAIL );
-                    }
-                    else
-                    {
-                        mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_REINSTALL_WAIT_TIMER );
-                    }
+                    mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_REINSTALL_WAIT_TIMER );
                 }
+            }
+            else if ( node_ptr->availStatus == MTC_AVAIL_STATUS__ONLINE )
+            {
+                mtcInvApi_update_task ( node_ptr, MTC_TASK_REINSTALL_SUCCESS);
+                mtcTimer_reset ( node_ptr->mtcTimer );
+                mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_TASK_UPDATE_DELAY );
+                reinstallStageChange ( node_ptr , MTC_REINSTALL__MSG_DISPLAY );
+                mtcAlarm_log ( node_ptr->hostname, MTC_LOG_ID__STATUSCHANGE_REINSTALL_COMPLETE );
+            }
+            else
+            {
+                ; // wait longer ...
             }
             break;
         }
         case MTC_REINSTALL__FAIL:
         {
-            mtcInvApi_update_task ( node_ptr, MTC_TASK_REINSTALL_FAIL);
-            mtcTimer_stop ( node_ptr->mtcTimer );
+            mtcTimer_reset ( node_ptr->mtcTimer );
             mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_TASK_UPDATE_DELAY );
             reinstallStageChange ( node_ptr , MTC_REINSTALL__MSG_DISPLAY );
             mtcAlarm_log ( node_ptr->hostname, MTC_LOG_ID__STATUSCHANGE_REINSTALL_FAILED );
@@ -4135,22 +4444,32 @@ int nodeLinkClass::reinstall_handler ( struct nodeLinkClass::node * node_ptr )
         }
         case MTC_REINSTALL__MSG_DISPLAY:
         {
-            if ( node_ptr->mtcTimer.ring == true )
+            if ( mtcTimer_expired ( node_ptr->mtcTimer ) )
             {
-                node_ptr->mtcTimer.ring = false ;
                 reinstallStageChange ( node_ptr , MTC_REINSTALL__DONE );
+            }
+            else
+            {
+                ; // wait longer ...
             }
             break ;
         }
         case MTC_REINSTALL__DONE:
         default:
         {
-            plog ("%s Reinstall Completed\n",  node_ptr->hostname.c_str());
+            if ( node_ptr->task == MTC_TASK_REINSTALL_SUCCESS )
+            {
+                plog ("%s Reinstall completed successfully",
+                          node_ptr->hostname.c_str());
+            }
+            else
+            {
+                plog ("%s Reinstall complete ; operation failure",
+                          node_ptr->hostname.c_str());
+            }
 
             /* Default timeout values */
             LOAD_NODETYPE_TIMERS ;
-
-            mtcTimer_stop ( node_ptr->mtcTimer );
 
             adminActionChange ( node_ptr , MTC_ADMIN_ACTION__NONE );
 
@@ -4583,6 +4902,7 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
                         }
                         else
                         {
+                            node_ptr->power_on = false ;
                             ilog ("%s power is off ; powering on ...\n", node_ptr->hostname.c_str() );
                             powerStageChange ( node_ptr , MTC_POWERON__REQ_SEND );
                         }
@@ -4623,7 +4943,7 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
             }
             else
             {
-                    rc = ipmi_command_send ( node_ptr, IPMITOOL_THREAD_CMD__POWER_ON );
+                rc = ipmi_command_send ( node_ptr, IPMITOOL_THREAD_CMD__POWER_ON );
                 if ( rc )
                 {
                     wlog ("%s Power-On request failed (%d)\n",
@@ -4918,14 +5238,14 @@ int nodeLinkClass::powercycle_handler ( struct nodeLinkClass::node * node_ptr )
                         {
                             bool on = false ;
 
-                                ilog ("%s Power Status: %s\n",
-                                           node_ptr->hostname.c_str(),
-                                           node_ptr->ipmitool_thread_info.data.c_str());
+                            ilog ("%s Power Status: %s\n",
+                                      node_ptr->hostname.c_str(),
+                                      node_ptr->ipmitool_thread_info.data.c_str());
 
-                                if ( node_ptr->ipmitool_thread_info.data.find ( IPMITOOL_POWER_ON_STATUS ) != std::string::npos )
-                                {
-                                    on = true ;
-                                }
+                            if ( node_ptr->ipmitool_thread_info.data.find ( IPMITOOL_POWER_ON_STATUS ) != std::string::npos )
+                            {
+                                on = true ;
+                            }
                             if ( rc == PASS )
                             {
                                 /* maintain current power state */
@@ -6033,6 +6353,12 @@ int nodeLinkClass::bm_handler ( struct nodeLinkClass::node * node_ptr )
                                                      node_ptr->ipmitool_thread_info.data.c_str());
                                     plog ("%s bmc is accessible\n", node_ptr->hostname.c_str());
 
+                                    /* set host power state ; on or off */
+                                    if ( node_ptr->ipmitool_thread_info.data.find (IPMITOOL_POWER_ON_STATUS) != std::string::npos )
+                                        node_ptr->power_on = true ;
+                                    else
+                                        node_ptr->power_on = false ;
+
                                     if ( node_ptr->ipmitool_thread_info.data.find (IPMITOOL_POWER_OFF_STATUS) != std::string::npos )
                                     {
                                         if ( node_ptr->adminState == MTC_ADMIN_STATE__LOCKED )
@@ -6333,7 +6659,6 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
                  }
                  node_ptr->ipmitool_thread_ctrl.done = true ;
             }
-
 #endif
 
             /* Audits for this controller host only */

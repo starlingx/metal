@@ -130,6 +130,11 @@ int nodeLinkClass::ipmi_command_send ( struct nodeLinkClass::node * node_ptr, in
         {
             want_fit = true ;
         }
+        else if (( command == IPMITOOL_THREAD_CMD__BOOTDEV_PXE ) &&
+                 ( daemon_want_fit ( fit, node_ptr->hostname, "netboot_pxe" ) == true ))
+        {
+            want_fit = true ;
+        }
 
         if ( want_fit == true )
         {

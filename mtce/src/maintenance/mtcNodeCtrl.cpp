@@ -1615,31 +1615,6 @@ extern int mtcJsonInv_testhead ( void );
 int daemon_run_testhead ( void )
 {
     int rc    = PASS;
-
-    mtc_config.testmode = true ;
-
-    nodeLinkClass * mtcInv_testhead_ptr = new nodeLinkClass ;
-
-    printf  ("\n\n");
-    printf  (TESTHEAD_BAR);
-
-    printf  ("| Node Class Test Head - Private and Public Member Functions\n");
-    printf  (TESTHEAD_BAR);
-    for ( int i = 0 ; i < 11 ; i++ )
-    {
- 	    if ( mtcInv_testhead_ptr->testhead ( i+1 ) )
-        {
-            FAILED_STR ;
-            rc = FAIL ;
-        }
-        else
-           PASSED ;
-    }
-    free(mtcInv_testhead_ptr);
-
-    printf  (TESTHEAD_BAR);
-    printf  ("| Maintenance Timer Test Head\n");
-    printf  (TESTHEAD_BAR);
     return (rc);
 }
 

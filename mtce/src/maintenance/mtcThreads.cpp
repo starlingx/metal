@@ -79,6 +79,7 @@ void * mtcThread_ipmitool ( void * arg )
 
         switch ( info_ptr->command )
         {
+            /* control commands */
             case IPMITOOL_THREAD_CMD__POWER_RESET:
             {
                 command  = IPMITOOL_POWER_RESET_CMD  ;
@@ -103,6 +104,14 @@ void * mtcThread_ipmitool ( void * arg )
                 response = IPMITOOL_POWER_CYCLE_RESP ;
                 break ;
             }
+            case IPMITOOL_THREAD_CMD__BOOTDEV_PXE:
+            {
+                command  = IPMITOOL_BOOTDEV_PXE_CMD  ;
+                response = IPMITOOL_BOOTDEV_PXE_RESP ;
+                break ;
+            }
+
+            /* Status commands */
             case IPMITOOL_THREAD_CMD__POWER_STATUS:
             {
                 command = IPMITOOL_POWER_STATUS_CMD ;
@@ -118,6 +127,7 @@ void * mtcThread_ipmitool ( void * arg )
                 command = IPMITOOL_MC_INFO_CMD ;
                 break ;
             }
+
             default:
             {
                 rc = info_ptr->status = FAIL_BAD_CASE ;
@@ -222,9 +232,11 @@ void * mtcThread_ipmitool ( void * arg )
                 else if ((( command == IPMITOOL_POWER_RESET_CMD ) ||
                          (  command == IPMITOOL_POWER_OFF_CMD ) ||
                          (  command == IPMITOOL_POWER_ON_CMD ) ||
-                         (  command == IPMITOOL_POWER_CYCLE_CMD )) &&
+                         (  command == IPMITOOL_POWER_CYCLE_CMD ) ||
+                         (  command == IPMITOOL_BOOTDEV_PXE_CMD)) &&
                          ( daemon_is_file_present ( MTC_CMD_FIT__POWER_CMD )))
                 {
+                    slog("%s FIT Bypass power or bootdev command", info_ptr->hostname.c_str());
                     bypass_ipmitool_request = true ;
                     rc = PASS ;
                 }

@@ -294,37 +294,16 @@ int nodeLinkClass::fsm ( struct nodeLinkClass::node * node_ptr )
     {
         flog ("%s -> OOS Action Check\n", node_ptr->hostname.c_str());
 
-        /* TEMPORARY: To allow reset of unlocked host for fault insertion. */
-        if ( node_ptr->adminAction == MTC_ADMIN_ACTION__RESET )
-        {
-            wlog ("%s Allowing Reset of unlocked host for FIT\n", node_ptr->hostname.c_str());
+        elog ("%s Administrative '%s' Operation Rejected\n",
+              node_ptr->hostname.c_str(),
+              get_adminAction_str (node_ptr->adminAction) );
 
-            if ( node_ptr->hostname.compare(nodeLinkClass::my_hostname))
-            {
-                nodeLinkClass::reset_handler ( node_ptr );
-            }
-            else
-            {
-                wlog ("%s Cowardly avoiding reset of self\n", node_ptr->hostname.c_str());
-                adminActionChange ( node_ptr , MTC_ADMIN_ACTION__NONE );
+        elog ("%s Cannot perform out-of-service action against in-service host\n",
+              node_ptr->hostname.c_str());
+        adminActionChange ( node_ptr , MTC_ADMIN_ACTION__NONE );
 
-                /* Clear the UI task since we are not really resetting */
-                mtcInvApi_update_task ( node_ptr, "" );
-            }
-        }
-        else
-        {
-            elog ("%s Administrative '%s' Operation Rejected\n",
-                  node_ptr->hostname.c_str(),
-                  get_adminAction_str (node_ptr->adminAction) );
-
-            elog ("%s Cannot perform out-of-service action against in-service host\n",
-                  node_ptr->hostname.c_str());
-            adminActionChange ( node_ptr , MTC_ADMIN_ACTION__NONE );
-
-            /* Clear the UI task since we are not really resetting */
-            mtcInvApi_update_task ( node_ptr, "" );
-        }
+        /* Clear the UI task since we are not really taking this action */
+        mtcInvApi_update_task ( node_ptr, "" );
     }
 
     /****************************************************************************
