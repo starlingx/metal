@@ -152,8 +152,12 @@ storageconfig
 storage-topology
 task-cloud-controller
 tgt
+nfv
+nfv-common
 nfv-plugins
 nfv-vim
+nfv-tools
+nfv-client
 vm-topology
 lighttpd-fastcgi
 lighttpd-mod_geoip

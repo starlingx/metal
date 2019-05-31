@@ -269,10 +269,12 @@ sm-common
 sm-db
 sm-tools
 storage-topology
+nfv
 nfv-common
 nfv-plugins
 nfv-vim
 nfv-tools
+nfv-client
 vm-topology
 python-networking-odl
 config-gate-worker
