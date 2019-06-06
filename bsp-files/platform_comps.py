@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2018 Wind River Systems, Inc.
+Copyright (c) 2018-2019 Wind River Systems, Inc.
 
 SPDX-License-Identifier: Apache-2.0
 
@@ -15,7 +15,7 @@ import xml.etree.ElementTree as ElementTree
 
 
 def usage():
-    print("Usage: %s --groups <groups.xml> --pkgdir <pkgdir>"
+    print("Usage: %s --groups <groups.xml> --pkglist <pkglist>"
           % os.path.basename(sys.argv[0]))
     exit(1)
 
@@ -88,29 +88,36 @@ def main():
     try:
         opts, remainder = getopt.getopt(sys.argv[1:],
                                         '',
-                                        ['pkgdir=',
-                                         'groups='])
+                                        ['pkgdir=',  # Deprecated
+                                         'groups=',
+                                         'pkglist='])
     except getopt.GetoptError:
         usage()
 
-    pkgdir = None
     groups_file = None
+    pkglist = []
 
     # Filters are colocated with this script
     filter_dir = os.path.dirname(sys.argv[0])
 
     for opt, arg in opts:
-        if opt == "--pkgdir":
-            pkgdir = arg
-        elif opt == "--groups":
+        if opt == "--groups":
             groups_file = arg
+        elif opt == "--pkglist":
+            pkglist.append(arg)
 
-    if pkgdir is None or groups_file is None:
+    if groups_file is None:
         usage()
 
+    if len(pkglist) == 0:
+        # Use default files
+        pkglist.append(os.path.join(os.environ['MY_REPO'],
+                       'build-tools/build_iso/minimal_rpm_list.txt'))
+        pkglist.append(os.path.join(os.environ['MY_WORKSPACE'],
+                       'std/image.inc'))
+
     # Get the pkglist
-    cmd = "find %s -name '*.rpm' \
-    | xargs rpm -qp --queryformat '%%{NAME}\n'" % pkgdir
+    cmd = "sed 's/#.*//' %s" % ' '.join(pkglist)
     rpmlist = subprocess.check_output(cmd, shell=True).split()
 
     tree = ElementTree.parse(groups_file)

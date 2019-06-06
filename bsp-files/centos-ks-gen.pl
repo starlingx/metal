@@ -37,7 +37,7 @@ system("mkdir -p ${output_dir}");
 
 # Write USB image files
 write_config_file("controller",
-                  "${output_dir}/controller_ks.cfg", "filter_out_from_controller",
+                  "${output_dir}/controller_ks.cfg",
                   "pre_common_head.cfg",
                   "pre_pkglist.cfg",
                   "pre_disk_setup_common.cfg",
@@ -48,7 +48,7 @@ write_config_file("controller",
                   "post_lvm_pv_on_rootfs.cfg",
                   "post_usb_controller.cfg");
 write_config_file("controller-worker",
-                  "${output_dir}/smallsystem_ks.cfg", "filter_out_from_smallsystem",
+                  "${output_dir}/smallsystem_ks.cfg",
                   "pre_common_head.cfg",
                   "pre_pkglist.cfg",
                   "pre_disk_setup_common.cfg",
@@ -60,7 +60,7 @@ write_config_file("controller-worker",
                   "post_system_aio.cfg",
                   "post_usb_controller.cfg");
 write_config_file("controller-worker-lowlatency",
-                  "${output_dir}/smallsystem_lowlatency_ks.cfg", "filter_out_from_smallsystem_lowlatency",
+                  "${output_dir}/smallsystem_lowlatency_ks.cfg",
                   "pre_common_head.cfg",
                   "pre_pkglist_lowlatency.cfg",
                   "pre_disk_setup_common.cfg",
@@ -76,7 +76,7 @@ system("mkdir -p ${pxeboot_output_dir}");
 
 # Write PXE boot files
 write_config_file("controller",
-                  "${pxeboot_output_dir}/pxeboot_controller.cfg", "filter_out_from_controller",
+                  "${pxeboot_output_dir}/pxeboot_controller.cfg",
                   "pre_common_head.cfg",
                   "pre_pkglist.cfg",
                   "pre_disk_setup_common.cfg",
@@ -87,7 +87,7 @@ write_config_file("controller",
                   "post_lvm_pv_on_rootfs.cfg",
                   "post_pxeboot_controller.cfg");
 write_config_file("controller-worker",
-                  "${pxeboot_output_dir}/pxeboot_smallsystem.cfg", "filter_out_from_smallsystem",
+                  "${pxeboot_output_dir}/pxeboot_smallsystem.cfg",
                   "pre_common_head.cfg",
                   "pre_pkglist.cfg",
                   "pre_disk_setup_common.cfg",
@@ -99,7 +99,7 @@ write_config_file("controller-worker",
                   "post_system_aio.cfg",
                   "post_pxeboot_controller.cfg");
 write_config_file("controller-worker-lowlatency",
-                  "${pxeboot_output_dir}/pxeboot_smallsystem_lowlatency.cfg", "filter_out_from_smallsystem_lowlatency",
+                  "${pxeboot_output_dir}/pxeboot_smallsystem_lowlatency.cfg",
                   "pre_common_head.cfg",
                   "pre_pkglist_lowlatency.cfg",
                   "pre_disk_setup_common.cfg",
@@ -114,7 +114,7 @@ write_config_file("controller-worker-lowlatency",
 
 # Write same net files
 write_config_file("controller",
-                  "${output_dir}/net_controller_ks.cfg", "filter_out_from_controller",
+                  "${output_dir}/net_controller_ks.cfg",
                   "pre_common_head.cfg",
                   "pre_net_common.cfg",
                   "pre_pkglist.cfg",
@@ -127,7 +127,7 @@ write_config_file("controller",
                   "post_net_controller.cfg",
                   "post_net_common.cfg");
 write_config_file("controller-worker",
-                  "${output_dir}/net_smallsystem_ks.cfg", "filter_out_from_smallsystem",
+                  "${output_dir}/net_smallsystem_ks.cfg",
                   "pre_common_head.cfg",
                   "pre_net_common.cfg",
                   "pre_pkglist.cfg",
@@ -141,7 +141,7 @@ write_config_file("controller-worker",
                   "post_net_controller.cfg",
                   "post_net_common.cfg");
 write_config_file("controller-worker-lowlatency",
-                  "${output_dir}/net_smallsystem_lowlatency_ks.cfg", "filter_out_from_smallsystem_lowlatency",
+                  "${output_dir}/net_smallsystem_lowlatency_ks.cfg",
                   "pre_common_head.cfg",
                   "pre_net_common.cfg",
                   "pre_pkglist_lowlatency.cfg",
@@ -155,7 +155,7 @@ write_config_file("controller-worker-lowlatency",
                   "post_net_controller.cfg",
                   "post_net_common.cfg");
 write_config_file("worker",
-                  "${output_dir}/net_worker_ks.cfg", "filter_out_from_worker",
+                  "${output_dir}/net_worker_ks.cfg",
                   "pre_common_head.cfg",
                   "pre_net_common.cfg",
                   "pre_pkglist.cfg",
@@ -167,7 +167,7 @@ write_config_file("worker",
                   "post_lvm_pv_on_rootfs.cfg",
                   "post_net_common.cfg");
 write_config_file("worker-lowlatency",
-                  "${output_dir}/net_worker_lowlatency_ks.cfg", "filter_out_from_worker_lowlatency",
+                  "${output_dir}/net_worker_lowlatency_ks.cfg",
                   "pre_common_head.cfg",
                   "pre_net_common.cfg",
                   "pre_pkglist_lowlatency.cfg",
@@ -179,7 +179,7 @@ write_config_file("worker-lowlatency",
                   "post_lvm_pv_on_rootfs.cfg",
                   "post_net_common.cfg");
 write_config_file("storage",
-                  "${output_dir}/net_storage_ks.cfg", "filter_out_from_storage",
+                  "${output_dir}/net_storage_ks.cfg",
                   "pre_common_head.cfg",
                   "pre_net_common.cfg",
                   "pre_pkglist.cfg",
@@ -200,7 +200,7 @@ foreach $server (keys %boot_servers)
     $BOOT_SERVER = $boot_servers{$server};
 
     write_config_file("controller",
-                      "${extra_output_dir}/${server}_controller.cfg", "filter_out_from_controller",
+                      "${extra_output_dir}/${server}_controller.cfg",
                       "pre_common_head.cfg",
                       "pre_pkglist.cfg",
                       "pre_disk_setup_common.cfg",
@@ -211,7 +211,7 @@ foreach $server (keys %boot_servers)
                       "post_lvm_pv_on_rootfs.cfg",
                       "post_yow_controller.cfg");
     write_config_file("controller-worker",
-                      "${extra_output_dir}/${server}_smallsystem.cfg", "filter_out_from_smallsystem",
+                      "${extra_output_dir}/${server}_smallsystem.cfg",
                       "pre_common_head.cfg",
                       "pre_pkglist.cfg",
                       "pre_disk_setup_common.cfg",
@@ -223,7 +223,7 @@ foreach $server (keys %boot_servers)
                       "post_system_aio.cfg",
                       "post_yow_controller.cfg");
     write_config_file("controller-worker-lowlatency",
-                      "${extra_output_dir}/${server}_smallsystem_lowlatency.cfg", "filter_out_from_smallsystem_lowlatency",
+                      "${extra_output_dir}/${server}_smallsystem_lowlatency.cfg",
                       "pre_common_head.cfg",
                       "pre_pkglist_lowlatency.cfg",
                       "pre_disk_setup_common.cfg",
@@ -241,19 +241,7 @@ exit 0;
 #------------------------#
 
 sub write_config_file {
-    my ($personality, $ksout, $filter_file, @templates) = @_;
-    my %filter;
-    if ($filter_file ne "") {
-        if (!(open(FILTER, "$files_dir/$filter_file"))) {
-            die "Could not open template $files_dir/$filter_file";
-        }
-        while (<FILTER>) {
-            chop();
-            next if ($_ =~ /^#/);
-            $filter{$_} = 1;
-        }
-        close(FILTER);
-    }
+    my ($personality, $ksout, @templates) = @_;
     print "Writing: $ksout\n";
     open(OUT, ">$ksout") || die "Could not write $ksout";
 

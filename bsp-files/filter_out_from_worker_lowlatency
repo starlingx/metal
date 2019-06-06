@@ -148,6 +148,7 @@ sm-client
 sm-common
 sm-db
 sm-tools
+starlingx-dashboard
 storageconfig
 storage-topology
 task-cloud-controller
