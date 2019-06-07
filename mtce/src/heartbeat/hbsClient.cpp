@@ -974,25 +974,9 @@ int _service_pulse_request ( iface_enum iface , unsigned int flags )
                     hbs_cluster_copy ( controller_cluster_cache[controller?0:1],
                                        hbs_sock.rx_mesg[iface].cluster );
 
-                    string dump_banner = "" ;
-                    if ( debug_state )
-                    {
-                        dump_banner.append("controller-") ;
-                        dump_banner.append(itos(controller?0:1));
-                        dump_banner.append(" cluster info from cache injected into controller-");
-                        dump_banner.append(itos(controller));
-                        dump_banner.append(":");
-                        dump_banner.append(get_iface_name_str(iface));
-                        dump_banner.append(" pulse response");
-                    }
-
                     if ( debug_state & 4 )
                     {
-                        hbs_cluster_dump ( hbs_sock.rx_mesg[iface].cluster, dump_banner );
-                    }
-                    else
-                    {
-                        clog ("%s", dump_banner.c_str());
+                        hbs_cluster_dump ( hbs_sock.rx_mesg[iface].cluster );
                     }
                 }
             }
@@ -1389,7 +1373,7 @@ void daemon_service_run ( void )
                 int bytes = hbs_sock.sm_client_sock->read((char*)&msg, sizeof(mtce_hbs_cluster_type));
                 if ( bytes )
                 {
-                    hbs_cluster_dump (msg, "cluster info received" );
+                    hbs_cluster_dump (msg );
                 }
             }
 #endif

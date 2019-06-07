@@ -352,29 +352,13 @@ void hbs_cluster_dump ( mtce_hbs_cluster_history_type & history, bool storage0_e
  * Parameters  :
  *
  *    vault is a reference to a cluster type whose contents will be logged.
- *    reason is a string induicatig the reason for the dump.
  *
  ***************************************************************************/
 
-void hbs_cluster_dump ( mtce_hbs_cluster_type & vault, string reason )
+void hbs_cluster_dump ( mtce_hbs_cluster_type & vault )
 {
     if (( vault.version == 0 ) || ( vault.histories == 0 ))
         return ;
-
-    /* The reason is cumulative , if long then use a new line */
-    if ( reason.length() > 40 )
-    {
-        syslog ( LOG_INFO, "Cluster Dump  : %s", reason.c_str());
-        reason = "" ;
-    }
-    syslog ( LOG_INFO, "Cluster Vault : v%d.%d %d msec period %s;%d network histories (%d bytes) %s",
-             vault.version,
-             vault.revision,
-             vault.period_msec,
-             vault.storage0_enabled ? " with storage-0: enabled " : "",
-             vault.histories,
-             vault.bytes,
-             reason.c_str());
 
     for ( int h = 0 ; h < vault.histories ; h++ )
     {
