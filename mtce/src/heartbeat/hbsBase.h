@@ -307,8 +307,12 @@ void hbs_cluster_append ( hbs_message_type & msg );
  *
  * Procedure was made generic so that it 'could' be used to add history
  * of any values for fault insertion or other potential future purposes
+ *
+ * Returns true if data was injected ;
+ *  ... as an indication that the cluster had a state change.
+ *
  */
-void hbs_cluster_inject ( unsigned short controller, unsigned short hosts_enabled, unsigned short hosts_responding );
+bool hbs_cluster_inject ( unsigned short controller, unsigned short hosts_enabled, unsigned short hosts_responding );
 
 
 /* Produce formatted clog's that characterize current and changing cluster
@@ -328,7 +332,7 @@ void hbs_cluster_copy ( mtce_hbs_cluster_type & src, mtce_hbs_cluster_type & dst
 
 /* print the contents of the vault */
 void hbs_cluster_dump ( mtce_hbs_cluster_history_type & history, bool storage0_enabled );
-void hbs_cluster_dump ( mtce_hbs_cluster_type & vault, string reason );
+void hbs_cluster_dump ( mtce_hbs_cluster_type & vault );
 
 /* Heartbeat service state audit */
 void hbs_state_audit ( void );
