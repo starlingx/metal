@@ -4612,13 +4612,13 @@ int nodeLinkClass::reboot_handler ( struct nodeLinkClass::node * node_ptr )
                 {
                     if ( !node_ptr->mtcCmd_work_fifo.empty() )
                         node_ptr->mtcCmd_work_fifo.pop_front();
-                        if ( !node_ptr->mtcCmd_work_fifo.empty() )
-                            mtcCmd_workQ_purge ( node_ptr );
+                    if ( !node_ptr->mtcCmd_work_fifo.empty() )
+                        mtcCmd_workQ_purge ( node_ptr );
 
                     if ( !node_ptr->mtcCmd_done_fifo.empty() )
                         node_ptr->mtcCmd_done_fifo.pop_front();
-                        if ( !node_ptr->mtcCmd_done_fifo.empty() )
-                            mtcCmd_doneQ_purge ( node_ptr );
+                    if ( !node_ptr->mtcCmd_done_fifo.empty() )
+                        mtcCmd_doneQ_purge ( node_ptr );
 
                     mtcInvApi_force_task ( node_ptr, "" );
                     adminActionChange ( node_ptr, MTC_ADMIN_ACTION__NONE );
