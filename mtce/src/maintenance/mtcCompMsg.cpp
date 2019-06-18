@@ -61,10 +61,11 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
     int bytes = 0 ;
     mtc_message_type msg ;
     int rc = FAIL ;
+    ctrl_type * ctrl_ptr = get_ctrl_ptr() ;
 
     if ( interface == CLSTR_INTERFACE )
     {
-        if ( ! get_ctrl_ptr()->clstr_iface_provisioned )
+        if ( ! ctrl_ptr->clstr_iface_provisioned )
         {
             wlog ("cannot receive from unprovisioned %s interface\n",
                    get_iface_name_str(interface) );
@@ -74,13 +75,14 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
 
     /* clean the rx/tx buffer */
     memset ((void*)&msg,0,sizeof(mtc_message_type));
-
+    string hostaddr = "" ;
     if ( interface == MGMNT_INTERFACE )
     {
         if (( sock_ptr->mtc_client_rx_socket ) &&
             ( sock_ptr->mtc_client_rx_socket->sock_ok() == true ))
         {
-            bytes = sock_ptr->mtc_client_rx_socket->read((char*)&msg.hdr[0], sizeof(mtc_message_type));
+            rc       = sock_ptr->mtc_client_rx_socket->read((char*)&msg.hdr[0], sizeof(mtc_message_type));
+            hostaddr = sock_ptr->mtc_client_rx_socket->get_src_str();
         }
         else
         {
@@ -93,7 +95,8 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
         if (( sock_ptr->mtc_client_clstr_rx_socket ) &&
             ( sock_ptr->mtc_client_clstr_rx_socket->sock_ok() == true ))
         {
-            bytes = sock_ptr->mtc_client_clstr_rx_socket->read((char*)&msg.hdr[0], sizeof(mtc_message_type));
+            rc       = sock_ptr->mtc_client_clstr_rx_socket->read((char*)&msg.hdr[0], sizeof(mtc_message_type));
+            hostaddr = sock_ptr->mtc_client_clstr_rx_socket->get_src_str();
         }
         else
         {
@@ -102,7 +105,7 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
         }
     }
 
-    if( bytes <= 0 )
+    if( rc <= 0 )
     {
         if ( ( errno == EINTR ) || ( errno == EAGAIN ))
         {
@@ -113,24 +116,34 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
             return (FAIL_TO_RECEIVE);
         }
     }
+    rc = PASS ;
 
-    print_mtc_message ( get_hostname(), MTC_CMD_RX, msg, get_iface_name_str(interface), false );
+    bool self = false ;
+    if (( hostaddr == ctrl_ptr->address ) ||
+        ( hostaddr == ctrl_ptr->address_clstr ))
+    {
+        self = true ;
+    }
 
     /* Message version greater than zero have the hosts management
      * mac address appended to the header string */
-    if ( msg.ver >= MTC_CMD_FEATURE_VER__MACADDR_IN_CMD )
+    if (( !self ) && ( msg.ver >= MTC_CMD_FEATURE_VER__MACADDR_IN_CMD ))
     {
         /* the minus 1 is to back up from the null char that is accounted for in the hearder size */
-        if ( strncmp ( &msg.hdr[MSG_HEADER_SIZE-1], get_ctrl_ptr()->macaddr.data(), MSG_HEADER_SIZE ))
+        if ( strncmp ( &msg.hdr[MSG_HEADER_SIZE-1], ctrl_ptr->macaddr.data(), MSG_HEADER_SIZE ))
         {
             wlog ("%s command not for this host (exp:%s det:%s) ; ignoring ...\n",
                       get_mtcNodeCommand_str(msg.cmd),
-                      get_ctrl_ptr()->macaddr.c_str(),
+                      ctrl_ptr->macaddr.c_str(),
                       &msg.hdr[MSG_HEADER_SIZE-1]);
-            print_mtc_message ( get_hostname(), MTC_CMD_RX, msg, get_iface_name_str(interface), true );
-            return (FAIL_INVALID_DATA);
+            rc = FAIL_INVALID_DATA ;
         }
     }
+
+    print_mtc_message ( hostaddr, MTC_CMD_RX, msg, get_iface_name_str(interface), rc );
+    if ( rc )
+        return rc;
+
     /* Check for response messages */
     if ( strstr ( &msg.hdr[0], get_cmd_req_msg_header() ) )
     {

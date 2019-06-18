@@ -423,7 +423,7 @@ void load_processes ( void )
         }
     }
 
-    pmon_send_event ( MTC_EVENT_PMON_CLEAR, &process_config[0] ) ;
+    pmon_send_event ( MTC_EVENT_PMON_CLEAR, NULL ) ;
 
     ilog ("Registering Processes With Kernel\n");
     ilog ("---------------------------------------------------------------\n");
@@ -1945,7 +1945,7 @@ void pmon_service ( pmon_ctrl_type * ctrl_ptr )
             if ( want_degrade_clear () == true )
             {
                 dlog ("sending degrade clear\n");
-                pmon_send_event ( MTC_EVENT_PMON_CLEAR, &process_config[0] ) ;
+                pmon_send_event ( MTC_EVENT_PMON_CLEAR, NULL ) ;
             }
             else
             {

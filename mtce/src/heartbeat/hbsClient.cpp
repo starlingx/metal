@@ -875,6 +875,18 @@ int _service_pulse_request ( iface_enum iface , unsigned int flags )
         }
     }
 
+    /* Manage the Resource Reference Index (RRI) "lookup clue"
+     * Only supported for hostnames -lt 32 bytes */
+    if (( strnlen(&my_hostname[0], MAX_CHARS_HOSTNAME) < MAX_CHARS_HOSTNAME_32) &&
+        (!strncmp(&hbs_sock.rx_mesg[iface].m[HBS_HEADER_SIZE], &my_hostname[0], MAX_CHARS_HOSTNAME_32)))
+    {
+        if(  rri[controller] != hbs_sock.rx_mesg[iface].c )
+        {
+            rri[controller] = hbs_sock.rx_mesg[iface].c ;
+            ilog ("Caching New RRI: %d (from controller-%d)\n", rri[controller], controller );
+        }
+    }
+
     /* Log the received cluster info
      * ... if the message version shows that it is supported */
     if ( hbs_sock.rx_mesg[iface].v )
@@ -1070,7 +1082,6 @@ int hbs_send_event ( unsigned int event )
     mtc_message_type msg ;
 
     int rc    = FAIL_BAD_PARM ;
-    int bytes = 0    ;
 
     memset (&msg, 0 , sizeof(mtc_message_type));
 
@@ -1097,22 +1108,31 @@ int hbs_send_event ( unsigned int event )
 
     /* build the message */
     snprintf ( &msg.hdr[0], MSG_HEADER_SIZE, "%s", get_mtce_event_header());
-    snprintf ( &msg.hdr[MSG_HEADER_SIZE], MAX_CHARS_HOSTNAME, "%s", &my_hostname[0]);
 
-    #define MAX_PROC_NAME_SIZE (64)
-    snprintf ( &msg.buf[0], MAX_PROC_NAME_SIZE, "%s", program_invocation_short_name);
-
-    size_t len = strlen(program_invocation_short_name);
-    bytes = ((sizeof(mtc_message_type))-(BUF_SIZE-len));
     msg.cmd = event ;
+    msg.ver = MTC_CMD_FEATURE_VER__KEYVALUE_IN_BUF ;
+
+    string event_info = "{\"" ;
+    event_info.append(MTC_JSON_INV_NAME);
+    event_info.append("\":\"");
+    event_info.append(my_hostname);
+    event_info.append("\",\"");
+    event_info.append(MTC_JSON_SERVICE);
+    event_info.append("\":\"");
+    event_info.append(MTC_SERVICE_HBSCLIENT_NAME );
+    event_info.append( "\"}");
+
+    size_t len =  event_info.length()+1 ;
+    snprintf ( &msg.buf[0], len, "%s", event_info.data());
+    int bytes = ((sizeof(mtc_message_type))-(BUF_SIZE-len));
 
     if (( hbs_sock.hbs_ready_tx_sock ) &&
         ( hbs_sock.hbs_ready_tx_sock->sock_ok() == true ))
     {
-        mlog ("Ready message\n");
+        mlog ("%s sending ready event\n", my_hostname );
         if ((rc = hbs_sock.hbs_ready_tx_sock->write((char*)&msg.hdr[0], bytes))!= bytes )
         {
-            elog ("Ready message send failed (%d) (%d:%s)\n", rc, errno, strerror(errno) );
+            elog ("... ready event send failed (%d) (%d:%s)\n", rc, errno, strerror(errno) );
             rc = FAIL_SOCKET_SENDTO ;
         }
         else

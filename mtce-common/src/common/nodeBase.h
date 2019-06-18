@@ -163,6 +163,9 @@ void daemon_exit ( void );
 #define LOOPBACK_IPV6 "::1"
 #define LOCALHOST   "localhost"
 
+
+#define CLUSTER_HOST_SUFFIX    ((const char*)("-cluster-host"))
+
 #define NONE (const char *)"none"
 
 /** Largest heartbeat pulse (req/resp) message size */
@@ -198,8 +201,10 @@ void daemon_exit ( void );
 #define MTC_JSON_INV_BMIP      "bm_ip"
 #define MTC_JSON_INV_BMTYPE    "bm_type"
 #define MTC_JSON_INV_BMUN      "bm_username"
-
+#define MTC_JSON_SERVICE       "service"
 #define MTC_JSON_SEVERITY      "severity"
+#define MTC_JSON_SENSOR        "sensor"
+#define MTC_JSON_PROCESS       "process"
 
 /* These Task strings should not be changed without
  * the corresponding change in Horizon.
@@ -336,9 +341,9 @@ void daemon_exit ( void );
 /* root@controller-0:~# getconf HOST_NAME_MAX
  * 64
  */
-#define MAX_CHARS_HOSTNAME       (32)  /**< The largest hostname length    */
-// #define MAX_CHARS_HOSTNAME       (64)  /**< The largest hostname length    */
-#define MAX_CHARS_FILENAME       (256) /**< The largest hostname length    */
+#define MAX_CHARS_HOSTNAME_32    (32)
+#define MAX_CHARS_HOSTNAME       (256) /**< the largest hostname length */
+#define MAX_CHARS_FILENAME       (256) /**< the largest filename length */
 
 #define MAX_CHARS_ON_LINE        (256) /**> max number of chars on a single line */
 #define MAX_CHARS_IN_INT         (65)  /**> max number of chars in an integer    */
@@ -388,6 +393,26 @@ void daemon_exit ( void );
 
 /* This label will resolve to an IP on the management network */
 #define CONTROLLER_NFS ((const char *)"controller-nfs")
+
+/* Maintenance Daemon Services - actual names of the daemons */
+/* ... controller only service / daemons */
+#define MTC_SERVICE_MTCAGENT_NAME       "mtcAgent"
+#define MTC_SERVICE_HBSAGENT_NAME       "hbsAgent"
+#define MTC_SERVICE_HWMOND_NAME         "hwmond"
+#define MTC_SERVICE_GUESTAGENT_NAME     "guestAgent"
+
+/* ... all nodes services / daemons */
+#define MTC_SERVICE_PMOND_NAME          "pmond"
+#define MTC_SERVICE_HBSCLIENT_NAME      "hbsClient"
+#define MTC_SERVICE_MTCCLIENT_NAME      "mtcClient"
+#define MTC_SERVICE_HOSTW_NAME          "hostwd"
+#define MTC_SERVICE_FSMON_NAME          "fsmond"
+#define MTC_SERVICE_LMON_NAME           "lmond"
+#define MTC_SERVICE_MTCLOG_NAME         "mtclogd"
+
+/* ... compute only services / daemons */
+#define MTC_SERVICE_GUESTSERVER_NAME    "guestServer"
+
 
 #define CGTS_NODE_TYPES      4
 #define CGTS_NODE_TYPE_SIZE 12
@@ -499,6 +524,7 @@ const char * get_heartbeat_ready_header( void ) ;
 #define MTC_CMD_REVISION (0)
 
 #define MTC_CMD_FEATURE_VER__MACADDR_IN_CMD (1)
+#define MTC_CMD_FEATURE_VER__KEYVALUE_IN_BUF (2)
 
 typedef struct
 {

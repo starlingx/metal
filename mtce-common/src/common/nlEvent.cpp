@@ -165,8 +165,8 @@ int get_netlink_events ( int nl_socket , std::list<string> & links_gone_down,
 
 
 void log_link_events ( int netlink_sock,
-                       int ioctl_sock, 
-                       const char * mgmnt_iface_ptr, 
+                       int ioctl_sock,
+                       const char * mgmnt_iface_ptr,
                        const char * clstr_iface_ptr,
                        bool & mgmnt_link_up_and_running,
                        bool & clstr_link_up_and_running)
@@ -175,28 +175,28 @@ void log_link_events ( int netlink_sock,
     std::list<string> links_gone_up   ;
     std::list<string>::iterator iter_curr_ptr ;
     dlog3 ("logging for interfaces %s and %s\n", mgmnt_iface_ptr, clstr_iface_ptr);
-    if ( get_netlink_events ( netlink_sock, links_gone_down, links_gone_up )) 
+    if ( get_netlink_events ( netlink_sock, links_gone_down, links_gone_up ))
     {
         bool running = false ;
         if ( !links_gone_down.empty() )
         {
             dlog3 ("%ld links have dropped\n", links_gone_down.size() );
-           
+
             /* Look at the down list */
             for ( iter_curr_ptr  = links_gone_down.begin();
                   iter_curr_ptr != links_gone_down.end() ;
                   iter_curr_ptr++ )
             {
-                dlog3 ( "downed link: %s (running:%d:%d)\n", 
-                        iter_curr_ptr->c_str(), 
-                        mgmnt_link_up_and_running, 
+                dlog3 ( "downed link: %s (running:%d:%d)\n",
+                        iter_curr_ptr->c_str(),
+                        mgmnt_link_up_and_running,
                         clstr_link_up_and_running );
 
                 if ( !strcmp (mgmnt_iface_ptr, iter_curr_ptr->data()))
                 {
                     if ( mgmnt_link_up_and_running == true )
                     {
-                        mgmnt_link_up_and_running = false ; 
+                        mgmnt_link_up_and_running = false ;
                         wlog ("Mgmnt link %s is down\n", mgmnt_iface_ptr );
                     }
                 }
@@ -208,14 +208,19 @@ void log_link_events ( int netlink_sock,
                         wlog ("Cluster-host link %s is down\n", clstr_iface_ptr );
                     }
                 }
-     
+
                 if ( get_link_state ( ioctl_sock, iter_curr_ptr->data(), &running ) == PASS )
                 {
-                   dlog ("%s is down (oper:%s)\n", iter_curr_ptr->c_str(), running ? "up" : "down" );
+                   wlog ("%s is down (oper:%s) (%ld)\n",
+                             iter_curr_ptr->c_str(),
+                             running ? "up" : "down",
+                             iter_curr_ptr->length() );
                 }
                 else
                 {
-                    wlog ("%s is down (driver query failed)\n", iter_curr_ptr->c_str() );
+                    wlog ("%s is down (driver query failed) (len:%ld)\n",
+                            iter_curr_ptr->c_str(),
+                            iter_curr_ptr->length() );
                 }
             }
         }
@@ -228,14 +233,14 @@ void log_link_events ( int netlink_sock,
                   iter_curr_ptr != links_gone_up.end() ;
                   iter_curr_ptr++ )
             {
-                dlog3 ( "recovered link: %s (running:%d:%d)\n", 
-                        iter_curr_ptr->c_str(), 
-                        mgmnt_link_up_and_running, 
+                dlog3 ( "recovered link: %s (running:%d:%d)\n",
+                        iter_curr_ptr->c_str(),
+                        mgmnt_link_up_and_running,
                         clstr_link_up_and_running );
 
                 if ( !strcmp (mgmnt_iface_ptr, iter_curr_ptr->data()))
                 {
-                    mgmnt_link_up_and_running = true ; 
+                    mgmnt_link_up_and_running = true ;
                     wlog ("Mgmnt link %s is up\n", mgmnt_iface_ptr );
                 }
                 if ( !strcmp (clstr_iface_ptr, iter_curr_ptr->data()))
@@ -246,13 +251,16 @@ void log_link_events ( int netlink_sock,
 
                 if ( get_link_state ( ioctl_sock, iter_curr_ptr->data(), &running ) == PASS )
                 {
-                    dlog ("%s is up (oper:%s)\n", 
-                            iter_curr_ptr->c_str(), 
-                            running ? "up" : "down" );
+                    wlog ("%s is up (oper:%s) (len:%ld)\n",
+                              iter_curr_ptr->c_str(),
+                              running ? "up" : "down",
+                              iter_curr_ptr->length() );
                 }
                 else
                 {
-                    wlog ("%s is up (driver query failed)\n", iter_curr_ptr->c_str() );
+                    wlog ("%s is up (driver query failed) (len:%ld)\n",
+                              iter_curr_ptr->c_str(),
+                              iter_curr_ptr->length() );
                 }
             }
         }
@@ -291,9 +299,9 @@ int open_netlink_socket ( int groups )
         addr.nl_pid = getpid ();
         /* addr.nl_groups = RTMGRP_LINK | RTMGRP_IPV4_IFADDR | RTMGRP_IPV6_IFADDR; */
         addr.nl_groups = groups ; /* allow the caller to specify the groups */
-    
+
         if (bind (nl_socket, (struct sockaddr *) &addr, sizeof (addr)) < 0)
-        {  
+        {
             elog ( "Failed to bind netlink socket (%d:%s)\n", errno, strerror(errno));
             close (nl_socket);
             nl_socket = 0 ;

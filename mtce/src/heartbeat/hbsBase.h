@@ -61,7 +61,7 @@ const char req_msg_header   [HBS_HEADER_SIZE+1] = {"cgts pulse req:"};
 /** Heartbeat pulse response message header content */
 const char rsp_msg_header   [HBS_HEADER_SIZE+1] = {"cgts pulse rsp:"};
 
-#define HBS_MAX_MSG (HBS_HEADER_SIZE+MAX_CHARS_HOSTNAME)
+#define HBS_MAX_MSG (HBS_HEADER_SIZE+MAX_CHARS_HOSTNAME_32)
 
 #define HBS_MESSAGE_VERSION   (1) // 0 -> 1 with intro of cluster info
 

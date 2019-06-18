@@ -289,7 +289,7 @@ void setup_mgmnt_rx_socket ( void )
         ilog("Mgmnt iface : %s\n", ctrl.mgmnt_iface.c_str() );
         get_iface_macaddr  ( ctrl.mgmnt_iface.data(), ctrl.macaddr );
         get_iface_address  ( ctrl.mgmnt_iface.data(), ctrl.address , true );
-    get_hostname       ( &ctrl.hostname[0], MAX_HOST_NAME_SIZE );
+        get_hostname       ( &ctrl.hostname[0], MAX_HOST_NAME_SIZE );
 
         _close_mgmnt_rx_socket ();
         mtc_sock.mtc_client_rx_socket = new msgClassRx(ctrl.address.c_str(),mtc_sock.mtc_cmd_port, IPPROTO_UDP, ctrl.mgmnt_iface.data(), false );

@@ -131,9 +131,7 @@ int mtclogd_tx_port_init ( void )
 int hwmon_send_event ( string hostname, unsigned int event_code , const char * sensor_ptr )
 {
     mtc_message_type event ;
-
-    int rc    = FAIL ;
-    int bytes = 0    ;
+    int rc = PASS ;
 
     memset (&event, 0 , sizeof(mtc_message_type));
 
@@ -149,59 +147,55 @@ int hwmon_send_event ( string hostname, unsigned int event_code , const char * s
         ( event_code == MTC_DEGRADE_RAISE ) ||
         ( event_code == MTC_DEGRADE_CLEAR ))
     {
-        mlog ("%s sending '%s' event to mtcAgent for '%s'\n", 
-                  hostname.c_str(), 
+        string event_info = "" ;
+
+        mlog ("%s sending '%s' event to mtcAgent for '%s'\n",
+                  hostname.c_str(),
                   get_event_str(event_code).c_str(),
                   sensor_ptr );
 
         snprintf ( &event.hdr[0], MSG_HEADER_SIZE, "%s", get_mtce_event_header());
-       
-        snprintf ( &event.hdr[MSG_HEADER_SIZE] , MAX_CHARS_HOSTNAME , "%s", hostname.data());
+
+        /* Limit the size of the hostname in the header to 32 bytes
+         * - legacy support */
+        snprintf ( &event.hdr[MSG_HEADER_SIZE] , MAX_CHARS_HOSTNAME_32, "%s", hostname.data());
+
+        /* Add support for up to 64 byte hostnames as a
+         * json string in the buffer. */
+        event.ver = MTC_CMD_FEATURE_VER__KEYVALUE_IN_BUF ;
+        event_info.append( "{\"service\":\"hwmond\",\"hostname\":\"" ) ;
+        event_info.append( hostname );
         if ( sensor_ptr )
         {
-            size_t len = strnlen ( sensor_ptr, MAX_SENSOR_NAME_LEN );
-            
-            /* We don't use the buffer for hwmon events to remove it from the size */
-            bytes = ((sizeof(mtc_message_type))-(BUF_SIZE-len));
+            event_info.append( "\",\"sensor\":\"" ) ;
+            event_info.append( sensor_ptr );
+        }
+        event_info.append( "\"}");
+        snprintf ( &event.buf[event.res] , event_info.length()+1, "%s", event_info.data());
 
-            snprintf ( &event.buf[0], MAX_SENSOR_NAME_LEN, "%s", sensor_ptr );
+        /* Update the event code */
+        event.cmd = event_code ;
+
+        /* Send the event */
+        rc = hwmon_sock.event_sock->write((char*)&event.hdr[0],sizeof(mtc_message_type));
+        if ( rc )
+        {
+            rc = PASS ;
+        }
+        else
+        {
+            elog ("event send to %s:%d failed (%d:%d:%m)",
+                    hwmon_sock.event_sock->get_dst_str(),
+                    hwmon_sock.event_sock->get_dst_addr()->getPort(), rc, errno);
+            rc = FAIL_SOCKET_SENDTO ;
         }
     }
-    else if ( event_code == MTC_EVENT_LOOPBACK )
-    {
-        snprintf ( &event.hdr[MSG_HEADER_SIZE] , MAX_CHARS_HOSTNAME , "%s", hostname.data());
-        snprintf ( &event.hdr[0] , MSG_HEADER_SIZE, "%s", get_loopback_header());
-
-        /* We don't use the buffer for hwmon events to remove it from the size */
-        bytes = ((sizeof(mtc_message_type))-(BUF_SIZE));
-    }
     else
     {
-        elog ("Unsupported process monitor event (%d)\n", event_code );
-        return ( FAIL_BAD_PARM );
+        elog ("Unsupported hardware monitor event (%d)\n", event_code );
+        rc = FAIL_BAD_PARM ;
     }
-
-    /* Update the event code */
-    event.cmd = event_code ;
-
-    /* Send the event */
-    if ((rc = hwmon_sock.event_sock->write((char*)&event.hdr[0],bytes)) != bytes )
-    {
-        elog ("Message send failed. (%d)\n", rc);
-        elog ("Message: %d bytes to <%s:%d>\n", bytes,
-                hwmon_sock.event_sock->get_dst_str(),
-                hwmon_sock.event_sock->get_dst_addr()->getPort());
-        rc = FAIL_SOCKET_SENDTO ; 
-    }
-    else
-    {
-        mlog ("Sending '%s' Event with %d bytes to %s:%d\n",
-                  get_event_str (event.cmd).c_str(), bytes,
-                  hwmon_sock.event_sock->get_dst_str(),
-                  hwmon_sock.event_sock->get_dst_addr()->getPort());
-        print_mtc_message (&event);
-        rc = PASS ;
-    }
+    print_mtc_message ( hostname, MTC_CMD_TX, event, get_iface_name_str(MGMNT_INTERFACE), rc );
     return rc ;
 }
 
@@ -213,7 +207,7 @@ int  hwmon_service_inbox  ( void )
 
     int rc = PASS ;
 
-    /* clean the rx/tx buffer */ 
+    /* clean the rx/tx buffer */
     memset ((void*)&msg,0,sizeof(mtc_message_type));
     bytes = hwmon_sock.cmd_sock->read((char*)&msg.hdr[0], sizeof(mtc_message_type));
     if( bytes <= 0 )
@@ -238,8 +232,6 @@ int  hwmon_service_inbox  ( void )
                 hwmon_sock.cmd_sock->get_src_str(),
                 hwmon_sock.cmd_sock->get_dst_addr()->getPort());
 
-        print_mtc_message ( &msg );
-
         if ( !strnlen ( &msg.hdr[MSG_HEADER_SIZE], MAX_CHARS_HOSTNAME ))
         {
             wlog ("Mtce message (%x) did not specify target hostname\n", msg.cmd );
@@ -254,6 +246,7 @@ int  hwmon_service_inbox  ( void )
             wlog ("%s failed to parse host info\n", inv.name.c_str());
             return (FAIL_KEY_VALUE_PARSE);
         }
+        print_mtc_message ( inv.name, MTC_CMD_RX, msg, get_iface_name_str(MGMNT_IFACE) , false);
 
         rc = PASS;
         if ( msg.cmd == MTC_CMD_ADD_HOST )
@@ -269,7 +262,6 @@ int  hwmon_service_inbox  ( void )
             {
                 mlog ("%s add host message\n", inv.name.c_str());
             }
-
         }
         else if ( msg.cmd == MTC_CMD_DEL_HOST )
         {
@@ -306,17 +298,13 @@ int  hwmon_service_inbox  ( void )
         {
             mlog ("%s query host message - NOT IMPLEMENTED YET !!!\n", inv.name.c_str());
         }
-        else if ( msg.cmd == MTC_CMD_LOOPBACK )
-        {
-            mlog ("Loopback command received\n");
-        }
         else
         {
             rc = FAIL_BAD_PARM ;
             elog ( "Unsupported maintenance command (%d)\n", msg.cmd );
-        }   
+        }
     }
-    else 
+    else
     {
         elog ("Unsupported Message\n");
         print_mtc_message ( &msg ) ;
@@ -324,15 +312,14 @@ int  hwmon_service_inbox  ( void )
     }
 
 #ifdef WANT_COMMAND_RESPONSE
-       
     /* TODO: Test and enable reply message */
-    // snprintf ( &msg.hdr[0], MSG_HEADER_SIZE, "%s", get_cmd_rsp_msg_header());           
+    // snprintf ( &msg.hdr[0], MSG_HEADER_SIZE, "%s", get_cmd_rsp_msg_header());
     if ( rc == PASS )
-    {      
+    {
         bytes = sizeof(mtc_message_type)-BUF_SIZE;
-        rc = sendto( hwmon_sock.mtc_client_tx_sock, 
+        rc = sendto( hwmon_sock.mtc_client_tx_sock,
                      (char*)&msg.hdr[0], bytes , 0,
-                     (struct sockaddr *) &hwmon_sock.agent_addr, 
+                     (struct sockaddr *) &hwmon_sock.agent_addr,
                                    sizeof(hwmon_sock.agent_addr));
         if (rc != bytes )
         {
@@ -345,9 +332,8 @@ int  hwmon_service_inbox  ( void )
         {
             mlog ("Response: <%s> to %s:%d\n", &msg.hdr[0],
                      inet_ntoa(hwmon_sock.client_addr.sin_addr),
-                         ntohs(hwmon_sock.agent_addr.sin_port)); 
+                         ntohs(hwmon_sock.agent_addr.sin_port));
         }
-        fflush(stdout);
     }
 #endif
     return (rc);

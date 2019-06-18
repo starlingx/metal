@@ -194,7 +194,7 @@ const char * get_mtcNodeCommand_str ( int cmd )
         case MTC_EVENT_HOST_STALLED: return("host stalled event");
 
         /* pmon events */
-        case MTC_EVENT_PMON_CLEAR: return("pmon clear");
+        case MTC_EVENT_PMON_CLEAR: return("pmon degrade clear");
         case MTC_EVENT_PMON_CRIT:  return("pmon critical event");
         case MTC_EVENT_PMON_MAJOR: return("pmon major event");
         case MTC_EVENT_PMON_MINOR: return("pmon minor event");

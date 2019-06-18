@@ -41,7 +41,7 @@ using namespace std;
 #include "hbsBase.h"       /* Heartbeat Base Header File                 */
 #include "hbsAlarm.h"      /* for ... hbsAlarm_clear_all                 */
 #include "alarm.h"         /* for ... alarm send message to mtcalarmd    */
-#include "jsonUtil.h"      /* for ... jsonUtil_get_key_val            */
+#include "jsonUtil.h"      /* for ... jsonUtil_get_key_val               */
 
 /**************************************************************
  *            Implementation Structure
@@ -414,39 +414,6 @@ int daemon_configure ( void )
     ilog("Mgmnt Port  : %d (rx)", hbs_config.hbs_agent_mgmnt_port );
     ilog("Mgmnt Port  : %d (tx)\n", hbs_config.hbs_client_mgmnt_port );
 
-    /* Fetch the cluster-host interface name.
-     * calls daemon_get_iface_master inside so the
-     * aggrigated name is returned if it exists */
-    get_clstr_iface (&hbs_config.clstr_iface );
-    if ( strlen(hbs_config.clstr_iface) )
-    {
-        if (!strcmp(hbs_config.clstr_iface, hbs_config.mgmnt_iface))
-        {
-            hbsInv.clstr_network_provisioned = false ;
-        }
-        else
-        {
-            hbsInv.clstr_network_provisioned = true ;
-            ilog ("Clstr Name  : %s", hbs_config.clstr_iface );
-            ilog ("Clstr Port  : %d (rx)", hbs_config.hbs_agent_clstr_port );
-            ilog ("Clstr Port  : %d (tx)", hbs_config.hbs_client_clstr_port );
-        }
-    }
-
-    ilog("Command Port: %d (rx)\n", hbs_config.mtc_to_hbs_cmd_port );
-    ilog("Event Port  : %d (tx)\n", hbs_config.hbs_to_mtc_event_port );
-    ilog("Alarm Port  : %d (tx)\n", hbs_config.mtcalarm_req_port );
-
-    hbsInv.hbs_state_change = true ;
-
-    /* pull in the degrade only config option */
-    hbsInv.clstr_degrade_only = hbs_config.clstr_degrade_only ;
-
-    if ( hbsInv.hbs_degrade_threshold >= hbsInv.hbs_failure_threshold )
-    {
-        wlog ("Degrade threshold should be smaller than Failure threshold\n");
-        wlog ("Heartbeat 'degrade' state disabled ; see %s\n", MTCE_CONF_FILE);
-    }
     for ( ;; )
     {
         get_ip_addresses ( hbsInv.my_hostname, hbsInv.my_local_ip , hbsInv.my_float_ip );
@@ -464,6 +431,39 @@ int daemon_configure ( void )
             break ;
         }
     }
+    /* Fetch the cluster-host interface name.
+     * calls daemon_get_iface_master inside so the
+     * aggrigated name is returned if it exists */
+    get_clstr_iface (&hbs_config.clstr_iface );
+    if ( strlen(hbs_config.clstr_iface) )
+    {
+        int rc = get_iface_address ( hbs_config.clstr_iface,
+                                     hbsInv.my_clstr_ip, false );
+        if ( rc )
+        {
+            elog ("get Clstr IP address failed '%s' (%d:%d:%m)\n",
+                   hbs_config.clstr_iface, rc, errno );
+        }
+        else
+        {
+            ilog ("Clstr Addr  : %s\n", hbsInv.my_clstr_ip.c_str());
+        }
+
+        if (!strcmp(hbs_config.clstr_iface, hbs_config.mgmnt_iface))
+        {
+            hbsInv.clstr_network_provisioned = false ;
+        }
+        else
+        {
+            hbsInv.clstr_network_provisioned = true ;
+            ilog ("Clstr Name  : %s", hbs_config.clstr_iface );
+            ilog ("Clstr Port  : %d (rx)", hbs_config.hbs_agent_clstr_port );
+            ilog ("Clstr Port  : %d (tx)", hbs_config.hbs_client_clstr_port );
+        }
+    }
+    ilog("Command Port: %d (rx)\n", hbs_config.mtc_to_hbs_cmd_port );
+    ilog("Event Port  : %d (tx)\n", hbs_config.hbs_to_mtc_event_port );
+    ilog("Alarm Port  : %d (tx)\n", hbs_config.mtcalarm_req_port );
 
     /* Set Controller Activity State */
     hbs_config.active = daemon_get_run_option ("active") ;
@@ -475,6 +475,19 @@ int daemon_configure ( void )
         hbsInv.set_activity_state ( true );
     else
         hbsInv.set_activity_state ( false );
+
+    /* Start assuming a change */
+    hbsInv.hbs_state_change = true ;
+
+    /* pull in the degrade only config option */
+    hbsInv.clstr_degrade_only = hbs_config.clstr_degrade_only ;
+
+    if ( hbsInv.hbs_degrade_threshold >= hbsInv.hbs_failure_threshold )
+    {
+        wlog ("Degrade threshold should be smaller than Failure threshold\n");
+        wlog ("Heartbeat 'degrade' state disabled ; see %s\n", MTCE_CONF_FILE);
+    }
+
 
     return (PASS);
 }
@@ -888,9 +901,6 @@ int hbs_pulse_request ( iface_enum iface,
     int bytes = 0 ;
     if ( hbs_sock.tx_sock[iface] )
     {
-        // int unused_networks = 0 ;
-        memset ( &hbs_sock.tx_mesg[iface].m[HBS_HEADER_SIZE], 0, MAX_CHARS_HOSTNAME );
-
         /* Add message version - 0 -> 1 with the acction of cluster information */
         hbs_sock.tx_mesg[iface].v = HBS_MESSAGE_VERSION ;
 
@@ -903,13 +913,20 @@ int hbs_pulse_request ( iface_enum iface,
 
         /* Add this controller's lookup_clue
          * ... aka RRI (Resource Reference Index) */
+
+        /* Fast lookup clue supported for hostnames less than 32 bytes */
+        memset ( &hbs_sock.tx_mesg[iface].m[HBS_HEADER_SIZE], 0, MAX_CHARS_HOSTNAME_32 );
         if (( lookup_clue ) &&
-            ( hostname_clue.length() <= MAX_CHARS_HOSTNAME ))
+            ( hostname_clue.length() < MAX_CHARS_HOSTNAME_32 ))
         {
             hbs_sock.tx_mesg[iface].c = lookup_clue ;
             memcpy ( &hbs_sock.tx_mesg[iface].m[HBS_HEADER_SIZE],
                       hostname_clue.data(),
                       hostname_clue.length());
+        }
+        else
+        {
+            hbs_sock.tx_mesg[iface].c = 0;
         }
 
         /* Append the cluster info to the pulse request */
@@ -973,19 +990,6 @@ hbs_pulse_request_out:
     return (PASS);
 }
 
-string get_hostname_from_pulse ( char * msg_ptr )
-{
-    char temp [MAX_HOST_NAME_SIZE];
-    string hostname ;
-
-    char * str_ptr = strstr ( msg_ptr, ":" );
-    memset ( temp, 0 , MAX_HOST_NAME_SIZE );
-
-    sscanf ( ++str_ptr, "%31s", &temp[0] );
-    hostname = temp ;
-    return (hostname);
-}
-
 int _pulse_receive ( iface_enum iface , unsigned int seq_num )
 {
     int bytes = 0 ;
@@ -1022,9 +1026,9 @@ int _pulse_receive ( iface_enum iface , unsigned int seq_num )
                 //       (hbs_sock.rx_mesg[iface].f & CTRLX_MASK ) >> CTRLX_BIT);
                 continue ;
             }
-            mlog ("%s Pulse Rsp: (%d) %s:%d: s:%d f:%x [%-27s] RRI:%d\n",
+            mlog ("%s Pulse Rsp: (%d) from:%s:%d: s:%d flags:%x [%-27s] RRI:%d\n",
                       get_iface_name_str(iface), bytes,
-                      hbs_sock.rx_sock[iface]->get_dst_addr()->toString(),
+                      hbs_sock.rx_sock[iface]->get_src_str(),
                       hbs_sock.rx_sock[iface]->get_dst_addr()->getPort(),
                       hbs_sock.rx_mesg[iface].s,
                       hbs_sock.rx_mesg[iface].f,
@@ -1035,7 +1039,7 @@ int _pulse_receive ( iface_enum iface , unsigned int seq_num )
             if ( strstr ( hbs_sock.rx_mesg[iface].m, rsp_msg_header) )
             {
                 int rc = RETRY ;
-                string hostname = get_hostname_from_pulse (&hbs_sock.rx_mesg[iface].m[0]);
+                string hostname = hbsInv.get_hostname (hbs_sock.rx_sock[iface]->get_src_str());
 
 #ifdef WANT_FIT_TESTING
                 if ( hbs_config.testmode == 1 )
@@ -1169,11 +1173,6 @@ int _pulse_receive ( iface_enum iface , unsigned int seq_num )
 
 int send_event ( string & hostname, unsigned int event_cmd, iface_enum iface )
 {
-    int bytes ;
-    int bytes_to_send ;
-    int rc = PASS ;
-    int retries = 0 ;
-
     if ((hbs_sock.hbs_event_tx_sock == NULL ) ||
         (hbs_sock.hbs_event_tx_sock->sock_ok() == false ))
     {
@@ -1192,23 +1191,10 @@ int send_event ( string & hostname, unsigned int event_cmd, iface_enum iface )
         hbs_cluster_log ( hbsInv.my_hostname, "event", true );
         snprintf ( &event.hdr[0] , MSG_HEADER_SIZE, "%s", get_heartbeat_loss_header());
     }
-    else if ( event_cmd == MTC_EVENT_LOOPBACK )
-    {
-        snprintf ( &event.hdr[0] , MSG_HEADER_SIZE, "%s", get_heartbeat_event_header());
-    }
-    else if ( event_cmd == MTC_EVENT_HEARTBEAT_MINOR_SET )
-    {
-        snprintf ( &event.hdr[0] , MSG_HEADER_SIZE, "%s", get_heartbeat_event_header());
-    }
-    else if ( event_cmd == MTC_EVENT_HEARTBEAT_MINOR_CLR )
-    {
-        snprintf ( &event.hdr[0] , MSG_HEADER_SIZE, "%s", get_heartbeat_event_header());
-    }
-    else if ( event_cmd == MTC_EVENT_HEARTBEAT_DEGRADE_SET )
-    {
-        snprintf ( &event.hdr[0] , MSG_HEADER_SIZE, "%s", get_heartbeat_event_header());
-    }
-    else if ( event_cmd == MTC_EVENT_HEARTBEAT_DEGRADE_CLR )
+    else if (( event_cmd == MTC_EVENT_HEARTBEAT_MINOR_SET )   ||
+             ( event_cmd == MTC_EVENT_HEARTBEAT_MINOR_CLR )   ||
+             ( event_cmd == MTC_EVENT_HEARTBEAT_DEGRADE_SET ) ||
+             ( event_cmd == MTC_EVENT_HEARTBEAT_DEGRADE_CLR ))
     {
         snprintf ( &event.hdr[0] , MSG_HEADER_SIZE, "%s", get_heartbeat_event_header());
     }
@@ -1228,38 +1214,34 @@ int send_event ( string & hostname, unsigned int event_cmd, iface_enum iface )
         return ( FAIL_BAD_CASE );
     }
 
-    /* Put the hostname in the buffer - as well */
-    snprintf ( &event.buf[0] , MAX_CHARS_HOSTNAME, "%s", hostname.data());
-
-    /* TODO: obsolete this method in the future as it limits the host name lenth to 32 */
-    snprintf ( &event.hdr[MSG_HEADER_SIZE] , MAX_CHARS_HOSTNAME, "%s", hostname.data());
+    snprintf ( &event.hdr[MSG_HEADER_SIZE] , MAX_CHARS_HOSTNAME_32, "%s", hostname.data());
 
     event.cmd = event_cmd ;
     event.num = 1 ;
     event.parm[0] = iface ;
 
+    /* Support for 64 byte hostnames */
+    event.ver = MTC_CMD_FEATURE_VER__KEYVALUE_IN_BUF ;
+
+    /* Json string starts at the beginning of the buffer */
+    event.res = 0 ;
+
+    string buf_info = "{\"hostname\":\"" ;
+    buf_info.append(hostname);
+    buf_info.append("\",\"service\":\"");
+    buf_info.append(MTC_SERVICE_HBSAGENT_NAME);
+    buf_info.append("\"}");
+
+    /* copy the string into the buffer and add one to the length to
+     * accomodate for the null terminator snprintf automatically adds */
+    snprintf ( &event.buf[event.res], buf_info.length()+1, "%s", buf_info.data());
     print_mtc_message ( hostname, MTC_CMD_TX, event, get_iface_name_str(iface) , false );
-
-    /* remove the buffer as it is not needed for this message */
-    bytes_to_send = ((sizeof(mtc_message_type))-(BUF_SIZE-hostname.length())) ;
-    do
+    if ( hbs_sock.hbs_event_tx_sock->write((char*)&event, sizeof(mtc_message_type)) <= 0 )
     {
-        bytes = hbs_sock.hbs_event_tx_sock->write((char*)&event,bytes_to_send);
-        if ( bytes <= 0 )
-        {
-            rc = FAIL_TO_TRANSMIT ;
-
-            if ( retries++ > 3 )
-            {
-                elog ("Cannot communicate with maintenance\n");
-                return (RETRY);
-            }
-        }
-        else
-            rc = PASS ;
-    } while ( bytes <= 0 ) ;
-
-    return rc ;
+        elog ("%s failed to send event to maintenance (%d:%m)", hostname.c_str(), errno );
+        return ( FAIL_TO_TRANSMIT ) ;
+    }
+    return PASS ;
 }
 
 /* The main heartbeat service loop */
@@ -1830,13 +1812,47 @@ void daemon_service_run ( void )
                 bytes = hbs_sock.mtc_to_hbs_sock->read((char*)&msg,sizeof(mtc_message_type));
                 if ( bytes > 0 )
                 {
-                    mlog ("Received Maintenance Command (%i)\n", bytes );
-                    mlog ("%s - cmd:0x%x\n", &msg.hdr[0], msg.cmd );
-
                     if ( !strncmp ( get_hbs_cmd_req_header(), &msg.hdr[0], MSG_HEADER_SIZE ))
                     {
-                        string hostname = &msg.hdr[MSG_HEADER_SIZE] ;
-                        if ( msg.cmd == MTC_CMD_ACTIVE_CTRL )
+                        string hostname ;
+                        node_inv_type inv ;
+                        node_inv_init(inv);
+
+                        /* 64 byte hostname support adds a json string to
+                         * the message buffer containing the hostname as a
+                         * key/value pair. */
+                        if (( msg.ver >= MTC_CMD_FEATURE_VER__KEYVALUE_IN_BUF ) &&
+                            ( msg.buf[msg.res] == '{' ))
+                        {
+                            if ( jsonUtil_get_key_val(&msg.buf[msg.res],
+                                        MTC_JSON_INV_NAME, hostname) == PASS )
+                            {
+                                inv.name = hostname ;
+                                if (( msg.cmd == MTC_CMD_ADD_HOST ) ||
+                                    ( msg.cmd == MTC_CMD_MOD_HOST ))
+                                {
+                                    jsonUtil_get_key_val(&msg.buf[msg.res], MTC_JSON_INV_HOSTIP, inv.ip);
+                                    if ( hbsInv.clstr_network_provisioned == true )
+                                    {
+                                        jsonUtil_get_key_val(&msg.buf[msg.res], MTC_JSON_INV_CLSTRIP, inv.clstr_ip);
+                                    }
+                                }
+                            }
+                        }
+                        else if ( msg.hdr[MSG_HEADER_SIZE] != '\0' )
+                        {
+                            /* get hostname by legacy method,
+                             * ... from the header */
+                            hostname = &msg.hdr[MSG_HEADER_SIZE] ;
+                        }
+                        if ( hostname.empty() )
+                        {
+                            /* no hostname ; no action to take */
+                            wlog ("unable to get hostname from %s command",
+                                   get_mtcNodeCommand_str(msg.cmd));
+                        }
+
+                        else if ( msg.cmd == MTC_CMD_ACTIVE_CTRL )
                         {
                             bool logit = false ;
                             if ( hostname == hbsInv.my_hostname )
@@ -1876,13 +1892,12 @@ void daemon_service_run ( void )
                         }
                         else if ( msg.cmd == MTC_CMD_ADD_HOST )
                         {
-                            node_inv_type inv ;
-                            node_inv_init(inv);
-                            inv.name = hostname ;
                             inv.nodetype = msg.parm[0];
                             hbsInv.add_heartbeat_host ( inv ) ;
-                            hostname_inventory.push_back ( hostname );
-                            ilog ("%s added to heartbeat service (%d)\n", hostname.c_str(), msg.parm[0] );
+                            hostname_inventory.push_back ( inv.name );
+                            ilog ("%s added to heartbeat service (%d)\n",
+                                      inv.name.c_str(),
+                                      inv.nodetype);
 
                             /* clear any outstanding alarms on the ADD */
                             if (( hbsInv.hbs_failure_action != HBS_FAILURE_ACTION__NONE ) &&
@@ -1890,6 +1905,20 @@ void daemon_service_run ( void )
                             {
                                 hbsAlarm_clear_all ( hostname,
                                 hbsInv.clstr_network_provisioned );
+                            }
+                        }
+                        else if ( msg.cmd == MTC_CMD_MOD_HOST )
+                        {
+                            inv.nodetype = msg.parm[0];
+                            hbsInv.add_heartbeat_host ( inv ) ;
+                            ilog ("%s modified heartbeat info [%d]\n",
+                                      inv.name.c_str(),
+                                      inv.nodetype );
+
+                            /* clear any outstanding alarms on the ADD */
+                            if ( hbsInv.hbs_failure_action != HBS_FAILURE_ACTION__NONE )
+                            {
+                                hbsAlarm_clear_all ( hostname, hbsInv.clstr_network_provisioned );
                             }
                         }
                         else if ( msg.cmd == MTC_CMD_DEL_HOST )

@@ -649,15 +649,13 @@ int daemon_configure ( void )
     ilog("Inv Port    : %d (tx)\n", mtc_config.sysinv_api_port );
     ilog("Inv Address : %s (tx)\n", mtc_config.sysinv_api_bind_ip );
     ilog("Inv Event   : %d (rx)\n", mtc_config.inv_event_port );
-    ilog("Keystone Port: %d (rx)\n", mtc_config.keystone_port );
+    ilog("Keystone Prt: %d (rx)\n", mtc_config.keystone_port );
     ilog("Mtce Logger : %d (tx)\n", mtc_config.daemon_log_port );
     ilog("nfv-vim-api : %d (port)\n", mtc_config.vim_cmd_port );
     ilog("hbsAgent    : %d (port)\n", mtc_config.mtc_to_hbs_cmd_port );
     ilog("guestAgent  : %d (port)\n", mtc_config.mtc_to_guest_cmd_port );
     ilog("hwmond      : %d (port)\n", mtc_config.hwmon_cmd_port );
     ilog("auth_host   : %s \n", mtc_config.keystone_auth_host );
-    ilog("Barbican Port: %d (rx)\n", mtc_config.barbican_api_port );
-    ilog("Barbican Address : %s (tx)\n", mtc_config.barbican_api_host );
 
     /* log system wide service based auto recovery control values */
     ilog("AR Config   : %d (threshold) %d sec (retry interval)",
