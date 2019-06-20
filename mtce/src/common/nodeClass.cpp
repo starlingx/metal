@@ -826,6 +826,7 @@ struct nodeLinkClass::node* nodeLinkClass::getEventBaseNode ( libEvent_enum requ
 
                    return ptr ;
                }
+               __attribute__ ((fallthrough));
            }
            case VIM_HOST_DISABLED:
            case VIM_HOST_ENABLED:
@@ -839,6 +840,7 @@ struct nodeLinkClass::node* nodeLinkClass::getEventBaseNode ( libEvent_enum requ
 
                    return ptr ;
                }
+               __attribute__ ((fallthrough));
            }
            case BARBICAN_GET_SECRET:
            case BARBICAN_READ_SECRET:
