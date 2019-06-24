@@ -362,7 +362,7 @@ private:
         bool inservice_failed_subf ;
 
         /** node has reached enabled state this number of times */
-        bool enabled_count ;
+        int enabled_count ;
 
         /** Number of OOS tests run so far */
         int  oos_test_count ;
