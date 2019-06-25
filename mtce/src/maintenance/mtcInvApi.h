@@ -85,7 +85,7 @@ int mtcInvApi_handler ( libEvent & event );
   *- HTTP status codes - any standard HTTP codes
   *
   *****************************************************************************/
-int mtcInvApi_read_inventory ( int batch );
+int mtcInvApi_read_inventory ( uint batch );
 
 /** Add a host to the sysinv database
   *
