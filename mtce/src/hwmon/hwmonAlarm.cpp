@@ -257,15 +257,7 @@ int hwmon_alarm_util ( string           & hostname,
                              "%s is reporting a '%s' out-of-tolerance reading from the '%s' sensor",
                              hostname.c_str(), _getSev_str (severity).c_str(), sub_entity.c_str());
 
-            if ( state == FM_ALARM_STATE_CLEAR )
-            {
-                snprintf(alarm.reason_text, FM_MAX_BUFFER_LENGTH,
-                             "%s:%s alarm clear\n",
-                              alarm.alarm_id,
-                              alarm.entity_instance_id);
-                hostname_prefix_in_reason = false ;
-            }
-            else if ( state == FM_ALARM_STATE_MSG )
+            if ( state == FM_ALARM_STATE_MSG )
             {
                 if ( severity == FM_ALARM_SEVERITY_WARNING )
                 {

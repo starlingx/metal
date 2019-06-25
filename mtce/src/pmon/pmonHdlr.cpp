@@ -538,6 +538,11 @@ bool service_file_exists ( string service_filename,
                            char * path_n_name_ptr,
                            int    max_len )
 {
+    if ( path_n_name_ptr == NULL ) {
+        slog ("Path for service files search is null.\n");
+        return false;
+    }
+
     /* load the name of the service file */
     snprintf ( path_n_name_ptr, max_len, "%s/%s",
                                           SYSTEMD_SERVICE_FILE_DIR1,
