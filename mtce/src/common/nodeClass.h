@@ -25,6 +25,12 @@
 
 using namespace std;
 
+#if defined(__GNUC__) && __GNUC__ >= 7
+#define MTCE_FALLTHROUGH __attribute__ ((fallthrough));
+#else
+#define MTCE_FALLTHROUGH
+#endif
+
 /* Include base class definition header */
 #include "nodeBase.h"
 #include "hostUtil.h"     /* for ... server_code and others           */

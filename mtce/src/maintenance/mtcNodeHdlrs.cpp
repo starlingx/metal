@@ -3230,6 +3230,7 @@ int nodeLinkClass::offline_handler ( struct nodeLinkClass::node * node_ptr )
 
             node_ptr->offlineStage = MTC_OFFLINE__SEND_MTCALIVE ;
             /* fall through on start */
+            MTCE_FALLTHROUGH;
         }
         case MTC_OFFLINE__SEND_MTCALIVE:
         {
@@ -3869,6 +3870,7 @@ int nodeLinkClass::reset_handler ( struct nodeLinkClass::node * node_ptr )
             }
             node_ptr->power_action_retries = MTC_RESET_ACTION_RETRY_COUNT ;
             /* the fall through is intentional */
+            MTCE_FALLTHROUGH;
         }
         case MTC_RESET__REQ_SEND:
         {
@@ -4691,6 +4693,7 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
 
             node_ptr->power_action_retries = MTC_POWER_ACTION_RETRY_COUNT ;
             //the fall through to MTC_POWEROFF__REQ_SEND is intentional
+            MTCE_FALLTHROUGH;
         }
         case MTC_POWEROFF__REQ_SEND:
         {
@@ -4850,6 +4853,7 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
             node_ptr->power_action_retries = MTC_POWER_ACTION_RETRY_COUNT ;
             powerStageChange ( node_ptr , MTC_POWERON__POWER_STATUS );
             //the fall through to MTC_POWERON__REQ_SEND is intentional
+            MTCE_FALLTHROUGH;
         }
         case MTC_POWERON__POWER_STATUS:
         {
