@@ -7,6 +7,18 @@
 
 # This script starts and stops a mtclogd Daemon process
 
+#
+# chkconfig: 2345 95 95
+#
+### BEGIN INIT INFO
+# Provides:          mtclog
+# Required-Start: $null
+# Required-Stop: $null
+# Default-Start: $null
+# Default-Stop: $null
+# Short-Description: mtclog daemon
+### END INIT INFO
+
 . /etc/init.d/functions
 
 DAEMON_NAME="mtclogd"
