@@ -306,17 +306,15 @@ string mtcHttpSvr_vim_req ( char          * buffer_ptr,
     nodeLinkClass * obj_ptr = get_mtcInv_ptr () ;
     string response = "" ;
     string severity = "" ;
-    string uuid     = "" ;
     string hostname = "" ;
 
     int rc1 = jsonUtil_get_key_val ( buffer_ptr, MTC_JSON_SEVERITY, severity );
-    int rc2 = jsonUtil_get_key_val ( buffer_ptr, MTC_JSON_INV_NAME, uuid     );
-    int rc3 = jsonUtil_get_key_val ( buffer_ptr, MTC_JSON_INV_NAME, hostname );
+    int rc2 = jsonUtil_get_key_val ( buffer_ptr, MTC_JSON_INV_NAME, hostname );
 
     jlog ("%s '%s' request\n", hostname.c_str(), getHttpCmdType_str(http_cmd)); 
-    if ( rc1 | rc2 | rc3 )
+    if ( rc1 | rc2 )
     {
-        wlog ("Failed to parse command key values (%d:%d:%d)\n", rc1, rc2, rc3 );
+        wlog ("Failed to parse command key values (%d:%d)\n", rc1, rc2);
         response = "{" ;
         response.append (" \"status\" : \"fail\"");
         response.append (",\"reason\" : \"command parse error\"");
