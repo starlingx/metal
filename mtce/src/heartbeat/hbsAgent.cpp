@@ -381,7 +381,7 @@ int daemon_configure ( void )
 
     if (ini_parse(MTCE_INI_FILE, hbs_config_handler, &hbs_config) < 0)
     {
-        elog("Can't load '%s'\n", MTCE_CONF_FILE );
+        elog("Can't load '%s'\n", MTCE_INI_FILE );
         return (FAIL_LOAD_INI);
     }
 
