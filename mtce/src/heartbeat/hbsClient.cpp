@@ -1347,16 +1347,31 @@ void daemon_service_run ( void )
         FD_ZERO(&hbs_sock.readfds);
         for ( int i = 0 ; i < MAX_IFACES ; i++ )
         {
-            if (hbs_sock.rx_sock[i] && hbs_sock.rx_sock[i]->getFD() > 0 )
+            if ( hbs_sock.rx_sock[i] && hbs_sock.rx_sock[i]->getFD() )
             {
-                FD_SET(hbs_sock.rx_sock[i]->getFD(),&hbs_sock.readfds);
+                FD_SET(hbs_sock.rx_sock[i]->getFD(), &hbs_sock.readfds);
             }
         }
-        FD_SET(hbs_sock.pmon_pulse_sock->getFD(),&hbs_sock.readfds);
-        FD_SET(hbs_sock.amon_socket,    &hbs_sock.readfds);
-        FD_SET(hbs_sock.netlink_sock,   &hbs_sock.readfds);
+
+        if ( hbs_sock.pmon_pulse_sock && hbs_sock.pmon_pulse_sock->getFD() )
+        {
+            FD_SET(hbs_sock.pmon_pulse_sock->getFD(), &hbs_sock.readfds);
+        }
+
+        if ( hbs_sock.amon_socket )
+        {
+            FD_SET(hbs_sock.amon_socket, &hbs_sock.readfds);
+        }
+
+        if ( hbs_sock.netlink_sock )
+        {
+            FD_SET(hbs_sock.netlink_sock, &hbs_sock.readfds);
+        }
 #ifdef WANT_CLUSTER_DEBUG
-        FD_SET(hbs_sock.sm_client_sock->getFD(), &hbs_sock.readfds);
+        if ( hbs_sock.sm_client_sock && hbs_sock.sm_client_sock->getFD() )
+        {
+            FD_SET(hbs_sock.sm_client_sock->getFD(), &hbs_sock.readfds);
+        }
 #endif
         rc = select( socks.back()+1,
                      &hbs_sock.readfds, NULL, NULL,
