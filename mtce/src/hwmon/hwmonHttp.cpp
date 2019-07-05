@@ -16,7 +16,6 @@
  *
  * 1. an http client used to register sensors with sysinv
  * 2. an http server used to receive sensor configuration changes from sysinv
- * 3. an http client used to send sensor samples to Ceilometer.
  *
  **/
 
