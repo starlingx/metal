@@ -142,12 +142,21 @@ int daemon_configure ( void )
     if (ini_parse(HOSTWD_CONFIG_FILE, hostw_process_config, config) < 0)
     {
         elog("Can't load '%s'\n", HOSTWD_CONFIG_FILE);
-        return (FAIL_INI_CONFIG);
+        return (FAIL_LOAD_INI);
     }
 
     if (ini_parse(PMOND_CONFIG_FILE, hostw_process_config, config) < 0)
     {
         elog("Can't load '%s'\n", PMOND_CONFIG_FILE);
+        return (FAIL_LOAD_INI);
+    }
+
+    /* Verify loaded config against an expected mask
+     * as an ini file fault detection method */
+    if ( config->mask != CONFIG_MASK )
+    {
+        elog ("Error: host watchdog configuration failed (%x)\n",
+             ((-1 ^ config->mask) & CONFIG_MASK));
         return (FAIL_INI_CONFIG);
     }
 
