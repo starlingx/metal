@@ -121,10 +121,11 @@ void opts_init ( void)
     opts.help    = false ;  
     opts.log     = false ; 
     opts.test    = false ;
+    opts.info    = false ;
     opts.verbose = false ;
     opts.Virtual = false ;
     opts.active  = false ;
-    opts.front   = false ;
+    opts.debug   = 0     ;
     opts.front   = false ;
     opts.command = ""    ;
     opts.username= ""    ;
