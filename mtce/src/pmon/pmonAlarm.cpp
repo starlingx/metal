@@ -176,6 +176,7 @@ void manage_queried_alarms (  list<active_process_alarms_type> & saved_alarm_lis
                 }
             }
         }
+        free(alarm_list_ptr);
     }
 }
 
