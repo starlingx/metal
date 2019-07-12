@@ -357,7 +357,7 @@ void daemon_service_run ( void )
             ilog ("Transmitting: Monitor READY Event\n" );
             do
             {
-                rc = hwmon_send_event ( hwmon_ctrl.my_hostname, MTC_EVENT_MONITOR_READY, "hwmond" );
+                rc = hwmon_send_event ( hwmon_ctrl.my_hostname, MTC_EVENT_MONITOR_READY, "" );
                 if ( rc == RETRY )
                 {
                     mtcWait_secs ( 2 );

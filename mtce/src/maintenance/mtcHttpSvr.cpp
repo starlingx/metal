@@ -416,8 +416,7 @@ string mtcHttpSvr_inv_req ( char          * request_ptr,
     {
         node_inv_type  inv ;
         node_inv_init (inv);
-        
-        ilog ("%s %s : '%s'\n", obj_ptr->my_hostname.c_str(), key.c_str(), value.c_str()) ;
+        dlog ("%s %s : '%s'\n", obj_ptr->my_hostname.c_str(), key.c_str(), value.c_str()) ;
 
         rc = jsonUtil_load_host ( request_ptr, inv );
         if ( rc == PASS )
@@ -449,6 +448,7 @@ string mtcHttpSvr_inv_req ( char          * request_ptr,
                  */
                 if ( rc == RETRY )
                 {
+                    ilog ("%s Modify Operation\n", inv.name.c_str());
                     rc = obj_ptr->mod_host ( inv );
                 }
 

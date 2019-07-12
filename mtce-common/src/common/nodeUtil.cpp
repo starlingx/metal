@@ -110,6 +110,7 @@ void node_inv_init (node_inv_type & inv)
     inv.uuid.clear();
     inv.name.clear();
     inv.ip.clear();
+    inv.clstr_ip.clear();
     inv.mac.clear();
     inv.admin.clear();
     inv.oper.clear();
@@ -750,7 +751,7 @@ int get_iface_address ( const char * iface_ptr, string & ip_addr , bool retry )
         if ( rc == PASS )
         {
             ip_addr = ip_cstr;
-            ilog ("IP Address  : %s\n", ip_addr.c_str() );
+            dlog ("IP Address  : %s\n", ip_addr.c_str() );
         }
         else
         {

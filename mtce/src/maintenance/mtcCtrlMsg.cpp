@@ -193,15 +193,16 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
 
     print_mtc_message ( hostname, MTC_CMD_RX, msg, get_iface_name_str(iface), false );
 
+    /* handle messages that are not mtc_message_type
+     * but rather are simply a json string */
     if ( msg.hdr[0] == '{' )
     {
-        int rc1 ;
         string service ;
 
         mlog1 ("%s\n", &msg.hdr[0] );
 
-        rc1 = jsonUtil_get_key_val(&msg.hdr[0],"service", service );
-        if ( rc1 == PASS )
+        rc = jsonUtil_get_key_val(&msg.hdr[0],"service", service );
+        if ( rc == PASS )
         {
             if ( service == "collectd_notifier" )
             {
@@ -215,23 +216,27 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
                 {
                     elog ("failed to parse '%s' message\n", service.c_str());
                     wlog ("... %s\n", &msg.hdr[0] );
+                    rc = FAIL_JSON_PARSE ;
                 }
                 else
                 {
                     obj_ptr->collectd_notify_handler ( hostname,
                                                        resource,
                                                        state );
+                    return (PASS) ;
                 }
             }
             /* future service requests */
             else
             {
                 wlog ("Unexpected service request: '%s'\n", service.c_str());
+                rc = FAIL_BAD_PARM ;
             }
         }
         else
         {
             wlog("Unexpected json message: %s\n", &msg.hdr[0] );
+            rc = FAIL_BAD_CASE ;
         }
     }
 
@@ -246,112 +251,112 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
      */
     else if ( strstr ( &msg.hdr[0], get_worker_msg_header() ) )
     {
-            if ( msg.cmd == MTC_MSG_MTCALIVE )
+        if ( msg.cmd == MTC_MSG_MTCALIVE )
+        {
+            string functions = "" ;
+            rc =  jsonUtil_get_key_val ( &msg.buf[0], "personality", functions );
+            if ( rc )
             {
-                string functions = "" ;
-                rc =  jsonUtil_get_key_val ( &msg.buf[0], "personality", functions );
-                if ( rc )
-                {
-                    wlog ("%s failed to get personality from mtcAlive message\n", hostname.c_str());
-                    return (FAIL_KEY_VALUE_PARSE);
-                }
-                rc = obj_ptr->update_host_functions ( hostname, functions );
-                dlog3 ("%s functions: %s\n", hostname.c_str(), functions.c_str());
-                if ( rc )
-                {
-                    wlog ("%s failed to load functions from mtcAlive message\n", hostname.c_str());
-                    return (FAIL_NODETYPE);
-                }
-                obj_ptr->set_uptime     ( hostname , msg.parm[MTC_PARM_UPTIME_IDX], false );
-                obj_ptr->set_health     ( hostname , msg.parm[MTC_PARM_HEALTH_IDX] );
-                obj_ptr->set_mtce_flags ( hostname , msg.parm[MTC_PARM_FLAGS_IDX]  );
-
-                obj_ptr->set_mtcAlive   ( hostname, iface );
-
-                mlog1("%s Uptime:%d Health:%d Flags:0x%x mtcAlive:%s\n",
-                          hostname.c_str(),
-                          msg.parm[MTC_PARM_UPTIME_IDX],
-                          msg.parm[MTC_PARM_HEALTH_IDX],
-                          msg.parm[MTC_PARM_FLAGS_IDX],
-                          obj_ptr->get_mtcAlive_gate ( hostname ) ? "gated" : "open");
-
-                string cluster_host_ip = "";
-                /* Get the clstr ip address if it is provisioned */
-                rc =  jsonUtil_get_key_val ( &msg.buf[0], "cluster_host_ip", cluster_host_ip );
-                if ( rc == PASS )
-                {
-                    obj_ptr->set_clstr_hostaddr ( hostname, cluster_host_ip );
-                }
-                else
-                {
-                    mlog ("%s null or missing 'cluster_host_ip' value (rc:%d)\n", hostname.c_str(), rc);
-                }
+                wlog ("%s failed to get personality from mtcAlive message\n", hostname.c_str());
+                return (FAIL_KEY_VALUE_PARSE);
             }
-            else if ( msg.cmd == MTC_MSG_MAIN_GOENABLED )
+            rc = obj_ptr->update_host_functions ( hostname, functions );
+            dlog3 ("%s functions: %s\n", hostname.c_str(), functions.c_str());
+            if ( rc )
             {
-                if ( !obj_ptr->my_hostname.compare(hostname) )
-                {
-                    ilog ("%s received GOENABLED from self\n", hostname.c_str());
-                }
-                rc = send_mtc_cmd ( hostname , msg.cmd, MGMNT_INTERFACE );
-                if ( rc != PASS )
-                {
-                    elog ("%s GOENABLED send reply failed (rc:%d)\n",
-                              hostname.c_str(), rc);
+                wlog ("%s failed to load functions from mtcAlive message\n", hostname.c_str());
+                return (FAIL_NODETYPE);
+            }
+            obj_ptr->set_uptime     ( hostname , msg.parm[MTC_PARM_UPTIME_IDX], false );
+            obj_ptr->set_health     ( hostname , msg.parm[MTC_PARM_HEALTH_IDX] );
+            obj_ptr->set_mtce_flags ( hostname , msg.parm[MTC_PARM_FLAGS_IDX]  );
 
-                    wlog ("%s ... need successful GOENABLED reply, dropping ...\n",
-                              hostname.c_str() );
-                }
-                else
-                {
-                    mlog ("%s got GOENABLED (out-of-service tests passed) message\n", hostname.c_str());
-                    obj_ptr->set_goEnabled ( hostname );
-                }
-            }
-            else if ( msg.cmd == MTC_MSG_MAIN_GOENABLED_FAILED )
-            {
-                if ( obj_ptr->get_adminState ( hostname ) == MTC_ADMIN_STATE__UNLOCKED )
-                {
-                    wlog ("%s failed out-of-service test: %s\n", hostname.c_str(), &msg.buf[0] );
-                    obj_ptr->set_goEnabled_failed ( hostname );
-                }
-                /* We don't send a reply on a fail */
-            }
-            else if ( msg.cmd == MTC_MSG_SUBF_GOENABLED )
-            {
-                mlog ("%s-worker GOENABLED message\n", hostname.c_str());
-                if ( !obj_ptr->my_hostname.compare(hostname) )
-                {
-                    ilog ("%s-worker received GOENABLED from self\n", hostname.c_str());
-                }
-                rc = send_mtc_cmd ( hostname , msg.cmd, MGMNT_INTERFACE );
-                if ( rc != PASS )
-                {
-                    elog ("%s-worker GOENABLED send reply failed (rc:%d)\n",
-                              hostname.c_str(), rc);
+            obj_ptr->set_mtcAlive   ( hostname, iface );
 
-                    wlog ("%s-worker ... need successful GOENABLED reply, dropping ...\n",
-                              hostname.c_str() );
-                }
-                else
-                {
-                    mlog ("%s-worker got GOENABLED (out-of-service tests passed) message\n", hostname.c_str());
-                    obj_ptr->set_goEnabled_subf ( hostname );
-                }
-            }
-            else if ( msg.cmd == MTC_MSG_SUBF_GOENABLED_FAILED )
+            mlog1("%s Uptime:%d Health:%d Flags:0x%x mtcAlive:%s\n",
+                      hostname.c_str(),
+                      msg.parm[MTC_PARM_UPTIME_IDX],
+                      msg.parm[MTC_PARM_HEALTH_IDX],
+                      msg.parm[MTC_PARM_FLAGS_IDX],
+                      obj_ptr->get_mtcAlive_gate ( hostname ) ? "gated" : "open");
+
+            string cluster_host_ip = "";
+            /* Get the clstr ip address if it is provisioned */
+            rc =  jsonUtil_get_key_val ( &msg.buf[0], "cluster_host_ip", cluster_host_ip );
+            if ( rc == PASS )
             {
-                if ( obj_ptr->get_adminState ( hostname ) == MTC_ADMIN_STATE__UNLOCKED )
-                {
-                    wlog ("%s-worker failed GOENABLE test: %s\n", hostname.c_str(), &msg.buf[0] );
-                    obj_ptr->set_goEnabled_failed_subf ( hostname );
-                }
-                /* We don't send a reply on a fail */
+                obj_ptr->set_clstr_hostaddr ( hostname, cluster_host_ip );
             }
             else
             {
-                wlog ("Unexpected worker message (0x%x) from '%s'\n", msg.cmd, hostname.c_str());
+                mlog ("%s null or missing 'cluster_host_ip' value (rc:%d)\n", hostname.c_str(), rc);
             }
+        }
+        else if ( msg.cmd == MTC_MSG_MAIN_GOENABLED )
+        {
+            if ( !obj_ptr->my_hostname.compare(hostname) )
+            {
+                ilog ("%s received GOENABLED from self\n", hostname.c_str());
+            }
+            rc = send_mtc_cmd ( hostname , msg.cmd, MGMNT_INTERFACE );
+            if ( rc != PASS )
+            {
+                elog ("%s GOENABLED send reply failed (rc:%d)\n",
+                          hostname.c_str(), rc);
+
+                wlog ("%s ... need successful GOENABLED reply, dropping ...\n",
+                          hostname.c_str() );
+            }
+            else
+            {
+                mlog ("%s got GOENABLED (out-of-service tests passed) message\n", hostname.c_str());
+                obj_ptr->set_goEnabled ( hostname );
+            }
+        }
+        else if ( msg.cmd == MTC_MSG_MAIN_GOENABLED_FAILED )
+        {
+            if ( obj_ptr->get_adminState ( hostname ) == MTC_ADMIN_STATE__UNLOCKED )
+            {
+                wlog ("%s failed out-of-service test: %s\n", hostname.c_str(), &msg.buf[0] );
+                obj_ptr->set_goEnabled_failed ( hostname );
+            }
+            /* We don't send a reply on a fail */
+        }
+        else if ( msg.cmd == MTC_MSG_SUBF_GOENABLED )
+        {
+            mlog ("%s-worker GOENABLED message\n", hostname.c_str());
+            if ( !obj_ptr->my_hostname.compare(hostname) )
+            {
+                ilog ("%s-worker received GOENABLED from self\n", hostname.c_str());
+            }
+            rc = send_mtc_cmd ( hostname , msg.cmd, MGMNT_INTERFACE );
+            if ( rc != PASS )
+            {
+                elog ("%s-worker GOENABLED send reply failed (rc:%d)\n",
+                          hostname.c_str(), rc);
+
+                wlog ("%s-worker ... need successful GOENABLED reply, dropping ...\n",
+                          hostname.c_str() );
+            }
+            else
+            {
+                mlog ("%s-worker got GOENABLED (out-of-service tests passed) message\n", hostname.c_str());
+                obj_ptr->set_goEnabled_subf ( hostname );
+            }
+        }
+        else if ( msg.cmd == MTC_MSG_SUBF_GOENABLED_FAILED )
+        {
+            if ( obj_ptr->get_adminState ( hostname ) == MTC_ADMIN_STATE__UNLOCKED )
+            {
+                wlog ("%s-worker failed GOENABLE test: %s\n", hostname.c_str(), &msg.buf[0] );
+                obj_ptr->set_goEnabled_failed_subf ( hostname );
+            }
+            /* We don't send a reply on a fail */
+        }
+        else
+        {
+            wlog ("Unexpected worker message (0x%x) from '%s'\n", msg.cmd, hostname.c_str());
+        }
     }
 
     /*
@@ -359,183 +364,180 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
      */
     else if ( strstr ( &msg.hdr[0], get_mtce_event_header() ) )
     {
-        rc = PASS ;
-        if ( hostname.empty() )
-        {
-            mlog2 ( "Received mtce event from unknown host\n");
-            rc = FAIL_UNKNOWN_HOSTNAME ;
-        }
-        else if ( !hostname.compare("localhost") )
-        {
-            mlog2 ("localhost event (%x) ignored", msg.cmd);
-        }
-        else
-        {
-            string event = "" ;
+        string service = "" ;
+        string sensor  = "" ;
+        string process = "" ;
+        hostname = "unknown" ;
 
-            /* TODO: fix this hostname setting */
-            if (( msg.cmd == MTC_DEGRADE_CLEAR          ) ||
-                ( msg.cmd == MTC_DEGRADE_RAISE          ) ||
-                ( msg.cmd == MTC_EVENT_HWMON_CLEAR      ) ||
-                ( msg.cmd == MTC_EVENT_HWMON_MINOR      ) ||
-                ( msg.cmd == MTC_EVENT_HWMON_MAJOR      ) ||
-                ( msg.cmd == MTC_EVENT_HWMON_CRIT       ) ||
-                ( msg.cmd == MTC_EVENT_HWMON_RESET      ) ||
-                ( msg.cmd == MTC_EVENT_HWMON_POWERDOWN ) ||
-                ( msg.cmd == MTC_EVENT_HWMON_POWERCYCLE) ||
-                ( msg.cmd == MTC_EVENT_HWMON_CONFIG     ))
+        int rc1 = FAIL ;
+        if ( ( rc = jsonUtil_get_key_val(&msg.buf[0], MTC_JSON_INV_NAME, hostname )) == PASS )
+        {
+            if ( ( rc1 = jsonUtil_get_key_val(&msg.buf[0], MTC_JSON_SERVICE, service )) == PASS )
             {
-                hostname = &msg.hdr[MSG_HEADER_SIZE] ;
+                if (( msg.cmd == MTC_EVENT_HWMON_CLEAR )    ||
+                    ( msg.cmd == MTC_EVENT_HWMON_MINOR )    ||
+                    ( msg.cmd == MTC_EVENT_HWMON_MAJOR )    ||
+                    ( msg.cmd == MTC_EVENT_HWMON_CRIT )     ||
+                    ( msg.cmd == MTC_EVENT_HWMON_RESET )    ||
+                    ( msg.cmd == MTC_EVENT_HWMON_POWERDOWN )||
+                    ( msg.cmd == MTC_EVENT_HWMON_POWERCYCLE ))
+                {
+                    jsonUtil_get_key_val(&msg.buf[0], MTC_JSON_SENSOR, sensor );
+                }
+                else if (( msg.cmd == MTC_EVENT_PMON_CLEAR ) ||
+                         ( msg.cmd == MTC_EVENT_PMON_CRIT )  ||
+                         ( msg.cmd == MTC_EVENT_PMON_MAJOR ) ||
+                         ( msg.cmd == MTC_EVENT_PMON_MINOR ) ||
+                         ( msg.cmd == MTC_EVENT_PMON_LOG ))
+                {
+                    jsonUtil_get_key_val(&msg.buf[0], MTC_JSON_PROCESS, process );
+                }
             }
-            /* the mtce event (process or resource) that causes this raised event is at the
-             * head of the message buffer. Load it into an 'event'
-             * string to be passed into the individual handlers for
-             * convenience. Safer to pass reference to a string than
-             * the raw buffer pointer. */
-            if ( strnlen ( &msg.buf[0] , MAX_MTCE_EVENT_NAME_LEN ) )
+        }
+        if (( rc | rc1 ) != PASS )
+        {
+            elog ("received invalid event [rc:%d:%d]", rc, rc1);
+            print_mtc_message ( hostname, MTC_CMD_RX, msg, get_iface_name_str(iface), true );
+            return ( FAIL_INVALID_OPERATION );
+        }
+        switch ( msg.cmd )
+        {
+            case MTC_EVENT_MONITOR_READY:
             {
-                event = msg.buf ;
-            }
-
-            switch ( msg.cmd )
-            {
-                /* TODO: Port other services to use this common code */
-                case MTC_EVENT_MONITOR_READY:
+                if ( service == MTC_SERVICE_PMOND_NAME )
+                {
+                    obj_ptr->declare_service_ready ( hostname, MTC_SERVICE_PMOND );
+                    return (PASS);
+                }
+                else if ( service == MTC_SERVICE_HBSCLIENT_NAME )
+                {
+                    obj_ptr->declare_service_ready ( hostname, MTC_SERVICE_HEARTBEAT );
+                    return (PASS);
+                }
+                if (  service == MTC_SERVICE_HWMOND_NAME )
                 {
                     std::list<string>::iterator temp ;
-                    // bool start_monitoring_flag = false ;
 
-                    if ( !event.compare("pmond") )
-                    {
-                        /* Notify mtcAgent that we got a pmond ready event */
-                        obj_ptr->declare_service_ready ( hostname, MTC_SERVICE_PMOND );
-                        return (PASS);
-                    }
-                    else if ( !event.compare("hbsClient") )
-                    {
-                        /* Notify mtcAgent that we got a hbsClient ready event */
-                        obj_ptr->declare_service_ready ( hostname, MTC_SERVICE_HEARTBEAT );
-                        return (PASS);
-                    }
-
-                    /* If the active controller got the ready event from a local service
-                     * then push the inventory to that service and for each host that is
-                     * enabled send the start monitoring command to it if the bm_ip is
-                     * provisioned.
-                     * Handles the daemon restart case */
-                    for ( temp  = obj_ptr->hostname_inventory.begin () ;
+                    /* push inventory to hardware hwmond.
+                     * handles the daemon restart case.
+                     */
+                    for ( temp = obj_ptr->hostname_inventory.begin () ;
                           temp != obj_ptr->hostname_inventory.end () ;
                           temp++ )
                     {
                         hostname = temp->data();
-
-                        /* Set the general start monitoring flag based on service state.
-                         * This lag may be over ridden my individual services based on
-                         * additional information */
-                        if (( obj_ptr->get_adminState  ( hostname ) == MTC_ADMIN_STATE__UNLOCKED ) &&
-                            ( obj_ptr->get_operState   ( hostname ) == MTC_OPER_STATE__ENABLED ) &&
-                            ((obj_ptr->get_availStatus ( hostname ) == MTC_AVAIL_STATUS__AVAILABLE ) ||
-                             (obj_ptr->get_availStatus ( hostname ) == MTC_AVAIL_STATUS__DEGRADED )))
-                        {
-                            ; // start_monitoring_flag = true ;
-                        }
-                        else
-                        {
-                            ; // start_monitoring_flag = false ;
-                        }
-
-                        if ( !event.compare("hwmond") )
-                        {
-                            obj_ptr->declare_service_ready ( hostname, MTC_SERVICE_HWMOND );
-                        }
-                        else
-                        {
-                            wlog ("%s Global Ready Event not supported for '%s' service\n",
-                                      hostname.c_str(), event.c_str());
-
-                            return (FAIL_BAD_PARM);
-                        }
+                        obj_ptr->declare_service_ready ( hostname, MTC_SERVICE_HWMOND );
                     }
-                    break ;
                 }
+                else
+                {
+                    wlog ("%s ready event not supported for '%s' service\n",
+                              hostname.c_str(), service.c_str());
+                    return (FAIL_BAD_PARM);
+                }
+                break ;
+            }
 
-               /*****************************************************************
-                *                   Data Port Events                            *
-                *****************************************************************/
+            /*****************************************************************
+             *                Process Monitor Events
+             *                ----------------------
+             *
+             *  service is the process name for this event.
+             *  parm[0] is the nodetype the process serves.
+             *
+             *****************************************************************/
+            case MTC_EVENT_PMON_CLEAR:
+            {
+                mlog ("%s %s: '%s' recovered (clear)\n",
+                         hostname.c_str(),
+                         MTC_SERVICE_PMOND_NAME,
+                         service.c_str());
 
-               /*****************************************************************
-                *                Process Monitor Events                         *
-                *****************************************************************/
-                case MTC_EVENT_PMON_CLEAR:
-                {
-                    mlog ("%s pmond: '%s' recovered (clear)\n", hostname.c_str(), event.c_str());
-                    obj_ptr->degrade_pmond_clear ( hostname );
-                    break ;
-                }
-                case MTC_EVENT_PMON_CRIT:
-                {
-                    mlog ("%s pmond: '%s' failed (critical)\n", hostname.c_str(), event.c_str());
+                obj_ptr->degrade_pmond_clear ( hostname );
+                break ;
+            }
+            case MTC_EVENT_PMON_CRIT:
+            {
+                mlog ("%s %s: '%s' failed (critical)\n",
+                          hostname.c_str(),
+                          MTC_SERVICE_PMOND_NAME,
+                          process.c_str());
 
-                    /**
-                     *  event   is the process name that has failed
-                     *  parm[0] is the nodetype the process serves
-                     **/
-                    obj_ptr->critical_process_failed ( hostname, event, msg.parm[0] );
-                    break ;
-                }
-                case MTC_EVENT_PMON_MAJOR:
-                {
-                    mlog ("%s pmond: '%s' failed (major)\n", hostname.c_str(), event.c_str());
-                    obj_ptr->degrade_process_raise ( hostname, event );
-                    break ;
-                }
-                case MTC_EVENT_PMON_MINOR:
-                {
-                    mlog ("%s pmond: '%s' failed (minor)\n", hostname.c_str(), event.c_str());
-                    obj_ptr->alarm_process_failure ( hostname, event );
-                    break ;
-                }
-                case MTC_EVENT_PMON_LOG:
-                {
-                    mlog ("%s pmond: '%s' failed (log)\n", hostname.c_str(), event.c_str());
-                    obj_ptr->log_process_failure ( hostname, event );
-                    break ;
-                }
+                obj_ptr->critical_process_failed ( hostname,
+                                                   process,
+                                                   msg.parm[0] );
+                break ;
+            }
+            case MTC_EVENT_PMON_MAJOR:
+            {
+                mlog ("%s %s: '%s' failed (major)\n",
+                          hostname.c_str(),
+                          MTC_SERVICE_PMOND_NAME,
+                          process.c_str());
+                obj_ptr->degrade_process_raise ( hostname, process );
+                break ;
+            }
+            case MTC_EVENT_PMON_MINOR:
+            {
+                mlog ("%s %s: '%s' failed (minor)\n",
+                          hostname.c_str(),
+                          MTC_SERVICE_PMOND_NAME,
+                          process.c_str());
+                obj_ptr->alarm_process_failure ( hostname, process );
+                break ;
+            }
+            case MTC_EVENT_PMON_LOG:
+            {
+                mlog ("%s %s: '%s' failed (log)\n",
+                          hostname.c_str(),
+                          MTC_SERVICE_PMOND_NAME,
+                          process.c_str());
+                obj_ptr->log_process_failure ( hostname, process );
+                break ;
+            }
 
-                case MTC_EVENT_HWMON_CLEAR:
-                case MTC_DEGRADE_CLEAR:
-                {
-                    mlog ("%s hwmon requests to clear its degrade flag\n", hostname.c_str());
-                    obj_ptr->node_degrade_control ( hostname, MTC_DEGRADE_CLEAR , "hwmon" );
-                    break ;
-                }
-                case MTC_EVENT_HWMON_MINOR:
-                case MTC_EVENT_HWMON_MAJOR:
-                case MTC_EVENT_HWMON_CRIT:
-                case MTC_DEGRADE_RAISE:
-                {
-                    mlog ("%s hwmon requested to set its degrade flag\n", hostname.c_str());
-                    obj_ptr->node_degrade_control ( hostname, MTC_DEGRADE_RAISE , "hwmon" );
-                    break ;
-                }
-                case MTC_EVENT_HWMON_RESET:
-                case MTC_EVENT_HWMON_POWERDOWN:
-                case MTC_EVENT_HWMON_POWERCYCLE:
-                {
-                    mlog ("%s requires maintenance '%s' action due to failing '%s' sensor \n",
-                              hostname.c_str(),
-                              get_event_str(msg.cmd).c_str(),
-                              event.c_str());
+            case MTC_EVENT_HWMON_CLEAR:
+            case MTC_DEGRADE_CLEAR:
+            {
+                mlog ("%s %s degrade clear request",
+                          hostname.c_str(),
+                          service.c_str());
+                obj_ptr->node_degrade_control ( hostname,
+                                                MTC_DEGRADE_CLEAR,
+                                                service );
+                break ;
+            }
+            case MTC_EVENT_HWMON_MINOR:
+            case MTC_EVENT_HWMON_MAJOR:
+            case MTC_EVENT_HWMON_CRIT:
+            case MTC_DEGRADE_RAISE:
+            {
+                mlog ("%s %s degrade request %s",
+                          hostname.c_str(),
+                          service.c_str(),
+                          sensor.empty() ? "" : sensor.c_str());
+                obj_ptr->node_degrade_control ( hostname,
+                                                MTC_DEGRADE_RAISE,
+                                                sensor );
+                break ;
+            }
+            case MTC_EVENT_HWMON_RESET:
+            case MTC_EVENT_HWMON_POWERDOWN:
+            case MTC_EVENT_HWMON_POWERCYCLE:
+            {
+                mlog ("%s '%s' action due to failing '%s' sensor",
+                          hostname.c_str(),
+                          get_event_str(msg.cmd).c_str(),
+                          sensor.c_str());
 
-                    obj_ptr->invoke_hwmon_action ( hostname, msg.cmd, event );
-                    break ;
-                }
-                default:
-                {
-                    wlog ("%s Unknown Event (%x)\n", hostname.c_str(), msg.cmd );
-                    rc = FAIL ;
-                    break ;
-                }
+                obj_ptr->invoke_hwmon_action ( hostname, msg.cmd, sensor );
+                break ;
+            }
+            default:
+            {
+                wlog ("%s Unknown Event (%x)\n", hostname.c_str(), msg.cmd );
+                rc = FAIL ;
+                break ;
             }
         }
     }
@@ -731,8 +733,6 @@ int send_mtc_cmd ( string & hostname, int cmd , int interface )
 
 int send_hbs_command ( string hostname, int cmd, string controller )
 {
-    int bytes = 0 ;
-    int bytes_to_send = 0 ;
     int rc = PASS ;
 
     nodeLinkClass * obj_ptr = get_mtcInv_ptr () ;
@@ -741,11 +741,7 @@ int send_hbs_command ( string hostname, int cmd, string controller )
 
     memset (&event, 0 , sizeof(mtc_message_type));
     snprintf ( &event.hdr[0] , MSG_HEADER_SIZE, "%s", get_hbs_cmd_req_header() );
-    snprintf ( &event.hdr[MSG_HEADER_SIZE] , MAX_CHARS_HOSTNAME , "%s", hostname.data());
-
-    /* There is no buffer data in any of these messages */
-    bytes_to_send = ((sizeof(mtc_message_type))-(BUF_SIZE)) ;
-
+    snprintf ( &event.hdr[MSG_HEADER_SIZE] , MAX_CHARS_HOSTNAME_32 , "%s", hostname.data());
 
     event.cmd     = cmd ;
     event.num     = 1   ;
@@ -773,47 +769,105 @@ int send_hbs_command ( string hostname, int cmd, string controller )
     {
         switch ( cmd )
         {
-        case MTC_CMD_ACTIVE_CTRL:
-            mlog3 ("%s sending 'activity state' to %s heartbeat service\n", hostname.c_str(), unit->c_str());
-            break ;
-        case MTC_CMD_STOP_HOST:
-            ilog ("%s sending 'stop' to %s heartbeat service\n", hostname.c_str(), unit->c_str());
-            break ;
-        case MTC_CMD_START_HOST:
-            obj_ptr->manage_heartbeat_clear ( hostname , MAX_IFACES );
-            ilog ("%s sending 'start' to %s heartbeat service\n", hostname.c_str(), unit->c_str());
-            break ;
-        case MTC_CMD_DEL_HOST:
-            ilog ("%s sending 'delete' to %s heartbeat service\n", hostname.c_str(), unit->c_str());
-            break ;
-        case MTC_CMD_ADD_HOST:
-            obj_ptr->manage_heartbeat_clear ( hostname, MAX_IFACES );
-            ilog ("%s sending 'add' to %s heartbeat service\n", hostname.c_str(), unit->c_str());
-            break ;
-        case MTC_RESTART_HBS:
-            ilog ("%s sending 'restart' to %s heartbeat service\n", hostname.c_str(), unit->c_str());
-            break ;
-        case MTC_BACKOFF_HBS:
-            ilog ("%s requesting %s heartbeat period backoff\n", hostname.c_str(), unit->c_str());
-            break ;
-        case MTC_RECOVER_HBS:
-            ilog ("%s requesting %s heartbeat period recovery\n", hostname.c_str(), unit->c_str());
-            break ;
-        default:
-        {
-            slog ("%s Unsupported command operation 0x%x\n",  hostname.c_str(), cmd );
-            rc = FAIL_BAD_PARM ;
-            continue ;
-        }
+            case MTC_CMD_ADD_HOST:
+            case MTC_CMD_MOD_HOST:
+            case MTC_CMD_START_HOST:
+                obj_ptr->manage_heartbeat_clear ( hostname, MAX_IFACES );
+                break ;
+            case MTC_CMD_ACTIVE_CTRL:
+            case MTC_CMD_STOP_HOST:
+            case MTC_CMD_DEL_HOST:
+            case MTC_RESTART_HBS:
+            case MTC_BACKOFF_HBS:
+            case MTC_RECOVER_HBS:
+                break ;
+            default:
+            {
+                slog ("%s Unsupported command operation 0x%x\n",  hostname.c_str(), cmd );
+                rc = FAIL_BAD_PARM ;
+                continue ;
+            }
         }
 
-        ip = get_mtcInv_ptr()->get_hostaddr(*unit) ;
-        bytes = sock_ptr->mtc_to_hbs_sock->write((char*) &event, bytes_to_send, ip.data());
-        if ( bytes <= 0 )
+        /* the command */
+        event.cmd     = cmd ;
+
+        /* add the node type */
+        event.num     = 1   ;
+        event.parm[0] = obj_ptr->get_nodetype(hostname);
+
+        /* support for 64 byte hostnames */
+        event.ver = MTC_CMD_FEATURE_VER__KEYVALUE_IN_BUF ;
+
+        /* the json string with hostname starts at the beginning of the buffer */
+        event.res = 0 ;
+
+        /* build the message info */
+        string hbs_info = "{\"";
+        hbs_info.append(MTC_JSON_INV_NAME);
+        hbs_info.append("\":\"") ;
+        hbs_info.append(hostname);
+
+        hbs_info.append("\",\"");
+        hbs_info.append(MTC_JSON_INV_HOSTIP);
+        hbs_info.append("\":\"");
+        hbs_info.append(obj_ptr->get_hostaddr(hostname));
+
+        if  ( obj_ptr->clstr_network_provisioned )
         {
-            wlog ("%s failed to send command (0x%x) to heartbeat service at %s\n", unit->c_str(), cmd, ip.c_str() );
-            rc = FAIL_TO_TRANSMIT ;
+            hbs_info.append("\",\"");
+            hbs_info.append(MTC_JSON_INV_CLSTRIP);
+            hbs_info.append("\":\"");
+            hbs_info.append(obj_ptr->get_clstr_hostaddr(hostname));
         }
+        hbs_info.append("\"}");
+
+        /* copy the json info string into the buffer.
+         *
+         * add one to the length to accomodate for the null terminator
+         * snprintf automatically adds */
+        snprintf ( &event.buf[event.res], hbs_info.length()+1,
+                   "%s", hbs_info.data());
+
+        /* send to hbsAgent for the specific controller */
+        string ip = get_mtcInv_ptr()->get_hostaddr(*unit) ;
+        if ( ! ip.empty() )
+        {
+            rc = sock_ptr->mtc_to_hbs_sock->write((char*) &event,
+                                                   sizeof(mtc_message_type),
+                                                   ip.data());
+            if ( rc <= 0 )
+            {
+                wlog ("%s send command (0x%x) failed (%s)",
+                          unit->c_str(), cmd, ip.c_str() );
+                rc = FAIL_TO_TRANSMIT ;
+            }
+            else
+            {
+                if ( cmd == MTC_CMD_ACTIVE_CTRL )
+                {
+                    mlog3 ("%s %s sent to %s %s",
+                               hostname.c_str(),
+                               get_mtcNodeCommand_str(cmd),
+                               unit->c_str(),
+                               MTC_SERVICE_HBSAGENT_NAME);
+                }
+                else
+                {
+                    ilog ("%s %s sent to %s %s",
+                              hostname.c_str(),
+                              get_mtcNodeCommand_str(cmd),
+                              unit->c_str(),
+                              MTC_SERVICE_HBSAGENT_NAME);
+                }
+                rc  = PASS ;
+            }
+        }
+        else
+        {
+            rc = FAIL_STRING_EMPTY ;
+        }
+        print_mtc_message ( hostname, MTC_CMD_RX, event, get_iface_name_str(MGMNT_INTERFACE), rc );
     }
     return rc ;
 }
@@ -839,7 +893,7 @@ int service_events ( nodeLinkClass * obj_ptr, mtc_socket_type * sock_ptr )
     {
         wlog ("%s ignoring service event from unknown host (%s)",
                 obj_ptr->my_hostname.c_str(), hostaddr.c_str());
-        return (PASS);
+        return (FAIL_UNKNOWN_HOSTNAME);
     }
     if (( hostname != obj_ptr->my_hostname ) &&
         (( msg.cmd == MTC_EVENT_HEARTBEAT_LOSS )       ||
@@ -848,31 +902,64 @@ int service_events ( nodeLinkClass * obj_ptr, mtc_socket_type * sock_ptr )
          ( msg.cmd == MTC_EVENT_HEARTBEAT_DEGRADE_SET )||
          ( msg.cmd == MTC_EVENT_HEARTBEAT_DEGRADE_CLR )))
     {
-        wlog ("%s %s from %s heartbeat service",
-                &msg.buf[0],
-                get_mtcNodeCommand_str(msg.cmd),
-                hostname.c_str());
+        mlog3 ("%s '%s' heartbeat event for '%s' from inactive controller ... ignoring",
+                   hostname.c_str(),
+                   get_mtcNodeCommand_str(msg.cmd),
+                   msg.buf[0] ? &msg.buf[0] : "unknown host");
         return (PASS);
     }
-    if ( msg.cmd == MTC_EVENT_LOOPBACK )
-    {
-        const char * event_hdr_ptr = get_loopback_header() ;
 
-        /* Confirm header */
-        if ( strncmp ( &msg.hdr[0], event_hdr_ptr, MSG_HEADER_SIZE ) )
+    else if (( msg.cmd == MTC_EVENT_HEARTBEAT_LOSS )        ||
+             ( msg.cmd == MTC_EVENT_HEARTBEAT_MINOR_SET )   ||
+             ( msg.cmd == MTC_EVENT_HEARTBEAT_MINOR_CLR )   ||
+             ( msg.cmd == MTC_EVENT_HEARTBEAT_DEGRADE_SET ) ||
+             ( msg.cmd == MTC_EVENT_HEARTBEAT_DEGRADE_CLR ) ||
+             ( msg.cmd == MTC_EVENT_PMOND_CLEAR )           ||
+             ( msg.cmd == MTC_EVENT_PMOND_RAISE )           ||
+             ( msg.cmd == MTC_EVENT_HOST_STALLED ))
+    {
+        if (( msg.ver >= MTC_CMD_FEATURE_VER__KEYVALUE_IN_BUF ) &&
+            ( msg.buf[msg.res] == '{' ))
         {
-            elog ("Invalid Event header\n");
+            jsonUtil_get_key_val(&msg.buf[msg.res], MTC_JSON_INV_NAME, hostname) ;
+        }
+        else if ( msg.buf[0] != '\0' )
+        {
+           hostname = &msg.buf[0] ;
         }
         else
         {
-            ilog ("Service ping\n");
-
-            /* Should send back a response */
+            slog ("failed to get hostname from '%s' message",
+                   get_mtcNodeCommand_str(msg.cmd));
+            print_mtc_message ( "unknown", MTC_CMD_TX, msg, get_iface_name_str(MGMNT_INTERFACE), true );
+            return (FAIL_UNKNOWN_HOSTNAME);
         }
     }
 
-    else if (( msg.cmd == MTC_EVENT_HEARTBEAT_MINOR_SET ) ||
-             ( msg.cmd == MTC_EVENT_HEARTBEAT_MINOR_CLR ))
+    /* print the ready event log */
+    if (( msg.cmd != MTC_EVENT_HEARTBEAT_READY ) && ( !hostname.empty () ))
+    {
+        string log_suffix = "" ;
+        if (msg.num)
+        {
+            log_suffix = "(" ;
+            log_suffix.append(get_iface_name_str((int)msg.parm[0]));
+            log_suffix.append(")") ;
+        }
+        if ( msg.cmd != MTC_EVENT_MONITOR_READY )
+        {
+            ilog ("%s %s %s",
+                      hostname.c_str(),
+                      get_mtcNodeCommand_str(msg.cmd),
+                      log_suffix.c_str() );
+        }
+    }
+
+    /* handle the events */
+    /* ----------------- */
+    int rc = PASS ;
+    if (( msg.cmd == MTC_EVENT_HEARTBEAT_MINOR_SET ) ||
+        ( msg.cmd == MTC_EVENT_HEARTBEAT_MINOR_CLR ))
     {
         const char * event_hdr_ptr = get_heartbeat_event_header() ;
 
@@ -880,14 +967,12 @@ int service_events ( nodeLinkClass * obj_ptr, mtc_socket_type * sock_ptr )
         if ( strncmp ( &msg.hdr[0], event_hdr_ptr, MSG_HEADER_SIZE ) )
         {
             elog ("Invalid Heartbeat Event header\n");
+            rc = FAIL_BAD_PARM ;
         }
         else
         {
-            string hostname = &msg.buf[0] ;
-            print_mtc_message ( hostname, MTC_CMD_RX, msg, get_iface_name_str(MGMNT_INTERFACE), false );
-
-            /* The interface that the heartbeat loss occurred over is
-             * specified in parm[0 for this command
+            /* The interface that the heartbeat minor occurred over is
+             * specified in parm[0] for this command
              * 0 = MGMNT_IFACE
              * 1 = CLSTR_IFACE
              * else default to 0 (MGMNT_IFACE) to be backwards compatible
@@ -922,14 +1007,12 @@ int service_events ( nodeLinkClass * obj_ptr, mtc_socket_type * sock_ptr )
         if ( strncmp ( &msg.hdr[0], event_hdr_ptr, MSG_HEADER_SIZE ) )
         {
             elog ("Invalid Heartbeat Event header\n");
+            rc = FAIL_BAD_PARM ;
         }
         else
         {
-            string hostname = &msg.buf[0] ;
-            print_mtc_message ( hostname, MTC_CMD_RX, msg, get_iface_name_str(MGMNT_INTERFACE), false );
-
-            /* The interface that the heartbeat loss occurred over is
-             * specified in parm[0 for this command
+            /* The interface that the heartbeatdegrade  occurred over is
+             * specified in parm[0] for this command
              * 0 = MGMNT_IFACE
              * 1 = CLSTR_IFACE
              * else default to 0 (MGMNT_IFACE) to be backwards compatible
@@ -976,6 +1059,7 @@ int service_events ( nodeLinkClass * obj_ptr, mtc_socket_type * sock_ptr )
         if ( strncmp ( &msg.hdr[0], loss_hdr_ptr, MSG_HEADER_SIZE ) )
         {
             elog ("Invalid Heartbeat Loss event header\n");
+            rc = FAIL_BAD_PARM ;
         }
         else
         {
@@ -994,8 +1078,6 @@ int service_events ( nodeLinkClass * obj_ptr, mtc_socket_type * sock_ptr )
                     iface = CLSTR_IFACE ;
                 }
             }
-            string hostname = &msg.buf[0] ;
-            print_mtc_message ( hostname, MTC_CMD_RX, msg, get_iface_name_str(MGMNT_INTERFACE), false );
 
             /* If heartbeat failure action is fail then call the fail handler */
             if ( obj_ptr->hbs_failure_action == HBS_FAILURE_ACTION__FAIL )
@@ -1017,24 +1099,18 @@ int service_events ( nodeLinkClass * obj_ptr, mtc_socket_type * sock_ptr )
     }
     else if ( msg.cmd == MTC_EVENT_PMOND_CLEAR )
     {
-        string hostname = &msg.hdr[MSG_HEADER_SIZE] ;
-        string process = "pmond" ;
+        string process = MTC_SERVICE_PMOND_NAME ;
         ilog ("%s Degrade Clear Event for process '%s'\n", hostname.c_str(), process.c_str());
-        print_mtc_message ( hostname, MTC_CMD_RX, msg, get_iface_name_str(MGMNT_INTERFACE), false );
         obj_ptr->degrade_pmond_clear ( hostname );
     }
     else if ( msg.cmd ==  MTC_EVENT_PMOND_RAISE )
     {
-        string hostname = &msg.hdr[MSG_HEADER_SIZE] ;
-        string process = "pmond" ;
+        string process = MTC_SERVICE_PMOND_NAME ;
         ilog ("%s Degrade Assert Event for process '%s'\n", hostname.c_str(), process.c_str());
-        print_mtc_message ( hostname, MTC_CMD_RX, msg, get_iface_name_str(MGMNT_INTERFACE), false );
         obj_ptr->degrade_process_raise ( hostname , process );
     }
     else if ( msg.cmd ==  MTC_EVENT_HOST_STALLED )
     {
-        string hostname = &msg.hdr[MSG_HEADER_SIZE] ;
-        print_mtc_message ( hostname, MTC_CMD_RX, msg, get_iface_name_str(MGMNT_INTERFACE), false );
         elog ("%s Stalled !!!\n", hostname.c_str());
     }
 
@@ -1042,10 +1118,12 @@ int service_events ( nodeLinkClass * obj_ptr, mtc_socket_type * sock_ptr )
     {
         string daemon = &msg.hdr[MSG_HEADER_SIZE] ;
 
-        if ( !daemon.compare("guestAgent") )
+        if ( !daemon.compare(MTC_SERVICE_GUESTAGENT_NAME) )
         {
             std::list<string>::iterator temp ;
-            int rc = PASS ;
+            rc = PASS ;
+
+            ilog ("%s %s ready event", hostname.c_str(), MTC_SERVICE_GUESTAGENT_NAME );
 
             /* If the active controller got the ready event from a local service
              * then push the inventory to that service and for each host that is
@@ -1055,15 +1133,19 @@ int service_events ( nodeLinkClass * obj_ptr, mtc_socket_type * sock_ptr )
                   temp != obj_ptr->hostname_inventory.end () ;
                   temp++ )
             {
-                string hostname = temp->data();
+                hostname = temp->data();
                 rc = send_guest_command ( hostname, MTC_CMD_ADD_HOST );
                 if ( rc )
                 {
-                    elog ("%s host add to '%s' failed\n", hostname.c_str(), daemon.c_str());
+                    elog ("%s host add to '%s' failed",
+                              hostname.c_str(),
+                              daemon.c_str());
                 }
                 else
                 {
-                    ilog ("%s added to guestAgent\n", hostname.c_str());
+                    ilog ("%s added to %s",
+                            hostname.c_str(),
+                            daemon.c_str());
                 }
             }
             /* Done sending the host info */
@@ -1076,40 +1158,41 @@ int service_events ( nodeLinkClass * obj_ptr, mtc_socket_type * sock_ptr )
 
     else if ( msg.cmd == MTC_EVENT_HEARTBEAT_READY )
     {
-        string controller = CONTROLLER ;
-        std::list<string>::iterator temp ;
-
         /* no heartbeating in simplex mode */
         if ( obj_ptr->system_type == SYSTEM_TYPE__CPE_MODE__SIMPLEX )
         {
             return (PASS);
         }
 
-        /* get the controller that sent this ready event */
-        if (( msg.buf[0] != '\0' ) && ( strnlen( msg.buf, BUF_SIZE) <= MAX_CHARS_HOSTNAME ))
+        /* Support for json formatted message in buffer */
+        if (( msg.ver >= MTC_CMD_FEATURE_VER__KEYVALUE_IN_BUF ) &&
+            ( msg.buf[msg.res] == '{' ))
         {
-            controller = msg.buf ;
-            ilog ("%s Heartbeat Service Ready Event (%s)\n",
-                      msg.buf, sock_ptr->mtc_event_rx_sock->get_src_str());
+            jsonUtil_get_key_val(&msg.buf[msg.res], MTC_JSON_INV_NAME, hostname) ;
         }
-        else
-        {
-            ilog ("Heartbeat Service Ready Event\n");
-        }
-        obj_ptr->hbs_ready = true ;
+        ilog ("%s %s ready event",
+                  hostname.c_str(),
+                  MTC_SERVICE_HBSAGENT_NAME);
 
-        /* Run Maintenance on Inventory */
+        obj_ptr->hbs_ready = true ;
+        /* Send inventory to the controller's hbsAgent that sent
+         * the ready request. Save controller hostname. */
+        string controller = hostname ;
+        ilog ("%s %s inventory push ... start",
+                  controller.c_str(),
+                  MTC_SERVICE_HBSAGENT_NAME);
+
+        std::list<string>::iterator temp ;
         for ( temp  = obj_ptr->hostname_inventory.begin () ;
               temp != obj_ptr->hostname_inventory.end () ;
               temp++ )
         {
-            string hostname = "" ;
-            hostname.append( temp->c_str() ) ;
+            hostname = temp->data();
 
-          /* Add all hosts, even the active controller, to
-           * the heartbeat service. This tell the heartbeat
-           * service about all the hosts so that it will
-           * send heartbeat oob flag events to mtce. */
+           /* Add all hosts, even the active controller, to
+            * the heartbeat service. This tell the heartbeat
+            * service about all the hosts so that it will
+            * send heartbeat oob flag events to mtce. */
             if ( send_hbs_command( hostname, MTC_CMD_ADD_HOST, controller ) != PASS )
             {
                 elog ("%s Failed to send inventory to heartbeat service\n", hostname.c_str());
@@ -1123,12 +1206,18 @@ int service_events ( nodeLinkClass * obj_ptr, mtc_socket_type * sock_ptr )
                 send_hbs_command ( hostname, MTC_CMD_START_HOST, controller );
             }
         }
+        ilog ("%s %s inventory push ... done",
+                  controller.c_str(),
+                  MTC_SERVICE_HBSAGENT_NAME);
     }
     else
     {
-         wlog ("Unrecognized Event from Heartbeat Service (hbsAgent)\n");
+        wlog ("Unrecognized Event from Heartbeat Service (hbsAgent)\n");
+        rc = FAIL_BAD_PARM ;
     }
-    return PASS ;
+    /* print the message if there was an error */
+    print_mtc_message ( hostname, MTC_CMD_TX, msg, get_iface_name_str(MGMNT_INTERFACE), rc );
+    return rc ;
 }
 
 
@@ -1158,7 +1247,10 @@ int send_hwmon_command ( string hostname, int command )
                 get_mtcInv_ptr()->set_hwmond_monitor_state ( hostname, false );
             }
 
-            ilog ("%s sending '%s' to hwmond service\n", hostname.c_str(), get_event_str(command).c_str());
+            ilog ("%s %s sent to %s",
+                      hostname.c_str(),
+                      get_mtcNodeCommand_str(command),
+                      MTC_SERVICE_HWMOND_NAME);
             break ;
         }
         default:
@@ -1173,23 +1265,31 @@ int send_hwmon_command ( string hostname, int command )
         mtc_message_type cmd ;
 
         string hwmon_info = "" ;
-        int bytes = 0;
 
         mtc_socket_type * sock_ptr = get_sockPtr ();
         nodeLinkClass * obj_ptr = get_mtcInv_ptr ();
 
         memset   ( &cmd, 0 , sizeof(mtc_message_type));
         snprintf ( &cmd.hdr[0] , MSG_HEADER_SIZE, "%s", get_cmd_req_msg_header());
-        snprintf ( &cmd.hdr[MSG_HEADER_SIZE], MAX_CHARS_HOSTNAME, "%s", hostname.data());
+        snprintf ( &cmd.hdr[MSG_HEADER_SIZE], MAX_CHARS_HOSTNAME_32, "%s", hostname.data());
 
-        /* Store the command, get the board management info and copy it into the message buffer */
+        /* Support for 64 byte hostnames */
+        cmd.ver = MTC_CMD_FEATURE_VER__KEYVALUE_IN_BUF ;
+
+        /* Hostname starts at the beginning of the buffer */
+        cmd.res = 0 ;
+
+        /* Store the command */
         cmd.cmd = command ;
-        hwmon_info = obj_ptr->get_hwmon_info ( hostname );
-        memcpy ( &cmd.buf[0], hwmon_info.data(), hwmon_info.length());
 
-        /* rc = message size */
-        bytes = sizeof(mtc_message_type);
-        rc = sock_ptr->hwmon_cmd_sock->write((char *)&cmd, bytes, obj_ptr->my_float_ip.c_str(), 0);
+        /* Copy the board management info string into the buffer and add one
+         * to the length to accomodate for the null terminator snprintf
+         * automatically adds */
+
+        hwmon_info = obj_ptr->get_hwmon_info ( hostname );
+        snprintf ( &cmd.buf[cmd.res] , hwmon_info.length()+1, "%s", hwmon_info.data());
+
+        rc = sock_ptr->hwmon_cmd_sock->write((char *)&cmd, sizeof(mtc_message_type), obj_ptr->my_float_ip.c_str(), 0);
         if ( 0 > rc )
         {
             elog ("%s Failed sendto command to hwmond (%d:%s)\n", hostname.c_str(), errno, strerror(errno));
@@ -1197,12 +1297,9 @@ int send_hwmon_command ( string hostname, int command )
         }
         else
         {
-            print_mtc_message ( hostname, MTC_CMD_TX, cmd, get_iface_name_str(MGMNT_INTERFACE), false );
             rc = PASS ;
         }
+        print_mtc_message ( hostname, MTC_CMD_TX, cmd, get_iface_name_str(MGMNT_INTERFACE), rc );
     }
     return rc ;
 }
-
-
-

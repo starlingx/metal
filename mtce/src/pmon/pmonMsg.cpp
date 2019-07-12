@@ -249,116 +249,87 @@ int pmon_send_pulse ( void )
 int pmon_send_event ( unsigned int event_cmd , process_config_type * ptr )
 {
     mtc_message_type event ;
-
     int rc    = PASS ;
-    int bytes = 0    ;
 
     /* Don't report events while we are in reset mode */
     if ( daemon_is_file_present ( NODE_RESET_FILE ) )
        return ( PASS );
 
+    pmon_ctrl_type * ctrl_ptr = get_ctrl_ptr () ;
     memset (&event, 0 , sizeof(mtc_message_type));
+    snprintf ( &event.hdr[0], MSG_HEADER_SIZE, "%s", get_mtce_event_header());
 
-    if (( event_cmd == MTC_EVENT_MONITOR_READY) ||
-        ( event_cmd == MTC_EVENT_PMON_LOG)      ||
-        ( event_cmd == MTC_EVENT_PMON_MINOR)    ||
-        ( event_cmd == MTC_EVENT_PMON_MAJOR)    ||
-        ( event_cmd == MTC_EVENT_PMON_CRIT )    ||
-        ( event_cmd == MTC_EVENT_PMON_CLEAR ))
+    event.cmd = event_cmd ;
+    event.ver = MTC_CMD_FEATURE_VER__KEYVALUE_IN_BUF  ;
+    event.num = 1 ;
+    event.parm[0] = ctrl_ptr->nodetype ; /* default to node type */
+
+    string event_info = "{\"" ;
+    event_info.append(MTC_JSON_INV_NAME);
+    event_info.append("\":\"");
+    event_info.append(ctrl_ptr->my_hostname);
+    event_info.append("\",\"");
+    event_info.append(MTC_JSON_SERVICE);
+    event_info.append("\":\"");
+    event_info.append(MTC_SERVICE_PMOND_NAME );
+    if ( ( ptr != NULL ) && ( ptr->process ) )
     {
-        pmon_ctrl_type * ctrl_ptr = get_ctrl_ptr () ;
+        event_info.append("\",\"");
+        event_info.append(MTC_JSON_PROCESS);
+        event_info.append("\":\"");
+        event_info.append(ptr->process);
+    }
+    event_info.append( "\"}");
 
-        snprintf ( &event.hdr[0], MSG_HEADER_SIZE, "%s", get_mtce_event_header());
+    size_t len =  event_info.length()+1 ;
+    snprintf ( &event.buf[0], len, "%s", event_info.data());
+    int bytes = ((sizeof(mtc_message_type))-(BUF_SIZE-len));
 
-        /* Set the version/revision for PMON messages. */
-        event.ver = MTC_MSG_VERSION_15_12_GA_PMON  ;
-        event.rev = MTC_MSG_REVISION_15_12_GA_PMON ;
-
-        if ( ptr->process )
+    /* override with subfunction case */
+    if (( ptr != NULL ) &&
+        ( ctrl_ptr->subfunction != 0 ) &&
+        ( ctrl_ptr->subfunction != ctrl_ptr->function ))
+    {
+        if ( ptr->subfunction != NULL )
         {
-            /* We don't use the buffer for pmon events to remove it from the size */
-            bytes = ((sizeof(mtc_message_type))-(BUF_SIZE-MAX_FILENAME_LEN));
-
-            snprintf( &event.buf[0], MAX_PROCESS_NAME_LEN, "%s", ptr->process );
-
-            /* Put the process function in parm zero of the event message */
-            event.num = 1 ;
-            event.parm[0] = ctrl_ptr->nodetype ; /* default to node type */
-
-            if ( event_cmd == MTC_EVENT_PMON_CLEAR )
+            string temp = ptr->subfunction ;
+            event.parm[0]= get_host_function_mask (temp) ;
+            if ( ( event_cmd == MTC_EVENT_PMON_MINOR) ||
+                 ( event_cmd == MTC_EVENT_PMON_MAJOR) ||
+                 ( event_cmd == MTC_EVENT_PMON_LOG)   ||
+                 ( event_cmd == MTC_EVENT_PMON_CRIT ) )
             {
-                dlog ("pmond degrade clear\n" );
-                snprintf( &event.buf[0], MAX_PROCESS_NAME_LEN, "%s", "pmond" );
+                mlog ("%s process failed\n", ptr->process );
             }
-            else if (( event_cmd == MTC_EVENT_PMON_CRIT ) ||
-                     ( event_cmd == MTC_EVENT_PMON_MAJOR ))
+            else if (( event_cmd == MTC_EVENT_PMON_CLEAR ) && ( ptr->was_failed == true ))
             {
-                wlog ("%s caused degrade assert\n", ptr->process );
-            }
-            else if ( event_cmd == MTC_EVENT_PMON_MINOR )
-            {
-                slog ("degrade does not apply to minor\n" );
-                rc = FAIL_BAD_CASE ;
-            }
-
-            /* override with subfunction case */
-            if (( ctrl_ptr->subfunction != 0 ) &&
-                ( ctrl_ptr->subfunction != ctrl_ptr->function ))
-            {
-                if ( ptr->subfunction != NULL )
-                {
-                    string temp = ptr->subfunction ;
-                    event.parm[0]= get_host_function_mask (temp) ;
-                    if ( ( event_cmd == MTC_EVENT_PMON_MINOR) ||
-                         ( event_cmd == MTC_EVENT_PMON_MAJOR) ||
-                         ( event_cmd == MTC_EVENT_PMON_LOG)   ||
-                         ( event_cmd == MTC_EVENT_PMON_CRIT ) )
-                    {
-                        mlog ("%s process failed\n", ptr->process );
-                    }
-                    else if (( event_cmd == MTC_EVENT_PMON_CLEAR ) && ( ptr->was_failed == true ))
-                    {
-                        ilog ("%s process recovered\n", ptr->process );
-                        ptr->was_failed = false ;
-                    }
-                }
+                ilog ("%s process recovered\n", ptr->process );
+                ptr->was_failed = false ;
             }
         }
     }
-    else if ( event_cmd == MTC_EVENT_LOOPBACK )
-    {
-        snprintf ( &event.hdr[0] , MSG_HEADER_SIZE, "%s", get_loopback_header());
-
-        /* We don't use the buffer for pmon events to remove it from the size */
-        bytes = ((sizeof(mtc_message_type))-(BUF_SIZE));
-    }
-    else
-    {
-        elog ("Unsupported process monitor event (%d)\n", event_cmd );
-        return ( FAIL_BAD_CASE );
-    }
-
-    event.cmd = event_cmd ;
-
-    print_mtc_message ( LOCALHOST, MTC_CMD_TX, event, get_iface_name_str(MGMNT_INTERFACE), false );
 
     /* Send the event */
     if ((rc = pmon_sock.event_sock->write((char*)&event.hdr[0], bytes)) != bytes )
     {
-        elog ("Message send failed. (%d)\n", rc);
-        elog ("Message: %d bytes to <%s:%d>\n", bytes,
-                pmon_sock.event_sock->get_dst_addr()->toString(),
-                    pmon_sock.event_sock->get_dst_addr()->getPort());
+        elog ("event message send failed (%d) (%d) (%d:%m) (%s:%d)\n",
+                     bytes, rc, errno,
+                     pmon_sock.event_sock->get_dst_addr()->toString(),
+                     pmon_sock.event_sock->get_dst_addr()->getPort());
     }
     else
     {
         string severity = get_event_str ( event.cmd );
-        mlog ("Sending '%s' event for process '%s' to %s:%d (bytes:%d)\n",
-                  severity.c_str(), event.buf,
-                  pmon_sock.event_sock->get_dst_addr()->toString(),
-                  pmon_sock.event_sock->get_dst_addr()->getPort(), bytes);
+        if ( ptr )
+        {
+            /* Only log the clear event for a specified process.
+             * Avoid logging the periodic degrade clear event. */
+            ilog ("%s %s sent", ctrl_ptr->my_hostname,
+                                get_mtcNodeCommand_str(event_cmd));
+        }
         rc = PASS ;
     }
+    print_mtc_message ( ctrl_ptr->my_hostname, MTC_CMD_TX, event, get_iface_name_str(MGMNT_INTERFACE), rc );
     return rc ;
 }
 

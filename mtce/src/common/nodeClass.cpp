@@ -281,6 +281,7 @@ nodeLinkClass::nodeLinkClass()
     my_hostname.clear() ;
     my_local_ip.clear() ;
     my_float_ip.clear() ;
+    my_clstr_ip.clear() ;
     active_controller_hostname.clear() ;
     inactive_controller_hostname.clear() ;
 
@@ -2351,15 +2352,15 @@ int nodeLinkClass::mod_host ( node_inv_type & inv )
         }
         if ( node_ptr->clstr_ip.compare ( inv.clstr_ip ) )
         {
-            if (( hostUtil_is_valid_ip_addr ( inv.clstr_ip )) || ( hostUtil_is_valid_ip_addr ( node_ptr->clstr_ip )))
+            if ( hostUtil_is_valid_ip_addr ( inv.clstr_ip ))
             {
                 plog ("%s Modify 'clstr_ip' from %s -> %s\n",
                       node_ptr->hostname.c_str(),
                       node_ptr->clstr_ip.c_str(), inv.clstr_ip.c_str() );
 
                 modify = true ; /* we have a delta */
+                node_ptr->clstr_ip = inv.clstr_ip ;
             }
-            node_ptr->clstr_ip = inv.clstr_ip ;
         }
         if ( (!inv.name.empty()) && (node_ptr->hostname.compare ( inv.name)) )
         {
@@ -2976,10 +2977,13 @@ int nodeLinkClass::add_heartbeat_host ( const node_inv_type & inv )
         /* Handle the case where we are adding a node that is already     */
         /* present if so just update the inventory data not the mtc state */
         node_ptr = nodeLinkClass::getNode(inv.name);
-        if ( node_ptr ) 
+        if ( node_ptr )
         {
             dlog ("%s already provisioned\n", node_ptr->hostname.c_str());
-            rc = RETRY ;
+            node_ptr->nodetype = inv.nodetype ;
+            node_ptr->ip = inv.ip ;
+            node_ptr->clstr_ip = inv.clstr_ip ;
+            rc = PASS ;
         }
         /* Otherwise add it as a new node */
         else
@@ -2989,6 +2993,8 @@ int nodeLinkClass::add_heartbeat_host ( const node_inv_type & inv )
             {
                 node_ptr->hostname = inv.name     ;
                 node_ptr->nodetype = inv.nodetype ;
+                node_ptr->ip = inv.ip ;
+                node_ptr->clstr_ip = inv.clstr_ip ;
                 dlog ("%s added to linked list\n", inv.name.c_str());
                 rc = PASS ;
             }
@@ -3323,21 +3329,32 @@ int nodeLinkClass::set_clstr_hostaddr ( string & hostname, string & ip )
     node_ptr = nodeLinkClass::getNode ( hostname );
     if ( node_ptr != NULL )
     {
-        node_ptr->clstr_ip = ip ;
+        if (( hostUtil_is_valid_ip_addr(ip)) && ( node_ptr->clstr_ip != ip ))
+        {
+            ilog ("%s cluster address provision change from %s to %s",
+                   hostname.c_str(),
+                   node_ptr->clstr_ip.empty() ? "none" : node_ptr->clstr_ip.c_str(),
+                   ip.c_str());
+            node_ptr->clstr_ip = ip ;
+            send_hbs_command ( node_ptr->hostname, MTC_CMD_MOD_HOST );
+        }
         rc = PASS ;
     }
     return ( rc );
 }
 
-string nodeLinkClass::get_hostname ( string & hostaddr )
+string nodeLinkClass::get_hostname ( string hostaddr )
 {
     if (( hostaddr == LOOPBACK_IPV6 ) ||
-        ( hostaddr == LOOPBACK_IP ) ||
-        ( hostaddr == LOCALHOST ))
+        ( hostaddr == LOOPBACK_IP )   ||
+        ( hostaddr == LOCALHOST )     ||
+        ( hostaddr == my_local_ip )   ||
+        ( hostaddr == my_float_ip )   ||
+        ( hostaddr == my_clstr_ip ))
     {
-        return(my_hostname);
+        return(this->my_hostname);
     }
-    else
+    else if ( this->hosts )
     {
         nodeLinkClass::node* node_ptr ;
         node_ptr = nodeLinkClass::getNode ( hostaddr );
@@ -3345,8 +3362,8 @@ string nodeLinkClass::get_hostname ( string & hostaddr )
         {
             return ( node_ptr->hostname );
         }
-        return ( null_str );
     }
+    return ( null_str );
 }
 
 string nodeLinkClass::get_hostname_from_bm_ip ( string bm_ip )
@@ -4763,7 +4780,9 @@ int nodeLinkClass::declare_service_ready  ( string & hostname,
     else if ( service == MTC_SERVICE_PMOND )
     {
         node_ptr->pmond_ready = true ;
-        plog ("%s got pmond ready event\n", hostname.c_str());
+        plog ("%s %s ready event\n",
+                  hostname.c_str(),
+                  MTC_SERVICE_PMOND_NAME);
 
         /* A ready event means that pmond pocess has started.
          * Any previous history is gone. Cleanup mtce.
@@ -4775,7 +4794,9 @@ int nodeLinkClass::declare_service_ready  ( string & hostname,
     else if ( service == MTC_SERVICE_HWMOND )
     {
         node_ptr->hwmond_ready = true ;
-        plog ("%s got hwmond ready event\n", hostname.c_str());
+        plog ("%s %s ready event\n",
+                  hostname.c_str(),
+                  MTC_SERVICE_HWMOND_NAME);
         if ( node_ptr->bm_provisioned == true )
         {
             send_hwmon_command ( node_ptr->hostname, MTC_CMD_ADD_HOST );
@@ -4788,7 +4809,9 @@ int nodeLinkClass::declare_service_ready  ( string & hostname,
         if ( node_ptr->hbsClient_ready == false )
         {
             node_ptr->hbsClient_ready = true ;
-            plog ("%s got hbsClient ready event\n", hostname.c_str());
+            plog ("%s %s ready event\n",
+                      hostname.c_str(),
+                      MTC_SERVICE_HBSCLIENT_NAME);
         }
         return (PASS);
     }
@@ -4901,7 +4924,7 @@ int nodeLinkClass::node_degrade_control ( string & hostname, int state, string s
             slog ("%s service not specified", hostname.c_str());
             return (FAIL_STRING_EMPTY);
         }
-        else if ( !service.compare("hwmon") )
+        else if ( service == MTC_SERVICE_HWMOND_NAME )
         {
             service_flag = DEGRADE_MASK_HWMON ;
         }
@@ -5047,6 +5070,9 @@ int nodeLinkClass::invoke_hwmon_action  ( string & hostname, int action, string 
                 {
                     mtcTimer_reset ( node_ptr->hwmon_reset.recovery_timer );
                     mtcTimer_start ( node_ptr->hwmon_reset.recovery_timer, mtcTimer_handler, MTC_MINS_15 );
+
+                   wlog ("%s invoking 'reset' due to critical '%s' sensor assertion\n",
+                             hostname.c_str(), sensor.c_str());
 
                     force_full_enable ( node_ptr );
                 }
@@ -7394,7 +7420,7 @@ bool nodeLinkClass::get_hwmond_monitor_state ( string & hostname )
 {
     bool state = false ;
     if ( hostname.length() )
-    {  
+    {
         struct nodeLinkClass::node* node_ptr ;
         node_ptr = nodeLinkClass::getNode ( hostname );
         if ( node_ptr != NULL )
@@ -7419,9 +7445,14 @@ bool nodeLinkClass::get_hbs_monitor_state ( string & hostname, int iface )
             state = node_ptr->monitor[iface] ;
             if ( state == true )
             {
-                wlog_throttled (node_ptr->no_rri_log_throttle, rri_max,
-                                "%s Not Offering RRI (%d)\n",
-                                hostname.c_str(), this->hosts );
+                /* fast lookup not supported for hostnames longer than 31
+                 * chars so in those cases don't do Not Offering RRI log */
+                if ( hostname.length() < MAX_CHARS_HOSTNAME_32 )
+                {
+                    wlog_throttled (node_ptr->no_rri_log_throttle, rri_max,
+                                    "%s Not Offering RRI (hosts:%d)\n",
+                                    hostname.c_str(), this->hosts );
+                }
             }
             else
             {
@@ -7450,7 +7481,7 @@ void nodeLinkClass::manage_pulse_flags ( string & hostname, unsigned int flags )
 /* Manage the heartbeat pulse flags by pulse_ptr */
 void nodeLinkClass::manage_pulse_flags ( struct nodeLinkClass::node * node_ptr, unsigned int flags )
 {
-    /* Do nothing with the flags for missing pulse 
+    /* Do nothing with the flags for missing pulse
      * responses (identified with flags=NULL_PULSE_FLAGS) */
     if ( flags == NULL_PULSE_FLAGS )
     {
@@ -7473,9 +7504,9 @@ void nodeLinkClass::manage_pulse_flags ( struct nodeLinkClass::node * node_ptr, 
         /* TODO: Does this need to be debounced ??? */
         node_ptr->monitor[CLSTR_IFACE] = true ;
     }
-    
+
     /* A host indicates that its process monitor is running by setting the
-     * PMOND_FLAG occasionally in its pulse response. 
+     * PMOND_FLAG occasionally in its pulse response.
      * The following if/else if clauses manage raising an alarm and degrading
      * a host has stopped sending the PMOND_FLAG. */
     if ( flags & PMOND_FLAG )
@@ -7707,8 +7738,8 @@ struct nodeLinkClass::node* nodeLinkClass::getPulseNode ( string & hostname , if
 /* Find the node  in the list of nodes being heartbeated and splice it out */
 int nodeLinkClass::remPulse_by_index ( string hostname, int index, iface_enum iface, bool clear_b2b_misses_count, unsigned int flags )
 {
-    int rc = FAIL ;
-    if (( index > 0 ) && ( !(index > hosts)))
+    int rc = RETRY ;
+    if (!(index > hosts))
     {
         if ( hbs_rra[index] != NULL )
         {
@@ -7727,14 +7758,20 @@ int nodeLinkClass::remPulse_by_index ( string hostname, int index, iface_enum if
                     }
                     else
                     {
-                        wlog_throttled ( node_ptr->unexpected_pulse_log_throttle, 200, "%s is not being monitored\n", hostname.c_str());
+                        wlog_throttled ( node_ptr->unexpected_pulse_log_throttle, 200,
+                                         "%s is not being monitored\n",
+                                         hostname.c_str());
                         rc = PASS;
                     }
                 }
                 else
                 {
                     rc = remPulse_by_name ( hostname, iface, clear_b2b_misses_count, flags );
-                    wlog_throttled ( node_ptr->lookup_mismatch_log_throttle, 200, "%s rri lookup mismatch (%s:%d) ; %s\n", hostname.c_str(), node_ptr->hostname.c_str(), index, rc ? "" : "removed by hostname" );
+                    wlog_throttled ( node_ptr->lookup_mismatch_log_throttle, 200,
+                                     "%s rri lookup mismatch (%s:%d) ; %s\n",
+                                     hostname.c_str(),
+                                     node_ptr->hostname.c_str(),
+                                     index, rc ? "" : "removed by hostname" );
                     return (rc);
                 }
             }
@@ -7984,13 +8021,6 @@ int nodeLinkClass::remPulse ( struct node * node_ptr, iface_enum iface, bool cle
  *  By index does not require a lookup whereas hostname does */
 int nodeLinkClass::remove_pulse ( string & hostname, iface_enum iface, int index, unsigned int flags )
 {
-    /* TODO: consider removing this check */
-    if ( hostname == "localhost" )
-    {
-        /* localhost is not a supported hostname and indicates
-         * an unconfigured host response ; return the ignore response */
-        return(ENXIO);
-    }
     if ( index )
     {
         int rc = remPulse_by_index ( hostname, index , iface, true , flags );
@@ -8001,8 +8031,11 @@ int nodeLinkClass::remove_pulse ( string & hostname, iface_enum iface, int index
             default: mlog ("%s RRI Miss (rri:%d) (rc:%d)\n", hostname.c_str(), index, rc );
         }
     }
-    else
+    /* fast lookup not supported for hostnames longer than 31
+     * chars so in those cases don't do Not Offering RRI log */
+    if ( hostname.length() < MAX_CHARS_HOSTNAME_32 )
     {
+       get_hbs_monitor_state ( hostname, iface ) ;
     }
     return ( remPulse_by_name ( hostname , iface, true, flags ));
 }

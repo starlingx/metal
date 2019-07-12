@@ -1331,6 +1331,7 @@ public:
     string my_hostname ; /**< */
     string my_local_ip ; /**< Primary IP address              */
     string my_float_ip ; /**< Secondary (floating) IP address */
+    string my_clstr_ip ; /**< Cluster network IP address      */
 
     /*********  New Public Constructs for IPMI Comamnd Handling ***********/
 
@@ -1371,7 +1372,7 @@ public:
     int set_clstr_hostaddr ( string & hostname, string & ip );
 
     /** get hostname for any hostname */
-    string get_hostname ( string & hostaddr );
+    string get_hostname ( string hostaddr );
 
     /******************************/
     /* NODE TYPE Member Functions */

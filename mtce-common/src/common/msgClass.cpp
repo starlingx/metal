@@ -309,17 +309,17 @@ int msgClassAddr::getAddressFromInterface(const char* interface, char* address, 
             return rc;
         }
     }
-    char hostname[MAX_HOST_NAME_SIZE+1] = {0};
-    if (gethostname(hostname,
-            MAX_HOST_NAME_SIZE) < 0) {
-        elog("Failed to get system host name (err: %d)", errno);
+    char hostname[MAX_CHARS_HOSTNAME] = {0};
+    if (gethostname(hostname, MAX_CHARS_HOSTNAME) < 0)
+    {
+        elog("Failed to gethostname (%d:%m)", errno);
         return rc;
     }
 
     // if hostname is localhost then resolution will give us
     // the interface loopback address. Detect this case and
     // return.
-    if (!strncmp(hostname, "localhost", 9)) {
+    if (!strcmp(hostname, LOCALHOST)) {
         wlog ("Detected localhost as system hostname."
               " Cannot resolve IP address");
        return rc;
@@ -328,19 +328,17 @@ int msgClassAddr::getAddressFromInterface(const char* interface, char* address, 
     // if it is cluster-host then we need to determine the interface
     // host name. For management interface, the system hostname
     // is the intf hostname
-    const char* cluster_host_suffix = "-cluster-host";
-    size_t cluster_host_suffix_len = sizeof(cluster_host_suffix);
-    char iface_hostname[MAX_HOST_NAME_SIZE+cluster_host_suffix_len];
+    char iface_hostname[MAX_CHARS_HOSTNAME];
     memset(iface_hostname, 0, sizeof(iface_hostname));
     snprintf(iface_hostname, sizeof(iface_hostname),
              "%s%s", hostname,
-             (((interface_type == CLSTR_IFACE)) ? cluster_host_suffix : ""));
+             (((interface_type == CLSTR_IFACE)) ? CLUSTER_HOST_SUFFIX : ""));
 
     struct addrinfo *res = NULL;
     int ret = getaddrinfo(iface_hostname, NULL, NULL, &res);
     if(ret)
     {
-        elog("IP address resolution failed for %s (err: %s)",
+        elog("%s ip address resolution failed (err: %s)",
              iface_hostname, gai_strerror(ret));
         return rc;
     }
