@@ -773,7 +773,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
             node_ptr->mtce_flags = 0 ;
 
             /* Assert the mtc alive gate */
-            node_ptr->mtcAlive_gate = true ;
+            this->ctl_mtcAlive_gate ( node_ptr, true ) ;
 
             node_ptr->mtcAlive_online  = false ;
             node_ptr->mtcAlive_offline = true  ;
@@ -886,9 +886,9 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                  * in the reboot recovery phase now. Look for the mtcAlive */
 
                 /* In self-enable we don't need to purge mtcAlive just need
-                 * to wait for one more. Assum,e offline, not online and open
+                 * to wait for one more. Assume offline, not online and open
                  * the mtcAlive gate. */
-                node_ptr->mtcAlive_gate = false ;
+                this->ctl_mtcAlive_gate ( node_ptr, false ) ;
                 node_ptr->mtcAlive_online  = false ;
                 node_ptr->mtcAlive_offline = true  ;
                 /* set mtcAlive timeout */
@@ -1053,7 +1053,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
             if ( node_ptr->mtcAlive_purge >= 20 )
             {
                /* open gate */
-               node_ptr->mtcAlive_gate = false ;
+               this->ctl_mtcAlive_gate ( node_ptr, false ) ;
 
                node_ptr->mtcAlive_purge = 0 ;
                /* timer is started ok so we can do the stage transition */
@@ -1173,12 +1173,12 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
 
                 break ;
             }
-            else if ( node_ptr->mtcAlive_gate == true )
+            else if ( this->get_mtcAlive_gate (node_ptr) == true )
             {
                 slog ("%s mtcAlive gate unexpectedly set, correcting ...\n",
                         node_ptr->hostname.c_str());
 
-                 node_ptr->mtcAlive_gate = false ;
+                this->ctl_mtcAlive_gate ( node_ptr, false ) ;
             }
 
             /* wait some more */
@@ -1628,7 +1628,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
            /* Purge this hosts work queues */
             mtcCmd_workQ_purge ( node_ptr );
             mtcCmd_doneQ_purge ( node_ptr );
-            node_ptr->mtcAlive_gate = false ;
+            this->ctl_mtcAlive_gate  ( node_ptr, false );
             node_ptr->http_retries_cur = 0 ;
             node_ptr->unknown_health_reported = false ;
 
@@ -1648,13 +1648,6 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
             /* Disable the heartbeat service for Graceful Recovery */
             send_hbs_command   ( node_ptr->hostname, MTC_CMD_STOP_HOST );
 
-            /* Clear the minor and failure flags if it is set for this host */
-            for ( int iface = 0 ; iface < MAX_IFACES ; iface++ )
-            {
-                hbs_minor_clear ( node_ptr, (iface_enum)iface );
-                node_ptr->heartbeat_failed[iface] = false ;
-            }
-
             /* Have we reached the maximum allowed fast recovery attempts.
              *
              * If we have then force the full enable by
@@ -1664,10 +1657,10 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
              */
             if ( ++node_ptr->graceful_recovery_counter > MTC_MAX_FAST_ENABLES )
             {
-                 /* gate off further mtcAlive messaging timme the offline
-                 * handler runs. This prevents stale messages from making it
-                 * in and prolong the offline detection time */
-                 node_ptr->mtcAlive_gate = true ;
+                /* gate off further mtcAlive messaging timme the offline
+                * handler runs. This prevents stale messages from making it
+                * in and prolong the offline detection time */
+                this->ctl_mtcAlive_gate ( node_ptr, true ) ;
 
                 elog ("%s Graceful Recovery Failed (retries=%d)\n",
                           node_ptr->hostname.c_str(), node_ptr->graceful_recovery_counter );
@@ -2114,12 +2107,12 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
                     availStatusChange ( node_ptr, MTC_AVAIL_STATUS__OFFLINE );
                 }
             }
-            else if ( node_ptr->mtcAlive_gate == true )
+            else if ( this->get_mtcAlive_gate ( node_ptr ) == true )
             {
                 slog ("%s mtcAlive gate unexpectedly set, auto-correcting ...\n",
                         node_ptr->hostname.c_str());
 
-                 node_ptr->mtcAlive_gate = false ;
+                 this->ctl_mtcAlive_gate ( node_ptr, false ) ;
             }
 
             /* wait some more */
@@ -2452,6 +2445,12 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
             else
             {
                 mtcTimer_reset ( node_ptr->mtcTimer );
+            }
+
+            for ( int iface = 0 ; iface < MAX_IFACES ; iface++ )
+            {
+               hbs_minor_clear ( node_ptr, (iface_enum)iface );
+               node_ptr->heartbeat_failed[iface] = false ;
             }
 
             /* Enable the heartbeat service for Graceful Recovery */
@@ -3097,7 +3096,7 @@ int nodeLinkClass::disable_handler  ( struct nodeLinkClass::node * node_ptr )
             }
 
             /* open the mtcAlive gate while we are disabled */
-            node_ptr->mtcAlive_gate = false ;
+            this->ctl_mtcAlive_gate ( node_ptr, false ) ;
 
             disableStageChange( node_ptr, MTC_DISABLE__START );
             adminActionChange ( node_ptr , MTC_ADMIN_ACTION__NONE );
@@ -3240,7 +3239,7 @@ int nodeLinkClass::offline_handler ( struct nodeLinkClass::node * node_ptr )
                       operState_enum_to_str(node_ptr->operState).c_str(),
                       availStatus_enum_to_str(node_ptr->availStatus).c_str());
 
-            node_ptr->mtcAlive_gate  = false ;
+            this->ctl_mtcAlive_gate ( node_ptr, false ) ;
             node_ptr->mtcAlive_mgmnt = false ;
             node_ptr->mtcAlive_clstr = false ;
 
@@ -3261,7 +3260,7 @@ int nodeLinkClass::offline_handler ( struct nodeLinkClass::node * node_ptr )
         case MTC_OFFLINE__WAIT:
         {
             /* be sure the mtcAlive gate is open */
-            node_ptr->mtcAlive_gate = false ;
+            this->ctl_mtcAlive_gate (node_ptr, false ) ;
             if ( mtcTimer_expired ( node_ptr->offline_timer ) == true )
             {
                 if ( node_ptr->availStatus == MTC_AVAIL_STATUS__OFFLINE )
@@ -3369,12 +3368,12 @@ int nodeLinkClass::online_handler ( struct nodeLinkClass::node * node_ptr )
                       node_ptr->hostname.c_str(),
                       node_ptr->onlineStage );
 
-            if ( node_ptr->mtcAlive_gate == true )
+            if ( this->get_mtcAlive_gate ( node_ptr ) == true )
             {
                 alog ("%s mtcAlive gate unexpectedly set, correcting ...\n",
                         node_ptr->hostname.c_str());
 
-                node_ptr->mtcAlive_gate = false ;
+                this->ctl_mtcAlive_gate (node_ptr, false ) ;
             }
 
             /* Start with a zero count. This counter is incremented every
@@ -3475,7 +3474,8 @@ int nodeLinkClass::online_handler ( struct nodeLinkClass::node * node_ptr )
                 /* ... keep the 'host locked' file on this host refreshed while in the locked state
                  * ... send it on both interfaces just in case */
                 send_mtc_cmd ( node_ptr->hostname , MTC_MSG_LOCKED, MGMNT_INTERFACE );
-                // send_mtc_cmd ( node_ptr->hostname , MTC_MSG_LOCKED, INFRA_INTERFACE );
+                if ( clstr_network_provisioned )
+                    send_mtc_cmd ( node_ptr->hostname , MTC_MSG_LOCKED, CLSTR_INTERFACE );
             }
 
             /* Start over */
@@ -6106,7 +6106,7 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
                 send_hwmon_command ( node_ptr->hostname, MTC_CMD_START_HOST );
             }
 
-            node_ptr->mtcAlive_gate = false ;
+            this->ctl_mtcAlive_gate(node_ptr, false) ;
             node_ptr->addStage = MTC_ADD__DONE ;
             break;
         }
@@ -6522,6 +6522,11 @@ int nodeLinkClass::oos_test_handler ( struct nodeLinkClass::node * node_ptr )
 
                 /* Tell the host that it is locked */
                 send_mtc_cmd ( node_ptr->hostname , MTC_MSG_LOCKED, MGMNT_INTERFACE);
+                if ( clstr_network_provisioned )
+                {
+                    ilog ("%s Sending Lock Cluster", node_ptr->hostname.c_str() );
+                    send_mtc_cmd ( node_ptr->hostname , MTC_MSG_LOCKED, CLSTR_INTERFACE );
+                }
             }
 
             break ;
@@ -6667,26 +6672,6 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
                 /* Remind the heartbeat service that this is the active ctrl */
                 send_hbs_command ( this->my_hostname, MTC_CMD_ACTIVE_CTRL );
             }
-
-            /* Manage active controller auto recovery bool.
-             * If the inactive controller is inservice then disable
-             * controller autorecovery. Otherwise enable it but in this case
-             * don't change the disable bool as that is used to gate auto
-             * recovery once the threshoild is reached */
-//            if ( is_controller ( node_ptr ) && NOT_THIS_HOST )
-//            {
-//                if (( node_ptr->ar_disabled == false ) &&
-//                    ( node_ptr->operState == MTC_OPER_STATE__ENABLED ))
-//                {
-//                    autorecovery_clear ( CONTROLLER_0 );
-//                    autorecovery_clear ( CONTROLLER_1 );
-//                }
-                //else if (( node_ptr->ar_disabled == true ) &&
-                //         ( node_ptr->operState != MTC_OPER_STATE__ENABLED ))
-                //{
-                //    node_ptr->ar_disabled = false ;
-                //}
-            // }
 
             /* Monitor the health of the host - no pass file */
             if ((  node_ptr->adminState  == MTC_ADMIN_STATE__UNLOCKED ) &&

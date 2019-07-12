@@ -265,6 +265,14 @@ void print_mtc_message ( string hostname,
                       iface,
                       msg.hdr);
         }
+        else if (( daemon_get_cfg_ptr()->debug_alive&1) && ( msg.cmd  == MTC_MSG_MTCALIVE ))
+        {
+            alog  ("%s %s (%s network) - %s\n",
+                       hostname.c_str(),
+                       direction ? "rx <-" : "tx ->" ,
+                       iface,
+                       msg.hdr);
+        }
         else
         {
             mlog1 ("%s %s (%s network) - %s\n",
@@ -276,7 +284,7 @@ void print_mtc_message ( string hostname,
         return ;
     }
 
-    string str = "-" ;
+    string str = "" ;
     if ( msg.buf[0] )
         str = msg.buf ;
     if ( force )

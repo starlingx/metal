@@ -699,7 +699,7 @@ int get_hostname ( char * hostname_ptr, int max_len )
         rc = gethostname(hostname_ptr, max_len );
         if ( rc == PASS )
         {
-            ilog ("Hostname    : %s\n", hostname_ptr);
+            ilog ("%s", hostname_ptr);
         }
         else
         {
@@ -751,7 +751,7 @@ int get_iface_address ( const char * iface_ptr, string & ip_addr , bool retry )
         if ( rc == PASS )
         {
             ip_addr = ip_cstr;
-            dlog ("IP Address  : %s\n", ip_addr.c_str() );
+            ilog ("%s %s\n", iface_ptr, ip_addr.c_str());
         }
         else
         {
