@@ -251,7 +251,10 @@ void daemon_service_run ( void )
         /* The CONFIG_COMPLETE file may be empty so don't look at size,
          * look at the node and dev ids as non-zero instead */
     } while ((p.st_ino == 0 ) || (p.st_dev == 0)) ;
-   
+
+    /* Set umask for the log files that will be created */
+    umask(027);
+
     /* Run daemon main loop */ 
     for ( ; ; )
     {
