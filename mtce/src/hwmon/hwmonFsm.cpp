@@ -65,7 +65,7 @@ void hwmonHostClass::hwmon_fsm ( void )
             if ( host_ptr->host_delete == true )
             {
                  /* need to service the thread handler during the delete operation */
-                 thread_handler ( host_ptr->ipmitool_thread_ctrl, host_ptr->ipmitool_thread_info );
+                 thread_handler ( host_ptr->bmc_thread_ctrl, host_ptr->bmc_thread_info );
                  delete_handler ( host_ptr );
 
                  if ( this->host_deleted == true )
@@ -92,7 +92,7 @@ void hwmonHostClass::hwmon_fsm ( void )
                      *   The ipmitool thread needs to run to learn the sensors
                      *   to begin with as well as continually monitor them
                      */
-                    thread_handler ( host_ptr->ipmitool_thread_ctrl, host_ptr->ipmitool_thread_info );
+                    thread_handler ( host_ptr->bmc_thread_ctrl, host_ptr->bmc_thread_info );
 
                     pingUtil_acc_monitor ( host_ptr->ping_info );
 
@@ -102,15 +102,15 @@ void hwmonHostClass::hwmon_fsm ( void )
                     {
                         /* ... make sure the thread sits in the
                          *     idle state while disabled */
-                        if ( thread_idle ( host_ptr->ipmitool_thread_ctrl ) == false )
+                        if ( thread_idle ( host_ptr->bmc_thread_ctrl ) == false )
                         {
-                            if ( thread_done ( host_ptr->ipmitool_thread_ctrl ) == true )
+                            if ( thread_done ( host_ptr->bmc_thread_ctrl ) == true )
                             {
-                                host_ptr->ipmitool_thread_ctrl.done = true ;
+                                host_ptr->bmc_thread_ctrl.done = true ;
                             }
                             else
                             {
-                                thread_kill ( host_ptr->ipmitool_thread_ctrl, host_ptr->ipmitool_thread_info );
+                                thread_kill ( host_ptr->bmc_thread_ctrl, host_ptr->bmc_thread_info );
                             }
                         }
                         continue ;
@@ -124,7 +124,7 @@ void hwmonHostClass::hwmon_fsm ( void )
                     else if (( host_ptr->accessible == true ) && ( host_ptr->ping_info.ok == false ))
                     {
                         wlog ("%s bmc access lost\n", host_ptr->hostname.c_str());
-                        thread_kill ( host_ptr->ipmitool_thread_ctrl, host_ptr->ipmitool_thread_info );
+                        thread_kill ( host_ptr->bmc_thread_ctrl, host_ptr->bmc_thread_info );
                         host_ptr->accessible = host_ptr->connected = false ;
                         host_ptr->sensor_query_count = 0 ;
                         host_ptr->bmc_fw_version.clear();
@@ -174,9 +174,9 @@ void hwmonHostClass::hwmon_fsm ( void )
                         /* typical success path */
                         hwmonHostClass::ipmi_sensor_monitor ( host_ptr );
                     }
-                    else if ( !thread_idle( host_ptr->ipmitool_thread_ctrl ) )
+                    else if ( !thread_idle( host_ptr->bmc_thread_ctrl ) )
                     {
-                         thread_kill ( host_ptr->ipmitool_thread_ctrl, host_ptr->ipmitool_thread_info );
+                         thread_kill ( host_ptr->bmc_thread_ctrl, host_ptr->bmc_thread_info );
                     }
                 }
                 if ( host_ptr->want_degrade_audit )

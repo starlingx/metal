@@ -23,7 +23,7 @@ SRCS += hwmonFsm.cpp
 
 OBJS = $(SRCS:.cpp=.o)
 BIN = hwmond
-LDLIBS = -lstdc++ -ldaemon -lfmcommon -lcommon -lthreadUtil -lipmiUtil -lpthread -levent -ljson-c -lrt -lcrypto
+LDLIBS = -lstdc++ -ldaemon -lfmcommon -lcommon -lthreadUtil -lbmcUtils -lpthread -levent -ljson-c -lrt -lcrypto
 INCLUDES = -I. -I/usr/include/mtce-daemon -I/usr/include/mtce-common
 INCLUDES += -I../maintenance
 CCFLAGS = -g -O2 -Wall -Wextra -Werror -std=c++11 -pthread

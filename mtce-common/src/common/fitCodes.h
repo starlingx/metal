@@ -50,10 +50,11 @@
 #define MTC_CMD_FIT__AMON_SOCK    ("/var/run/fit/amon_sock")    /* mtcClient */
 #define MTC_CMD_FIT__NO_CLSTR_RSP ("/var/run/fit/no_clstr_rsp") /* hbsClient */
 #define MTC_CMD_FIT__NO_MGMNT_RSP ("/var/run/fit/no_mgmnt_rsp") /* hbsClient */
-#define MTC_CMD_FIT__LINKLIST     ("/var/run/fit/linklist") /* hbsAgent */
+#define MTC_CMD_FIT__LINKLIST     ("/var/run/fit/linklist")     /* hbsAgent */
 #define MTC_CMD_FIT__HBSSILENT    ("/var/run/fit/hbs_silent_fault") /* hbsAgent */
-#define MTC_CMD_FIT__SENSOR_DATA  ("/var/run/fit/sensor_data") /* hwmond */
+#define MTC_CMD_FIT__SENSOR_DATA  ("/var/run/fit/sensor_data")      /* hwmond */
 #define MTC_CMD_FIT__POWER_CMD    ("/var/run/fit/power_cmd_result") /* mtcAgent */
+#define MTC_CMD_FIT__ROOT_QUERY   ("/var/run/fit/root_query")       /* mtcAgent */
 #define MTC_CMD_FIT__MC_INFO      ("/var/run/fit/mc_info")          /* mtcAgent */
 #define MTC_CMD_FIT__POWER_STATUS ("/var/run/fit/power_status")     /* mtcAgent */
 #define MTC_CMD_FIT__RESTART_CAUSE ("/var/run/fit/restart_cause")   /* mtcAgent */
@@ -117,8 +118,8 @@
 #define FIT_CODE__FM_GET_ALARM                       (41)
 #define FIT_CODE__FM_QRY_ALARMS                      (42)
 
-#define FIT_CODE__IPMI_COMMAND_SEND                  (60)
-#define FIT_CODE__IPMI_COMMAND_RECV                  (61)
+#define FIT_CODE__BMC_COMMAND_SEND                   (60)
+#define FIT_CODE__BMC_COMMAND_RECV                   (61)
 
 #define FIT_CODE__START_HOST_SERVICES                (70)
 #define FIT_CODE__STOP_HOST_SERVICES                 (71)

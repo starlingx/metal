@@ -66,6 +66,7 @@ Requires: libpthread.so.0()(64bit)
 Requires: /usr/bin/expect
 Requires: python-rtslib
 Requires: /usr/bin/ipmitool
+Requires: /usr/bin/redfishtool
 
 %description
 Titanium Cloud Host Maintenance services. A suite of daemons that provide
@@ -167,7 +168,7 @@ Requires: libgcc_s.so.1()(64bit)
 Requires: libstdc++.so.6(GLIBCXX_3.4)(64bit)
 Requires: libstdc++.so.6(GLIBCXX_3.4.15)(64bit)
 Requires: libpthread.so.0()(64bit)
-Requires: /usr/bin/ipmitool
+Requires: /usr/bin/redfishtool
 
 %description -n mtce-hwmon
 Titanium Cloud Host Maintenance Hardware Monitor Service (hwmond) adds

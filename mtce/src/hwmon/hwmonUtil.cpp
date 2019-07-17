@@ -678,8 +678,8 @@ bool got_delimited_value ( char * buf_ptr,
 
 #define BUFFER (80)
 
-#define MC_INFO_LABEL_FW_VERSION       ((const char *)("Firmware Revision"))
-#define MC_INFO_LABEL_DELIMITER        ((const char *)(": "))
+#define BMC_INFO_LABEL_FW_VERSION       ((const char *)("Firmware Revision"))
+#define BMC_INFO_LABEL_DELIMITER        ((const char *)(": "))
 string get_bmc_version_string ( string hostname,
                                 const char * filename )
 {
@@ -693,8 +693,8 @@ string get_bmc_version_string ( string hostname,
             MEMSET_ZERO(buffer);
             while ( fgets (buffer, BUFFER, _stream) )
             {
-                if ( got_delimited_value ( buffer, MC_INFO_LABEL_FW_VERSION,
-                                                   MC_INFO_LABEL_DELIMITER,
+                if ( got_delimited_value ( buffer, BMC_INFO_LABEL_FW_VERSION,
+                                                   BMC_INFO_LABEL_DELIMITER,
                                                    bmc_fw_version  ))
                 {
                     break ;

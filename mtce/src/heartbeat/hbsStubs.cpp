@@ -327,22 +327,33 @@ int tokenUtil_parse_uri (const string uri, daemon_config_type* config_ptr)
     return(PASS);
 }
 
-void * mtcThread_ipmitool ( void * arg ) { UNUSED(arg); return NULL ; }
+void * mtcThread_bmc ( void * arg ) { UNUSED(arg); return NULL ; }
 
-int nodeLinkClass::ipmi_command_send ( struct nodeLinkClass::node * node_ptr, int command )
+string bmcUtil_getProtocol_str ( bmc_protocol_enum protocol )
+{
+    UNUSED(protocol);
+    return("unknown");
+}
+
+void bmcUtil_info_init ( bmc_info_type & bmc_info )
+{
+    UNUSED(bmc_info);
+}
+
+int nodeLinkClass::bmc_command_send ( struct nodeLinkClass::node * node_ptr, int command )
 {
     UNUSED(node_ptr);
     UNUSED(command);
     return(PASS);
 }
 
-int  nodeLinkClass::ipmi_command_recv ( struct nodeLinkClass::node * node_ptr )
+int  nodeLinkClass::bmc_command_recv ( struct nodeLinkClass::node * node_ptr )
 {
     UNUSED(node_ptr);
     return(PASS);
 }
 
-void nodeLinkClass::ipmi_command_done ( struct nodeLinkClass::node * node_ptr )
+void nodeLinkClass::bmc_command_done ( struct nodeLinkClass::node * node_ptr )
 {
     UNUSED(node_ptr);
 }

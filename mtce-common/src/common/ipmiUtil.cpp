@@ -14,9 +14,25 @@
 
 using namespace std;
 
-#include "nodeBase.h"      /* for ... mtce node common definitions     */
+#include "ipmiUtil.h"      /* for ... module header                    */
 #include "hostUtil.h"      /* for ... mtce host common definitions     */
-#include "ipmiUtil.h"      /* for ... this module header               */
+
+/***********************************************************************
+ *
+ * Name       : ipmiUtil_init
+ *
+ * Purpose    : Module init
+ *
+ * Description: Performs the following functions
+ *
+ *              1. creates the ipmitool runtime temp dir
+ *
+ ***********************************************************************/
+int ipmiUtil_init ( void )
+{
+    daemon_make_dir(IPMITOOL_OUTPUT_DIR) ;
+    return(PASS);
+}
 
 /* Create a randomly named password filename */
 void ipmiUtil_create_pw_fn ( thread_info_type * info_ptr, string pw )
@@ -103,20 +119,8 @@ string ipmiUtil_create_request ( string cmd, string & ip, string & un, string & 
     return (ipmitool_request);
 }
 
-/* init the mc info struct */
-void ipmiUtil_mc_info_init ( mc_info_type & mc_info )
-{
-    mc_info.device_id.clear();
-    mc_info.manufacturer_name.clear();
-    mc_info.manufacturer_id.clear();
-    mc_info.product_name.clear();
-    mc_info.product_id.clear();
-    mc_info.fw_version.clear();
-    mc_info.hw_version.clear();
-}
-
 /* print a log of the mc info data */
-void mc_info_log ( string hostname, mc_info_type & mc_info, int rc )
+void ipmiUtil_bmc_info_log ( string hostname, bmc_info_type & bmc_info, int rc )
 {
     if ( rc )
     {
@@ -126,16 +130,16 @@ void mc_info_log ( string hostname, mc_info_type & mc_info, int rc )
     {
         ilog ("%s Manufacturer: %s [id:%s] [ Device: %s  ver %s ]\n",
                   hostname.c_str(),
-                  mc_info.manufacturer_name.c_str(),
-                  mc_info.manufacturer_id.c_str(),
-                  mc_info.device_id.c_str(),
-                  mc_info.hw_version.c_str());
+                  bmc_info.manufacturer_name.c_str(),
+                  bmc_info.manufacturer_id.c_str(),
+                  bmc_info.device_id.c_str(),
+                  bmc_info.hw_version.c_str());
 
         ilog ("%s Product Name: %s [id:%s] [ BMC FW: ver %s ]\n",
                   hostname.c_str(),
-                  mc_info.product_name.c_str(),
-                  mc_info.product_id.c_str(),
-                  mc_info.fw_version.c_str());
+                  bmc_info.product_name.c_str(),
+                  bmc_info.product_id.c_str(),
+                  bmc_info.fw_version.c_str());
     }
 }
 
@@ -161,10 +165,10 @@ bool _got_delimited_value ( char * buf_ptr, const char * key, const char * delim
 
 /*****************************************************************************
  *
- * Name       : ipmiUtil_mc_info_load
+ * Name       : ipmiUtil_bmc_info_load
  *
  * Description: Load the contents of a file containing an ipmitool formatted
- *              output from an mc info request into the passed in mc_info
+ *              output from an mc info request into the passed in bmc_info
  *              struct. Loaded info includes
  *
  *              Manufacturer (id/name)
@@ -198,10 +202,9 @@ bool _got_delimited_value ( char * buf_ptr, const char * key, const char * delim
  **************************************************************************/
 
 #define BUFFER (80)
-int ipmiUtil_mc_info_load ( string hostname, const char * filename, mc_info_type & mc_info )
+int ipmiUtil_bmc_info_load ( string hostname, const char * filename, bmc_info_type & bmc_info )
 {
     int rc = FAIL ;
-    ipmiUtil_mc_info_init ( mc_info );
     if ( daemon_is_file_present ( filename ) )
     {
         FILE * _stream = fopen ( filename, "r" );
@@ -211,22 +214,22 @@ int ipmiUtil_mc_info_load ( string hostname, const char * filename, mc_info_type
             MEMSET_ZERO(buffer);
             while ( fgets (buffer, BUFFER, _stream) )
             {
-                if ( _got_delimited_value ( buffer, MC_INFO_LABEL_FW_VERSION, MC_INFO_LABEL_DELIMITER, mc_info.fw_version ))
+                if ( _got_delimited_value ( buffer, BMC_INFO_LABEL_FW_VERSION, BMC_INFO_LABEL_DELIMITER, bmc_info.fw_version ))
                 {
                     rc = PASS ;
                     continue;
                 }
-                if ( _got_delimited_value ( buffer, MC_INFO_LABEL_HW_VERSION, MC_INFO_LABEL_DELIMITER, mc_info.hw_version ))
+                if ( _got_delimited_value ( buffer, BMC_INFO_LABEL_HW_VERSION, BMC_INFO_LABEL_DELIMITER, bmc_info.hw_version ))
                     continue;
-                if ( _got_delimited_value ( buffer, MC_INFO_LABEL_DEVICE_ID, MC_INFO_LABEL_DELIMITER, mc_info.device_id ))
+                if ( _got_delimited_value ( buffer, BMC_INFO_LABEL_DEVICE_ID, BMC_INFO_LABEL_DELIMITER, bmc_info.device_id ))
                     continue;
-                if ( _got_delimited_value ( buffer, MC_INFO_LABEL_PRODUCT_ID, MC_INFO_LABEL_DELIMITER, mc_info.product_id ))
+                if ( _got_delimited_value ( buffer, BMC_INFO_LABEL_PRODUCT_ID, BMC_INFO_LABEL_DELIMITER, bmc_info.product_id ))
                     continue;
-                if ( _got_delimited_value ( buffer, MC_INFO_LABEL_PRODUCT_NAME, MC_INFO_LABEL_DELIMITER, mc_info.product_name ))
+                if ( _got_delimited_value ( buffer, BMC_INFO_LABEL_PRODUCT_NAME, BMC_INFO_LABEL_DELIMITER, bmc_info.product_name ))
                     continue;
-                if ( _got_delimited_value ( buffer, MC_INFO_LABEL_MANUFACTURE_ID, MC_INFO_LABEL_DELIMITER, mc_info.manufacturer_id ))
+                if ( _got_delimited_value ( buffer, BMC_INFO_LABEL_MANUFACTURE_ID, BMC_INFO_LABEL_DELIMITER, bmc_info.manufacturer_id ))
                     continue;
-                if ( _got_delimited_value ( buffer, MC_INFO_LABEL_MANUFACTURE_NAME, MC_INFO_LABEL_DELIMITER, mc_info.manufacturer_name ))
+                if ( _got_delimited_value ( buffer, BMC_INFO_LABEL_MANUFACTURE_NAME, BMC_INFO_LABEL_DELIMITER, bmc_info.manufacturer_name ))
                     continue;
                 else
                     blog3 ("buffer: %s\n", buffer );
@@ -241,6 +244,6 @@ int ipmiUtil_mc_info_load ( string hostname, const char * filename, mc_info_type
         rc = FAIL_FILE_ACCESS ;
     }
 
-    mc_info_log ( hostname, mc_info, rc );
+    ipmiUtil_bmc_info_log ( hostname, bmc_info, rc );
     return (rc);
 }

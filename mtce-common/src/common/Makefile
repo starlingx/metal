@@ -8,7 +8,9 @@ SHELL = /bin/bash
 
 SRCS = regexUtil.cpp \
 	   timeUtil.cpp \
+	   bmcUtil.cpp \
 	   ipmiUtil.cpp \
+	   redfishUtil.cpp \
 	   pingUtil.cpp \
 	   keyClass.cpp \
 	   hostClass.cpp \
@@ -76,7 +78,7 @@ threadUtil:
 
 library:
 	ar rcs libcommon.a $(COMMON_OBJS) $(EXTRAARFLAGS)
-	ar rcs libipmiUtil.a ipmiUtil.o $(EXTRAARFLAGS)
+	ar rcs libbmcUtils.a bmcUtil.o ipmiUtil.o redfishUtil.o $(EXTRAARFLAGS)
 	ar rcs libpingUtil.a pingUtil.o $(EXTRAARFLAGS)
 	ar rcs libnodeBase.a nodeBase.o $(EXTRAARFLAGS)
 	ar rcs libregexUtil.a regexUtil.o $(EXTRAARFLAGS)

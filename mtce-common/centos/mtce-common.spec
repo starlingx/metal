@@ -99,7 +99,7 @@ install -m 755 -d %{buildroot}%{_libdir}
 install -m 644 -p -D %{_buildsubdir}/daemon/libdaemon.a %{buildroot}%{_libdir}
 install -m 644 -p -D %{_buildsubdir}/common/libcommon.a %{buildroot}%{_libdir}
 install -m 644 -p -D %{_buildsubdir}/common/libthreadUtil.a %{buildroot}%{_libdir}
-install -m 644 -p -D %{_buildsubdir}/common/libipmiUtil.a %{buildroot}%{_libdir}
+install -m 644 -p -D %{_buildsubdir}/common/libbmcUtils.a %{buildroot}%{_libdir}
 install -m 644 -p -D %{_buildsubdir}/common/libpingUtil.a %{buildroot}%{_libdir}
 install -m 644 -p -D %{_buildsubdir}/common/libnodeBase.a %{buildroot}%{_libdir}
 install -m 644 -p -D %{_buildsubdir}/common/libregexUtil.a %{buildroot}%{_libdir}
@@ -134,6 +134,8 @@ install -m 644 -p -D %{_buildsubdir}/daemon/daemon_option.h %{buildroot}%{_inclu
 install -m 644 -p -D %{_buildsubdir}/common/alarmUtil.h %{buildroot}%{_includedir}/mtce-common
 install -m 644 -p -D %{_buildsubdir}/common/hostUtil.h %{buildroot}%{_includedir}/mtce-common
 install -m 644 -p -D %{_buildsubdir}/common/ipmiUtil.h %{buildroot}%{_includedir}/mtce-common
+install -m 644 -p -D %{_buildsubdir}/common/redfishUtil.h %{buildroot}%{_includedir}/mtce-common
+install -m 644 -p -D %{_buildsubdir}/common/bmcUtil.h %{buildroot}%{_includedir}/mtce-common
 install -m 644 -p -D %{_buildsubdir}/common/nlEvent.h %{buildroot}%{_includedir}/mtce-common
 install -m 644 -p -D %{_buildsubdir}/common/pingUtil.h %{buildroot}%{_includedir}/mtce-common
 install -m 644 -p -D %{_buildsubdir}/common/regexUtil.h %{buildroot}%{_includedir}/mtce-common

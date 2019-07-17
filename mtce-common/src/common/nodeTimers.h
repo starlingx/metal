@@ -89,6 +89,7 @@
 #define SM_NOTIFY_UNHEALTHY_DELAY_SECS  (5)
 #define MTC_MIN_ONLINE_PERIOD_SECS      (7)
 #define MTC_RETRY_WAIT                  (5)
+#define MTC_FIRST_WAIT                  (3)
 #define MTC_AGENT_TIMEOUT_EXTENSION     (5)
 #define MTC_LOCK_CEPH_DELAY             (90)
 

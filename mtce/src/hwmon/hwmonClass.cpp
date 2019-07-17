@@ -192,7 +192,7 @@ void hwmonHostClass::free_host_timers ( struct hwmon_host * ptr )
     mtcTimer_fini ( ptr->ping_info.timer );
 
     mtcTimer_fini ( ptr->monitor_ctrl.timer );
-    mtcTimer_fini ( ptr->ipmitool_thread_ctrl.timer );
+    mtcTimer_fini ( ptr->bmc_thread_ctrl.timer );
 }
 
 /* Remove a hist from the linked list of hosts - may require splice action */
@@ -732,13 +732,13 @@ int hwmonHostClass::add_host ( node_inv_type & inv )
             host_ptr->thread_extra_info.sensor_query_request = IPMITOOL_PATH_AND_FILENAME ;
 
             /* Sensor Monitoring Thread Initialization */
-            thread_init ( host_ptr->ipmitool_thread_ctrl,
-                          host_ptr->ipmitool_thread_info,
+            thread_init ( host_ptr->bmc_thread_ctrl,
+                          host_ptr->bmc_thread_info,
                          &host_ptr->thread_extra_info,
                           hwmonThread_ipmitool,
                           DEFAULT_THREAD_TIMEOUT_SECS,
                           host_ptr->hostname,
-                          THREAD_NAME__IPMITOOL);
+                          THREAD_NAME__BMC);
 
             /* TODO: create a is_bm_info_valid */
             if ( ( hostUtil_is_valid_ip_addr (host_ptr->bm_ip) == true ) &&
@@ -1022,7 +1022,7 @@ struct hwmonHostClass::hwmon_host * hwmonHostClass::getHost_timer ( timer_t tid 
    {
        for ( struct hwmon_host * host_ptr = hwmon_head ;  ; host_ptr = host_ptr->next )
        {
-           if ( host_ptr->ipmitool_thread_ctrl.timer.tid == tid )
+           if ( host_ptr->bmc_thread_ctrl.timer.tid == tid )
            {
                return host_ptr ;
            }
@@ -2187,7 +2187,7 @@ void hwmonHostClass::log_sensor_data ( struct hwmonHostClass::hwmon_host * host_
     source.append (to );
     source.append ("'\n");
     daemon_log ( debugfile.data(), source.data());
-    daemon_log ( debugfile.data(), host_ptr->ipmitool_thread_info.data.data());
+    daemon_log ( debugfile.data(), host_ptr->bmc_thread_info.data.data());
     daemon_log ( debugfile.data(), daemon_read_file ( sensor_datafile.data()).data());
     daemon_log ( debugfile.data(), "---------------------------------------------------------------------\n");
 }
@@ -2244,11 +2244,11 @@ void hwmonHostClass::mem_log_threads (  struct hwmonHostClass::hwmon_host * hwmo
     char str[MAX_MEM_LOG_DATA] ;
     snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tThread Stage:%d Runs:%d Progress:%d Ctrl Status:%d Thread Status:%d\n",
                 hwmon_host_ptr->hostname.c_str(),
-                hwmon_host_ptr->ipmitool_thread_ctrl.stage,
-                hwmon_host_ptr->ipmitool_thread_ctrl.runcount,
-                hwmon_host_ptr->ipmitool_thread_info.progress,
-                hwmon_host_ptr->ipmitool_thread_ctrl.status,
-                hwmon_host_ptr->ipmitool_thread_info.status);
+                hwmon_host_ptr->bmc_thread_ctrl.stage,
+                hwmon_host_ptr->bmc_thread_ctrl.runcount,
+                hwmon_host_ptr->bmc_thread_info.progress,
+                hwmon_host_ptr->bmc_thread_ctrl.status,
+                hwmon_host_ptr->bmc_thread_info.status);
     mem_log (str);
 }
 

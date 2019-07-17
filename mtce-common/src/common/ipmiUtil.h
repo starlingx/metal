@@ -13,17 +13,20 @@
   * Wind River Titanium Cloud's Maintenance Common IPMI Utilities Header
   */
 
-#include "nodeBase.h"      /* for ...                                  */
-#include "threadUtil.h"    /* for ... thread utilities                 */
+#include "bmcUtil.h"       /* for ... mtce-common bmc utility header   */
 
-#define MC_INFO_LABEL_DELIMITER        ((const char *)(": "))
-#define MC_INFO_LABEL_FW_VERSION       ((const char *)("Firmware Revision"))
-#define MC_INFO_LABEL_HW_VERSION       ((const char *)("Device Revision"))
-#define MC_INFO_LABEL_DEVICE_ID        ((const char *)("Device ID"))
-#define MC_INFO_LABEL_PRODUCT_ID       ((const char *)("Product ID"))
-#define MC_INFO_LABEL_PRODUCT_NAME     ((const char *)("Product Name"))
-#define MC_INFO_LABEL_MANUFACTURE_ID   ((const char *)("Manufacturer ID"))
-#define MC_INFO_LABEL_MANUFACTURE_NAME ((const char *)("Manufacturer Name"))
+#define THREAD_NAME__BMC             ((const char *)("bmc"))
+#define IPMITOOL_PATH_AND_FILENAME   ((const char *)("/usr/bin/ipmitool"))
+#define IPMITOOL_OUTPUT_DIR          ((const char *)("/var/run/bmc/ipmitool/"))
+
+#define BMC_INFO_LABEL_DELIMITER        ((const char *)(": "))
+#define BMC_INFO_LABEL_FW_VERSION       ((const char *)("Firmware Revision"))
+#define BMC_INFO_LABEL_HW_VERSION       ((const char *)("Device Revision"))
+#define BMC_INFO_LABEL_DEVICE_ID        ((const char *)("Device ID"))
+#define BMC_INFO_LABEL_PRODUCT_ID       ((const char *)("Product ID"))
+#define BMC_INFO_LABEL_PRODUCT_NAME     ((const char *)("Product Name"))
+#define BMC_INFO_LABEL_MANUFACTURE_ID   ((const char *)("Manufacturer ID"))
+#define BMC_INFO_LABEL_MANUFACTURE_NAME ((const char *)("Manufacturer Name"))
 
 #define IPMITOOL_POWER_RESET_CMD       ((const char *)("chassis power reset"))
 #define IPMITOOL_POWER_RESET_RESP      ((const char *)("Chassis Power Control: Reset"))
@@ -46,53 +49,14 @@
 #define IPMITOOL_BOOTDEV_PXE_CMD       ((const char *)("chassis bootdev pxe"))
 #define IPMITOOL_BOOTDEV_PXE_RESP      ((const char *)("Set Boot Device to pxe"))
 
-#define IPMITOOL_MC_INFO_CMD           ((const char *)("mc info"))
+#define IPMITOOL_BMC_INFO_CMD          ((const char *)("mc info"))
 
-#define IPMITOOL_CMD_FILE_SUFFIX            ((const char *)("_power_cmd_result"))
-#define IPMITOOL_MC_INFO_FILE_SUFFIX        ((const char *)("_mc_info"))
-#define IPMITOOL_RESTART_CAUSE_FILE_SUFFIX  ((const char *)("_restart_cause"))
-#define IPMITOOL_POWER_STATUS_FILE_SUFFIX   ((const char *)("_power_status"))
+#define BMC__MAX_RECV_RETRIES      (10)
 
-#define IPMITOOL_MAX_RECV_RETRIES      (10)
+int ipmiUtil_init ( void );
 
-/* Warning : Changes here require 'mtc_ipmiRequest_str' string array to be updated */
-typedef enum
-{
-    IPMITOOL_THREAD_CMD__NULL = 0,
-    IPMITOOL_THREAD_CMD__POWER_RESET,
-
-    IPMITOOL_THREAD_CMD__POWER_ON,
-    IPMITOOL_THREAD_CMD__POWER_OFF,
-    IPMITOOL_THREAD_CMD__POWER_CYCLE,
-
-    IPMITOOL_THREAD_CMD__MC_INFO,
-    IPMITOOL_THREAD_CMD__POWER_STATUS,
-    IPMITOOL_THREAD_CMD__RESTART_CAUSE,
-    IPMITOOL_THREAD_CMD__BOOTDEV_PXE,
-
-    IPMITOOL_THREAD_CMD__READ_SENSORS,
-
-    IPMITOOL_THREAD_CMD__LAST
-
-} ipmitool_cmd_enum ;
-
-const char * getIpmiCmd_str ( int command );
-const char * getIpmiAction_str ( int command );
-
-
-typedef struct
-{
-    std::string product_name      ;
-    std::string product_id        ;
-    std::string manufacturer_name ;
-    std::string manufacturer_id   ;
-    std::string device_id         ;
-    std::string fw_version        ;
-    std::string hw_version        ;
-} mc_info_type ;
-
-int  ipmiUtil_mc_info_load ( string hostname, const char * filename, mc_info_type & mc_info );
-void ipmiUtil_mc_info_init                                         ( mc_info_type & mc_info );
+int  ipmiUtil_bmc_info_load ( string hostname, const char * filename, bmc_info_type & mc_info );
+void ipmiUtil_mc_info_init                                         ( bmc_info_type & mc_info );
 
 /* Create a randomly named password filename */
 void ipmiUtil_create_pw_fn ( thread_info_type * info_ptr, string pw );

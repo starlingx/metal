@@ -153,10 +153,13 @@ void daemon_exit ( void );
 
 #define BM_DNSMASQ_FILENAME     ((const char *)"dnsmasq.bmc_hosts")
 
-#define THREAD_NAME__IPMITOOL        ((const char *)("ipmitool"))
+/* supported BMC communication protocols ; access method */
+typedef enum
+{
+   BMC_PROTOCOL__IPMITOOL,
+   BMC_PROTOCOL__REDFISHTOOL,
+} bmc_protocol_enum ;
 
-#define IPMITOOL_PATH_AND_FILENAME   ((const char *)("/usr/bin/ipmitool"))
-#define IPMITOOL_OUTPUT_DIR          ((const char *)("/var/run/ipmitool/"))
 
 /** 'lo' interface IP address - TODO: get it from the interface */
 #define LOOPBACK_IP "127.0.0.1"
@@ -309,7 +312,7 @@ void daemon_exit ( void );
 #define MTC_POWER_ACTION_RETRY_COUNT     (10)
 #define MTC_RESET_ACTION_RETRY_COUNT     (5)
 
-/* number of calls to the bm_handler while bm_access is not confirmed */
+/* number of calls to the bmc_handler while bm_access is not confirmed */
 #define MTC_MAX_B2B_BM_ACCESS_FAIL_COUNT_B4_ALARM (5)
                                                                          /* string too long for inv */
 #define MTC_TASK_DISABLE_REJ       "Lock Rejected: Incomplete Migration" /* Please Enable More Worker Resources" */
@@ -737,15 +740,6 @@ typedef struct
 #define RESET_PROG_MAX_REBOOTS_B4_RETRY (RESET_PROG_MAX_REBOOTS_B4_RESET+2)
 
 const char * get_mtcNodeCommand_str ( int cmd );
-
-typedef enum
-{
-    PROTOCOL__NONE  = 0,
-    PROTOCOL__SMASH = 1,
-    PROTOCOL__IPMI  = 2,
-    PROTOCOL__MAX   = 3
-} protocol_enum ;
-
 
 /** Maintenance Commands used to specify HTTP REST API Command operations  */
 typedef enum

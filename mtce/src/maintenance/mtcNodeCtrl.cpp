@@ -54,6 +54,7 @@ using namespace std;
 #include "mtcInvApi.h"     /* */
 #include "mtcSmgrApi.h"    /* */
 #include "nlEvent.h"       /* for ... open_netlink_socket                */
+#include "bmcUtil.h"       /* for ... board mgmnt utility header         */
 
 /**************************************************************
  *            Implementation Structure
@@ -983,12 +984,6 @@ int daemon_init ( string iface, string nodetype )
         return ( FAIL_DAEMON_CONFIG ) ;
     }
 
-    daemon_make_dir(IPMITOOL_OUTPUT_DIR) ;
-
-#ifdef WANT_FIT_TESTING
-    daemon_make_dir(FIT__INFO_FILEPATH);
-#endif
-
     return (rc);
 }
 
@@ -1097,9 +1092,6 @@ int _self_provision ( void )
                         // node_ptr->alarms[MTC_ALARM_ID__LOCK] = FM_ALARM_SEVERITY_CLEAR
                 }
 
-//                mtcInv.set_subf_info ( my_identity.name, record_info.func,
-//                                                         record_info.oper_subf,
-//                                                         record_info.avail_subf );
                 if ( my_identity.mac != record_info.mac )
                 {
                     wlog ("%s mac address mismatch (%s - %s)\n",
@@ -1162,12 +1154,6 @@ int _self_provision ( void )
         return (FAIL_SOCKET_INIT) ;
     }
 
-    daemon_make_dir(IPMITOOL_OUTPUT_DIR) ;
-
-#ifdef WANT_FIT_TESTING
-    daemon_make_dir(FIT__INFO_FILEPATH);
-#endif
-
     return(rc);
 }
 
@@ -1226,6 +1212,10 @@ void daemon_service_run ( void )
     /* Init HTTP Messaging */
     mtcHttpUtil_init ();
 
+    /* Init board management stuff */
+    bmcUtil_init ();
+
+    /* log the currect software version */
     ilog ("SW VERSION  : %s\n", daemon_sw_version ().c_str());
 
     /* Collect inventory in active state only */

@@ -25,13 +25,12 @@ using namespace std;
 
 #include "daemon_common.h"
 
-#include "nodeBase.h"
 #include "nodeBase.h"        /* for ... mtce node common definitions     */
+#include "bmcUtil.h"         /* for ... mtce-common board management     */
 #include "hostUtil.h"        /* for ... mtce host common definitions     */
 #include "nodeMacro.h"
-#include "ipmiUtil.h"
 #include "threadUtil.h"
-#include "hwmonThreads.h"    /* for ... IPMITOOL_THREAD_CMD__READ_SENSORS */
+#include "hwmonThreads.h"    /* for ... BMC_THREAD_CMD__READ_SENSORS */
 #include "hwmonIpmi.h"       /* for ... MAX_IPMITOOL_PARSE_ERRORS         */
 #include "hwmonClass.h"      /* for ... thread_extra_info_type            */
 
@@ -331,7 +330,7 @@ void * hwmonThread_ipmitool ( void * arg )
     extra_ptr->samples = samples = 0 ;
     switch ( info_ptr->command )
     {
-        case IPMITOOL_THREAD_CMD__POWER_STATUS:
+        case BMC_THREAD_CMD__POWER_STATUS:
         {
             int rc = PASS ;
 
@@ -349,7 +348,7 @@ void * hwmonThread_ipmitool ( void * arg )
             }
 
             /**************** Create the password file *****************/
-            ipmiUtil_create_pw_fn ( info_ptr, extra_ptr->bm_pw ) ;
+            bmcUtil_create_pw_file ( info_ptr, extra_ptr->bm_pw, BMC_PROTOCOL__IPMITOOL) ;
             if ( info_ptr->password_file.empty() )
             {
                 info_ptr->status_string = "failed to get a temporary password filename" ;
@@ -362,7 +361,10 @@ void * hwmonThread_ipmitool ( void * arg )
 
             /*************** Create the output filename ***************/
             string ipmitool_datafile =
-            ipmiUtil_create_data_fn (info_ptr->hostname, IPMITOOL_POWER_STATUS_FILE_SUFFIX ) ;
+            bmcUtil_create_data_fn (info_ptr->hostname,
+                                    BMC_POWER_STATUS_FILE_SUFFIX,
+                                    BMC_PROTOCOL__IPMITOOL ) ;
+
             dlog_t ("%s power query filename  : %s\n",
                         info_ptr->log_prefix,
                         ipmitool_datafile.c_str());
@@ -434,7 +436,7 @@ void * hwmonThread_ipmitool ( void * arg )
             }
             break ;
         }
-        case IPMITOOL_THREAD_CMD__READ_SENSORS:
+        case BMC_THREAD_CMD__READ_SENSORS:
         {
             int rc = PASS ;
 
@@ -464,7 +466,9 @@ void * hwmonThread_ipmitool ( void * arg )
 
             /*************** Create the output filename ***************/
             string sensor_datafile =
-            ipmiUtil_create_data_fn (info_ptr->hostname, IPMITOOL_SENSOR_OUTPUT_FILE_SUFFIX ) ;
+            bmcUtil_create_data_fn (info_ptr->hostname,
+                                    IPMITOOL_SENSOR_OUTPUT_FILE_SUFFIX,
+                                    BMC_PROTOCOL__IPMITOOL ) ;
 
             dlog_t ("%s sensor output file%s\n",
                       info_ptr->log_prefix,
@@ -761,7 +765,7 @@ ipmitool_thread_done:
     pthread_signal_handler ( info_ptr );
 
     /* Sensor reading specific exit */
-    if ( info_ptr->command == IPMITOOL_THREAD_CMD__READ_SENSORS )
+    if ( info_ptr->command == BMC_THREAD_CMD__READ_SENSORS )
     {
         if ( parse_errors )
         {

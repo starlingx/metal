@@ -17,6 +17,8 @@
 #include "hostClass.h"
 #include "hwmonThreads.h"
 #include "hwmonSensor.h"
+#include "bmcUtil.h"       /* for ... board mgmnt utility header         */
+
 //#include "hwmonIpmi.h"     /* for ... sensor_data_type                  */
 
 typedef enum
@@ -91,7 +93,7 @@ class hwmonHostClass
         int degrade_audit_log_throttle ;
 
         /** set to the protocol used to communicate with this server's BMC */
-        protocol_enum protocol ;
+        bmc_protocol_enum protocol ;
 
         /** Pointer to the previous host in the list */
         struct hwmon_host * prev;
@@ -125,8 +127,8 @@ class hwmonHostClass
 
         /* the info required by the sensor read thread to issue a ipmitool
          * lanplus request to read sensors over the network */
-        thread_ctrl_type ipmitool_thread_ctrl ; /* control data used to manage the thread */
-        thread_info_type ipmitool_thread_info ; /* thread info used to execute and post results */
+        thread_ctrl_type bmc_thread_ctrl ; /* control data used to manage the thread */
+        thread_info_type bmc_thread_info ; /* thread info used to execute and post results */
         thread_extra_info_type thread_extra_info ; /* extra thread info for sensor monitoring */
 
         /* Ipmi sensor monitoring control structure */

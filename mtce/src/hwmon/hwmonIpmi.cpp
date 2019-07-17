@@ -351,18 +351,18 @@ int hwmonHostClass::ipmi_load_sensor_samples ( struct hwmonHostClass::hwmon_host
                 else
                 {
                     wlog ("%s invalid sensor data:%s\n", host_ptr->hostname.c_str(), sensor_data.c_str());
-                    host_ptr->ipmitool_thread_info.status_string =
+                    host_ptr->bmc_thread_info.status_string =
                     "failed to load sensor sample data from incoming json string" ;
-                    host_ptr->ipmitool_thread_info.status = FAIL_JSON_PARSE ;
+                    host_ptr->bmc_thread_info.status = FAIL_JSON_PARSE ;
                     break ;
                 }
             }
             else
             {
-                host_ptr->ipmitool_thread_info.status_string = "sensor data parse error for index '" ;
-                host_ptr->ipmitool_thread_info.status_string.append(itos(host_ptr->thread_extra_info.samples));
-                host_ptr->ipmitool_thread_info.status_string.append("'");
-                host_ptr->ipmitool_thread_info.status = FAIL_JSON_PARSE ;
+                host_ptr->bmc_thread_info.status_string = "sensor data parse error for index '" ;
+                host_ptr->bmc_thread_info.status_string.append(itos(host_ptr->thread_extra_info.samples));
+                host_ptr->bmc_thread_info.status_string.append("'");
+                host_ptr->bmc_thread_info.status = FAIL_JSON_PARSE ;
                 break ;
             }
             host_ptr->samples++ ;
@@ -371,12 +371,12 @@ int hwmonHostClass::ipmi_load_sensor_samples ( struct hwmonHostClass::hwmon_host
     }
     else
     {
-        host_ptr->ipmitool_thread_info.status_string = "failed to find '" ;
-        host_ptr->ipmitool_thread_info.status_string.append(IPMITOOL_JSON__SENSORS_LABEL);
-        host_ptr->ipmitool_thread_info.status_string.append("' label") ;
-        host_ptr->ipmitool_thread_info.status = FAIL_JSON_PARSE ;
+        host_ptr->bmc_thread_info.status_string = "failed to find '" ;
+        host_ptr->bmc_thread_info.status_string.append(IPMITOOL_JSON__SENSORS_LABEL);
+        host_ptr->bmc_thread_info.status_string.append("' label") ;
+        host_ptr->bmc_thread_info.status = FAIL_JSON_PARSE ;
     }
-    return (host_ptr->ipmitool_thread_info.status);
+    return (host_ptr->bmc_thread_info.status);
 }
 
 void _generate_transient_log ( sensor_type * sensor_ptr )
@@ -636,7 +636,7 @@ int hwmonHostClass::ipmi_update_sensors ( struct hwmonHostClass::hwmon_host * ho
                                           ipmi_status);
 
                                 sensor_data_print (host_ptr->sample[j]);
-                                blog3 ("%s ... %s\n", host_ptr->hostname.c_str(), host_ptr->ipmitool_thread_info.data.c_str());
+                                blog3 ("%s ... %s\n", host_ptr->hostname.c_str(), host_ptr->bmc_thread_info.data.c_str());
 
                                 host_ptr->sensor[i].sample_severity = HWMON_SEVERITY_MINOR ;
                             }
@@ -699,7 +699,7 @@ int hwmonHostClass::ipmi_update_sensors ( struct hwmonHostClass::hwmon_host * ho
                                           ipmi_status);
 
                                 sensor_data_print (host_ptr->sample[j]);
-                                blog3 ("%s ... %s\n", host_ptr->hostname.c_str(), host_ptr->ipmitool_thread_info.data.c_str());
+                                blog3 ("%s ... %s\n", host_ptr->hostname.c_str(), host_ptr->bmc_thread_info.data.c_str());
 
                                 host_ptr->sensor[i].sample_severity = HWMON_SEVERITY_MINOR ;
                             }

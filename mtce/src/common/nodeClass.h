@@ -33,12 +33,12 @@ using namespace std;
 #include "pingUtil.h"     /* for ... ping_info_type                   */
 #include "nodeCmds.h"     /* for ... mtcCmd type                      */
 #include "httpUtil.h"     /* for ... libevent stuff                   */
-#include "ipmiUtil.h"     /* for ... mc_info_type                     */
+#include "bmcUtil.h"      /* for ... mtce-common board management     */
 #include "mtcHttpUtil.h"  /* for ... libevent stuff                   */
 #include "mtcSmgrApi.h"   /* for ... mtcSmgrApi_request/handler       */
 #include "alarmUtil.h"    /* for ... SFmAlarmDataT                    */
 #include "mtcAlarm.h"     /* for ... MTC_ALARM_ID__xx and utils       */
-#include "mtcThreads.h"   /* for ... mtcThread_ipmitool               */
+#include "mtcThreads.h"   /* for ... mtcThread_bmc               */
 
 /**Default back-to-back heartbeat failures for disabled-failed condition */
 #define HBS_FAILURE_THRESHOLD  10
@@ -146,7 +146,7 @@ private:
         bool subf_enabled ;
 
         /** set true if the BMC is provisioned */
-        bool bm_provisioned ;
+        bool bmc_provisioned ;
 
 
         /** general retry counter */
@@ -594,7 +594,7 @@ private:
          *   The BMC is 'accessible' once provisioning data is available
          *   and bmc is verified pingable.
          **/
-        bool bm_accessible;
+        bool bmc_accessible;
 
         /** @} private_boad_management_variables */
 
@@ -650,15 +650,29 @@ private:
 
         int stress_iteration ;
 
+        /* BMC Protocol Learning Controls and State */
+
+        /* specifies what BMC protocol is selected for this host
+         *
+         * defaults to 0 or BMC_PROTOCOL__IPMITOOL */
+        bmc_protocol_enum bmc_protocol ;
+
+        /* set true once the best BMC protocol has been learned
+         *
+         * looked at in the bmc_handler to decide learn or use bmc_protocol */
+        bool bmc_protocol_learned ;
+
+        /* set true while bmc protocol learning is in progress */
+        bool bmc_protocol_learning ;
+
         /* for bmc ping access monitor */
         ping_info_type bm_ping_info ;
 
-        /* the bmc info struct filled in and log printed by a
-         * call to ipmiUtil_mc_info_load. */
-        mc_info_type   mc_info    ;
+        /* the bmc info struct */
+        bmc_info_type   bmc_info    ;
 
-        bool   mc_info_query_active ;
-        bool   mc_info_query_done   ;
+        bool   bmc_info_query_active ;
+        bool   bmc_info_query_done   ;
 
         bool   reset_cause_query_active ;
         bool   reset_cause_query_done   ;
@@ -667,8 +681,8 @@ private:
         bool   power_status_query_done   ;
         bool   power_on = false ;
 
-        /* a timer used in the bm_handler to query
-         * the mc_info and reset cause */
+        /* a timer used in the bmc_handler to query
+         * the bmc_info and reset cause */
         struct mtc_timer bm_timer         ;
 
         /* timer used to manage the bmc access alarm */
@@ -678,10 +692,10 @@ private:
          *            Maintenance Thread Structs
          *****************************************************/
         /* control data the parent uses to manage the thread */
-        thread_ctrl_type ipmitool_thread_ctrl ;
+        thread_ctrl_type bmc_thread_ctrl ;
 
         /*info the thread uses to execute and post results   */
-        thread_info_type ipmitool_thread_info  ;
+        thread_info_type bmc_thread_info  ;
 
         /* extra thread info for board management control thread */
         thread_extra_info_type thread_extra_info ;
@@ -799,7 +813,7 @@ private:
     int oos_test_handler   ( struct nodeLinkClass::node * node_ptr );
     int insv_test_handler  ( struct nodeLinkClass::node * node_ptr );
     int stress_handler     ( struct nodeLinkClass::node * node_ptr );
-    int bm_handler         ( struct nodeLinkClass::node * node_ptr );
+    int bmc_handler         ( struct nodeLinkClass::node * node_ptr );
     int degrade_handler    ( struct nodeLinkClass::node * node_ptr );
     int uptime_handler     ( void );
 
@@ -824,9 +838,9 @@ private:
 
     /*****************************************************************************
      *
-     * Name       : ipmi_command_send
+     * Name       : bmc_command_send
      *
-     * Description: This utility starts the ipmitool command handling thread
+     * Description: This utility starts the bmc command handling thread
      *              with the specified command.
      *
      * Returns    : PASS if all the pre-start semantic checks pass and the
@@ -838,34 +852,34 @@ private:
      *
      *****************************************************************************/
 
-    int ipmi_command_send ( struct nodeLinkClass::node * node_ptr, int command ) ;
+    int bmc_command_send ( struct nodeLinkClass::node * node_ptr, int command ) ;
 
     /*****************************************************************************
      *
-     * Name       : ipmi_command_recv
+     * Name       : bmc_command_recv
      *
-     * Description: This utility will check for ipmitool command thread completion.
+     * Description: This utility will check for bmc command thread completion.
      *
      * Returns    : PASS       is returned if the thread reports done.
      *              RETRY      is returned if the thread has not completed.
      *              FAIL_RETRY is returned after 10 back-to-back calls return RETRY.
      *
-     * Assumptions: The caller is expected to call ipmi_command_done once it has
+     * Assumptions: The caller is expected to call bmc_command_done once it has
      *              consumed the results of the thread
      *
      *****************************************************************************/
 
-    int  ipmi_command_recv ( struct nodeLinkClass::node * node_ptr );
+    int  bmc_command_recv ( struct nodeLinkClass::node * node_ptr );
 
     /*****************************************************************************
      *
-     * Name       : ipmi_command_done
+     * Name       : bmc_command_done
      *
      * Description: This utility frees the ipmitool command thread for next execution.
      *
      *****************************************************************************/
 
-    void ipmi_command_done ( struct nodeLinkClass::node * node_ptr );
+    void bmc_command_done ( struct nodeLinkClass::node * node_ptr );
 
     /* default all the BMC access variaables to the "no access" state */
     void bmc_access_data_init ( struct nodeLinkClass::node * node_ptr );
@@ -1257,6 +1271,7 @@ private:
     void mem_log_stage     ( struct nodeLinkClass::node * node_ptr );
     void mem_log_test_info ( struct nodeLinkClass::node * node_ptr );
     void mem_log_bm        ( struct nodeLinkClass::node * node_ptr );
+    void mem_log_ping      ( struct nodeLinkClass::node * node_ptr );
     void mem_log_heartbeat ( struct nodeLinkClass::node * node_ptr );
     void mem_log_hbs_cnts  ( struct nodeLinkClass::node * node_ptr );
     void mem_log_type_info ( struct nodeLinkClass::node * node_ptr );

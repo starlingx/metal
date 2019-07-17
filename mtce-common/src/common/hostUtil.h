@@ -19,40 +19,6 @@ using namespace std;
 
 #include "nodeBase.h"
 
-/* Supported Server Names */
-//#define SERVER__UNKNOWN                ((const char*)"Undetermined Server")
-//#define SERVER__NOKIA_QUANTA_1234_GEN1 ((const char*)"Quanta Computer")
-//#define SERVER__HP_PROLIANT_DL380_GEN9 ((const char*)"ProLiant DL380 Gen9")
-//#define SERVER__HP_PROLIANT_DL360_GEN9 ((const char*)"ProLiant DL360 Gen9")
-
-/* Supported Board Management Controller Names */
-//#define SERVER_BMC__UNKNOWN            ((const char*)"Unknown BMC")
-//#define SERVER_BMC__STANDARD_ILO_V3    ((const char*)"iLO 3 Standard")
-//#define SERVER_BMC__STANDARD_ILO_V4    ((const char*)"iLO 4 Standard")
-
-
-/* A list of supported servers */
-//typedef enum
-//{
-//    SERVER_IS_UNKNOWN = 0,
-//    SERVER_IS_NOKIA__QUANTA_1234____GEN1__ILO_V4 = 1,
-//    SERVER_IS_HP_____PROLIANT_DL380_GEN9__ILO_V4 = 2,
-//    SERVER_IS_HP_____PROLIANT_DL360_GEN9__ILO_V4 = 3,
-//    SERVER_IS_LAST                               = 4
-//} server_enum ;
-
-/* Server Table Entry Type */
-//typedef struct
-//{
-//    server_enum     server_code ;
-//    protocol_enum   protocol    ;
-//    const char    * server_name ;
-//    const char    * server_bmc  ;
-//    const char    * profile     ;
-//
-//} server_table_entry_type ;
-//server_table_entry_type * hostUtil_get_server_info ( server_enum server_code );
-
 typedef enum
 {
     CLIENT_NONE         = 0,

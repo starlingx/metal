@@ -23,7 +23,7 @@ typedef struct
 
 } thread_extra_info_type ;
 
-void * mtcThread_ipmitool ( void * );
-void * mtcThread_ipmitool_test ( void * arg );
+void * mtcThread_bmc ( void * );
+void * mtcThread_bmc_test ( void * arg );
 
 #endif // __INCLUDE_MTCTHREAD_HH__

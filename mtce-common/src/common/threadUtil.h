@@ -131,37 +131,37 @@ using namespace std;
 
 #define dlog_t(format, args...) { \
     if(daemon_get_cfg_ptr()->debug_level&1) \
-    { syslog(LOG_INFO, "[%ld.%05d] %s %s %-3s %-18s(%4d) %-24s:Debug : " format, gettid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }}
+    { syslog(LOG_INFO, "[%ld.%05d] %s %s %-3s %-18s(%4d) %-24s:debug : " format, gettid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }}
 #define dlog1_t(format, args...) { \
     if(daemon_get_cfg_ptr()->debug_level&2) \
-    { syslog(LOG_INFO, "[%ld.%05d] %s %s %-3s %-18s(%4d) %-24s:Debug2: " format, gettid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }}
+    { syslog(LOG_INFO, "[%ld.%05d] %s %s %-3s %-18s(%4d) %-24s:debug2: " format, gettid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }}
 #define dlog2_t(format, args...) { \
     if(daemon_get_cfg_ptr()->debug_level&4) \
-    { syslog(LOG_INFO, "[%ld.%05d] %s %s %-3s %-18s(%4d) %-24s:Debug4: " format, gettid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }}
+    { syslog(LOG_INFO, "[%ld.%05d] %s %s %-3s %-18s(%4d) %-24s:debug4: " format, gettid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }}
 #define dlog3_t(format, args...) { \
     if(daemon_get_cfg_ptr()->debug_level&8) \
-    { syslog(LOG_INFO, "[%ld.%05d] %s %s %-3s %-18s(%4d) %-24s:Debug8: " format, gettid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }}
+    { syslog(LOG_INFO, "[%ld.%05d] %s %s %-3s %-18s(%4d) %-24s:debug8: " format, gettid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }}
 
 
 #define blog_t(format, args...) { \
     if(daemon_get_cfg_ptr()->debug_bmgmt&1) \
-    { syslog(LOG_INFO, "[%ld.%05d] %s %s %-3s %-18s(%4d) %-24s: BMgt : " format, gettid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }}
+    { syslog(LOG_INFO, "[%ld.%05d] %s %s %-3s %-18s(%4d) %-24s: bmgt : " format, gettid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }}
 #define blog1_t(format, args...) { \
     if(daemon_get_cfg_ptr()->debug_bmgmt&2) \
-    { syslog(LOG_INFO, "[%ld.%05d] %s %s %-3s %-18s(%4d) %-24s: BMgt2: " format, gettid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }}
+    { syslog(LOG_INFO, "[%ld.%05d] %s %s %-3s %-18s(%4d) %-24s: bmgt2: " format, gettid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }}
 #define blog2_t(format, args...) { \
     if(daemon_get_cfg_ptr()->debug_bmgmt&4) \
-    { syslog(LOG_INFO, "[%ld.%05d] %s %s %-3s %-18s(%4d) %-24s: BMgt4: " format, gettid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }}
+    { syslog(LOG_INFO, "[%ld.%05d] %s %s %-3s %-18s(%4d) %-24s: bmgt4: " format, gettid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }}
 #define blog3_t(format, args...) { \
     if(daemon_get_cfg_ptr()->debug_bmgmt&8) \
-    { syslog(LOG_INFO, "[%ld.%05d] %s %s %-3s %-18s(%4d) %-24s: BMgt8: " format, gettid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }}
+    { syslog(LOG_INFO, "[%ld.%05d] %s %s %-3s %-18s(%4d) %-24s: bmgt8: " format, gettid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }}
 
 
 
 #define THREAD_INIT_SIG     (0xbabef00d)
 #define MAX_PTHREADS                 (1) /* max number concurrent pthreads  */
 #define DEFAULT_THREAD_TIMEOUT_SECS (60) /* default pthread exec timout     */
-#define MAX_LOG_PREFIX_LEN          (MAX_CHARS_HOSTNAME*4)
+#define MAX_LOG_PREFIX_LEN          (MAX_CHARS_ON_LINE)
 #define THREAD_POST_KILL_WAIT       (10) /* wait time between KILL and IDLE */
 
 typedef enum
@@ -199,7 +199,7 @@ typedef struct
    int              timeout ; /* timout in msecs , 0 for no timeout         */
 
    /* FSM Level Completion Control and Status                               */
-   int               status ; /* FSM status ; overrides info status         */
+   unsigned int      status ; /* FSM status ; overrides info status         */
    bool                done ; /* flag indicating thread data was consumed   */
    int             runcount ; /* copy of info.runcount before launch ;      */
    int              retries ; /* max thread retries                         */
@@ -228,7 +228,7 @@ typedef struct
 
     string hostname       ; /* hostname this thread is tied to              */
     string name           ; /* short name of the thread                     */
-    int    command        ; /* the command the thread should execute        */
+    int command           ; /* the command the thread should execute        */
     int    signal         ; /* parent request signal ; SIGKILL exit request */
     void * extra_info_ptr ; /* pointer to thread specific command data      */
     char   log_prefix[MAX_LOG_PREFIX_LEN]; /* preformatted log prefix       */
@@ -238,7 +238,7 @@ typedef struct
     /* -------------------------------------------------------------------- */
 
     pthread_t id         ; /* the thread id of self                         */
-    int    status        ; /* thread execution status set before runcount++ */
+    int unsigned status  ; /* thread execution status set before runcount++ */
     string status_string ; /* status string representing unique error case  */
     int    runcount      ; /* thread increments just before exit - complete */
     int    progress      ; /* incremented by thread ; show forward progress */
@@ -246,6 +246,8 @@ typedef struct
     int    signal_handling;/* incremented by thread calling signal handler  */
     int    pw_file_fd    ; /* file descriptor for the password file         */
     string password_file ; /* the name of the password file                 */
+
+    bmc_protocol_enum proto ; /* IPMITOOL, REDFISHTOOL, future ...          */
 
 } thread_info_type ;
 

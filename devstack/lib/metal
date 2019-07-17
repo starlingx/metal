@@ -163,7 +163,7 @@ function install_mtce_common {
     local libdaecom_file=( \
         "common/libcommon.a" \
         "common/libthreadUtil.a" \
-        "common/libipmiUtil.a" \
+        "common/libbmcUtils.a" \
         "common/libpingUtil.a" \
         "common/libnodeBase.a" \
         "common/libregexUtil.a" \
@@ -190,7 +190,9 @@ function install_mtce_common {
         "common/timeUtil.h" \
         "common/alarmUtil.h" \
         "common/hostUtil.h" \
+        "common/bmcUtil.h" \
         "common/ipmiUtil.h" \
+        "common/redfishUtil.h" \
         "common/nlEvent.h" \
         "common/pingUtil.h" \
         "common/regexUtil.h" \
@@ -898,7 +900,7 @@ function cleanup_metal {
     local libdaecom_file=( \
         "libcommon.a" \
         "libthreadUtil.a" \
-        "libipmiUtil.a" \
+        "libBmcUtils.a" \
         "libpingUtil.a" \
         "libnodeBase.a" \
         "libregexUtil.a" \

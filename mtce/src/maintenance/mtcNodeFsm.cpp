@@ -69,10 +69,10 @@ int nodeLinkClass::fsm ( struct nodeLinkClass::node * node_ptr )
     }
 
     /* Monitor and Manage active threads */
-    thread_handler ( node_ptr->ipmitool_thread_ctrl, node_ptr->ipmitool_thread_info );
+    thread_handler ( node_ptr->bmc_thread_ctrl, node_ptr->bmc_thread_info );
 
     /* manage the host connected state and board management alarms */
-    nodeLinkClass::bm_handler ( node_ptr );
+    nodeLinkClass::bmc_handler ( node_ptr );
 
     /* manage host's degrade state */
     nodeLinkClass::degrade_handler ( node_ptr );

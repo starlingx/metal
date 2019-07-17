@@ -17,14 +17,14 @@
 #include "regexUtil.h"    /* for ... regexUtil_pattern_match          */
 #include "tokenUtil.h"    /* for ... tokenUtil_new_token              */
 #include "nodeUtil.h"     /* for ... mtce common utilities            */
-#include "ipmiUtil.h"     /* for ... IPMI utilties                    */
+#include "bmcUtil.h"      /* for ... mtce-common board management     */
 #include "hwmon.h"        /* for ... service module header            */
 #include "hwmonUtil.h"    /* for ... utilities, ie clear_logged_state */
 #include "hwmonClass.h"   /* for ... service class definition         */
-#include "hwmonIpmi.h"    /* for ... QUANTA_SENSOR_PROFILE_CHECKSUM  */
 #include "hwmonSensor.h"  /* for ... this mpodule header              */
 #include "hwmonHttp.h"    /* for ... hwmonHttp_mod_group              */
 #include "hwmonAlarm.h"   /* for ... hwmonAlarm_major                 */
+#include "hwmonIpmi.h"    /* for ... QUANTA_SAMPLE_PROFILE_..         */
 
 /* Declare the Hardware Monitor Inventory Object */
 hwmonHostClass hostInv ;
@@ -205,10 +205,10 @@ void hwmonHostClass::timer_handler ( int sig, siginfo_t *si, void *uc)
                 hwmon_host_ptr->monitor_ctrl.timer.ring = true ;
                 return ;
             }
-            else if (( *tid_ptr == hwmon_host_ptr->ipmitool_thread_ctrl.timer.tid ) )
+            else if (( *tid_ptr == hwmon_host_ptr->bmc_thread_ctrl.timer.tid ) )
             {
-                mtcTimer_stop_int_safe ( hwmon_host_ptr->ipmitool_thread_ctrl.timer );
-                hwmon_host_ptr->ipmitool_thread_ctrl.timer.ring = true ;
+                mtcTimer_stop_int_safe ( hwmon_host_ptr->bmc_thread_ctrl.timer );
+                hwmon_host_ptr->bmc_thread_ctrl.timer.ring = true ;
                 return ;
             }
             else if (( *tid_ptr == hwmon_host_ptr->ping_info.timer.tid ) )
@@ -777,37 +777,37 @@ int hwmonHostClass::ipmi_sensor_monitor ( struct hwmonHostClass::hwmon_host * ho
                         ( host_ptr->poweron == false ) &&
                         ( host_ptr->relearn == false ))
                     {
-                        if ( host_ptr->ipmitool_thread_ctrl.id )
+                        if ( host_ptr->bmc_thread_ctrl.id )
                         {
                             wlog ("%s sensor monitor thread is unexpectedly active ; retry soon\n", host_ptr->hostname.c_str());
-                            thread_kill ( host_ptr->ipmitool_thread_ctrl, host_ptr->ipmitool_thread_info );
+                            thread_kill ( host_ptr->bmc_thread_ctrl, host_ptr->bmc_thread_info );
                             sleep (1);
                             break ;
                         }
 
                         host_ptr->accounting_bad_count = 0 ;
-                        host_ptr->ipmitool_thread_ctrl.id = 0       ;
-                        host_ptr->ipmitool_thread_ctrl.done = false ;
+                        host_ptr->bmc_thread_ctrl.id = 0       ;
+                        host_ptr->bmc_thread_ctrl.done = false ;
 
-                        host_ptr->ipmitool_thread_info.data.clear() ;
-                        host_ptr->ipmitool_thread_info.status_string.clear();
-                        host_ptr->ipmitool_thread_info.status = -1  ;
-                        host_ptr->ipmitool_thread_info.progress = 0 ;
-                        host_ptr->ipmitool_thread_info.id = 0       ;
-                        host_ptr->ipmitool_thread_info.signal = 0   ;
-                        host_ptr->ipmitool_thread_info.command = IPMITOOL_THREAD_CMD__POWER_STATUS ;
+                        host_ptr->bmc_thread_info.data.clear() ;
+                        host_ptr->bmc_thread_info.status_string.clear();
+                        host_ptr->bmc_thread_info.status = -1  ;
+                        host_ptr->bmc_thread_info.progress = 0 ;
+                        host_ptr->bmc_thread_info.id = 0       ;
+                        host_ptr->bmc_thread_info.signal = 0   ;
+                        host_ptr->bmc_thread_info.command = BMC_THREAD_CMD__POWER_STATUS ;
 
                         /* Update / Setup the BMC query credentials */
                         host_ptr->thread_extra_info.bm_ip = host_ptr->bm_ip ;
                         host_ptr->thread_extra_info.bm_un = host_ptr->bm_un ;
                         host_ptr->thread_extra_info.bm_pw = host_ptr->bm_pw ;
 
-                        rc = thread_launch ( host_ptr->ipmitool_thread_ctrl,
-                                             host_ptr->ipmitool_thread_info ) ;
+                        rc = thread_launch ( host_ptr->bmc_thread_ctrl,
+                                             host_ptr->bmc_thread_info ) ;
                         if ( rc != PASS )
                         {
-                            host_ptr->ipmitool_thread_info.status = rc ;
-                            host_ptr->ipmitool_thread_info.status_string =
+                            host_ptr->bmc_thread_info.status = rc ;
+                            host_ptr->bmc_thread_info.status_string =
                             "failed to launch power query thread" ;
 
                             _stage_change ( host_ptr->hostname,
@@ -817,7 +817,7 @@ int hwmonHostClass::ipmi_sensor_monitor ( struct hwmonHostClass::hwmon_host * ho
                         else
                         {
                             /* Assign the extra data pointer */
-                            host_ptr->ipmitool_thread_info.extra_info_ptr = (void*)&host_ptr->thread_extra_info ;
+                            host_ptr->bmc_thread_info.extra_info_ptr = (void*)&host_ptr->thread_extra_info ;
 
                             /* start an umbrella timer 5 seconds longer than
                              * the default thread FSM timout */
@@ -834,7 +834,7 @@ int hwmonHostClass::ipmi_sensor_monitor ( struct hwmonHostClass::hwmon_host * ho
                     else if ( host_ptr->interval )
                     {
                         /* Assign the extra data pointer */
-                        host_ptr->ipmitool_thread_info.extra_info_ptr = (void*)&host_ptr->thread_extra_info ;
+                        host_ptr->bmc_thread_info.extra_info_ptr = (void*)&host_ptr->thread_extra_info ;
 
                         /* randomize the first audit a little so that over a swact we don't spike hwmond */
                         int r = (rand() % host_ptr->interval) + 1 ;
@@ -891,62 +891,62 @@ int hwmonHostClass::ipmi_sensor_monitor ( struct hwmonHostClass::hwmon_host * ho
                     wlog ("%s power query thread timeout\n",
                               host_ptr->hostname.c_str());
 
-                    thread_kill ( host_ptr->ipmitool_thread_ctrl, host_ptr->ipmitool_thread_info );
+                    thread_kill ( host_ptr->bmc_thread_ctrl, host_ptr->bmc_thread_info );
                 }
 
                 /* check for 'thread done' completion */
-                else if ( thread_done( host_ptr->ipmitool_thread_ctrl ) )
+                else if ( thread_done( host_ptr->bmc_thread_ctrl ) )
                 {
                     /* Consume done results */
                     mtcTimer_reset ( host_ptr->monitor_ctrl.timer );
 
-                    if ( host_ptr->ipmitool_thread_info.status )
+                    if ( host_ptr->bmc_thread_info.status )
                     {
                         elog ("%s %s thread %2d failed (rc:%d) (%d:%d)\n",
-                                  host_ptr->ipmitool_thread_ctrl.hostname.c_str(),
-                                  host_ptr->ipmitool_thread_ctrl.name.c_str(),
-                                  host_ptr->ipmitool_thread_info.command,
-                                  host_ptr->ipmitool_thread_info.status,
-                                  host_ptr->ipmitool_thread_info.progress,
-                                  host_ptr->ipmitool_thread_info.runcount);
+                                  host_ptr->bmc_thread_ctrl.hostname.c_str(),
+                                  host_ptr->bmc_thread_ctrl.name.c_str(),
+                                  host_ptr->bmc_thread_info.command,
+                                  host_ptr->bmc_thread_info.status,
+                                  host_ptr->bmc_thread_info.progress,
+                                  host_ptr->bmc_thread_info.runcount);
 
                         wlog ("%s ... %s\n",
-                                  host_ptr->ipmitool_thread_ctrl.hostname.c_str(),
-                                  host_ptr->ipmitool_thread_info.status_string.c_str());
+                                  host_ptr->bmc_thread_ctrl.hostname.c_str(),
+                                  host_ptr->bmc_thread_info.status_string.c_str());
                     }
                     else
                     {
                         dlog ("%s '%s' thread '%d' command is done ; (%d:%d) (rc:%d)\n",
-                                  host_ptr->ipmitool_thread_ctrl.hostname.c_str(),
-                                  host_ptr->ipmitool_thread_ctrl.name.c_str(),
-                                  host_ptr->ipmitool_thread_info.command,
-                                  host_ptr->ipmitool_thread_info.progress,
-                                  host_ptr->ipmitool_thread_info.runcount,
-                                  host_ptr->ipmitool_thread_info.status);
+                                  host_ptr->bmc_thread_ctrl.hostname.c_str(),
+                                  host_ptr->bmc_thread_ctrl.name.c_str(),
+                                  host_ptr->bmc_thread_info.command,
+                                  host_ptr->bmc_thread_info.progress,
+                                  host_ptr->bmc_thread_info.runcount,
+                                  host_ptr->bmc_thread_info.status);
 
                         blog2("%s ... status: %s\n",
-                                  host_ptr->ipmitool_thread_ctrl.hostname.c_str(),
-                                  host_ptr->ipmitool_thread_info.status_string.c_str());
+                                  host_ptr->bmc_thread_ctrl.hostname.c_str(),
+                                  host_ptr->bmc_thread_info.status_string.c_str());
 
 #ifdef WANT_FIT_TESTING
                         if ( daemon_want_fit ( FIT_CODE__HWMON__NO_DATA, host_ptr->hostname ))
                         {
-                            host_ptr->ipmitool_thread_info.data.clear ();
-                            host_ptr->ipmitool_thread_info.status = 0 ;
-                            host_ptr->ipmitool_thread_info.status_string.clear ();
+                            host_ptr->bmc_thread_info.data.clear ();
+                            host_ptr->bmc_thread_info.status = 0 ;
+                            host_ptr->bmc_thread_info.status_string.clear ();
                             slog ("%s FIT No Power Status Data\n", host_ptr->hostname.c_str());
                         }
 #endif
 
-                        if ( host_ptr->ipmitool_thread_info.data.empty())
+                        if ( host_ptr->bmc_thread_info.data.empty())
                         {
                             wlog ("%s power query status empty ; retrying query\n",
                                       host_ptr->hostname.c_str());
                         }
-                        else if ( host_ptr->ipmitool_thread_info.data.find (IPMITOOL_POWER_ON_STATUS) == string::npos )
+                        else if ( host_ptr->bmc_thread_info.data.find (IPMITOOL_POWER_ON_STATUS) == string::npos )
                         {
                             ilog ("%s %s\n", host_ptr->hostname.c_str(),
-                                             host_ptr->ipmitool_thread_info.data.c_str());
+                                             host_ptr->bmc_thread_info.data.c_str());
 
                             wlog ("%s sensor learning delayed ; need power on\n",
                                       host_ptr->hostname.c_str());
@@ -954,14 +954,14 @@ int hwmonHostClass::ipmi_sensor_monitor ( struct hwmonHostClass::hwmon_host * ho
                         else
                         {
                             ilog ("%s %s\n", host_ptr->hostname.c_str(),
-                                             host_ptr->ipmitool_thread_info.data.c_str());
+                                             host_ptr->bmc_thread_info.data.c_str());
 
                             /* OK, this is what we have been waiting for */
                             host_ptr->poweron = true ;
                         }
                     }
 
-                    host_ptr->ipmitool_thread_ctrl.done = true ;
+                    host_ptr->bmc_thread_ctrl.done = true ;
 
                     if ( host_ptr->poweron == false )
                     {
@@ -1007,11 +1007,11 @@ int hwmonHostClass::ipmi_sensor_monitor ( struct hwmonHostClass::hwmon_host * ho
 
                     /* if there was a previous connection failure being handled
                      * then give it time to resolve */
-                    if ( !thread_idle ( host_ptr->ipmitool_thread_ctrl ) )
+                    if ( !thread_idle ( host_ptr->bmc_thread_ctrl ) )
                     {
                         wlog ("%s rejecting thread run stage change ; FSM not IDLE (thread stage:%s)\n",
                                   host_ptr->hostname.c_str(),
-                                  thread_stage(host_ptr->ipmitool_thread_ctrl).c_str());
+                                  thread_stage(host_ptr->bmc_thread_ctrl).c_str());
 
                         _stage_change ( host_ptr->hostname,
                                         host_ptr->monitor_ctrl.stage,
@@ -1061,10 +1061,10 @@ int hwmonHostClass::ipmi_sensor_monitor ( struct hwmonHostClass::hwmon_host * ho
              ******************************************************************/
             case HWMON_SENSOR_MONITOR__READ:
             {
-                if ( host_ptr->ipmitool_thread_ctrl.id )
+                if ( host_ptr->bmc_thread_ctrl.id )
                 {
-                    host_ptr->ipmitool_thread_info.status = FAIL_THREAD_RUNNING ;
-                    host_ptr->ipmitool_thread_info.status_string =
+                    host_ptr->bmc_thread_info.status = FAIL_THREAD_RUNNING ;
+                    host_ptr->bmc_thread_info.status_string =
                     "sensor monitor thread is unexpectedly active ; handling as failure" ;
                     _stage_change ( host_ptr->hostname,
                                     host_ptr->monitor_ctrl.stage,
@@ -1073,16 +1073,16 @@ int hwmonHostClass::ipmi_sensor_monitor ( struct hwmonHostClass::hwmon_host * ho
                 }
 
                 host_ptr->accounting_bad_count = 0 ;
-                host_ptr->ipmitool_thread_ctrl.id = 0       ;
-                host_ptr->ipmitool_thread_ctrl.done = false ;
+                host_ptr->bmc_thread_ctrl.id = 0       ;
+                host_ptr->bmc_thread_ctrl.done = false ;
 
-                host_ptr->ipmitool_thread_info.data.clear() ;
-                host_ptr->ipmitool_thread_info.status_string.clear();
-                host_ptr->ipmitool_thread_info.status = -1  ;
-                host_ptr->ipmitool_thread_info.progress = 0 ;
-                host_ptr->ipmitool_thread_info.id = 0       ;
-                host_ptr->ipmitool_thread_info.signal = 0   ;
-                host_ptr->ipmitool_thread_info.command = IPMITOOL_THREAD_CMD__READ_SENSORS ;
+                host_ptr->bmc_thread_info.data.clear() ;
+                host_ptr->bmc_thread_info.status_string.clear();
+                host_ptr->bmc_thread_info.status = -1  ;
+                host_ptr->bmc_thread_info.progress = 0 ;
+                host_ptr->bmc_thread_info.id = 0       ;
+                host_ptr->bmc_thread_info.signal = 0   ;
+                host_ptr->bmc_thread_info.command = BMC_THREAD_CMD__READ_SENSORS ;
 
                 /* Update / Setup the BMC query credentials */
                 host_ptr->thread_extra_info.bm_ip = host_ptr->bm_ip ;
@@ -1090,11 +1090,11 @@ int hwmonHostClass::ipmi_sensor_monitor ( struct hwmonHostClass::hwmon_host * ho
                 host_ptr->thread_extra_info.bm_pw = host_ptr->bm_pw ;
 
 
-                rc = thread_launch ( host_ptr->ipmitool_thread_ctrl, host_ptr->ipmitool_thread_info ) ;
+                rc = thread_launch ( host_ptr->bmc_thread_ctrl, host_ptr->bmc_thread_info ) ;
                 if ( rc != PASS )
                 {
-                    host_ptr->ipmitool_thread_info.status = rc ;
-                    host_ptr->ipmitool_thread_info.status_string =
+                    host_ptr->bmc_thread_info.status = rc ;
+                    host_ptr->bmc_thread_info.status_string =
                     "failed to launch sensor monitoring thread" ;
 
                     _stage_change ( host_ptr->hostname,
@@ -1149,8 +1149,8 @@ int hwmonHostClass::ipmi_sensor_monitor ( struct hwmonHostClass::hwmon_host * ho
                 if ( mtcTimer_expired ( host_ptr->monitor_ctrl.timer ) )
                 {
                     host_ptr->monitor_ctrl.timer.ring = false ;
-                    host_ptr->ipmitool_thread_info.status = FAIL_TIMEOUT ;
-                    host_ptr->ipmitool_thread_info.status_string =
+                    host_ptr->bmc_thread_info.status = FAIL_TIMEOUT ;
+                    host_ptr->bmc_thread_info.status_string =
                     "timeout waiting for sensor read data" ;
 
                     _stage_change ( host_ptr->hostname,
@@ -1159,34 +1159,34 @@ int hwmonHostClass::ipmi_sensor_monitor ( struct hwmonHostClass::hwmon_host * ho
                 }
 
                 /* check for 'thread done' completion */
-                else if ( thread_done( host_ptr->ipmitool_thread_ctrl ) )
+                else if ( thread_done( host_ptr->bmc_thread_ctrl ) )
                 {
                     /* Consume done results */
                     mtcTimer_stop ( host_ptr->monitor_ctrl.timer );
 
-                    if ( host_ptr->ipmitool_thread_info.status ) // == FAIL_SYSTEM_CALL )
+                    if ( host_ptr->bmc_thread_info.status ) // == FAIL_SYSTEM_CALL )
                     {
-                        if ( ++host_ptr->ipmitool_thread_ctrl.retries < MAX_THREAD_RETRIES )
+                        if ( ++host_ptr->bmc_thread_ctrl.retries < MAX_THREAD_RETRIES )
                         {
                             elog ("%s %s thread %2d failed (rc:%d) (try %d of %d) (%d:%d)\n",
-                                      host_ptr->ipmitool_thread_ctrl.hostname.c_str(),
-                                      host_ptr->ipmitool_thread_ctrl.name.c_str(),
-                                      host_ptr->ipmitool_thread_info.command,
-                                      host_ptr->ipmitool_thread_info.status,
-                                      host_ptr->ipmitool_thread_ctrl.retries,
+                                      host_ptr->bmc_thread_ctrl.hostname.c_str(),
+                                      host_ptr->bmc_thread_ctrl.name.c_str(),
+                                      host_ptr->bmc_thread_info.command,
+                                      host_ptr->bmc_thread_info.status,
+                                      host_ptr->bmc_thread_ctrl.retries,
                                       MAX_THREAD_RETRIES,
-                                      host_ptr->ipmitool_thread_info.progress,
-                                      host_ptr->ipmitool_thread_info.runcount);
+                                      host_ptr->bmc_thread_info.progress,
+                                      host_ptr->bmc_thread_info.runcount);
 
                             /* don't flood the logs with the same error data over and over */
-                            if ( host_ptr->ipmitool_thread_ctrl.retries == 1 )
+                            if ( host_ptr->bmc_thread_ctrl.retries == 1 )
                             {
                                 blog ("%s ... %s\n",
-                                          host_ptr->ipmitool_thread_ctrl.hostname.c_str(),
-                                          host_ptr->ipmitool_thread_info.status_string.c_str());
+                                          host_ptr->bmc_thread_ctrl.hostname.c_str(),
+                                          host_ptr->bmc_thread_info.status_string.c_str());
                             }
 
-                            host_ptr->ipmitool_thread_ctrl.done = true ;
+                            host_ptr->bmc_thread_ctrl.done = true ;
                             mtcTimer_start ( host_ptr->monitor_ctrl.timer, hwmonTimer_handler, THREAD_RETRY_DELAY_SECS );
                             _stage_change ( host_ptr->hostname,
                                             host_ptr->monitor_ctrl.stage,
@@ -1195,53 +1195,53 @@ int hwmonHostClass::ipmi_sensor_monitor ( struct hwmonHostClass::hwmon_host * ho
                         }
 #ifdef WANT_THIS
                         /* don't flood the logs with the same error data over and over */
-                        if ( host_ptr->ipmitool_thread_ctrl.retries > 1 )
+                        if ( host_ptr->bmc_thread_ctrl.retries > 1 )
                         {
                             wlog ("%s %s thread '%d' command is done ; (%d:%d) (rc:%d)\n",
-                                      host_ptr->ipmitool_thread_ctrl.hostname.c_str(),
-                                      host_ptr->ipmitool_thread_ctrl.name.c_str(),
-                                      host_ptr->ipmitool_thread_info.command,
-                                      host_ptr->ipmitool_thread_info.progress,
-                                      host_ptr->ipmitool_thread_info.runcount,
-                                      host_ptr->ipmitool_thread_info.status);
+                                      host_ptr->bmc_thread_ctrl.hostname.c_str(),
+                                      host_ptr->bmc_thread_ctrl.name.c_str(),
+                                      host_ptr->bmc_thread_info.command,
+                                      host_ptr->bmc_thread_info.progress,
+                                      host_ptr->bmc_thread_info.runcount,
+                                      host_ptr->bmc_thread_info.status);
                             blog ("%s ... data: %s\n",
-                                      host_ptr->ipmitool_thread_ctrl.hostname.c_str(),
-                                      host_ptr->ipmitool_thread_info.status_string.c_str());
+                                      host_ptr->bmc_thread_ctrl.hostname.c_str(),
+                                      host_ptr->bmc_thread_info.status_string.c_str());
                         }
 #endif
                     }
                     else
                     {
                         dlog ("%s '%s' thread '%d' command is done ; (%d:%d) (rc:%d)\n",
-                                  host_ptr->ipmitool_thread_ctrl.hostname.c_str(),
-                                  host_ptr->ipmitool_thread_ctrl.name.c_str(),
-                                  host_ptr->ipmitool_thread_info.command,
-                                  host_ptr->ipmitool_thread_info.progress,
-                                  host_ptr->ipmitool_thread_info.runcount,
-                                  host_ptr->ipmitool_thread_info.status);
+                                  host_ptr->bmc_thread_ctrl.hostname.c_str(),
+                                  host_ptr->bmc_thread_ctrl.name.c_str(),
+                                  host_ptr->bmc_thread_info.command,
+                                  host_ptr->bmc_thread_info.progress,
+                                  host_ptr->bmc_thread_info.runcount,
+                                  host_ptr->bmc_thread_info.status);
                         blog2 ("%s ... data: %s\n",
-                                  host_ptr->ipmitool_thread_ctrl.hostname.c_str(),
-                                  host_ptr->ipmitool_thread_info.status_string.c_str());
+                                  host_ptr->bmc_thread_ctrl.hostname.c_str(),
+                                  host_ptr->bmc_thread_info.status_string.c_str());
                     }
-                    host_ptr->ipmitool_thread_ctrl.done = true ;
-                    host_ptr->ipmitool_thread_ctrl.retries = 0 ;
+                    host_ptr->bmc_thread_ctrl.done = true ;
+                    host_ptr->bmc_thread_ctrl.retries = 0 ;
 
 #ifdef WANT_FIT_TESTING
                     if ( daemon_want_fit ( FIT_CODE__HWMON__NO_DATA, host_ptr->hostname ))
                     {
-                        host_ptr->ipmitool_thread_info.data.clear ();
-                        host_ptr->ipmitool_thread_info.status = 0 ;
-                        host_ptr->ipmitool_thread_info.status_string.clear ();
+                        host_ptr->bmc_thread_info.data.clear ();
+                        host_ptr->bmc_thread_info.status = 0 ;
+                        host_ptr->bmc_thread_info.status_string.clear ();
                     }
 #endif
 
-                    if ( host_ptr->ipmitool_thread_info.status == PASS )
+                    if ( host_ptr->bmc_thread_info.status == PASS )
                     {
                         /* NOTE: This parsing method is not leaking memory ; verified ! */
 
                         json_bool status ;
                         struct json_object * req_obj = (struct json_object *)(NULL) ;
-                        struct json_object * raw_obj = json_tokener_parse( host_ptr->ipmitool_thread_info.data.data() );
+                        struct json_object * raw_obj = json_tokener_parse( host_ptr->bmc_thread_info.data.data() );
                         if ( raw_obj )
                         {
                             /* Look for ... IPMITOOL_JSON__SENSOR_DATA_MESSAGE_HEADER */
@@ -1252,14 +1252,14 @@ int hwmonHostClass::ipmi_sensor_monitor ( struct hwmonHostClass::hwmon_host * ho
                                 host_ptr->json_ipmi_sensors = msg_ptr ;
                                 if ( msg_ptr )
                                 {
-                                    host_ptr->ipmitool_thread_info.status = ipmi_load_sensor_samples ( host_ptr , msg_ptr);
-                                    if ( host_ptr->ipmitool_thread_info.status == PASS )
+                                    host_ptr->bmc_thread_info.status = ipmi_load_sensor_samples ( host_ptr , msg_ptr);
+                                    if ( host_ptr->bmc_thread_info.status == PASS )
                                     {
                                         if ( host_ptr->samples != host_ptr->sensors )
                                         {
                                             if ( host_ptr->quanta_server == false )
                                             {
-                                                ilog ("%s read %d sensor samples but expected %d\n",
+                                                blog ("%s read %d sensor samples but expected %d\n",
                                                           host_ptr->hostname.c_str(),
                                                           host_ptr->samples,
                                                           host_ptr->sensors );
@@ -1270,34 +1270,34 @@ int hwmonHostClass::ipmi_sensor_monitor ( struct hwmonHostClass::hwmon_host * ho
                                     }
                                     else
                                     {
-                                        host_ptr->ipmitool_thread_info.status_string = "failed to load sensor data" ;
+                                        host_ptr->bmc_thread_info.status_string = "failed to load sensor data" ;
                                     }
                                 }
                                 else
                                 {
-                                    host_ptr->ipmitool_thread_info.status_string = "failed to get json message after header" ;
-                                    host_ptr->ipmitool_thread_info.status = FAIL_JSON_PARSE ;
+                                    host_ptr->bmc_thread_info.status_string = "failed to get json message after header" ;
+                                    host_ptr->bmc_thread_info.status = FAIL_JSON_PARSE ;
                                 }
                             }
                             else
                             {
-                                host_ptr->ipmitool_thread_info.status_string = "failed to find '" ;
-                                host_ptr->ipmitool_thread_info.status_string.append(IPMITOOL_JSON__SENSOR_DATA_MESSAGE_HEADER);
-                                host_ptr->ipmitool_thread_info.status_string.append("' label") ;
-                                host_ptr->ipmitool_thread_info.status = FAIL_JSON_PARSE ;
+                                host_ptr->bmc_thread_info.status_string = "failed to find '" ;
+                                host_ptr->bmc_thread_info.status_string.append(IPMITOOL_JSON__SENSOR_DATA_MESSAGE_HEADER);
+                                host_ptr->bmc_thread_info.status_string.append("' label") ;
+                                host_ptr->bmc_thread_info.status = FAIL_JSON_PARSE ;
                             }
                         }
                         else
                         {
-                            host_ptr->ipmitool_thread_info.status_string = "failed to parse ipmitool sensor data string" ;
-                            host_ptr->ipmitool_thread_info.status = FAIL_JSON_PARSE ;
+                            host_ptr->bmc_thread_info.status_string = "failed to parse ipmitool sensor data string" ;
+                            host_ptr->bmc_thread_info.status = FAIL_JSON_PARSE ;
                         }
 
                         if (raw_obj) json_object_put(raw_obj);
                         if (req_obj) json_object_put(req_obj);
                     }
 
-                    if ( host_ptr->ipmitool_thread_info.status )
+                    if ( host_ptr->bmc_thread_info.status )
                     {
                         /* Handle thread error status */
                         if ( host_ptr->groups == 0 )
@@ -1369,10 +1369,10 @@ int hwmonHostClass::ipmi_sensor_monitor ( struct hwmonHostClass::hwmon_host * ho
                 /* Handle cases where we got an incomplete sensor reading */
                 if ( host_ptr->thread_extra_info.samples == 0 )
                 {
-                    if ( host_ptr->ipmitool_thread_info.status == PASS )
+                    if ( host_ptr->bmc_thread_info.status == PASS )
                     {
-                        host_ptr->ipmitool_thread_info.status        = FAIL_INVALID_DATA ;
-                        host_ptr->ipmitool_thread_info.status_string = "incomplete sensor data reading" ;
+                        host_ptr->bmc_thread_info.status        = FAIL_INVALID_DATA ;
+                        host_ptr->bmc_thread_info.status_string = "incomplete sensor data reading" ;
                     }
                     _stage_change ( host_ptr->hostname,
                                     host_ptr->monitor_ctrl.stage,
@@ -1914,18 +1914,18 @@ int hwmonHostClass::ipmi_sensor_monitor ( struct hwmonHostClass::hwmon_host * ho
             case HWMON_SENSOR_MONITOR__FAIL:
             {
                 host_ptr->ping_info.ok = false ;
-                host_ptr->ipmitool_thread_ctrl.retries = 0 ;
+                host_ptr->bmc_thread_ctrl.retries = 0 ;
 
                 mtcTimer_reset ( host_ptr->monitor_ctrl.timer );
 
-                if ( host_ptr->ipmitool_thread_info.status )
+                if ( host_ptr->bmc_thread_info.status )
                 {
                     elog ("%s sensor monitoring failure (rc:%d)\n",
                               host_ptr->hostname.c_str(),
-                              host_ptr->ipmitool_thread_info.status );
-                    if ( host_ptr->ipmitool_thread_info.data.length() )
+                              host_ptr->bmc_thread_info.status );
+                    if ( host_ptr->bmc_thread_info.data.length() )
                     {
-                        string _temp = host_ptr->ipmitool_thread_info.status_string ;
+                        string _temp = host_ptr->bmc_thread_info.status_string ;
                         size_t pos = _temp.find ("-f", 0) ;
 
                         if ( pos != std::string::npos )
@@ -1939,17 +1939,17 @@ int hwmonHostClass::ipmi_sensor_monitor ( struct hwmonHostClass::hwmon_host * ho
                         {
                             elog ("%s ... %s\n",
                                       host_ptr->hostname.c_str(),
-                                      host_ptr->ipmitool_thread_info.status_string.c_str());
+                                      host_ptr->bmc_thread_info.status_string.c_str());
                         }
                     }
                 }
 
-                if ( host_ptr->ipmitool_thread_ctrl.id )
+                if ( host_ptr->bmc_thread_ctrl.id )
                 {
                     slog ("%s sensor monitor thread is unexpectedly active ; handling as failure\n",
                               host_ptr->hostname.c_str());
 
-                    thread_kill ( host_ptr->ipmitool_thread_ctrl, host_ptr->ipmitool_thread_info );
+                    thread_kill ( host_ptr->bmc_thread_ctrl, host_ptr->bmc_thread_info );
                 }
 
                 if ( host_ptr->interval )
@@ -2007,10 +2007,10 @@ int hwmonHostClass::delete_handler ( struct hwmonHostClass::hwmon_host * host_pt
                 set_bm_prov ( host_ptr, false);
             }
 
-            if ( host_ptr->ipmitool_thread_ctrl.stage != THREAD_STAGE__IDLE )
+            if ( host_ptr->bmc_thread_ctrl.stage != THREAD_STAGE__IDLE )
             {
                 int delay = THREAD_POST_KILL_WAIT ;
-                thread_kill ( host_ptr->ipmitool_thread_ctrl , host_ptr->ipmitool_thread_info) ;
+                thread_kill ( host_ptr->bmc_thread_ctrl , host_ptr->bmc_thread_info) ;
 
                 ilog ("%s thread active ; sending kill ; waiting %d seconds\n",
                           host_ptr->hostname.c_str(), delay );
@@ -2030,14 +2030,14 @@ int hwmonHostClass::delete_handler ( struct hwmonHostClass::hwmon_host * host_pt
         {
             if ( mtcTimer_expired ( host_ptr->hostTimer ) )
             {
-                if ( host_ptr->ipmitool_thread_ctrl.stage != THREAD_STAGE__IDLE )
+                if ( host_ptr->bmc_thread_ctrl.stage != THREAD_STAGE__IDLE )
                 {
                     if ( host_ptr->retries++ < 3 )
                     {
                         wlog ("%s still waiting on active thread ; sending another kill signal (try %d or %d)\n",
                                   host_ptr->hostname.c_str(), host_ptr->retries, 3 );
 
-                        thread_kill ( host_ptr->ipmitool_thread_ctrl, host_ptr->ipmitool_thread_info ) ;
+                        thread_kill ( host_ptr->bmc_thread_ctrl, host_ptr->bmc_thread_info ) ;
                         mtcTimer_start ( host_ptr->hostTimer, hwmonTimer_handler, THREAD_POST_KILL_WAIT );
                         break ;
                     }
@@ -2525,10 +2525,10 @@ void hwmonHostClass::monitor_soon ( struct hwmonHostClass::hwmon_host * host_ptr
                   host_ptr->hostname.c_str(),
                   host_ptr->monitor_ctrl.stage);
 
-        if ( host_ptr->ipmitool_thread_ctrl.id )
+        if ( host_ptr->bmc_thread_ctrl.id )
         {
-            ilog ("%s stopping current thread (%lu)\n", host_ptr->hostname.c_str(), host_ptr->ipmitool_thread_ctrl.id );
-            thread_kill ( host_ptr->ipmitool_thread_ctrl, host_ptr->ipmitool_thread_info );
+            ilog ("%s stopping current thread (%lu)\n", host_ptr->hostname.c_str(), host_ptr->bmc_thread_ctrl.id );
+            thread_kill ( host_ptr->bmc_thread_ctrl, host_ptr->bmc_thread_info );
 
             /* have to wait a bit longer than THREAD_POST_KILL_WAIT for the thread kill to happen */
             delay += THREAD_POST_KILL_WAIT ;

@@ -8,7 +8,7 @@ SHELL = /bin/bash
 
 SRCS  = mtcAlarm.cpp
 SRCS += mtcThreads.cpp
-SRCS += mtcIpmiUtil.cpp
+SRCS += mtcBmcUtil.cpp
 SRCS += mtcNodeHdlrs.cpp
 SRCS += mtcSubfHdlrs.cpp
 SRCS += mtcNodeFsm.cpp
@@ -32,7 +32,7 @@ CONTROL_OBJS += ../common/nodeClass.o
 
 CONTROL_OBJS  = mtcAlarm.o
 CONTROL_OBJS += mtcThreads.o
-CONTROL_OBJS += mtcIpmiUtil.o
+CONTROL_OBJS += mtcBmcUtil.o
 CONTROL_OBJS += mtcNodeCtrl.o
 CONTROL_OBJS += mtcNodeFsm.o
 CONTROL_OBJS += mtcNodeHdlrs.o
@@ -51,7 +51,7 @@ CONTROL_OBJS += ../common/nodeClass.o
 
 OBJS = $(SRCS:.cpp=.o)
 BINS = mtcAgent mtcClient
-LDLIBS += -lstdc++ -ldaemon -lcommon -lthreadUtil -lipmiUtil -lfmcommon -lalarm -lpthread -lrt -levent -ljson-c -lamon -lcrypto -luuid
+LDLIBS += -lstdc++ -ldaemon -lcommon -lthreadUtil -lbmcUtils -lfmcommon -lalarm -lpthread -lrt -levent -ljson-c -lamon -lcrypto -luuid
 INCLUDES = -I. -I/usr/include/mtce-daemon -I/usr/include/mtce-common
 INCLUDES += -I../common -I../alarm -I../heartbeat -I../hwmon -I../public
 CCFLAGS += -g -O2 -Wall -Wextra -Werror -Wno-missing-braces

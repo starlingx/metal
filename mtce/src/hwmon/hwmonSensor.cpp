@@ -170,7 +170,7 @@ void hwmonSensor_init ( string & hostname , sensor_type * sensor_ptr )
         sensor_ptr->unit_rate.clear();
         sensor_ptr->unit_modifier.clear();
 
-        sensor_ptr->prot     =    PROTOCOL__NONE ;
+        sensor_ptr->prot     = BMC_PROTOCOL__IPMITOOL ;
         sensor_ptr->kind     = SENSOR_KIND__NONE ;
         sensor_ptr->unit     = SENSOR_UNIT__NONE ;
 

@@ -471,7 +471,7 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
         }
         case MTC_CMD_STAGE__RESET:
         {
-            if (( node_ptr->bm_provisioned == true ) && ( node_ptr->bm_accessible == true ))
+            if (( node_ptr->bmc_provisioned == true ) && ( node_ptr->bmc_accessible == true ))
             {
                 plog ("%s Performing RESET over Board Management Interface\n", node_ptr->hostname.c_str());
                 if ( node_ptr->cmd.task == true )
@@ -480,7 +480,7 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
                 }
 
                 /* bmc power control reset by ipmitool */
-                    rc = ipmi_command_send ( node_ptr, IPMITOOL_THREAD_CMD__POWER_RESET );
+                    rc = bmc_command_send ( node_ptr, BMC_THREAD_CMD__POWER_RESET );
 
                 if ( rc == PASS )
                 {
@@ -498,11 +498,11 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
             }
             else
             {
-                if ( node_ptr->bm_provisioned == false )
+                if ( node_ptr->bmc_provisioned == false )
                 {
                     wlog ("%s Board Management Interface not provisioned\n", node_ptr->hostname.c_str());
                 }
-                else if ( node_ptr->bm_accessible == false )
+                else if ( node_ptr->bmc_accessible == false )
                 {
                     wlog ("%s Board Management Interface not accessible\n", node_ptr->hostname.c_str());
                 }
@@ -519,7 +519,7 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
                   int delay = (((offline_period*offline_threshold)/1000)+3);
 
                   /* bmc power control reset by ipmitool */
-                     rc = ipmi_command_recv ( node_ptr );
+                     rc = bmc_command_recv ( node_ptr );
                      if ( rc == RETRY )
                      {
                          mtcTimer_start ( node_ptr->mtcCmd_timer, mtcTimer_handler, MTC_IPMITOOL_REQUEST_DELAY );
@@ -618,11 +618,11 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
 
         case MTC_CMD_STAGE__IPMI_COMMAND_SEND:
         {
-            if ( ipmi_command_send ( node_ptr, node_ptr->cmdReq ) != PASS )
+            if ( bmc_command_send ( node_ptr, node_ptr->cmdReq ) != PASS )
             {
                 elog ("%s IPMI %s Send Failed\n",
                           node_ptr->hostname.c_str(),
-                          getIpmiCmd_str(node_ptr->cmdReq));
+                          bmcUtil_getCmd_str(node_ptr->cmdReq).c_str());
 
                 node_ptr->mtcCmd_work_fifo_ptr->status = FAIL_RETRY ;
                 node_ptr->mtcCmd_work_fifo_ptr->stage = MTC_CMD_STAGE__DONE ;
@@ -631,7 +631,7 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
             {
                 plog ("%s IPMI %s Requested\n",
                           node_ptr->hostname.c_str(),
-                          getIpmiCmd_str(node_ptr->cmdReq));
+                          bmcUtil_getCmd_str(node_ptr->cmdReq).c_str());
 
                 mtcTimer_start ( node_ptr->mtcCmd_timer, mtcTimer_handler, MTC_IPMITOOL_REQUEST_DELAY );
                 node_ptr->mtcCmd_work_fifo_ptr->stage = MTC_CMD_STAGE__IPMI_COMMAND_RECV ;
@@ -643,7 +643,7 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
         {
             if ( mtcTimer_expired ( node_ptr->mtcCmd_timer ) )
             {
-                rc = ipmi_command_recv ( node_ptr );
+                rc = bmc_command_recv ( node_ptr );
                 if ( rc == RETRY )
                 {
                      mtcTimer_start ( node_ptr->mtcCmd_timer, mtcTimer_handler, MTC_SECS_5 ) ;
@@ -652,12 +652,12 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
                 else if ( rc == PASS )
                 {
                     plog ("%s IPMI %s Successful\n", node_ptr->hostname.c_str(),
-                                                     getIpmiCmd_str(node_ptr->cmdReq));
+                                                     bmcUtil_getCmd_str(node_ptr->cmdReq).c_str());
                 }
                 else
                 {
                     plog ("%s IPMI %s Requested\n", node_ptr->hostname.c_str(),
-                                                    getIpmiCmd_str(node_ptr->cmdReq));
+                                                    bmcUtil_getCmd_str(node_ptr->cmdReq).c_str());
                 }
                 node_ptr->mtcCmd_work_fifo_ptr->status = rc ;
                 node_ptr->mtcCmd_work_fifo_ptr->stage = MTC_CMD_STAGE__OFFLINE_CHECK ;

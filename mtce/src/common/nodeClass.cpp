@@ -631,12 +631,13 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
     ptr->mnfa_graceful_recovery = false ;
 
     /* initialize all board management variables for this host */
+    ptr->bmc_protocol = BMC_PROTOCOL__IPMITOOL ;
     ptr->bm_ip = NONE ;
     ptr->bm_type = NONE ;
     ptr->bm_un = NONE ;
     ptr->bm_pw = NONE ;
 
-    ptr->bm_provisioned = false ; /* assume not provisioned until learned   */
+    ptr->bmc_provisioned = false ; /* assume not provisioned until learned   */
     ptr->power_on       = false ; /* learned on first BMC connection        */
     bmc_access_data_init ( ptr ); /* init all the BMC access vars all modes */
 
@@ -1889,7 +1890,7 @@ int nodeLinkClass::del_host ( const string uuid )
         if ( nodeLinkClass::maintenance == true )
         {
 
-            if ( node_ptr->bm_provisioned == true )
+            if ( node_ptr->bmc_provisioned == true )
             {
                 set_bm_prov ( node_ptr, false);
             }
@@ -2182,7 +2183,7 @@ int nodeLinkClass::mod_host ( node_inv_type & inv )
                      *  - its in progress,
                      *  - there is a BMC provisioned and
                      *  - are waiting while the actual install is in progress */
-                    if (( node_ptr->bm_provisioned == true ) &&
+                    if (( node_ptr->bmc_provisioned == true ) &&
                         ( node_ptr->reinstallStage == MTC_REINSTALL__ONLINE_WAIT))
                     {
                         reinstallStageChange ( node_ptr , MTC_REINSTALL__START );
@@ -2742,13 +2743,13 @@ int nodeLinkClass::add_host ( node_inv_type & inv )
             node_ptr->bm_ping_info.sock = 0 ;
 
             /* initialize the host power and reset control thread */
-            thread_init ( node_ptr->ipmitool_thread_ctrl,
-                          node_ptr->ipmitool_thread_info,
+            thread_init ( node_ptr->bmc_thread_ctrl,
+                          node_ptr->bmc_thread_info,
                          &node_ptr->thread_extra_info,
-                          mtcThread_ipmitool,
+                          mtcThread_bmc,
                           DEFAULT_THREAD_TIMEOUT_SECS,
                           node_ptr->hostname,
-                          THREAD_NAME__IPMITOOL);
+                          THREAD_NAME__BMC);
 
             if ( adminStateOk  (inv.admin) &&
                  operStateOk   (inv.oper ) &&
@@ -3922,7 +3923,7 @@ int nodeLinkClass::manage_bmc_provisioning ( struct node * node_ptr )
 {
     int rc = PASS ;
 
-    bool was_provisioned = node_ptr->bm_provisioned ;
+    bool was_provisioned = node_ptr->bmc_provisioned ;
 
     set_bm_prov ( node_ptr, false);
     if ((hostUtil_is_valid_ip_addr ( node_ptr->bm_ip )) &&
@@ -3949,7 +3950,7 @@ int nodeLinkClass::manage_bmc_provisioning ( struct node * node_ptr )
     ilog ("%s sending board management info update to hwmond\n", node_ptr->hostname.c_str() );
     if ( ( rc = send_hwmon_command(node_ptr->hostname,MTC_CMD_MOD_HOST) ) == PASS )
     {
-        if ( node_ptr->bm_provisioned == true )
+        if ( node_ptr->bmc_provisioned == true )
         {
             rc = send_hwmon_command(node_ptr->hostname,MTC_CMD_START_HOST);
         }
@@ -4007,7 +4008,7 @@ int nodeLinkClass::set_bm_type ( string hostname , string bm_type )
 int nodeLinkClass::set_bm_un ( string hostname , string bm_un )
 {
     int rc = FAIL_HOSTNAME_LOOKUP ;
-    
+
     nodeLinkClass::node* node_ptr ;
     node_ptr = nodeLinkClass::getNode ( hostname );
     if ( node_ptr != NULL )
@@ -4020,9 +4021,9 @@ int nodeLinkClass::set_bm_un ( string hostname , string bm_un )
         {
             node_ptr->bm_un = NONE ;
         }
-        dlog ("%s '%s' updated to '%s'\n", 
-                      hostname.c_str(), 
-                      MTC_JSON_INV_BMUN, 
+        dlog ("%s '%s' updated to '%s'\n",
+                      hostname.c_str(),
+                      MTC_JSON_INV_BMUN,
                       node_ptr->bm_un.c_str());
         rc = PASS ;
     }
@@ -4032,16 +4033,16 @@ int nodeLinkClass::set_bm_un ( string hostname , string bm_un )
 int nodeLinkClass::set_bm_ip   ( string hostname , string bm_ip )
 {
     int rc = FAIL_HOSTNAME_LOOKUP ;
-    
+
     nodeLinkClass::node* node_ptr ;
     node_ptr = nodeLinkClass::getNode ( hostname );
     if ( node_ptr != NULL )
     {
         node_ptr->bm_ip = bm_ip ;
 
-        dlog ("%s '%s' updated to '%s'\n", 
-                      hostname.c_str(), 
-                      MTC_JSON_INV_BMIP, 
+        dlog ("%s '%s' updated to '%s'\n",
+                      hostname.c_str(),
+                      MTC_JSON_INV_BMIP,
                       node_ptr->bm_ip.c_str());
         rc = PASS ;
     }
@@ -4052,13 +4053,18 @@ void nodeLinkClass::bmc_access_data_init ( struct nodeLinkClass::node * node_ptr
 {
     if ( node_ptr )
     {
-        node_ptr->bm_accessible = false;
-        node_ptr->mc_info_query_active = false     ;
-        node_ptr->mc_info_query_done = false       ;
-        node_ptr->reset_cause_query_active = false ;
-        node_ptr->reset_cause_query_done = false   ;
-        node_ptr->power_status_query_active = false;
-        node_ptr->power_status_query_done = false  ;
+        node_ptr->bmc_accessible              = false ;
+        node_ptr->bm_ping_info.ok             = false ;
+        node_ptr->bmc_info_query_active       = false ;
+        node_ptr->bmc_info_query_done         = false ;
+        node_ptr->reset_cause_query_active    = false ;
+        node_ptr->reset_cause_query_done      = false ;
+        node_ptr->power_status_query_active   = false ;
+        node_ptr->power_status_query_done     = false ;
+        node_ptr->bmc_protocol_learned        = false ;
+        node_ptr->bmc_protocol_learning = false ;
+        node_ptr->bmc_protocol = BMC_PROTOCOL__IPMITOOL ;
+        bmcUtil_info_init ( node_ptr->bmc_info );
     }
 }
 
@@ -4080,20 +4086,24 @@ int nodeLinkClass::set_bm_prov ( struct nodeLinkClass::node * node_ptr, bool sta
     int rc = FAIL_HOSTNAME_LOOKUP ;
     if ( node_ptr != NULL )
     {
-        ilog ("%s bmc %sprovision request (provisioned:%s)\n", // ERIC blog
+        /* default the bmc info file */
+        string bmc_info_path_n_filename = BMC_OUTPUT_DIR + node_ptr->hostname ;
+
+        ilog ("%s bmc %sprovision request (provisioned:%s)\n",
                   node_ptr->hostname.c_str(),
                   state ? "" : "de",
-                  node_ptr->bm_provisioned ? "Yes" : "No" );
+                  node_ptr->bmc_provisioned ? "Yes" : "No" );
 
         /* Clear the alarm if we are starting fresh from an unprovisioned state */
-        if (( node_ptr->bm_provisioned == false ) && ( state == true ))
+        if (( node_ptr->bmc_provisioned == false ) && ( state == true ))
         {
-            /* BMC is managed by IPMI/IPMITOOL */
+            /* default the bmc info file */
+            daemon_log ( bmc_info_path_n_filename.data(), BMC_DEFAULT_INFO );
+
             ilog ("%s starting BM ping monitor to address '%s'\n",
                       node_ptr->hostname.c_str(),
                       node_ptr->bm_ip.c_str());
 
-            // mtcTimer_reset ( node_ptr->bm_ping_info.timer );
             node_ptr->bm_ping_info.ip = node_ptr->bm_ip ;
             node_ptr->bm_ping_info.stage = PINGUTIL_MONITOR_STAGE__OPEN ;
             bmc_access_data_init ( node_ptr );
@@ -4114,39 +4124,7 @@ int nodeLinkClass::set_bm_prov ( struct nodeLinkClass::node * node_ptr, bool sta
 
             send_hwmon_command(node_ptr->hostname, MTC_CMD_ADD_HOST);
             send_hwmon_command(node_ptr->hostname, MTC_CMD_START_HOST);
-        }
 
-        /* handle the case going from provisioned to not provisioned */
-        else if (( node_ptr->bm_provisioned == true ) && ( state == false ))
-        {
-            /* BMC is managed by IPMI/IPMITOOL */
-            ilog ("%s deprovisioning bmc ; accessible:%s\n",
-                      node_ptr->hostname.c_str(),
-                      node_ptr->bm_accessible ? "Yes" : "No" );
-
-            pingUtil_fini  ( node_ptr->bm_ping_info );
-            bmc_access_data_init ( node_ptr );
-            node_ptr->bm_accessible = false;
-
-            if ( !thread_idle( node_ptr->ipmitool_thread_ctrl ) )
-            {
-                 thread_kill ( node_ptr->ipmitool_thread_ctrl , node_ptr->ipmitool_thread_info);
-            }
-            node_ptr->mc_info_query_active = false     ;
-            node_ptr->mc_info_query_done = false       ;
-            node_ptr->reset_cause_query_active = false ;
-            node_ptr->reset_cause_query_done = false   ;
-            node_ptr->power_status_query_active = false;
-            node_ptr->power_status_query_done = false  ;
-
-            /* send a delete to hwmon if the provisioning data is NONE */
-            if ( hostUtil_is_valid_bm_type ( node_ptr->bm_type ) == false )
-            {
-                send_hwmon_command(node_ptr->hostname, MTC_CMD_DEL_HOST);
-            }
-        }
-        if (( node_ptr->bm_provisioned == false ) && ( state == true ))
-        {
             /* start the connection timer - if it expires before we
              * are 'accessible' then the BM Alarm is raised.
              * Timer is further managed in mtcNodeHdlrs.cpp */
@@ -4155,7 +4133,32 @@ int nodeLinkClass::set_bm_prov ( struct nodeLinkClass::node * node_ptr, bool sta
             mtcTimer_start ( node_ptr->bmc_access_timer, mtcTimer_handler, MTC_MINS_2 );
         }
 
-        node_ptr->bm_provisioned = state ;
+        /* handle the case going from provisioned to not provisioned */
+        else if (( node_ptr->bmc_provisioned == true ) && ( state == false ))
+        {
+            /* remove the BMC info file */
+            daemon_remove_file ( bmc_info_path_n_filename.data() );
+
+            ilog ("%s deprovisioning bmc ; accessible:%s\n",
+                      node_ptr->hostname.c_str(),
+                      node_ptr->bmc_accessible ? "Yes" : "No" );
+
+            pingUtil_fini  ( node_ptr->bm_ping_info );
+            bmc_access_data_init ( node_ptr );
+
+            if ( !thread_idle( node_ptr->bmc_thread_ctrl ) )
+            {
+                 thread_kill ( node_ptr->bmc_thread_ctrl , node_ptr->bmc_thread_info);
+            }
+
+            /* send a delete to hwmon if the provisioning data is NONE */
+            if ( hostUtil_is_valid_bm_type ( node_ptr->bm_type ) == false )
+            {
+                send_hwmon_command(node_ptr->hostname, MTC_CMD_DEL_HOST);
+            }
+        }
+
+        node_ptr->bmc_provisioned = state ;
     }
     return (rc);
 }
@@ -4893,7 +4896,7 @@ int nodeLinkClass::declare_service_ready  ( string & hostname,
         plog ("%s %s ready event\n",
                   hostname.c_str(),
                   MTC_SERVICE_HWMOND_NAME);
-        if ( node_ptr->bm_provisioned == true )
+        if ( node_ptr->bmc_provisioned == true )
         {
             send_hwmon_command ( node_ptr->hostname, MTC_CMD_ADD_HOST );
             send_hwmon_command ( node_ptr->hostname, MTC_CMD_START_HOST );
@@ -5129,7 +5132,7 @@ int nodeLinkClass::invoke_hwmon_action  ( string & hostname, int action, string 
 
     if ( node_ptr )
     {
-        if ( node_ptr->bm_accessible == false )
+        if ( node_ptr->bmc_accessible == false )
         {
             wlog ("%s rejecting %s hwmon action request for '%s' sensor ; BMC not accessible\n",
                       hostname.c_str(),
@@ -6109,9 +6112,9 @@ int nodeLinkClass::adminActionChange ( struct nodeLinkClass::node * node_ptr,
                 (( newActionState != MTC_ADMIN_ACTION__POWERCYCLE ) &&
                  ( newActionState != MTC_ADMIN_ACTION__POWEROFF )))
             {
-                blog ("%s (mon:%d:prov:%d)\n", node_ptr->hostname.c_str(), node_ptr->hwmond_monitor, node_ptr->bm_provisioned );
+                blog ("%s (mon:%d:prov:%d)\n", node_ptr->hostname.c_str(), node_ptr->hwmond_monitor, node_ptr->bmc_provisioned );
 
-                if (( node_ptr->hwmond_monitor == false ) && ( node_ptr->bm_provisioned == true ))
+                if (( node_ptr->hwmond_monitor == false ) && ( node_ptr->bmc_provisioned == true ))
                 {
                     send_hwmon_command ( node_ptr->hostname, MTC_CMD_ADD_HOST   );
                     send_hwmon_command ( node_ptr->hostname, MTC_CMD_START_HOST );
@@ -6814,7 +6817,7 @@ struct nodeLinkClass::node * nodeLinkClass::get_thread_timer ( timer_t tid )
    {
        for ( struct node * ptr = head ;  ; ptr = ptr->next )
        {
-           if ( ptr->ipmitool_thread_ctrl.timer.tid == tid )
+           if ( ptr->bmc_thread_ctrl.timer.tid == tid )
            {
                return ptr ;
            }
@@ -8608,13 +8611,32 @@ void nodeLinkClass::mem_log_general_mtce_hosts ( void )
 void nodeLinkClass::mem_log_bm ( struct nodeLinkClass::node * node_ptr )
 {
     char str[MAX_MEM_LOG_DATA] ;
-    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tbm_ip:%s bm_un:%s bm_type:%s provisioned: %s\n",
+    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tBMC %s %s:%s prov:%s learn:%s:%s\n",
                 node_ptr->hostname.c_str(),
-                node_ptr->bm_ip.c_str(),
+                bmcUtil_getProtocol_str(node_ptr->bmc_protocol).c_str(),
                 node_ptr->bm_un.c_str(),
-                node_ptr->bm_type.c_str(),
-                node_ptr->bm_provisioned ? "Yes" : "No" );
+                node_ptr->bm_ip.c_str(),
+                node_ptr->bmc_provisioned ? "Yes" : "No",
+                node_ptr->bmc_protocol_learned ? "Yes" : "No",
+                node_ptr->bmc_protocol_learning ? "Yes" : "No");
     mem_log (str);
+}
+
+
+void nodeLinkClass::mem_log_ping ( struct nodeLinkClass::node * node_ptr )
+{
+    if ( node_ptr->bmc_provisioned )
+    {
+        char str[MAX_MEM_LOG_DATA] ;
+        snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tPing stage:%d ok:%s mon:%s %s tid:%p\n",
+                node_ptr->bm_ping_info.hostname.c_str(),
+                node_ptr->bm_ping_info.stage,
+                node_ptr->bm_ping_info.ok ? "Yes" : "No",
+                node_ptr->bm_ping_info.monitoring ? "Yes" : "No",
+                node_ptr->bm_ping_info.ip.c_str(),
+                node_ptr->bm_ping_info.timer.tid);
+        mem_log (str);
+    }
 }
 
 void nodeLinkClass::mem_log_identity ( struct nodeLinkClass::node * node_ptr )
@@ -8642,10 +8664,10 @@ void nodeLinkClass::mem_log_state1 ( struct nodeLinkClass::node * node_ptr )
                 av.c_str(),
                 node_ptr->degrade_mask);
     mem_log (str);
-    op = operState_enum_to_str(node_ptr->operState_subf) ;
-    av = availStatus_enum_to_str(node_ptr->availStatus_subf);
     if ( ! node_ptr->subfunction_str.empty() )
     {
+        op = operState_enum_to_str(node_ptr->operState_subf) ;
+        av = availStatus_enum_to_str(node_ptr->availStatus_subf);
         snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tSub-Functions: %s-%s %s-%s-%s\n",
                 node_ptr->hostname.c_str(),
                 node_ptr->function_str.c_str(),
@@ -8653,8 +8675,8 @@ void nodeLinkClass::mem_log_state1 ( struct nodeLinkClass::node * node_ptr )
                 ad.c_str(),
                 op.c_str(),
                 av.c_str());
+        mem_log (str);
     }
-    mem_log (str);
 }
 
 void nodeLinkClass::mem_log_state2 ( struct nodeLinkClass::node * node_ptr )
@@ -8806,11 +8828,11 @@ void nodeLinkClass::mem_log_thread_info ( struct nodeLinkClass::node * node_ptr 
     char str[MAX_MEM_LOG_DATA] ;
     snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tThread Stage:%d Runs:%d Progress:%d Ctrl Status:%d Thread Status:%d\n",
                 node_ptr->hostname.c_str(),
-                node_ptr->ipmitool_thread_ctrl.stage,
-                node_ptr->ipmitool_thread_ctrl.runcount,
-                node_ptr->ipmitool_thread_info.progress,
-                node_ptr->ipmitool_thread_ctrl.status,
-                node_ptr->ipmitool_thread_info.status);
+                node_ptr->bmc_thread_ctrl.stage,
+                node_ptr->bmc_thread_ctrl.runcount,
+                node_ptr->bmc_thread_info.progress,
+                node_ptr->bmc_thread_ctrl.status,
+                node_ptr->bmc_thread_info.status);
     mem_log (str);
 }
 
@@ -8868,6 +8890,7 @@ void nodeLinkClass::memDumpNodeState ( string hostname )
             mem_log_mtcalive   ( node_ptr );
             mem_log_stage      ( node_ptr );
             mem_log_bm         ( node_ptr );
+            mem_log_ping       ( node_ptr );
             mem_log_test_info  ( node_ptr );
             mem_log_thread_info( node_ptr );
             workQueue_dump     ( node_ptr );

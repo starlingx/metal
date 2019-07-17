@@ -35,10 +35,28 @@ using namespace std;
 #include "hostUtil.h"      /* for ... hostUtil_mktmpfile               */
 #include "nodeUtil.h"
 #include "threadUtil.h"
-#include "ipmiUtil.h"      /* for ... IPMITOOL_CMD_FILE_SUFFIX   ...   */
 #include "mtcThreads.h"    /* for ... IPMITOOL_THREAD_CMD__RESET ...   */
+#include "bmcUtil.h"       /* for ... mtce-common bmc utility header   */
 
-void * mtcThread_ipmitool ( void * arg )
+
+/**************************************************************************
+ *
+ * Name       : mtcThread_bmc
+ *
+ * Purpose    : Maintenance thread used to submit a service request to the BMC
+ *
+ * Description: The thread ...
+ *
+ *  1. determine protocol to use.
+ *  2. create password temp file
+ *  3. create output data file name
+ *  4. create the tool specific command request
+ *  5. launch blocking request
+ *  6. parse response against protocol used and pass back to main process
+ *
+ ************************************************************************/
+
+void * mtcThread_bmc ( void * arg )
 {
     thread_info_type       * info_ptr  ;
     thread_extra_info_type * extra_ptr ;
@@ -46,7 +64,7 @@ void * mtcThread_ipmitool ( void * arg )
     /* Pointer Error Detection and Handling */
     if ( !arg )
     {
-        slog ("*** ipmitool thread called with null arg pointer *** corruption\n");
+        slog ("thread called with null arg pointer\n");
         return NULL ;
     }
 
@@ -61,6 +79,7 @@ void * mtcThread_ipmitool ( void * arg )
     pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL );
 
+#ifdef WANT_FIT_TESTING
     if ( daemon_want_fit ( FIT_CODE__DO_NOTHING_THREAD, info_ptr->hostname ))
     {
         info_ptr->progress++ ;
@@ -68,165 +87,361 @@ void * mtcThread_ipmitool ( void * arg )
         pthread_exit (&info_ptr->status );
         return NULL ;
     }
+#endif
 
     /* allow the parent to confirm thread id */
     info_ptr->id = pthread_self() ;
     if ( extra_ptr != NULL )
     {
-        int rc = PASS ;
+        unsigned int rc = PASS ;
         string command  = "" ;
         string response = "" ;
+        string suffix   = "" ;
+        string datafile = "" ;
 
-        switch ( info_ptr->command )
+        if ( info_ptr->proto == BMC_PROTOCOL__REDFISHTOOL )
         {
-            /* control commands */
-            case IPMITOOL_THREAD_CMD__POWER_RESET:
+            switch ( info_ptr->command )
             {
-                command  = IPMITOOL_POWER_RESET_CMD  ;
-                response = IPMITOOL_POWER_RESET_RESP ;
-                break ;
-            }
-            case IPMITOOL_THREAD_CMD__POWER_ON:
-            {
-                command  = IPMITOOL_POWER_ON_CMD  ;
-                response = IPMITOOL_POWER_ON_RESP ;
-                break ;
-            }
-            case IPMITOOL_THREAD_CMD__POWER_OFF:
-            {
-                command  = IPMITOOL_POWER_OFF_CMD  ;
-                response = IPMITOOL_POWER_OFF_RESP ;
-                break ;
-            }
-            case IPMITOOL_THREAD_CMD__POWER_CYCLE:
-            {
-                command  = IPMITOOL_POWER_CYCLE_CMD  ;
-                response = IPMITOOL_POWER_CYCLE_RESP ;
-                break ;
-            }
-            case IPMITOOL_THREAD_CMD__BOOTDEV_PXE:
-            {
-                command  = IPMITOOL_BOOTDEV_PXE_CMD  ;
-                response = IPMITOOL_BOOTDEV_PXE_RESP ;
-                break ;
-            }
+                /* state commands */
+                case BMC_THREAD_CMD__BMC_QUERY:
+                {
+                    command = REDFISHTOOL_ROOT_QUERY_CMD ;
+                    suffix  = BMC_QUERY_FILE_SUFFIX ;
+                    break ;
+                }
+                case BMC_THREAD_CMD__BMC_INFO:
+                {
+                    command = REDFISHTOOL_BMC_INFO_CMD ;
+                    suffix  = BMC_INFO_FILE_SUFFIX ;
+                    break ;
+                }
 
-            /* Status commands */
-            case IPMITOOL_THREAD_CMD__POWER_STATUS:
-            {
-                command = IPMITOOL_POWER_STATUS_CMD ;
-                break ;
-            }
-            case IPMITOOL_THREAD_CMD__RESTART_CAUSE:
-            {
-                command = IPMITOOL_RESTART_CAUSE_CMD ;
-                break ;
-            }
-            case IPMITOOL_THREAD_CMD__MC_INFO:
-            {
-                command = IPMITOOL_MC_INFO_CMD ;
-                break ;
-            }
+                /* control commands */
+                case BMC_THREAD_CMD__POWER_RESET:
+                {
+                    command  = REDFISHTOOL_POWER_RESET_CMD  ;
+                    suffix   = BMC_POWER_CMD_FILE_SUFFIX  ;
+                    break ;
+                }
+                case BMC_THREAD_CMD__POWER_ON:
+                {
+                    command  = REDFISHTOOL_POWER_ON_CMD    ;
+                    suffix   = BMC_POWER_CMD_FILE_SUFFIX ;
+                    break ;
+                }
+                case BMC_THREAD_CMD__POWER_OFF:
+                {
+                    command  = REDFISHTOOL_POWER_OFF_CMD   ;
+                    suffix   = BMC_POWER_CMD_FILE_SUFFIX ;
+                    break ;
+                }
+                case BMC_THREAD_CMD__BOOTDEV_PXE:
+                {
+                    /* json response */
+                    command  = REDFISHTOOL_BOOTDEV_PXE_CMD     ;
+                    suffix   = BMC_BOOTDEV_CMD_FILE_SUFFIX ;
+                    break ;
+                }
 
-            default:
+                default:
+                {
+                    rc = info_ptr->status = FAIL_BAD_CASE ;
+                    info_ptr->data = "unsupported redfishtool command: " ;
+                    info_ptr->data.append(bmcUtil_getCmd_str(info_ptr->command).c_str());
+                    break ;
+                }
+            }/* end redfishtool switch */
+        } /* end if */
+        else
+        {
+            switch ( info_ptr->command )
             {
-                rc = info_ptr->status = FAIL_BAD_CASE ;
-                info_ptr->data = "unsupported command: " ;
-                info_ptr->data.append(itos(info_ptr->command));
-                break ;
+                /* control commands */
+                case BMC_THREAD_CMD__POWER_RESET:
+                {
+                    command  = IPMITOOL_POWER_RESET_CMD  ;
+                    response = IPMITOOL_POWER_RESET_RESP ;
+                    suffix   = BMC_POWER_CMD_FILE_SUFFIX  ;
+                    break ;
+                }
+                case BMC_THREAD_CMD__POWER_ON:
+                {
+                    command  = IPMITOOL_POWER_ON_CMD    ;
+                    response = IPMITOOL_POWER_ON_RESP   ;
+                    suffix   = BMC_POWER_CMD_FILE_SUFFIX ;
+                    break ;
+                }
+                case BMC_THREAD_CMD__POWER_OFF:
+                {
+                    command  = IPMITOOL_POWER_OFF_CMD   ;
+                    response = IPMITOOL_POWER_OFF_RESP  ;
+                    suffix   = BMC_POWER_CMD_FILE_SUFFIX ;
+                    break ;
+                }
+                case BMC_THREAD_CMD__POWER_CYCLE:
+                {
+                    command  = IPMITOOL_POWER_CYCLE_CMD  ;
+                    response = IPMITOOL_POWER_CYCLE_RESP ;
+                    suffix   = BMC_POWER_CMD_FILE_SUFFIX  ;
+                    break ;
+                }
+                case BMC_THREAD_CMD__BOOTDEV_PXE:
+                {
+                    command  = IPMITOOL_BOOTDEV_PXE_CMD     ;
+                    response = IPMITOOL_BOOTDEV_PXE_RESP    ;
+                    suffix   = BMC_BOOTDEV_CMD_FILE_SUFFIX ;
+                    break ;
+                }
+
+                /* Status commands */
+                case BMC_THREAD_CMD__POWER_STATUS:
+                {
+                    command = IPMITOOL_POWER_STATUS_CMD ;
+                    suffix = BMC_POWER_STATUS_FILE_SUFFIX ;
+                    break ;
+                }
+                case BMC_THREAD_CMD__RESTART_CAUSE:
+                {
+                    command = IPMITOOL_RESTART_CAUSE_CMD ;
+                    suffix = BMC_RESTART_CAUSE_FILE_SUFFIX ;
+                    break ;
+                }
+                case BMC_THREAD_CMD__BMC_INFO:
+                {
+                    command = IPMITOOL_BMC_INFO_CMD ;
+                    suffix = BMC_INFO_FILE_SUFFIX ;
+                    break ;
+                }
+
+                default:
+                {
+                    rc = info_ptr->status = FAIL_BAD_CASE ;
+                    info_ptr->data = "unsupported ipmitool command: " ;
+                    info_ptr->data.append(bmcUtil_getCmd_str(info_ptr->command).c_str());
+                    break ;
+                }
+            } /* end ipmitool switch */
+        } /* end else */
+
+        if ( rc != PASS )
+        {
+            if ( info_ptr->status_string.empty() )
+            {
+                info_ptr->status_string = "failure ; see logs";
             }
+            if ( info_ptr->status == PASS )
+            {
+                info_ptr->status = rc ;
+            }
+            goto bmc_thread_done ;
         }
-
-        if ( rc == PASS )
+        else if ( info_ptr->proto == BMC_PROTOCOL__REDFISHTOOL )
         {
-            bool bypass_ipmitool_request = false ;
-
             dlog_t ("%s '%s' command\n", info_ptr->log_prefix, command.c_str());
 
-            /* create the password file */
-            string password_tempfile = IPMITOOL_OUTPUT_DIR ;
-            password_tempfile.append(".") ;
-            password_tempfile.append(program_invocation_short_name);
-            password_tempfile.append("-");
-            password_tempfile.append(info_ptr->hostname);
-            password_tempfile.append("-");
-
-            info_ptr->pw_file_fd = hostUtil_mktmpfile (info_ptr->hostname,
-                                                       password_tempfile,
-                                                       info_ptr->password_file,
-                                                       extra_ptr->bm_pw );
-
-            if ( info_ptr->pw_file_fd <= 0 )
-            {
-                info_ptr->status_string = "failed to get an open temporary password filedesc" ;
-                info_ptr->status = FAIL_FILE_CREATE ;
-                goto ipmitool_thread_done ;
-            }
-
-            if ( info_ptr->pw_file_fd > 0)
-                close (info_ptr->pw_file_fd);
-            info_ptr->pw_file_fd = 0 ;
+            /*************** create the password file ***************/
+            /* password file contains username and password in format
+             *
+             * {"username":"<username>","password":"<password>"}
+             *
+             */
+            string config_file_content = "{\"username\":\"" ;
+            config_file_content.append(extra_ptr->bm_un);
+            config_file_content.append("\",\"password\":\"");
+            config_file_content.append(extra_ptr->bm_pw);
+            config_file_content.append("\"}");
+            bmcUtil_create_pw_file ( info_ptr,
+                                     config_file_content,
+                                     BMC_PROTOCOL__REDFISHTOOL);
 
             if ( info_ptr->password_file.empty() )
             {
                 info_ptr->status_string = "failed to get a temporary password filename" ;
                 info_ptr->status = FAIL_FILE_CREATE ;
-                goto ipmitool_thread_done ;
+                goto bmc_thread_done ;
             }
 
             dlog_t ("%s password file: %s\n", info_ptr->log_prefix, info_ptr->password_file.c_str());
 
+            /* *********** create the output filename ****************/
+            datafile = bmcUtil_create_data_fn ( info_ptr->hostname,
+                                                suffix,
+                                                BMC_PROTOCOL__REDFISHTOOL );
 
-            /* create the output filename */
-            string ipmitool_datafile = IPMITOOL_OUTPUT_DIR ;
-            ipmitool_datafile.append(info_ptr->hostname);
+            dlog_t ("%s datafile:%s\n",
+                        info_ptr->hostname.c_str(),
+                        datafile.c_str());
 
-            if ( info_ptr->command == IPMITOOL_THREAD_CMD__MC_INFO )
-            {
-                ipmitool_datafile.append(IPMITOOL_MC_INFO_FILE_SUFFIX);
-            }
-            else if ( info_ptr->command == IPMITOOL_THREAD_CMD__RESTART_CAUSE )
-            {
-                ipmitool_datafile.append(IPMITOOL_RESTART_CAUSE_FILE_SUFFIX);
-            }
-            else if ( info_ptr->command == IPMITOOL_THREAD_CMD__POWER_STATUS )
-            {
-                ipmitool_datafile.append(IPMITOOL_POWER_STATUS_FILE_SUFFIX);
-            }
-            else
-            {
-                ipmitool_datafile.append(IPMITOOL_CMD_FILE_SUFFIX);
-            }
+            /************** Create the redfishtool request **************/
+            string request =
+                redfishUtil_create_request (command,
+                                            extra_ptr->bm_ip,
+                                            info_ptr->password_file,
+                                            datafile);
 
-            dlog_t ("%s datafile:%s\n", info_ptr->hostname.c_str(), ipmitool_datafile.c_str());
+            blog1_t ("%s %s", info_ptr->hostname.c_str(), request.c_str());
 
-            /************** Create the ipmitool request **************/
-            string ipmitool_request =
-            ipmiUtil_create_request ( command,
-                                      extra_ptr->bm_ip,
-                                      extra_ptr->bm_un,
-                                      info_ptr->password_file,
-                                      ipmitool_datafile );
-
-
+#ifdef WANT_FIT_TESTING
+            bool bypass_request = false ;
             if ( daemon_is_file_present ( MTC_CMD_FIT__DIR ) == true )
             {
-                if (( command == IPMITOOL_MC_INFO_CMD ) &&
+                if (( command == REDFISHTOOL_ROOT_QUERY_CMD ) &&
+                    ( daemon_is_file_present ( MTC_CMD_FIT__ROOT_QUERY )))
+                {
+                    bypass_request = true ;
+                    rc = PASS ;
+                }
+                if (( command == REDFISHTOOL_BMC_INFO_CMD ) &&
                     ( daemon_is_file_present ( MTC_CMD_FIT__MC_INFO )))
                 {
-                    bypass_ipmitool_request = true ;
+                    bypass_request = true ;
+                    rc = PASS ;
+                }
+            }
+            if ( bypass_request )
+                ;
+            else
+#endif
+            {
+                daemon_remove_file ( datafile.data() ) ;
+
+                nodeUtil_latency_log ( info_ptr->hostname, NODEUTIL_LATENCY_MON_START, 0 );
+                rc = system ( request.data()) ;
+                if ( rc != PASS )
+                {
+                    if ( info_ptr->command != BMC_THREAD_CMD__BMC_QUERY )
+                    {
+                        elog_t ("%s redfishtool system call failed (%s) (%d:%d:%m)\n",
+                                    info_ptr->hostname.c_str(),
+                                    request.c_str(),
+                                    rc, errno );
+                    }
+                    info_ptr->status = FAIL_SYSTEM_CALL ;
+                    if ( daemon_is_file_present ( datafile.data() ))
+                    {
+                        /* load in the error. stdio is redirected to the datafile */
+                        info_ptr->status_string = daemon_read_file(datafile.data());
+                    }
+                }
+                nodeUtil_latency_log ( info_ptr->hostname, "redfishtool system call", 1000 );
+            }
+
+#ifdef WANT_FIT_TESTING
+            if ( daemon_want_fit ( FIT_CODE__THREAD_TIMEOUT, info_ptr->hostname ) )
+            {
+                for ( ; ; )
+                {
+                    sleep (1) ;
+                    pthread_signal_handler ( info_ptr );
+                }
+            }
+            if ( daemon_want_fit ( FIT_CODE__THREAD_SEGFAULT, info_ptr->hostname ) )
+            {
+                daemon_do_segfault();
+            }
+#endif
+            /* clean-up */
+            if ( info_ptr->pw_file_fd > 0 )
+                close(info_ptr->pw_file_fd);
+            info_ptr->pw_file_fd = 0 ;
+
+            unlink(info_ptr->password_file.data());
+            daemon_remove_file ( info_ptr->password_file.data() ) ;
+            info_ptr->password_file.clear();
+
+            if ( rc != PASS )
+            {
+                info_ptr->status_string = "failed redfishtool command : " ;
+                info_ptr->status_string.append(bmcUtil_getCmd_str(info_ptr->command));
+                info_ptr->status = FAIL_SYSTEM_CALL ;
+
+#ifdef WANT_PW_FILE_LOG
+                if ( request.length () )
+                {
+                    string _temp = request ;
+                    size_t pos1 = _temp.find ("-f", 0) ;
+                    size_t pos2 = _temp.find (" > ", 0) ;
+
+                    if (( pos1 != std::string::npos ) && ( pos2 != std::string::npos ))
+                    {
+                        /* don't log the password filename */
+                        wlog_t ("%s ... %s%s\n",
+                                  info_ptr->hostname.c_str(),
+                                  _temp.substr(0,pos1).c_str(),
+                                  _temp.substr(pos2).c_str());
+                    }
+                    else
+                    {
+                        wlog_t ("%s ... %s\n",
+                                  info_ptr->hostname.c_str(),
+                                  request.c_str());
+                    }
+                }
+#endif
+            }
+        }
+
+        else if ( info_ptr->proto == BMC_PROTOCOL__IPMITOOL )
+        {
+            dlog_t ("%s '%s' command\n", info_ptr->log_prefix, command.c_str());
+
+            /*************** create the password file ***************/
+            bmcUtil_create_pw_file ( info_ptr,
+                                     extra_ptr->bm_pw,
+                                     BMC_PROTOCOL__IPMITOOL);
+
+            if ( info_ptr->password_file.empty() )
+            {
+                info_ptr->status_string = "failed to get a temporary password filename" ;
+                info_ptr->status = FAIL_FILE_CREATE ;
+                goto bmc_thread_done ;
+            }
+
+            dlog_t ("%s password file: %s\n", info_ptr->log_prefix, info_ptr->password_file.c_str());
+
+            /* *********** create the output filename ****************/
+            datafile = bmcUtil_create_data_fn ( info_ptr->hostname,
+                                                suffix,
+                                                BMC_PROTOCOL__IPMITOOL );
+
+            dlog_t ("%s datafile:%s\n",
+                        info_ptr->hostname.c_str(),
+                        datafile.c_str());
+
+            /************** Create the ipmitool request **************/
+            string request = ipmiUtil_create_request ( command,
+                                                       extra_ptr->bm_ip,
+                                                       extra_ptr->bm_un,
+                                                       info_ptr->password_file,
+                                                       datafile );
+
+            dlog_t ("%s %s", info_ptr->hostname.c_str(), request.c_str());
+
+            /* assume pass */
+            info_ptr->status_string = "pass" ;
+            info_ptr->status = rc = PASS ;
+
+#ifdef WANT_FIT_TESTING
+            bool bypass_request = false ;
+            if ( daemon_is_file_present ( MTC_CMD_FIT__DIR ) == true )
+            {
+                if (( command == IPMITOOL_BMC_INFO_CMD ) &&
+                    ( daemon_is_file_present ( MTC_CMD_FIT__MC_INFO )))
+                {
+                    bypass_request = true ;
                     rc = PASS ;
                 }
                 else if (( command == IPMITOOL_POWER_STATUS_CMD ) &&
                          ( daemon_is_file_present ( MTC_CMD_FIT__POWER_STATUS )))
                 {
-                    bypass_ipmitool_request = true ;
+                    bypass_request = true ;
                     rc = PASS ;
                 }
                 else if (( command == IPMITOOL_RESTART_CAUSE_CMD ) &&
                          ( daemon_is_file_present ( MTC_CMD_FIT__RESTART_CAUSE )))
                 {
-                    bypass_ipmitool_request = true ;
+                    bypass_request = true ;
                     rc = PASS ;
                 }
                 else if ((( command == IPMITOOL_POWER_RESET_CMD ) ||
@@ -237,31 +452,31 @@ void * mtcThread_ipmitool ( void * arg )
                          ( daemon_is_file_present ( MTC_CMD_FIT__POWER_CMD )))
                 {
                     slog("%s FIT Bypass power or bootdev command", info_ptr->hostname.c_str());
-                    bypass_ipmitool_request = true ;
+                    bypass_request = true ;
                     rc = PASS ;
                 }
                 else if ( daemon_want_fit ( FIT_CODE__AVOID_N_FAIL_IPMITOOL_REQUEST, info_ptr->hostname ))
                 {
                     slog ("%s FIT FIT_CODE__AVOID_N_FAIL_IPMITOOL_REQUEST\n", info_ptr->hostname.c_str());
-                    bypass_ipmitool_request = true ;
+                    bypass_request = true ;
                     rc = FAIL_FIT ;
                 }
                 else if ( daemon_want_fit ( FIT_CODE__STRESS_THREAD, info_ptr->hostname ))
                 {
                     slog ("%s FIT FIT_CODE__STRESS_THREAD\n", info_ptr->hostname.c_str());
-                    bypass_ipmitool_request = true ;
+                    bypass_request = true ;
                     rc = PASS ;
                 }
             }
-
-            dlog_t ("%s %s", info_ptr->hostname.c_str(), ipmitool_request.c_str()); /* ERIC */
-
-            if ( ! bypass_ipmitool_request )
+            if ( bypass_request )
+                ;
+            else
+#endif
             {
-                daemon_remove_file ( ipmitool_datafile.data() ) ;
+                daemon_remove_file ( datafile.data() ) ;
 
                 nodeUtil_latency_log ( info_ptr->hostname, NODEUTIL_LATENCY_MON_START, 0 );
-                rc = system ( ipmitool_request.data()) ;
+                rc = system ( request.data()) ;
                 if ( rc != PASS )
                 {
                     wlog_t ("%s ipmitool system call failed (%d:%d:%m)\n", info_ptr->hostname.c_str(), rc, errno );
@@ -294,13 +509,15 @@ void * mtcThread_ipmitool ( void * arg )
 
             if ( rc != PASS )
             {
+
                 info_ptr->status_string = "failed ipmitool command : " ;
-                info_ptr->status_string.append(getIpmiCmd_str(info_ptr->command));
+                info_ptr->status_string.append(bmcUtil_getCmd_str((bmc_cmd_enum)info_ptr->command));
                 info_ptr->status = FAIL_SYSTEM_CALL ;
 
-                if ( ipmitool_request.length () )
+#ifdef WANT_PW_FILE_LOG
+                if ( request.length () )
                 {
-                    string _temp = ipmitool_request ;
+                    string _temp = request ;
                     size_t pos1 = _temp.find ("-f", 0) ;
                     size_t pos2 = _temp.find (" > ", 0) ;
 
@@ -316,59 +533,60 @@ void * mtcThread_ipmitool ( void * arg )
                     {
                         wlog_t ("%s ... %s\n",
                                   info_ptr->hostname.c_str(),
-                                  ipmitool_request.c_str());
+                                  request.c_str());
                     }
+                }
+#endif
+            }
+        }
+        if ( rc == PASS )
+        {
+            bool datafile_present = false ;
+
+            /* look for the output data file */
+            for ( int i = 0 ; i < 10 ; i++ )
+            {
+                pthread_signal_handler ( info_ptr );
+                if ( daemon_is_file_present ( datafile.data() ))
+                {
+                    datafile_present = true ;
+                    break ;
+                }
+                info_ptr->progress++ ;
+                sleep (1);
+            }
+
+            if ( datafile_present )
+            {
+                if ( info_ptr->command == BMC_THREAD_CMD__BMC_INFO )
+                {
+                    /* tell the main process the name of the file containing the mc info data */
+                    info_ptr->data = datafile ;
+                }
+                else
+                {
+                    info_ptr->data = daemon_read_file (datafile.data()) ;
                 }
             }
             else
             {
-                bool ipmitool_datafile_present = false ;
-
-                /* look for the output data file */
-                for ( int i = 0 ; i < 10 ; i++ )
-                {
-                    pthread_signal_handler ( info_ptr );
-                    if ( daemon_is_file_present ( ipmitool_datafile.data() ))
-                    {
-                        ipmitool_datafile_present = true ;
-                        break ;
-                    }
-                    info_ptr->progress++ ;
-                    sleep (1);
-                }
-
-                if ( ipmitool_datafile_present )
-                {
-                    if ( info_ptr->command == IPMITOOL_THREAD_CMD__MC_INFO )
-                    {
-                        /* tell the main process the name of the file containing the mc info data */
-                        info_ptr->data = ipmitool_datafile ;
-                        info_ptr->status_string = "pass" ;
-                        info_ptr->status = PASS ;
-                    }
-                    else
-                    {
-                        info_ptr->data = daemon_read_file (ipmitool_datafile.data()) ;
-                        info_ptr->status_string = "pass" ;
-                        info_ptr->status = PASS ;
-                    }
-                }
-                else
-                {
-                    info_ptr->status_string = "command did not produce output file ; timeout" ;
-                    info_ptr->status = FAIL_FILE_ACCESS ;
-                }
+                info_ptr->status_string = "command did not produce output file ; timeout" ;
+                info_ptr->status = FAIL_FILE_ACCESS ;
             }
+        }
+        else
+        {
+            info_ptr->status_string = "system call failed" ;
+            info_ptr->status = FAIL_SYSTEM_CALL ;
         }
     }
     else
     {
         info_ptr->status_string = "null 'extra info' pointer" ;
         info_ptr->status = FAIL_NULL_POINTER ;
-        goto ipmitool_thread_done ;
     }
 
-ipmitool_thread_done:
+bmc_thread_done:
 
     if ( info_ptr->pw_file_fd > 0)
         close (info_ptr->pw_file_fd);

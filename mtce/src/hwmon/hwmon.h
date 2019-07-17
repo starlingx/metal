@@ -311,7 +311,7 @@ typedef struct
     string  unit_base     ; /**< Celcius, Revolutions                        */
     string  unit_rate     ; /**< Minute                                      */
 
-    protocol_enum    prot ; /**< protocol to use for this sensor             */
+    bmc_protocol_enum prot ; /**< protocol to use for this sensor            */
     sensor_kind_enum kind ; /**< the kind of sensor ; see definition         */
     sensor_unit_enum unit ; /**< the units the sensor should be displayed in */
 
