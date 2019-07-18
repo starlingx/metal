@@ -233,9 +233,6 @@ int daemon_run_testhead ( void );
 #define CONFIG_AGENT_SECRET_PORT     0x20000000 /**< Barbican HTTP port        */
 #define CONFIG_AGENT_VIM_EVENT_PORT  0x40000000 /**< VIM Event Port Mask       */
 
-#define CONFIG_AGENT_PORT  CONFIG_AGENT_MTC_MGMNT_PORT
-#define CONFIG_CLIENT_PORT CONFIG_CLIENT_MTC_MGMNT_PORT
-
 typedef struct {
     struct timespec ts ;
     struct tm t;

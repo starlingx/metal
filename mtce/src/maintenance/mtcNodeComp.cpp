@@ -171,12 +171,17 @@ void _close_mgmnt_tx_socket ( void )
     }
 }
 
-void _close_clstr_tx_socket ( void )
+void _close_clstr_tx_sockets ( void )
 {
-    if (mtc_sock.mtc_client_clstr_tx_socket)
+    if (mtc_sock.mtc_client_tx_socket_c0_clstr)
     {
-        delete (mtc_sock.mtc_client_clstr_tx_socket);
-        mtc_sock.mtc_client_clstr_tx_socket = 0 ;
+        delete (mtc_sock.mtc_client_tx_socket_c0_clstr);
+        mtc_sock.mtc_client_tx_socket_c0_clstr = 0 ;
+    }
+    if (mtc_sock.mtc_client_tx_socket_c1_clstr)
+    {
+        delete (mtc_sock.mtc_client_tx_socket_c1_clstr);
+        mtc_sock.mtc_client_tx_socket_c1_clstr = 0 ;
     }
 }
 
@@ -196,7 +201,7 @@ void daemon_exit ( void )
     _close_mgmnt_rx_socket ();
     _close_clstr_rx_socket ();
     _close_mgmnt_tx_socket ();
-    _close_clstr_tx_socket ();
+    _close_clstr_tx_sockets();
     _close_amon_sock       ();
 
     exit (0) ;
@@ -214,12 +219,17 @@ static int mtc_config_handler ( void * user,
     if (MATCH("agent", "mtc_agent_port"))
     {
         config_ptr->mtc_agent_port = atoi(value);
-        config_ptr->mask |= CONFIG_AGENT_PORT ;
+        config_ptr->mask |= CONFIG_AGENT_MTC_MGMNT_PORT ;
     }
     else if (MATCH("client", "mtc_rx_mgmnt_port"))
     {
         config_ptr->mtc_rx_mgmnt_port = atoi(value);
         config_ptr->mask |= CONFIG_CLIENT_MTC_MGMNT_PORT ;
+    }
+    else if (MATCH("client", "mtc_rx_clstr_port"))
+    {
+        config_ptr->mtc_rx_clstr_port = atoi(value);
+        config_ptr->mask |= CONFIG_CLIENT_MTC_CLSTR_PORT ;
     }
     else if (MATCH("timeouts", "failsafe_shutdown_delay"))
     {
@@ -289,10 +299,9 @@ void setup_mgmnt_rx_socket ( void )
         ilog("Mgmnt iface : %s\n", ctrl.mgmnt_iface.c_str() );
         get_iface_macaddr  ( ctrl.mgmnt_iface.data(), ctrl.macaddr );
         get_iface_address  ( ctrl.mgmnt_iface.data(), ctrl.address , true );
-        get_hostname       ( &ctrl.hostname[0], MAX_HOST_NAME_SIZE );
 
         _close_mgmnt_rx_socket ();
-        mtc_sock.mtc_client_rx_socket = new msgClassRx(ctrl.address.c_str(),mtc_sock.mtc_cmd_port, IPPROTO_UDP, ctrl.mgmnt_iface.data(), false );
+        mtc_sock.mtc_client_rx_socket = new msgClassRx(ctrl.address.c_str(),mtc_sock.mtc_mgmnt_cmd_port, IPPROTO_UDP, ctrl.mgmnt_iface.data(), false );
 
         /* update health of socket */
         if ( mtc_sock.mtc_client_rx_socket )
@@ -328,12 +337,13 @@ void setup_clstr_rx_socket ( void )
      * calls daemon_get_iface_master inside so the
      * aggrigated name is returned if it exists */
     get_clstr_iface (&mtc_config.clstr_iface );
-    if ( strlen(mtc_config.clstr_iface) )
+    ctrl.clstr_iface = mtc_config.clstr_iface ;
+    if ( !ctrl.clstr_iface.empty())
     {
         /* Only get the cluster-host network address if it is provisioned */
-        if ( get_iface_address  ( mtc_config.clstr_iface, ctrl.address_clstr, false ) == PASS )
+        if ( get_iface_address  ( ctrl.clstr_iface.data(), ctrl.address_clstr, false ) == PASS )
         {
-            ilog ("Cluster-host iface : %s\n", mtc_config.clstr_iface );
+            ilog ("Cluster-host iface : %s\n", ctrl.clstr_iface.c_str());
             ilog ("Cluster-host addr  : %s\n", ctrl.address_clstr.c_str());
         }
     }
@@ -342,7 +352,7 @@ void setup_clstr_rx_socket ( void )
         _close_clstr_rx_socket ();
 
         /* Only set up the socket if an cluster-host interface is provisioned */
-        mtc_sock.mtc_client_clstr_rx_socket = new msgClassRx(ctrl.address_clstr.c_str(),mtc_sock.mtc_cmd_port, IPPROTO_UDP, ctrl.clstr_iface.data(), false );
+        mtc_sock.mtc_client_clstr_rx_socket = new msgClassRx(ctrl.address_clstr.c_str(),mtc_sock.mtc_clstr_cmd_port, IPPROTO_UDP, ctrl.clstr_iface.data(), false );
 
         /* update health of socket */
         if ( mtc_sock.mtc_client_clstr_rx_socket )
@@ -390,32 +400,60 @@ void setup_mgmnt_tx_socket ( void )
     }
 }
 
-void setup_clstr_tx_socket ( void )
+void setup_clstr_tx_sockets ( void )
 {
     if ( ctrl.clstr_iface_provisioned == false )
     {
         return ;
     }
 
-    dlog ("setup of cluster-host TX\n");
-    _close_clstr_tx_socket ();
-    mtc_sock.mtc_client_clstr_tx_socket = new msgClassTx(CONTROLLER_NFS,mtc_sock.mtc_agent_port, IPPROTO_UDP, mtc_config.clstr_iface);
+    dlog ("setup of %s TX\n", CONTROLLER_0_CLUSTER_HOST);
 
-    if ( mtc_sock.mtc_client_clstr_tx_socket )
+    _close_clstr_tx_sockets ();
+
+    mtc_sock.mtc_client_tx_socket_c0_clstr =
+        new msgClassTx(CONTROLLER_0_CLUSTER_HOST,
+                       mtc_sock.mtc_agent_port,
+                       IPPROTO_UDP,
+                       mtc_config.clstr_iface);
+
+    if ( mtc_sock.mtc_client_tx_socket_c0_clstr )
     {
-        /* look for fault insertion request */
-        if ( daemon_is_file_present ( MTC_CMD_FIT__CLSTR_TXSOCK ) )
-            mtc_sock.mtc_client_clstr_tx_socket->return_status = FAIL ;
-
-        if ( mtc_sock.mtc_client_clstr_tx_socket->return_status == PASS )
+        if ( mtc_sock.mtc_client_tx_socket_c0_clstr->return_status == PASS )
         {
-            mtc_sock.mtc_client_clstr_tx_socket->sock_ok(true);
+            mtc_sock.mtc_client_tx_socket_c0_clstr->sock_ok(true);
         }
         else
         {
-            elog ("failed to init 'cluster-host tx' socket (rc:%d)\n",
-            mtc_sock.mtc_client_clstr_tx_socket->return_status );
-            mtc_sock.mtc_client_clstr_tx_socket->sock_ok(false);
+            elog ("failed to init '%s' tx socket (rc:%d)\n",
+            CONTROLLER_0_CLUSTER_HOST,
+            mtc_sock.mtc_client_tx_socket_c0_clstr->return_status );
+            mtc_sock.mtc_client_tx_socket_c0_clstr->sock_ok(false);
+        }
+    }
+    if ( ctrl.system_type != SYSTEM_TYPE__CPE_MODE__SIMPLEX )
+    {
+        dlog ("setup of %s TX\n", CONTROLLER_1_CLUSTER_HOST);
+
+        mtc_sock.mtc_client_tx_socket_c1_clstr =
+            new msgClassTx(CONTROLLER_1_CLUSTER_HOST,
+                           mtc_sock.mtc_agent_port,
+                           IPPROTO_UDP,
+                           mtc_config.clstr_iface);
+
+        if ( mtc_sock.mtc_client_tx_socket_c1_clstr )
+        {
+            if ( mtc_sock.mtc_client_tx_socket_c1_clstr->return_status == PASS )
+            {
+                mtc_sock.mtc_client_tx_socket_c1_clstr->sock_ok(true);
+            }
+            else
+            {
+                elog ("failed to init '%s' tx socket (rc:%d)\n",
+                CONTROLLER_0_CLUSTER_HOST,
+                mtc_sock.mtc_client_tx_socket_c1_clstr->return_status );
+                mtc_sock.mtc_client_tx_socket_c1_clstr->sock_ok(false);
+            }
         }
     }
 }
@@ -463,7 +501,7 @@ void setup_amon_socket ( void )
  * 1. Unicast receive socket mgmnt (mtc_client_rx_socket)
  * 2. Unicast receive socket clstr (mtc_client_clstr_rx_socket)
  * 3. Unicast transmit socket mgmnt (mtc_client_tx_socket)
- * 4. Unicast transmit socket clstr (mtc_client_clstr_tx_socket)
+ * 4. Unicast transmit socket clstr (mtc_client_tx_socket_c?_clstr)
  *
  * 5. socket for pmond acive monitoring
  *
@@ -473,8 +511,10 @@ int mtc_socket_init ( void )
     /* Setup the Management Interface Recieve Socket */
     /* Read the port config strings into the socket struct */
     mtc_sock.mtc_agent_port  = mtc_config.mtc_agent_port;
-    mtc_sock.mtc_cmd_port    = mtc_config.mtc_rx_mgmnt_port;
+    mtc_sock.mtc_mgmnt_cmd_port    = mtc_config.mtc_rx_mgmnt_port;
+    mtc_sock.mtc_clstr_cmd_port    = mtc_config.mtc_rx_clstr_port;
 
+    get_hostname ( &ctrl.hostname[0], MAX_HOST_NAME_SIZE );
     ctrl.mtcAgent_ip = getipbyname ( CONTROLLER );
     ilog ("Controller  : %s\n", ctrl.mtcAgent_ip.c_str());
 
@@ -489,8 +529,8 @@ int mtc_socket_init ( void )
     setup_mgmnt_tx_socket ();
 
     /* Manage Cluster-host network setup */
-    string clstr_iface_name = daemon_clstr_iface();
     string mgmnt_iface_name = daemon_mgmnt_iface();
+    string clstr_iface_name = daemon_clstr_iface();
     if ( !clstr_iface_name.empty() )
     {
         if ( clstr_iface_name != mgmnt_iface_name )
@@ -504,7 +544,7 @@ int mtc_socket_init ( void )
             /*************************************************************/
             /* Setup the Clstr Interface Transmit Messaging to mtcAgent  */
             /*************************************************************/
-            setup_clstr_tx_socket () ;
+            setup_clstr_tx_sockets () ;
         }
     }
 
@@ -1225,8 +1265,8 @@ void daemon_service_run ( void )
             if (( mtc_sock.mtc_client_rx_socket == NULL ) ||
                 ( mtc_sock.mtc_client_rx_socket->sock_ok() == false ))
             {
-                setup_mgmnt_rx_socket();
                 wlog ("calling setup_mgmnt_rx_socket (auto-recovery)\n");
+                setup_mgmnt_rx_socket();
                 socket_reinit = true ;
             }
 
@@ -1234,8 +1274,8 @@ void daemon_service_run ( void )
             else if (( mtc_sock.mtc_client_tx_socket == NULL  ) ||
                      ( mtc_sock.mtc_client_tx_socket->sock_ok() == false ))
             {
-                setup_mgmnt_tx_socket();
                 wlog ("calling setup_mgmnt_tx_socket\n");
+                setup_mgmnt_tx_socket();
                 socket_reinit = true ;
             }
 
@@ -1244,18 +1284,20 @@ void daemon_service_run ( void )
                      (( mtc_sock.mtc_client_clstr_rx_socket == NULL ) ||
                       ( mtc_sock.mtc_client_clstr_rx_socket->sock_ok() == false )))
             {
-                setup_clstr_rx_socket();
                 wlog ("calling setup_clstr_rx_socket (auto-recovery)\n");
+                setup_clstr_rx_socket();
                 socket_reinit = true ;
             }
 
             /* Clstr Tx */
             else if (( ctrl.clstr_iface_provisioned == true ) &&
-                     (( mtc_sock.mtc_client_clstr_tx_socket == NULL ) ||
-                      ( mtc_sock.mtc_client_clstr_tx_socket->sock_ok() == false )))
+                     (( mtc_sock.mtc_client_tx_socket_c0_clstr == NULL ) ||
+                      ( mtc_sock.mtc_client_tx_socket_c1_clstr == NULL ) ||
+                      ( mtc_sock.mtc_client_tx_socket_c0_clstr->sock_ok() == false ) ||
+                      ( mtc_sock.mtc_client_tx_socket_c1_clstr->sock_ok() == false )))
             {
-                setup_clstr_tx_socket();
-                wlog ("calling setup_clstr_tx_socket (auto-recovery)\n");
+                wlog ("calling setup_clstr_tx_sockets (auto-recovery)\n");
+                setup_clstr_tx_sockets();
                 socket_reinit = true ;
             }
 
@@ -1311,18 +1353,14 @@ void daemon_service_run ( void )
                 if ( daemon_is_file_present ( MTC_CMD_FIT__CLSTR_RXSOCK ))
                 {
                     if ( mtc_sock.mtc_client_clstr_rx_socket )
-                    {
                         mtc_sock.mtc_client_clstr_rx_socket->sock_ok (false);
-                        _close_clstr_rx_socket ();
-                    }
                 }
                 if ( daemon_is_file_present ( MTC_CMD_FIT__CLSTR_TXSOCK ))
                 {
-                    if ( mtc_sock.mtc_client_clstr_tx_socket )
-                    {
-                        mtc_sock.mtc_client_clstr_tx_socket->sock_ok (false);
-                        _close_clstr_tx_socket ();
-                    }
+                    if ( mtc_sock.mtc_client_tx_socket_c0_clstr )
+                        mtc_sock.mtc_client_tx_socket_c0_clstr->sock_ok (false);
+                    if ( mtc_sock.mtc_client_tx_socket_c1_clstr )
+                        mtc_sock.mtc_client_tx_socket_c1_clstr->sock_ok (false);
                 }
                 if ( daemon_is_file_present ( MTC_CMD_FIT__AMON_SOCK ))
                 {

@@ -155,18 +155,6 @@ void daemon_exit ( void )
     if (mtc_sock.mtc_agent_tx_socket)
         delete (mtc_sock.mtc_agent_tx_socket);
 
-    if (mtc_sock.mtc_client_rx_socket)
-        delete(mtc_sock.mtc_client_rx_socket);
-
-    if (mtc_sock.mtc_client_tx_socket)
-        delete (mtc_sock.mtc_client_tx_socket);
-
-    if (mtc_sock.mtc_client_clstr_rx_socket)
-        delete (mtc_sock.mtc_client_clstr_rx_socket);
-
-    if (mtc_sock.mtc_client_clstr_tx_socket)
-        delete (mtc_sock.mtc_client_clstr_tx_socket);
-
     if (mtc_sock.mtc_event_rx_sock)
         delete (mtc_sock.mtc_event_rx_sock);
 
@@ -191,7 +179,8 @@ void daemon_exit ( void )
 
 
 /** Control Config Mask */
-#define CONFIG_AGENT_MASK    (CONFIG_AGENT_PORT            |\
+#define CONFIG_AGENT_MASK    (CONFIG_AGENT_MTC_MGMNT_PORT  |\
+                              CONFIG_CLIENT_MTC_CLSTR_PORT |\
                               CONFIG_MTC_TO_HBS_CMD_PORT   |\
                               CONFIG_MTC_TO_HWMON_CMD_PORT |\
                               CONFIG_HBS_TO_MTC_EVENT_PORT |\
@@ -201,7 +190,7 @@ void daemon_exit ( void )
                               CONFIG_AGENT_LOC_TIMEOUT     |\
                               CONFIG_AGENT_INV_EVENT_PORT  |\
                               CONFIG_AGENT_API_RETRIES     |\
-                              CONFIG_CLIENT_PORT)
+                              CONFIG_CLIENT_MTC_MGMNT_PORT)
 
 static int mtc_nfvi_handler   ( void * user,
                           const char * section,
@@ -250,7 +239,7 @@ static int mtc_config_handler ( void * user,
     else if (MATCH("agent", "mtc_agent_port"))
     {
         config_ptr->mtc_agent_port = atoi(value);
-        config_ptr->mask |= CONFIG_AGENT_PORT ;
+        config_ptr->mask |= CONFIG_AGENT_MTC_MGMNT_PORT ;
     }
     else if (MATCH("agent", "mtc_to_hbs_cmd_port"))
     {
@@ -279,7 +268,12 @@ static int mtc_config_handler ( void * user,
     else if (MATCH("client", "mtc_rx_mgmnt_port"))
     {
         config_ptr->cmd_port = atoi(value);
-        config_ptr->mask |= CONFIG_CLIENT_PORT ;
+        config_ptr->mask |= CONFIG_CLIENT_MTC_MGMNT_PORT ;
+    }
+    else if (MATCH("client", "mtc_rx_clstr_port"))
+    {
+        config_ptr->mtc_rx_clstr_port = atoi(value);
+        config_ptr->mask |= CONFIG_CLIENT_MTC_CLSTR_PORT ;
     }
     else if (MATCH("agent", "token_refresh_rate"))
     {
@@ -639,6 +633,7 @@ int daemon_configure ( void )
         else
         {
             mtcInv.clstr_network_provisioned = true ;
+            ilog ("Cluster network is provisioned" );
         }
     }
 
@@ -697,11 +692,11 @@ int mtc_socket_init ( void )
 
     /* Read the port config strings into the socket struct */
     mtc_sock.mtc_agent_port  = mtc_config.mtc_agent_port;
-    mtc_sock.mtc_cmd_port    = mtc_config.cmd_port;
+    mtc_sock.mtc_mgmnt_cmd_port = mtc_config.cmd_port;
 
     /* create transmit socket */
     msgClassAddr::getAddressFromInterface(mtc_config.mgmnt_iface, ip_address, INET6_ADDRSTRLEN);
-    sock_ptr->mtc_agent_tx_socket = new msgClassTx(ip_address, mtc_config.mtc_agent_port, IPPROTO_UDP, mtc_config.mgmnt_iface);
+    sock_ptr->mtc_agent_tx_socket = new msgClassTx(ip_address, mtc_sock.mtc_mgmnt_cmd_port, IPPROTO_UDP, mtc_config.mgmnt_iface);
     rc = sock_ptr->mtc_agent_tx_socket->return_status;
     if(rc != PASS)
     {
@@ -714,9 +709,12 @@ int mtc_socket_init ( void )
    /***********************************************************/
     if ( strlen( mtc_config.clstr_iface ) )
     {
+        sock_ptr->mtc_clstr_cmd_port = mtc_config.mtc_rx_clstr_port;
+
         /* create clstr transmit socket only if the interface is provisioned */
         msgClassAddr::getAddressFromInterface(mtc_config.clstr_iface, ip_address, INET6_ADDRSTRLEN);
-        sock_ptr->mtc_agent_clstr_tx_socket  = new msgClassTx(ip_address, mtc_config.mtc_agent_port, IPPROTO_UDP, mtc_config.clstr_iface);
+        sock_ptr->mtc_agent_clstr_tx_socket = new msgClassTx(ip_address, mtc_sock.mtc_clstr_cmd_port, IPPROTO_UDP, mtc_config.clstr_iface);
+
         rc = sock_ptr->mtc_agent_clstr_tx_socket->return_status;
         if(rc != PASS)
         {
@@ -778,8 +776,17 @@ int mtc_socket_init ( void )
 
     if ( mtcInv.clstr_network_provisioned == true )
     {
-        sock_ptr->mtc_agent_clstr_rx_socket =
-        new msgClassRx(CONTROLLER_NFS, sock_ptr->mtc_agent_port, IPPROTO_UDP );
+        if ( mtcInv.my_hostname == CONTROLLER_0 )
+        {
+            sock_ptr->mtc_agent_clstr_rx_socket =
+            new msgClassRx(CONTROLLER_0_CLUSTER_HOST, sock_ptr->mtc_agent_port, IPPROTO_UDP );
+        }
+        else
+        {
+            sock_ptr->mtc_agent_clstr_rx_socket =
+            new msgClassRx(CONTROLLER_1_CLUSTER_HOST, sock_ptr->mtc_agent_port, IPPROTO_UDP );
+        }
+
         if (( sock_ptr->mtc_agent_clstr_rx_socket == NULL ) ||
             ( sock_ptr->mtc_agent_clstr_rx_socket->return_status ))
         {

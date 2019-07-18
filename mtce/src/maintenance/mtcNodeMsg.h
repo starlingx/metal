@@ -74,15 +74,15 @@ typedef struct
     int  mtc_agent_clstr_rx_socket_size ;
 
     /** UDP sockets used by the mtcClient to receive maintenance
-      * commands from and transmit replies to the mtcAgent              */
-    msgClassSock*  mtc_client_rx_socket             ; /**< rx from controller       */
-    msgClassSock*  mtc_client_tx_socket             ; /**< tx to controller mgmnt   */
-    msgClassSock*  mtc_client_clstr_tx_socket       ; /**< tx to controller clstr   */
-    msgClassSock*  mtc_client_clstr_rx_socket       ; /**< rx from controller clstr */
-    int                mtc_cmd_port       ; /**< mtc command port number  */
-    struct sockaddr_in mtc_cmd_addr       ; /**< socket attributes mgmnt  */
-
-
+      * commands from and transmit replies to the mtcAgent                           */
+    msgClassSock*  mtc_client_rx_socket          ; /**< rx from controller           */
+    msgClassSock*  mtc_client_tx_socket          ; /**< tx to controller mgmnt       */
+    msgClassSock*  mtc_client_tx_socket_c0_clstr ; /**< tx to controller-0 clstr i/f */
+    msgClassSock*  mtc_client_tx_socket_c1_clstr ; /**< tx to controller-1 clstr i/f */
+    msgClassSock*  mtc_client_clstr_rx_socket    ; /**< rx from controller clstr     */
+    int            mtc_mgmnt_cmd_port            ; /**< mtc command port mgmnt i/f   */
+    int            mtc_clstr_cmd_port            ; /**< mtc command port clstr i/f   */
+    struct sockaddr_in mtc_cmd_addr              ; /**< socket attributes mgmnt      */
 
    /***************************************************************/
 

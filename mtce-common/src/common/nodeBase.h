@@ -393,6 +393,8 @@ void daemon_exit ( void );
 
 /* This label will resolve to an IP on the management network */
 #define CONTROLLER_NFS ((const char *)"controller-nfs")
+#define CONTROLLER_0_CLUSTER_HOST ((const char *)"controller-0-cluster-host")
+#define CONTROLLER_1_CLUSTER_HOST ((const char *)"controller-1-cluster-host")
 
 /* Maintenance Daemon Services - actual names of the daemons */
 /* ... controller only service / daemons */

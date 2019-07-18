@@ -818,6 +818,10 @@ private:
     void start_offline_handler ( struct nodeLinkClass::node * node_ptr );
     void stop_offline_handler  ( struct nodeLinkClass::node * node_ptr );
 
+    bool get_mtcAlive_gate ( struct nodeLinkClass::node * node_ptr );
+    void ctl_mtcAlive_gate ( struct nodeLinkClass::node * node_ptr, bool gate_state );
+    void set_mtcAlive      ( struct nodeLinkClass::node * node_ptr, int interface );
+
     /*****************************************************************************
      *
      * Name       : ipmi_command_send
@@ -1701,7 +1705,7 @@ public:
         #define MTC_FLAG__I_AM_HEALTHY     (0x00000004)
         #define MTC_FLAG__I_AM_LOCKED      (0x00000008)
     */
-    void set_mtce_flags ( string hostname, int flags );
+    void set_mtce_flags ( string hostname, int flags, int iface );
 
     /** Updates the node's health code
       * Codes are found in nodeBase.h

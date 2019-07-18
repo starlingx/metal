@@ -50,9 +50,6 @@ using namespace std;
 
 int service_events ( nodeLinkClass * obj_ptr, mtc_socket_type * sock_ptr );
 
-/* Throttle logging of messages from unknown IP addresses */
-std::list<string> unknown_ip_list ;
-
 /* Send specified command to the guestAgent daemon */
 int send_guest_command ( string hostname, int command )
 {
@@ -163,6 +160,7 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
 
     zero_unused_msg_buf (msg, bytes);
 
+    /* get the sender's hostname */
     string hostaddr = "" ;
     string hostname = "" ;
     if ( iface == CLSTR_INTERFACE )
@@ -175,20 +173,22 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
         hostaddr = sock_ptr->mtc_agent_rx_socket->get_src_str();
         hostname = obj_ptr->get_hostname ( hostaddr ) ;
     }
+
+    /* lookup failed if hostname remains empty. */
     if ( hostname.empty() )
     {
-        std::list<string>::iterator  iter ;
-        iter = std::find (unknown_ip_list.begin(), unknown_ip_list.end(), hostaddr );
-        if ( iter == unknown_ip_list.end() )
+        /* try and learn the cluster ip from a mtcAlive message. */
+        if (( msg.cmd == MTC_MSG_MTCALIVE ) &&
+            (( rc = jsonUtil_get_key_val ( &msg.buf[0], "hostname", hostname )) == PASS ))
         {
-            mlog3 ( "Received message from unknown IP <%s>\n", hostaddr.c_str());
-            unknown_ip_list.push_front(hostaddr);
+            ilog ("%s learned from mtcAlive", hostname.c_str());
         }
-        return (FAIL_NOT_FOUND);
-    }
-    else if ( ! hostaddr.empty() )
-    {
-       unknown_ip_list.remove (hostaddr);
+        else
+        {
+            wlog ("unknown hostname message ... dropping" ); /* make dlog */
+            print_mtc_message ( hostname, MTC_CMD_RX, msg, get_iface_name_str(iface), true );
+            return (FAIL_GET_HOSTNAME);
+        }
     }
 
     print_mtc_message ( hostname, MTC_CMD_RX, msg, get_iface_name_str(iface), false );
@@ -244,6 +244,26 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
     else if ( strstr ( &msg.hdr[0], get_cmd_rsp_msg_header() ) )
     {
         obj_ptr->set_cmd_resp ( hostname , msg ) ;
+        if ( msg.num > 0 )
+        {
+            if (( msg.cmd != MTC_MSG_LOCKED ) &&
+                ( msg.cmd != MTC_CMD_HOST_SVCS_RESULT ))
+            {
+                ilog ("%s '%s' ACK (rc:%d) (%s)",
+                          hostname.c_str(),
+                          get_mtcNodeCommand_str(msg.cmd),
+                          msg.parm[0],
+                          get_iface_name_str(iface));
+            }
+            else
+            {
+                mlog ("%s '%s' ACK (rc:%d) (%s)",
+                          hostname.c_str(),
+                          get_mtcNodeCommand_str(msg.cmd),
+                          msg.parm[0],
+                          get_iface_name_str(iface));
+            }
+        }
     }
 
     /*
@@ -267,30 +287,35 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
                 wlog ("%s failed to load functions from mtcAlive message\n", hostname.c_str());
                 return (FAIL_NODETYPE);
             }
+
+            if ( obj_ptr->clstr_network_provisioned == true )
+            {
+                string cluster_host_ip = "";
+                /* Get the clstr ip address if it is provisioned */
+                rc =  jsonUtil_get_key_val ( &msg.buf[0], "cluster_host_ip", cluster_host_ip );
+                if ( rc == PASS )
+                {
+                    obj_ptr->set_clstr_hostaddr ( hostname, cluster_host_ip );
+                }
+                else
+                {
+                    wlog ("%s missing 'cluster_host_ip' value (rc:%d)\n", hostname.c_str(), rc);
+                }
+            }
+
             obj_ptr->set_uptime     ( hostname , msg.parm[MTC_PARM_UPTIME_IDX], false );
             obj_ptr->set_health     ( hostname , msg.parm[MTC_PARM_HEALTH_IDX] );
-            obj_ptr->set_mtce_flags ( hostname , msg.parm[MTC_PARM_FLAGS_IDX]  );
-
+            obj_ptr->set_mtce_flags ( hostname , msg.parm[MTC_PARM_FLAGS_IDX], iface );
             obj_ptr->set_mtcAlive   ( hostname, iface );
 
-            mlog1("%s Uptime:%d Health:%d Flags:0x%x mtcAlive:%s\n",
+            mlog1("%s Uptime:%d Health:%d Flags:0x%x mtcAlive:%s (%s)\n",
                       hostname.c_str(),
                       msg.parm[MTC_PARM_UPTIME_IDX],
                       msg.parm[MTC_PARM_HEALTH_IDX],
                       msg.parm[MTC_PARM_FLAGS_IDX],
-                      obj_ptr->get_mtcAlive_gate ( hostname ) ? "gated" : "open");
+                      obj_ptr->get_mtcAlive_gate ( hostname ) ? "gated" : "open",
+                      get_iface_name_str(iface));
 
-            string cluster_host_ip = "";
-            /* Get the clstr ip address if it is provisioned */
-            rc =  jsonUtil_get_key_val ( &msg.buf[0], "cluster_host_ip", cluster_host_ip );
-            if ( rc == PASS )
-            {
-                obj_ptr->set_clstr_hostaddr ( hostname, cluster_host_ip );
-            }
-            else
-            {
-                mlog ("%s null or missing 'cluster_host_ip' value (rc:%d)\n", hostname.c_str(), rc);
-            }
         }
         else if ( msg.cmd == MTC_MSG_MAIN_GOENABLED )
         {
@@ -546,19 +571,6 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
         wlog ( "Received unsupported or badly formed message\n" );
     }
 
-    /* Only do this if the debug level is appropriate */
-    if ( daemon_get_cfg_ptr()->debug_msg )
-    {
-        int count = 0 ;
-        std::list<string>::iterator  iter ;
-        for ( iter  = unknown_ip_list.begin () ;
-              iter != unknown_ip_list.end  () ;
-              iter++ )
-        {
-            count++ ;
-            mlog3 ("Unknown IP [%d]:%s\n", count, iter->c_str());
-        }
-    }
     return (rc);
 }
 
@@ -667,55 +679,56 @@ int send_mtc_cmd ( string & hostname, int cmd , int interface )
     {
         int bytes = 0;
 
-        /* Temporarily get IP from node inventory till dns is available */
         nodeLinkClass * obj_ptr = get_mtcInv_ptr ();
 
         /* add the mac address of the target card to the header
-         * Note: the minus 1 is to overwqrite the null */
+         * Note: the minus 1 is to overwrite the null */
         snprintf ( &mtc_cmd.hdr[MSG_HEADER_SIZE-1], MSG_HEADER_SIZE, "%s", obj_ptr->get_hostIfaceMac(hostname, MGMNT_IFACE).data());
 
-        /* Lets add the controller's floating ip in the buffer so hat he host knowns where to reply */
-        snprintf ( &mtc_cmd.buf[0], obj_ptr->my_float_ip.length()+1, "%s", obj_ptr->my_float_ip.data());
-
-        /* only send the minimum amount of data */
-        bytes = (sizeof(mtc_message_type)-(BUF_SIZE-(obj_ptr->my_float_ip.length()+1))) ;
+        string data = "{\"address\":\"";
+        data.append(obj_ptr->my_float_ip) ;
+        data.append("\",\"interface\":\"");
+        data.append(get_iface_name_str(interface));
+        data.append("\"}");
+        snprintf ( &mtc_cmd.buf[0], data.length()+1, "%s", data.data());
+        bytes = (sizeof(mtc_message_type)-(BUF_SIZE-(data.length()+1)));
 
         print_mtc_message ( hostname, MTC_CMD_TX, mtc_cmd, get_iface_name_str(interface), force ) ;
 
         if (interface == MGMNT_INTERFACE)
         {
             string hostaddr = obj_ptr->get_hostaddr(hostname);
-
-#ifdef WANT_FIT_TESTING
-            if ( daemon_want_fit ( FIT_CODE__INVALIDATE_MGMNT_IP, hostname ) )
-                hostaddr = "none" ;
-#endif
-
             if ( hostUtil_is_valid_ip_addr ( hostaddr ) != true )
             {
-                 wlog("%s has no management IP assigned\n", hostname.c_str());
+                wlog("%s has invalid management addr '%s'\n",
+                         hostname.c_str(),
+                         hostaddr.c_str());
                 return (FAIL_HOSTADDR_LOOKUP);
             }
-            /* rc = message size */
-            rc = sock_ptr->mtc_agent_tx_socket->write((char *)&mtc_cmd, bytes, hostaddr.c_str(), sock_ptr->mtc_cmd_port);
+
+            mlog ("%s sending %s request to %s (%s)",
+                      hostname.c_str(),
+                      get_mtcNodeCommand_str(cmd),
+                      hostaddr.c_str(),
+                      get_iface_name_str(interface));
+
+            rc = sock_ptr->mtc_agent_tx_socket->write((char *)&mtc_cmd, bytes, hostaddr.c_str(), sock_ptr->mtc_mgmnt_cmd_port);
         }
         else if ((interface == CLSTR_INTERFACE) &&
                  ( obj_ptr->clstr_network_provisioned == true ) &&
                  ( sock_ptr->mtc_agent_clstr_tx_socket != NULL ))
         {
-            /* SETUP TX -> COMPUTE SOCKET CLSTR INTERFACE */
             string clstr_hostaddr = obj_ptr->get_clstr_hostaddr(hostname);
-
-#ifdef WANT_FIT_TESTING
-            if ( daemon_want_fit ( FIT_CODE__INVALIDATE_CLSTR_IP, hostname ) )
-                clstr_hostaddr = "none" ;
-#endif
-
             if ( hostUtil_is_valid_ip_addr( clstr_hostaddr ) != true )
-            {
                 return (FAIL_NO_CLSTR_PROV);
-            }
-            rc = sock_ptr->mtc_agent_clstr_tx_socket->write((char *)&mtc_cmd, bytes, clstr_hostaddr.c_str(), sock_ptr->mtc_cmd_port);
+
+            mlog ("%s sending %s request to %s (%s)",
+                      hostname.c_str(),
+                      get_mtcNodeCommand_str(cmd),
+                      clstr_hostaddr.c_str(),
+                      get_iface_name_str(interface));
+
+            rc = sock_ptr->mtc_agent_clstr_tx_socket->write((char *)&mtc_cmd, bytes, clstr_hostaddr.c_str(), sock_ptr->mtc_clstr_cmd_port);
         }
 
         if ( 0 > rc )

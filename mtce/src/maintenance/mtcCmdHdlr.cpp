@@ -356,6 +356,7 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
         }
         case MTC_CMD_STAGE__REBOOT:
         {
+            int rc = PASS ;
             bool send_reboot_ok = false ;
 
             node_ptr->reboot_cmd_ack_mgmnt = false ;
@@ -364,11 +365,13 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
             /* send reboot command */
             node_ptr->cmdReq = MTC_CMD_REBOOT ;
             node_ptr->cmdRsp = MTC_CMD_NONE   ;
-            plog ("%s Performing REBOOT (mgmnt network)\n", node_ptr->hostname.c_str());
-            if ( send_mtc_cmd ( node_ptr->hostname, MTC_CMD_REBOOT, MGMNT_INTERFACE ) != PASS )
+            if (( rc = send_mtc_cmd ( node_ptr->hostname,
+                                      MTC_CMD_REBOOT,
+                                      MGMNT_INTERFACE )) != PASS )
             {
-                wlog ("%s REBOOT Request Failed (mgmnt network)\n",
-                       node_ptr->hostname.c_str());
+                wlog ("%s reboot request failed (%s) (rc:%d)\n",
+                       node_ptr->hostname.c_str(),
+                       get_iface_name_str(MGMNT_INTERFACE), rc);
             }
             else
             {
@@ -377,11 +380,13 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
 
             if ( clstr_network_provisioned == true )
             {
-                plog ("%s Performing REBOOT (cluster-host network)\n", node_ptr->hostname.c_str());
-                if ( send_mtc_cmd ( node_ptr->hostname, MTC_CMD_REBOOT, CLSTR_INTERFACE ) != PASS )
+                if (( rc = send_mtc_cmd ( node_ptr->hostname,
+                                          MTC_CMD_REBOOT,
+                                          CLSTR_INTERFACE )) != PASS )
                 {
-                    wlog ("%s REBOOT Request Failed (cluster-host network)\n",
-                        node_ptr->hostname.c_str());
+                    wlog ("%s 'reboot' request failed (%s) (rc:%d)\n",
+                        node_ptr->hostname.c_str(),
+                        get_iface_name_str(CLSTR_INTERFACE), rc);
                 }
                 else
                 {

@@ -545,7 +545,7 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
     ptr->action = "none" ;
     ptr->clear_task = false ;
 
-    ptr->mtcAlive_gate     = true  ;
+    ctl_mtcAlive_gate( ptr , true ) ;
     ptr->mtcAlive_online   = false ;
     ptr->mtcAlive_offline  = true  ;
     ptr->mtcAlive_misses   = 0     ;
@@ -1463,7 +1463,7 @@ int nodeLinkClass::avail_status_change ( string hostname,
             {
                 node_ptr->mtcAlive_misses = 0 ;
                 node_ptr->mtcAlive_hits   = 0 ;
-                node_ptr->mtcAlive_gate   = false ;
+                this->ctl_mtcAlive_gate ( node_ptr, false ) ;
             }
 
             /* check for need to generate power on log */
@@ -1696,16 +1696,10 @@ int nodeLinkClass::alarm_insv_failure ( struct nodeLinkClass::node * node_ptr )
 /* Clear the enable alarm and degrade flag */
 int nodeLinkClass::alarm_enabled_clear ( struct nodeLinkClass::node * node_ptr, bool force )
 {
-    if ( node_ptr->degrade_mask & DEGRADE_MASK_ENABLE )
-    {
-        node_ptr->degrade_mask &= ~DEGRADE_MASK_ENABLE ;
-    }
+    unsigned int clear_mask = DEGRADE_MASK_ENABLE |
+                              DEGRADE_MASK_INSV_TEST ;
 
-    /* The inservice test degrade flag needs to be cleared too. */
-    if ( node_ptr->degrade_mask & DEGRADE_MASK_INSV_TEST )
-    {
-        node_ptr->degrade_mask &= ~DEGRADE_MASK_INSV_TEST ;
-    }
+    node_ptr->degrade_mask &= ~clear_mask ;
 
     if (( node_ptr->alarms[MTC_ALARM_ID__ENABLE] != FM_ALARM_SEVERITY_CLEAR ) ||
         ( force == true ))
@@ -2350,18 +2344,19 @@ int nodeLinkClass::mod_host ( node_inv_type & inv )
 
             modify = true ; /* we have a delta */
         }
-        if ( node_ptr->clstr_ip.compare ( inv.clstr_ip ) )
-        {
-            if ( hostUtil_is_valid_ip_addr ( inv.clstr_ip ))
-            {
-                plog ("%s Modify 'clstr_ip' from %s -> %s\n",
-                      node_ptr->hostname.c_str(),
-                      node_ptr->clstr_ip.c_str(), inv.clstr_ip.c_str() );
 
-                modify = true ; /* we have a delta */
-                node_ptr->clstr_ip = inv.clstr_ip ;
-            }
+        if (( hostUtil_is_valid_ip_addr ( inv.clstr_ip )) &&
+            ( node_ptr->clstr_ip != inv.clstr_ip ))
+        {
+            plog ("%s Modify 'clstr_ip' from %s -> %s\n",
+                      node_ptr->hostname.c_str(),
+                      node_ptr->clstr_ip.c_str(),
+                      inv.clstr_ip.c_str() );
+
+            modify = true ; /* we have a delta */
+            node_ptr->clstr_ip = inv.clstr_ip ;
         }
+
         if ( (!inv.name.empty()) && (node_ptr->hostname.compare ( inv.name)) )
         {
             mtcCmd  cmd ;
@@ -3455,17 +3450,14 @@ void nodeLinkClass::set_cmd_resp ( string & hostname, mtc_message_type & msg )
         }
         else
         {
-            node_ptr->cmdRsp = msg.cmd ;
-            if ( msg.num > 0 )
-                node_ptr->cmdRsp_status = msg.parm[0] ;
-            else
-                node_ptr->cmdRsp_status = -1 ;
-
-            dlog ("%s '%s' command response status [%u:%s]\n",
-                  hostname.c_str(),
-                  node_ptr->cmdName.c_str(),
-                  msg.num ? node_ptr->cmdRsp_status : PASS,
-                  node_ptr->cmdRsp_status_string.empty() ? "empty" : node_ptr->cmdRsp_status_string.c_str());
+            if ( node_ptr->cmdRsp != msg.cmd )
+            {
+                node_ptr->cmdRsp = msg.cmd ;
+                if ( msg.num > 0 )
+                    node_ptr->cmdRsp_status = msg.parm[0] ;
+                else
+                    node_ptr->cmdRsp_status = -1 ;
+            }
         }
     }
 }
@@ -3514,7 +3506,12 @@ int nodeLinkClass::set_activeClient ( string hostname, mtc_client_enum client )
  *
  * Name       : set_mtcAlive
  *
- * Description:
+ * Description: Set the mgmnt or clust specific mtc alive received bool.
+ *
+ *              Used in the offline handler to verify overall offline state.
+ *
+ * Interfaces : Public with hostname.
+ *              Private by node pointer.
  *
  * If mtcAlive is ungated then
  *
@@ -3529,6 +3526,14 @@ void nodeLinkClass::set_mtcAlive ( string & hostname, int interface )
     node_ptr = nodeLinkClass::getNode ( hostname );
     if ( node_ptr != NULL )
     {
+        this->set_mtcAlive ( node_ptr, interface );
+    }
+}
+
+void nodeLinkClass::set_mtcAlive ( struct nodeLinkClass::node * node_ptr, int interface )
+{
+    if ( node_ptr )
+    {
         if ( node_ptr->mtcAlive_gate == false )
         {
             node_ptr->mtcAlive_online  = true  ;
@@ -3537,15 +3542,38 @@ void nodeLinkClass::set_mtcAlive ( string & hostname, int interface )
 
             if ( interface == CLSTR_INTERFACE )
             {
-                node_ptr->mtcAlive_clstr = true ;
+                if ( node_ptr->mtcAlive_clstr == false )
+                {
+                    alog2 ("%s %s mtcAlive received",
+                              node_ptr->hostname.c_str(),
+                              get_iface_name_str(interface));
+                    node_ptr->mtcAlive_clstr = true ;
+                }
             }
             else
             {
-                node_ptr->mtcAlive_mgmnt = true ;
+                if ( node_ptr->mtcAlive_mgmnt == false )
+                {
+                    alog2 ("%s %s mtcAlive received",
+                              node_ptr->hostname.c_str(),
+                              get_iface_name_str(interface));
+                    node_ptr->mtcAlive_mgmnt = true ;
+                }
             }
         }
     }
 }
+
+/*****************************************************************************
+ *
+ * Name       : get_mtcAlive
+ *
+ * Description: Return the current mtcAlive gate state.
+ *
+ * Interfaces : Public with hostname.
+ *              Private by node pointer.
+ *
+ ****************************************************************************/
 
 bool nodeLinkClass::get_mtcAlive_gate ( string & hostname )
 {
@@ -3553,32 +3581,71 @@ bool nodeLinkClass::get_mtcAlive_gate ( string & hostname )
     node_ptr = nodeLinkClass::getNode ( hostname );
     if ( node_ptr != NULL )
     {
+        return ( get_mtcAlive_gate (node_ptr)) ;
+    }
+    /* If we can't find the node then assume alive messages are gated */
+    return (true);
+}
+
+bool nodeLinkClass::get_mtcAlive_gate ( struct nodeLinkClass::node * node_ptr )
+{
+    if ( node_ptr )
+    {
+        alog3 ("%s mtcAlive gate: %s",
+                   node_ptr->hostname.c_str(),
+                   node_ptr->mtcAlive_gate ? "closed" : "open" );
         return ( node_ptr->mtcAlive_gate ) ;
     }
     /* If we can't find the node then gate off the alive messages */
     return (true);
 }
 
-void nodeLinkClass::ctl_mtcAlive_gate ( string & hostname, bool gated )
+/*****************************************************************************
+ *
+ * Name       : ctl_mtcAlive_gate
+ *
+ * Description: Control the mtcAlive gate state.
+ *              Produce an alog on state changes.
+ *
+ * Interfaces : Public with hostname.
+ *              Private by node pointer.
+ *
+ ****************************************************************************/
+
+void nodeLinkClass::ctl_mtcAlive_gate ( string & hostname, bool gate_state )
 {
     nodeLinkClass::node* node_ptr ;
     node_ptr = nodeLinkClass::getNode ( hostname );
     if ( node_ptr != NULL )
     {
-        node_ptr->mtcAlive_gate = gated ;
-        if ( gated == true )
+        ctl_mtcAlive_gate ( node_ptr, gate_state );
+    }
+}
+
+void nodeLinkClass::ctl_mtcAlive_gate ( struct nodeLinkClass::node * node_ptr,
+                                        bool gate_state )
+{
+    if ( node_ptr )
+    {
+        if ( node_ptr->mtcAlive_gate != gate_state )
         {
-            alog ("%s mtcAlive gated\n", node_ptr->hostname.c_str());
-        }
-        else
-        {
-            alog ("%s mtcAlive ungated\n", node_ptr->hostname.c_str());
+            node_ptr->mtcAlive_gate = gate_state ;
+            if ( node_ptr->mtcAlive_gate == true )
+            {
+                alog ("%s mtcAlive gate closed",
+                          node_ptr->hostname.c_str());
+            }
+            else
+            {
+                alog ("%s mtcAlive gate open",
+                          node_ptr->hostname.c_str());
+            }
         }
     }
 }
 
-/* Main-Function Go Enabled member Functions */
 
+/* Main-Function Go Enabled member Functions */
 void nodeLinkClass::set_goEnabled ( string & hostname )
 {
     nodeLinkClass::node* node_ptr ;
@@ -3691,7 +3758,7 @@ void nodeLinkClass::set_uptime_refresh_ctr ( string & hostname, int value )
     if ( node_ptr != NULL )
     {
         node_ptr->uptime_refresh_counter = value ;
-    } 
+    }
 }
 
 
@@ -3706,7 +3773,7 @@ int  nodeLinkClass::get_uptime_refresh_ctr ( string & hostname )
     return (0);
 }
 
-void nodeLinkClass::set_mtce_flags ( string hostname, int flags )
+void nodeLinkClass::set_mtce_flags ( string hostname, int flags, int iface )
 {
     nodeLinkClass::node* node_ptr = nodeLinkClass::getNode ( hostname );
     if ( node_ptr != NULL )
@@ -3717,6 +3784,35 @@ void nodeLinkClass::set_mtce_flags ( string hostname, int flags )
             node_ptr->goEnabled = true  ;
         else
             node_ptr->goEnabled = false ;
+
+        /*
+         * Fail the inactive controller if the sm unhealthy flag is set.
+         * Degrade for the active controller.
+         */
+        if (( flags & MTC_FLAG__SM_UNHEALTHY ) &&
+            (( node_ptr->operState == MTC_OPER_STATE__ENABLED ) ||
+             ( node_ptr->adminAction == MTC_ADMIN_ACTION__RECOVER )))
+        {
+            if (( hostname == CONTROLLER_0 ) || ( hostname == CONTROLLER_1 ))
+            {
+                elog ("%s reported unhealthy by SM (%s)",
+                          hostname.c_str(),
+                          get_iface_name_str(iface));
+
+                if ( hostname != this->my_hostname )
+                {
+                     force_full_enable ( node_ptr );
+                }
+
+                /* no else cause because mtcAgent does nothing if this file
+                 * is present on the active controller. */
+            }
+            else
+            {
+                slog ("%s reported unhealthy by SM ; compare error",
+                          hostname.c_str());
+            }
+        }
 
         /* Track host patching state by Out-Of-Band flag */
         if ( flags & MTC_FLAG__PATCHING )
@@ -6235,7 +6331,7 @@ int nodeLinkClass::availStatusChange ( struct nodeLinkClass::node * node_ptr,
             {
                 node_ptr->mtcAlive_misses = 0 ;
                 node_ptr->mtcAlive_hits   = 0 ;
-                node_ptr->mtcAlive_gate   = false ;
+                this->ctl_mtcAlive_gate ( node_ptr, false ) ;
             }
 
             /* check for need to generate power on log */
@@ -8175,7 +8271,7 @@ int nodeLinkClass::lost_pulses ( iface_enum iface, bool & storage_0_responding )
             // pulse_ptr->max_count[iface]++ ;
 
             /*
-             * Update storage_0_responding reference to false if storgate-0
+             * Update storage_0_responding reference to false if storage-0
              * is found in the pulse lots list.
              */
             if ( pulse_ptr->hostname == STORAGE_0 )
@@ -8572,12 +8668,12 @@ void nodeLinkClass::mem_log_mtcalive ( struct nodeLinkClass::node * node_ptr )
 {
     char str[MAX_MEM_LOG_DATA] ;
 
-    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tmtcAlive: on:%c off:%c Cnt:%d State:%s Misses:%d\n", 
+    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tmtcAlive: online:%c offline:%c Cnt:%d Gate:%s Misses:%d\n", 
                 node_ptr->hostname.c_str(), 
                 node_ptr->mtcAlive_online ? 'Y' : 'N',
                 node_ptr->mtcAlive_offline ? 'Y' : 'N',
                 node_ptr->mtcAlive_count,
-                node_ptr->mtcAlive_gate ? "gated" : "rxing",
+                node_ptr->mtcAlive_gate ? "closed" : "open",
                 node_ptr->mtcAlive_misses); 
     mem_log (str);
 }
