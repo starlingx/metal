@@ -17,7 +17,7 @@
 #include "hwmonClass.h"   /* for ... service class definition         */
 #include "hwmonHttp.h"    /* for ... hwmonHttp_load_sensors           */
 #include "hwmonSensor.h"  /* for ... this module header               */
-#include "hwmonGroup.h"   /* for ... ipmi_get_grouptype               */
+#include "hwmonGroup.h"   /* for ... bmc_get_grouptype               */
 #include "hwmonAlarm.h"   /* for ... hwmonAlarm                       */
 
 #define DELIMITER ((const char)',')
@@ -2138,13 +2138,13 @@ int hwmonHostClass::group_modify ( string hostname, string group_uuid, string ke
 
 /*****************************************************************************
  *
- * Name       : ipmi_create_sensors
+ * Name       : bmc_create_sensors
  *
  * Description: Add sample sensors to the sysinv database.
  *
  *****************************************************************************/
 
-int hwmonHostClass::ipmi_create_sensors ( struct hwmonHostClass::hwmon_host * host_ptr )
+int hwmonHostClass::bmc_create_sensors ( struct hwmonHostClass::hwmon_host * host_ptr )
 {
     int rc = PASS ;
     int sensor_errors = 0 ;
@@ -2152,7 +2152,7 @@ int hwmonHostClass::ipmi_create_sensors ( struct hwmonHostClass::hwmon_host * ho
 
     for ( int s = 0 ; s < host_ptr->samples ; ++s )
     {
-        string sensortype = ipmi_get_grouptype ( host_ptr->hostname,
+        string sensortype = bmc_get_grouptype ( host_ptr->hostname,
                                                  host_ptr->sample[s].unit,
                                                  host_ptr->sample[s].name);
 
@@ -2229,9 +2229,9 @@ int hwmonHostClass::ipmi_create_sensors ( struct hwmonHostClass::hwmon_host * ho
 
 /*****************************************************************************
  *
- * Name       : ipmi_disable_sensors
+ * Name       : bmc_disable_sensors
  *
- * Purpose    : With the introduction of ipmi monitoring, all groups are
+ * Purpose    : With the introduction of bmc monitoring, all groups are
  *              monitored at once. Therefore all should be in the same state.
  *
  * Description: Set all sensors to specified state.
@@ -2239,7 +2239,7 @@ int hwmonHostClass::ipmi_create_sensors ( struct hwmonHostClass::hwmon_host * ho
  *
  ******************************************************************************/
 
-int  hwmonHostClass::ipmi_disable_sensors  ( struct hwmonHostClass::hwmon_host * host_ptr )
+int  hwmonHostClass::bmc_disable_sensors  ( struct hwmonHostClass::hwmon_host * host_ptr )
 {
     int rc = FAIL_NULL_POINTER ;
     if ( host_ptr )

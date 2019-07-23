@@ -34,51 +34,6 @@ int ipmiUtil_init ( void )
     return(PASS);
 }
 
-/* Create a randomly named password filename */
-void ipmiUtil_create_pw_fn ( thread_info_type * info_ptr, string pw )
-{
-    info_ptr->password_file.clear ();
-    string password_tempfile = IPMITOOL_OUTPUT_DIR ;
-    password_tempfile.append(".") ;
-    password_tempfile.append(program_invocation_short_name);
-    password_tempfile.append("-");
-    password_tempfile.append(info_ptr->hostname);
-    password_tempfile.append("-");
-
-    info_ptr->pw_file_fd = hostUtil_mktmpfile (info_ptr->hostname,
-                                                password_tempfile,
-                                                info_ptr->password_file,
-                                                pw );
-    if ( info_ptr->pw_file_fd <= 0 )
-    {
-        info_ptr->status_string = "failed to get an open temporary password filedesc" ;
-        info_ptr->status = FAIL_FILE_CREATE ;
-        info_ptr->password_file.clear();
-    }
-    else
-    {
-        /* clean-up */
-        if ( info_ptr->pw_file_fd > 0 )
-            close(info_ptr->pw_file_fd);
-        info_ptr->pw_file_fd = 0 ;
-    }
-}
-
-/* Create the ipmitool output_filename */
-string ipmiUtil_create_data_fn ( string & hostname, string file_suffix )
-{
-    /* create the output filename */
-    string ipmitool_datafile = IPMITOOL_OUTPUT_DIR ;
-    ipmitool_datafile.append(program_invocation_short_name);
-    ipmitool_datafile.append("_");
-    ipmitool_datafile.append(hostname);
-
-    /* add the sensor list command */
-    ipmitool_datafile.append(file_suffix);
-
-    return ( ipmitool_datafile );
-}
-
 /* Create the ipmi request */
 string ipmiUtil_create_request ( string cmd, string & ip, string & un, string & pw, string & out )
 {

@@ -7,7 +7,7 @@
 SHELL = /bin/bash
 
 SRCS += hwmonUtil.cpp
-SRCS += hwmonIpmi.cpp
+SRCS += hwmonBmc.cpp
 SRCS += hwmonModel.cpp
 SRCS += hwmonGroup.cpp
 SRCS += hwmonSensor.cpp

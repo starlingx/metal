@@ -15,7 +15,7 @@
 #include "hwmonClass.h"
 #include "hwmonHttp.h"
 #include "hwmonSensor.h"
-#include "hwmonThreads.h" /* for ... ipmitool_thread                      */
+#include "hwmonThreads.h" /* for ... bmc_thread                      */
 #include "secretUtil.h"
 
 
@@ -57,7 +57,7 @@ void hwmonHostClass::hwmon_fsm ( void )
         host_ptr = getHost ( hostname );
         if ( host_ptr )
         {
-            /* Handle host delete in ipmi mode
+            /* Handle host delete in bmc mode
              *
              * Note: the bmc may have been deprovisioned already
              *       so the delete needs to be deleted up front.
@@ -89,7 +89,7 @@ void hwmonHostClass::hwmon_fsm ( void )
                 {
                     /*
                      *   Monitor and Manage active threads
-                     *   The ipmitool thread needs to run to learn the sensors
+                     *   The bmc thread needs to run to learn the sensors
                      *   to begin with as well as continually monitor them
                      */
                     thread_handler ( host_ptr->bmc_thread_ctrl, host_ptr->bmc_thread_info );
@@ -119,13 +119,13 @@ void hwmonHostClass::hwmon_fsm ( void )
                     if (( host_ptr->accessible == false ) && ( host_ptr->ping_info.ok == true ))
                     {
                         ilog ("%s bmc is accessible\n", host_ptr->hostname.c_str());
-                        host_ptr->accessible = host_ptr->connected = true ;
+                        host_ptr->accessible = true ;
                     }
                     else if (( host_ptr->accessible == true ) && ( host_ptr->ping_info.ok == false ))
                     {
                         wlog ("%s bmc access lost\n", host_ptr->hostname.c_str());
                         thread_kill ( host_ptr->bmc_thread_ctrl, host_ptr->bmc_thread_info );
-                        host_ptr->accessible = host_ptr->connected = false ;
+                        host_ptr->accessible = false ;
                         host_ptr->sensor_query_count = 0 ;
                         host_ptr->bmc_fw_version.clear();
                         host_ptr->ping_info.stage = PINGUTIL_MONITOR_STAGE__FAIL ;
@@ -172,7 +172,7 @@ void hwmonHostClass::hwmon_fsm ( void )
                     else if ( host_ptr->accessible )
                     {
                         /* typical success path */
-                        hwmonHostClass::ipmi_sensor_monitor ( host_ptr );
+                        hwmonHostClass::bmc_sensor_monitor ( host_ptr );
                     }
                     else if ( !thread_idle( host_ptr->bmc_thread_ctrl ) )
                     {

@@ -857,7 +857,7 @@ void hwmonHttp_server_handler (struct evhttp_request *req, void *arg)
                                     {
                                         /* request sensor model relearn as a
                                          * background operation */
-                                        obj_ptr->ipmi_learn_sensor_model (host_uuid) ;
+                                        obj_ptr->bmc_learn_sensor_model (host_uuid) ;
                                         http_status_code = HTTP_OK ;
                                         response = "{ \"status\" : \"pass\" }" ;
                                     }

@@ -28,8 +28,8 @@ void   clear_asserted_alarm ( string & hostname, hwmonAlarm_id_type id, sensor_t
 
 string               get_severity ( sensor_severity_enum severity );
 sensor_severity_enum get_severity ( string status );
-string               get_ipmi_severity ( sensor_severity_enum status );
-sensor_severity_enum get_ipmi_severity ( string status );
+string               get_bmc_severity ( sensor_severity_enum status );
+sensor_severity_enum get_bmc_severity ( string status );
 
 bool   is_valid_action      ( sensor_severity_enum severity, string & action, bool set_to_lower );
 bool   is_ignore_action     ( string action ) ;

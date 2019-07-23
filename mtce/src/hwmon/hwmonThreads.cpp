@@ -20,6 +20,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <sys/syscall.h>
+#include <sys/stat.h>
 
 using namespace std;
 
@@ -28,15 +29,17 @@ using namespace std;
 #include "nodeBase.h"        /* for ... mtce node common definitions     */
 #include "bmcUtil.h"         /* for ... mtce-common board management     */
 #include "hostUtil.h"        /* for ... mtce host common definitions     */
+#include "jsonUtil.h"        /* for ... common Json utilities            */
+#include "bmcUtil.h"
 #include "nodeMacro.h"
 #include "threadUtil.h"
 #include "hwmonThreads.h"    /* for ... BMC_THREAD_CMD__READ_SENSORS */
-#include "hwmonIpmi.h"       /* for ... MAX_IPMITOOL_PARSE_ERRORS         */
+#include "hwmonBmc.h"        /* for ... MAX_IPMITOOL_PARSE_ERRORS         */
 #include "hwmonClass.h"      /* for ... thread_extra_info_type            */
 
 /***************************************************************************
  *
- * Name       : ipmitool_sample_type
+ * Name       : bmc_sample_type
  *
  * Description: An array of sensor data.
  *
@@ -44,7 +47,7 @@ using namespace std;
  *
  ***************************************************************************/
 
-static ipmitool_sample_type   _sample_list[MAX_HOST_SENSORS] ;
+static bmc_sample_type   _sample_list[MAX_HOST_SENSORS] ;
 
 /***************************************************************************
  *
@@ -55,7 +58,7 @@ static ipmitool_sample_type   _sample_list[MAX_HOST_SENSORS] ;
 static void _command_not_supported ( thread_info_type * info_ptr )
 {
     info_ptr->data = "{\"" ;
-    info_ptr->data.append(IPMITOOL_JSON__SENSOR_DATA_MESSAGE_HEADER);
+    info_ptr->data.append(BMC_JSON__SENSOR_DATA_MESSAGE_HEADER);
     info_ptr->data.append("\":{");
     info_ptr->data.append("\"status\":");
     info_ptr->data.append(itos(info_ptr->status));
@@ -68,7 +71,7 @@ static void _command_not_supported ( thread_info_type * info_ptr )
 }
 
 
-static void _add_json_sensor_tuple ( ipmitool_sample_type * ptr, string & response )
+static void _add_json_sensor_tuple ( bmc_sample_type * ptr, string & response )
 {
     response.append ("{\"n\":\"");
     response.append (ptr->name);
@@ -141,7 +144,7 @@ static void _parse_sensor_data ( thread_info_type * info_ptr )
         int samples = extra_info_ptr->samples ;
 
         info_ptr->data = "{\"" ;
-        info_ptr->data.append (IPMITOOL_JSON__SENSOR_DATA_MESSAGE_HEADER);
+        info_ptr->data.append (BMC_JSON__SENSOR_DATA_MESSAGE_HEADER);
         info_ptr->data.append ("\":{\"status\":");
         info_ptr->data.append(itos(info_ptr->status));
         info_ptr->data.append(",");
@@ -158,7 +161,7 @@ static void _parse_sensor_data ( thread_info_type * info_ptr )
         }
 
         info_ptr->data.append (",\"");
-        info_ptr->data.append (IPMITOOL_JSON__SENSORS_LABEL);
+        info_ptr->data.append (BMC_JSON__SENSORS_LABEL);
         info_ptr->data.append ("\":[");
         for ( int i = 0 ; i < samples ; )
         {
@@ -177,7 +180,6 @@ static void _parse_sensor_data ( thread_info_type * info_ptr )
         info_ptr->status = FAIL_NULL_POINTER ;
     }
 }
-
 
 /*****************************************************************************
  *
@@ -206,7 +208,7 @@ static void _parse_sensor_data ( thread_info_type * info_ptr )
 
 #define PARSE_ERROR_STR ((const char *)("parse error"))
 
-void _get_field ( char * src_ptr , int field, char * dst_ptr )
+void _ipmitool_get_field ( char * src_ptr , int field, char * dst_ptr )
 {
     int src = 0 ;
     char * saved_dst_ptr = dst_ptr ;
@@ -452,7 +454,10 @@ void * hwmonThread_ipmitool ( void * arg )
                 goto ipmitool_thread_done ;
             }
 
-            ipmiUtil_create_pw_fn ( info_ptr, extra_ptr->bm_pw ) ;
+            bmcUtil_create_pw_file ( info_ptr,
+                                     extra_ptr->bm_pw,
+                                     BMC_PROTOCOL__IPMITOOL);
+
             if ( info_ptr->password_file.empty() )
             {
                 info_ptr->status_string = "failed to get a temporary password filename" ;
@@ -467,7 +472,7 @@ void * hwmonThread_ipmitool ( void * arg )
             /*************** Create the output filename ***************/
             string sensor_datafile =
             bmcUtil_create_data_fn (info_ptr->hostname,
-                                    IPMITOOL_SENSOR_OUTPUT_FILE_SUFFIX,
+                                    BMC_SENSOR_OUTPUT_FILE_SUFFIX,
                                     BMC_PROTOCOL__IPMITOOL ) ;
 
             dlog_t ("%s sensor output file%s\n",
@@ -505,7 +510,7 @@ void * hwmonThread_ipmitool ( void * arg )
             {
                 rc = PASS ; // ilog ("%s FIT Avoiding Sensor Query\n", info_ptr->hostname.c_str());
             }
-            else if ( daemon_want_fit ( FIT_CODE__AVOID_N_FAIL_IPMITOOL_REQUEST, info_ptr->hostname ))
+            else if ( daemon_want_fit ( FIT_CODE__AVOID_N_FAIL_BMC_REQUEST, info_ptr->hostname ))
             {
                 rc = FAIL ; // ilog ("%s FIT Avoiding Sensor Query\n", info_ptr->hostname.c_str());
             }
@@ -650,19 +655,19 @@ void * hwmonThread_ipmitool ( void * arg )
                                         blog3_t ("%s Line:%d is a '%s' sensor\n", info_ptr->log_prefix, line, type );
                                     }
 
-                                    _get_field ( buffer, 0, _sample_list[samples].name   );
-                                    _get_field ( buffer, 1, _sample_list[samples].value  );
+                                    _ipmitool_get_field ( buffer, 0, _sample_list[samples].name   );
+                                    _ipmitool_get_field ( buffer, 1, _sample_list[samples].value  );
 
                                     /* copy already learned type to unit field 2 */
                                     snprintf ( _sample_list[samples].unit, strlen(type)+1, "%s", type );
 
-                                    _get_field ( buffer, 3, _sample_list[samples].status );
-                                    _get_field ( buffer, 4, _sample_list[samples].lnr );
-                                    _get_field ( buffer, 5, _sample_list[samples].lcr );
-                                    _get_field ( buffer, 6, _sample_list[samples].lnc );
-                                    _get_field ( buffer, 7, _sample_list[samples].unc );
-                                    _get_field ( buffer, 8, _sample_list[samples].ucr );
-                                    _get_field ( buffer, 9, _sample_list[samples].unr );
+                                    _ipmitool_get_field ( buffer, 3, _sample_list[samples].status );
+                                    _ipmitool_get_field ( buffer, 4, _sample_list[samples].lnr );
+                                    _ipmitool_get_field ( buffer, 5, _sample_list[samples].lcr );
+                                    _ipmitool_get_field ( buffer, 6, _sample_list[samples].lnc );
+                                    _ipmitool_get_field ( buffer, 7, _sample_list[samples].unc );
+                                    _ipmitool_get_field ( buffer, 8, _sample_list[samples].ucr );
+                                    _ipmitool_get_field ( buffer, 9, _sample_list[samples].unr );
                                     blog2_t ("%s | %20s | %8s | %12s | %3s | %8s | %8s | %8s | %8s | %8s | %8s |\n",
                                            info_ptr->log_prefix,
                                            _sample_list[samples].name,
@@ -734,9 +739,8 @@ void * hwmonThread_ipmitool ( void * arg )
                 else
                 {
                     info_ptr->status = FAIL_FILE_ACCESS ;
-                    info_ptr->status_string = "failed to open sensor data file: <";
+                    info_ptr->status_string = "failed to open sensor data file: ";
                     info_ptr->status_string.append(sensor_datafile);
-                    info_ptr->status_string.append(">");
                  }
             } /* end else handling of successful system command */
             break ;
@@ -776,6 +780,553 @@ ipmitool_thread_done:
         {
             dlog_t ("%s exit", info_ptr->log_prefix );
         }
+        _parse_sensor_data ( info_ptr );
+    }
+
+    info_ptr->progress++ ;
+    info_ptr->runcount++ ;
+    info_ptr->id = 0     ;
+    pthread_exit (&info_ptr->status );
+    return NULL ;
+}
+
+/*****************************************************************************
+ *
+ * Name        : _set_default_unit_type_for_sensor
+ * Description : Set default unit type for sensor
+ * Parameters  : label   - sensor label
+                 samples - sensor index in global_sample_list array
+ *
+ *****************************************************************************/
+
+static void _set_default_unit_type_for_sensor( thread_info_type * info_ptr,
+                                               string label, int samples)
+{
+    if ( label == REDFISH_SENSOR_LABEL_VOLT )
+    {
+        strcpy( _sample_list[samples].unit, BMC_SENSOR_DEFAULT_UNIT_TYPE_VOLT );
+    }
+    else if ( label == REDFISH_SENSOR_LABEL_TEMP )
+    {
+        strcpy( _sample_list[samples].unit, BMC_SENSOR_DEFAULT_UNIT_TYPE_TEMP);
+    }
+    else if ( label == REDFISH_SENSOR_LABEL_POWER_CTRL )
+    {
+        strcpy( _sample_list[samples].unit, BMC_SENSOR_DEFAULT_UNIT_TYPE_POWER);
+    }
+    else if ( label == REDFISH_SENSOR_LABEL_FANS )
+    {
+        strcpy( _sample_list[samples].unit, BMC_SENSOR_DEFAULT_UNIT_TYPE_FANS);
+    }
+    else
+    {
+        dlog_t ("%s unrecognized label\n", info_ptr->log_prefix);
+    }
+}
+
+/*****************************************************************************
+ *
+ * Name        : _parse_redfish_sensor_data
+ * Purpose     : Parse redfish command response
+ * Description : Parse json string and store sensor data to  _sample_list.
+ * Parameters  : json_str_ptr  - the json string read from the file of command response.
+                 info_ptr      - thread info
+                 label         - json key, like "Voltages", "PowerControl"
+                 reading_label - json key, like "ReadingVolts", "PowerConsumedWatts"
+                 samples       - sensor data index for _sample_list array.
+ * Returns     : PASS if parse data successfully.
+ *
+ *****************************************************************************/
+
+/* Get value from json string according to key, if value is none, return na
+   Put the value to _sample_list */
+#define GET_SENSOR_DATA_VALUE( temp_str, json_obj, key, para )     \
+    temp_str = jsonUtil_get_key_value_string ( json_obj, key );    \
+    if ( !strcmp (temp_str.data(),"none" ))   temp_str = "na" ;    \
+    strcpy( _sample_list[samples].para , temp_str.c_str() );
+
+static int _parse_redfish_sensor_data( char * json_str_ptr, thread_info_type * info_ptr,
+                                       string label, const char * reading_label, int & samples )
+{
+    int rc = PASS ;
+    struct json_object *json_obj = NULL;
+    std::list<string> sensor_list ;
+    std::list<string>::iterator iter_curr_ptr ;
+    string status_str;
+    string temp_str;
+
+    sensor_list.clear();
+
+    rc = jsonUtil_get_list(json_str_ptr, label, sensor_list);
+    if ( rc == PASS )
+    {
+        for ( iter_curr_ptr  = sensor_list.begin();
+              iter_curr_ptr != sensor_list.end() ;
+            ++iter_curr_ptr )
+        {
+            json_obj = json_tokener_parse((char*)iter_curr_ptr->data());
+            if ( !json_obj )
+            {
+                elog_t ("%s no or invalid sensor record\n", info_ptr->hostname.c_str());
+                return (FAIL_JSON_PARSE);
+            }
+            /* parse value from json string according to key, if value is none, return na
+               Put the value to _sample_list */
+            GET_SENSOR_DATA_VALUE( temp_str, json_obj, "Name", name )
+            GET_SENSOR_DATA_VALUE( temp_str, json_obj, reading_label, value )
+            GET_SENSOR_DATA_VALUE( temp_str, json_obj, "LowerThresholdNonRecoverable", lnr )
+            GET_SENSOR_DATA_VALUE( temp_str, json_obj, "LowerThresholdCritical", lcr )
+            GET_SENSOR_DATA_VALUE( temp_str, json_obj, "LowerThresholdNonCritical", lnc )
+            GET_SENSOR_DATA_VALUE( temp_str, json_obj, "UpperThresholdNonCritical", unc )
+            GET_SENSOR_DATA_VALUE( temp_str, json_obj, "UpperThresholdCritical", ucr )
+            GET_SENSOR_DATA_VALUE( temp_str, json_obj, "UpperThresholdNonRecoverable", unr )
+            GET_SENSOR_DATA_VALUE( temp_str, json_obj, "ReadingUnits", unit )
+
+            /* Set default unit type if can not get unit type from json string */
+            if ( !strcmp(_sample_list[samples].unit, "na") )
+            {
+                _set_default_unit_type_for_sensor( info_ptr, label, samples );
+            }
+
+            /* Parse and store status to _sample_list[samples].status */
+            status_str = jsonUtil_get_key_value_string ( json_obj, "Status" );
+            if ( strcmp (status_str.data(),"none" ))
+            {
+                struct json_object *json_status_obj = json_tokener_parse((char*)status_str.data());
+                if ( json_status_obj )
+                {
+                    string state = jsonUtil_get_key_value_string ( json_status_obj, "State" );
+                    string health = jsonUtil_get_key_value_string ( json_status_obj, "Health" );
+                    // string healthRollup = jsonUtil_get_key_value_string ( json_status_obj, "HealthRollup" );
+                    if ( !strcmp (state.data(),"Enabled" ))
+                    {
+                        if ( !strcmp (health.data(), REDFISH_SEVERITY__GOOD ))
+                        {
+                            strcpy(_sample_list[samples].status, "ok");
+                        }
+                        else if  (!strcmp (health.data(), REDFISH_SEVERITY__MAJOR ))
+                        {
+                            strcpy(_sample_list[samples].status, "nc");
+                        }
+                        else if  (!strcmp (health.data(), REDFISH_SEVERITY__CRITICAL ))
+                        {
+                            strcpy(_sample_list[samples].status, "cr");
+                        }
+                        else
+                        {
+                            strcpy(_sample_list[samples].status, "na");
+                        }
+                    }
+                    else
+                    {
+                        strcpy(_sample_list[samples].status, "na");
+                    }
+                    json_object_put(json_status_obj);
+                }
+            }
+            else
+            {
+                strcpy(_sample_list[samples].status, "na");
+            }
+
+            if (json_obj) json_object_put(json_obj);
+
+            samples++ ;
+            if ( samples >= MAX_HOST_SENSORS )
+            {
+                samples-- ;
+                rc = info_ptr->status = FAIL_OUT_OF_RANGE ;
+                info_ptr->status_string = "max number of sensors reached";
+                break ;
+            }
+        }
+    }
+
+    return (rc);
+}
+
+/*****************************************************************************
+ *
+ * Name        : _redfishUtil_send_request
+ * Description : Construct redfishtool request and send it out
+ * Parameters  : info_ptr              - thread info
+                 redfishtool_datafile  - date file used for storing redfishtool comand response
+                 file_suffix           - file suffix for redfishtool_datafile name
+                 redfish_cmd_str       - redfish command string
+ * Returns     : PASS if command sent out successfully.
+ *
+ *****************************************************************************/
+
+static int _redfishUtil_send_request( thread_info_type * info_ptr, string & redfishtool_datafile,
+                                      const char * file_suffix,    const char * redfish_cmd_str )
+{
+    string redfishtool_request = "" ;
+    string pw_file_content = "" ;
+    int rc = PASS ;
+    thread_extra_info_type * extra_ptr = (thread_extra_info_type*)info_ptr->extra_info_ptr ;
+
+    info_ptr->status_string = "" ;
+    info_ptr->status = PASS ;
+
+    if ( extra_ptr == NULL )
+    {
+        info_ptr->status = FAIL_NULL_POINTER ;
+        info_ptr->status_string = "null extra info pointer" ;
+        return FAIL ;
+    }
+
+    /**************** Create the password file *****************/
+    pw_file_content = "{\"user\" : \"" ;
+    pw_file_content.append(extra_ptr->bm_un) ;
+    pw_file_content.append("\", \"password\" : \"") ;
+    pw_file_content.append(extra_ptr->bm_pw) ;
+    pw_file_content.append("\"}") ;
+
+    bmcUtil_create_pw_file ( info_ptr, pw_file_content, BMC_PROTOCOL__REDFISHTOOL ) ;
+    if ( info_ptr->password_file.empty() )
+    {
+        info_ptr->status_string = "failed to get a temporary password filename" ;
+        info_ptr->status = FAIL_FILE_CREATE ;
+        return FAIL ;
+    }
+
+    dlog_t ("%s password filename     : %s\n",
+    info_ptr->log_prefix,
+    info_ptr->password_file.c_str());
+
+    /*************** Create the output filename ***************/
+    redfishtool_datafile =
+        bmcUtil_create_data_fn (info_ptr->hostname, file_suffix, BMC_PROTOCOL__REDFISHTOOL ) ;
+            dlog_t ("%s  create data filename  : %s\n",
+                        info_ptr->log_prefix,
+                        redfishtool_datafile.c_str());
+
+    /************** Create the redfishtool request **************/
+    redfishtool_request =
+        redfishUtil_create_request ( redfish_cmd_str,
+                                     extra_ptr->bm_ip,
+                                     info_ptr->password_file,
+                                     redfishtool_datafile );
+
+    dlog_t ("%s query cmd: %s\n",
+                        info_ptr->log_prefix,
+                        redfishtool_request.c_str());
+
+    if ( ( info_ptr->command == BMC_THREAD_CMD__BMC_INFO
+               && daemon_is_file_present ( MTC_CMD_FIT__MC_INFO ) )
+      || ( info_ptr->command == BMC_THREAD_CMD__POWER_STATUS
+               && daemon_is_file_present ( MTC_CMD_FIT__POWER_STATUS ) ) )
+    {
+        slog ("%s FIT CMD ： %s\n", info_ptr->hostname.c_str(), redfish_cmd_str);
+        rc = PASS ;
+    }
+    else if ( info_ptr->command == BMC_THREAD_CMD__READ_SENSORS )
+    {
+        if( daemon_is_file_present ( MTC_CMD_FIT__SENSOR_DATA ))
+        {
+            rc = PASS ;
+        }
+#ifdef WANT_FIT_TESTING
+        else if ( daemon_want_fit ( FIT_CODE__HWMON__AVOID_SENSOR_QUERY, info_ptr->hostname ))
+        {
+            rc = PASS ; // ilog ("%s FIT Avoiding Sensor Query\n", info_ptr->hostname.c_str());
+        }
+        else if ( daemon_want_fit ( FIT_CODE__AVOID_N_FAIL_BMC_REQUEST, info_ptr->hostname ))
+        {
+            rc = FAIL ; // ilog ("%s FIT Avoiding Sensor Query\n", info_ptr->hostname.c_str());
+        }
+        else
+        {
+            /* Make the request */
+            rc = system ( redfishtool_request.data()) ;
+        }
+#endif
+    }
+    else
+    {
+        /* Make the request */
+        rc = system ( redfishtool_request.data()) ;
+    }
+
+    unlink(info_ptr->password_file.data());
+    daemon_remove_file (info_ptr->password_file.data());
+
+    /* check for system call error case */
+    if ( rc != PASS )
+    {
+        info_ptr->status_string = "system call failed for info query ; " ;
+        info_ptr->status_string.append(redfishtool_request);
+        info_ptr->status = FAIL_SYSTEM_CALL ;
+    }
+    return (rc) ;
+}
+
+/*****************************************************************************
+ *
+ * Name        : wait_for_command_output
+ * Description : Wait for some time to check if redfishtool command output is available.
+ * Parameters  : info_ptr              - thread info
+                 redfishtool_datafile  - date file used for storing redfishtool comand response
+ * Returns     : True if command response file is availalbe
+                 False if command response file is unavailable after timeout.
+ *
+ *****************************************************************************/
+
+static bool _wait_for_command_output( thread_info_type * info_ptr, string & redfishtool_datafile )
+{
+    /* look for the output data file */
+    for ( int i = 0 ; i < 10 ; i++ )
+    {
+        pthread_signal_handler ( info_ptr );
+        if ( daemon_is_file_present ( redfishtool_datafile.data() ))
+        {
+            return true ;
+        }
+        info_ptr->progress++ ;
+        sleep (1);
+    }
+
+    info_ptr->status_string = "command did not produce output file ; timeout" ;
+    info_ptr->status = FAIL_FILE_ACCESS ;
+    return false ;
+}
+
+/*****************************************************************************
+ *
+ * Name        : _parse_redfish_sensor_data_output_file
+ * Description : Parse power and thermal sensor data
+ * Parameters  : info_ptr              - thread info
+                 sensor_group          - power & thermal group
+                 redfishtool_datafile  - date file used for storing redfishtool comand response
+                 samples       - sensor data index for _sample_list array.
+ * Returns     : PASS if file access is OK
+ *
+ *****************************************************************************/
+
+static int _parse_redfish_sensor_data_output_file( thread_info_type * info_ptr,
+                                                   int                sensor_group,
+                                                   string &           redfishtool_datafile,
+                                                   int &              samples )
+{
+    FILE * _fp = fopen ( redfishtool_datafile.data(), "r" );
+
+    if ( _fp )
+    {
+        struct stat st;
+        char buffer[HWMON_MAX_BMC_DATA_BUF_SIZE];
+
+        /* zero the buffer according to the file size */
+        if( fstat(fileno(_fp), &st) != 0 || (st.st_size + 2) > HWMON_MAX_BMC_DATA_BUF_SIZE)
+        {
+            elog_t ("%s file size is abnormal or bigger than buffer size\n",
+                        info_ptr->hostname.c_str());
+            return FAIL ;
+        }
+        else
+        {
+            memset (buffer, 0, (st.st_size + 2) );
+        }
+        fread(buffer,(st.st_size + 2), 1, _fp);
+        fclose(_fp);
+
+        switch (sensor_group)
+        {
+            case BMC_SENSOR_POWER_GROUP:
+            {
+                _parse_redfish_sensor_data( buffer, info_ptr, REDFISH_SENSOR_LABEL_VOLT,
+                                        REDFISH_SENSOR_LABEL_VOLT_READING, samples);
+                _parse_redfish_sensor_data( buffer, info_ptr, REDFISH_SENSOR_LABEL_POWER_SUPPLY,
+                                        REDFISH_SENSOR_LABEL_POWER_SUPPLY_READING, samples);
+                _parse_redfish_sensor_data( buffer, info_ptr, REDFISH_SENSOR_LABEL_POWER_CTRL,
+                                        REDFISH_SENSOR_LABEL_POWER_CTRL_READING, samples);
+                return PASS;
+            }
+            case BMC_SENSOR_THERMAL_GROUP:
+            {
+                _parse_redfish_sensor_data( buffer, info_ptr, REDFISH_SENSOR_LABEL_TEMP,
+                                        REDFISH_SENSOR_LABEL_TEMP_READING, samples);
+                _parse_redfish_sensor_data( buffer, info_ptr, REDFISH_SENSOR_LABEL_FANS,
+                                        REDFISH_SENSOR_LABEL_FANS_READING, samples);
+                return PASS;
+            }
+            default:
+            {
+                elog_t ("%s unsupported command failure\n",
+                            info_ptr->hostname.c_str());
+            }
+        }
+    }
+    else
+    {
+        info_ptr->status = FAIL_FILE_ACCESS ;
+        info_ptr->status_string = "failed to open sensor data file: ";
+        info_ptr->status_string.append(redfishtool_datafile);
+    }
+
+    return FAIL ;
+}
+
+/*****************************************************************************
+ *
+ * Name        : hwmonThread_redfish
+ * Purpose     : This thread used for sending redfishtool command
+ * Description : hwmon thread main function
+ *
+ *****************************************************************************/
+
+void * hwmonThread_redfish ( void * arg )
+{
+    int samples ;
+
+    thread_info_type       * info_ptr  ;
+    thread_extra_info_type * extra_ptr ;
+    string redfishtool_datafile = "";
+
+    /* Pointer Error Detection and Handling */
+    if ( !arg )
+    {
+        slog ("*** redfishtool thread called with null arg pointer *** corruption\n");
+        return NULL ;
+    }
+
+    /* cast pointers from arg */
+    info_ptr  = (thread_info_type*)arg   ;
+    extra_ptr = (thread_extra_info_type*)info_ptr->extra_info_ptr ;
+
+    info_ptr->pw_file_fd = 0 ;
+
+    /* allow the parent to confirm thread id */
+    info_ptr->id = pthread_self() ;
+    if ( extra_ptr == NULL )
+    {
+        info_ptr->status_string = "null 'extra info' pointer" ;
+        info_ptr->status = FAIL_NULL_POINTER ;
+        goto redfishtool_thread_done ;
+    }
+
+    /* Set cancellation option so that a delete operation
+     * can kill this thread immediately */
+    pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+    pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL );
+
+    /* the number of sensors learned */
+    extra_ptr->samples = samples = 0 ;
+
+    switch ( info_ptr->command )
+    {
+        case BMC_THREAD_CMD__READ_SENSORS:
+        {
+            blog2_t ("%s read power sensors \n", info_ptr->log_prefix);
+            if ( _redfishUtil_send_request( info_ptr, redfishtool_datafile,
+                                            BMC_SENSOR_OUTPUT_FILE_SUFFIX,
+                                            REDFISHTOOL_READ_POWER_SENSORS_CMD ) == PASS )
+            {
+                /* look for the output data file */
+                if( _wait_for_command_output(info_ptr, redfishtool_datafile) )
+                {
+                    _parse_redfish_sensor_data_output_file( info_ptr, BMC_SENSOR_POWER_GROUP,
+                                                            redfishtool_datafile, samples );
+                }
+                else
+                {
+                    break ;
+                }
+            }
+
+            blog2_t ("%s read thermal sensors \n", info_ptr->log_prefix);
+            if (_redfishUtil_send_request( info_ptr, redfishtool_datafile,
+                                           BMC_SENSOR_OUTPUT_FILE_SUFFIX,
+                                           REDFISHTOOL_READ_THERMAL_SENSORS_CMD ) == PASS )
+            {
+                /* look for the output data file */
+                if( _wait_for_command_output(info_ptr, redfishtool_datafile) )
+                {
+                    _parse_redfish_sensor_data_output_file( info_ptr, BMC_SENSOR_THERMAL_GROUP,
+                                                            redfishtool_datafile, samples );
+                }
+            }
+
+            extra_ptr->samples = samples ;
+            if ( samples == 0 )
+            {
+                info_ptr->status = FAIL_NO_DATA ;
+                info_ptr->status_string = "no sensor data found";
+            }
+            else
+            {
+                info_ptr->status_string = "pass" ;
+                info_ptr->status = PASS ;
+            }
+            break ;
+        }
+        case BMC_THREAD_CMD__BMC_INFO:
+        {
+            blog2_t ("%s query BMC info\n", info_ptr->log_prefix);
+            if (_redfishUtil_send_request( info_ptr, redfishtool_datafile,
+                                           BMC_INFO_FILE_SUFFIX, REDFISHTOOL_BMC_INFO_CMD )
+                                        == PASS )
+            {
+                /* look for the output data file */
+                if( _wait_for_command_output(info_ptr, redfishtool_datafile) )
+                {
+                    info_ptr->data = daemon_read_file (redfishtool_datafile.data()) ;
+                    dlog_t ("%s data:%s\n",
+                                info_ptr->hostname.c_str(),
+                                info_ptr->data.data());
+
+                    info_ptr->status_string = "pass" ;
+                    info_ptr->status = PASS ;
+                }
+            }
+            break ;
+        }
+        case BMC_THREAD_CMD__POWER_STATUS:
+        {
+            blog2_t ("%s query power status info\n", info_ptr->log_prefix);
+            if ( _redfishUtil_send_request( info_ptr, redfishtool_datafile,
+                                            BMC_POWER_STATUS_FILE_SUFFIX,
+                                            REDFISHTOOL_POWER_STATUS_CMD ) == PASS )
+            {
+                /* look for the output data file */
+                if( _wait_for_command_output(info_ptr, redfishtool_datafile) )
+                {
+                    info_ptr->data = daemon_read_file (redfishtool_datafile.data()) ;
+                    dlog_t ("%s data:%s\n",
+                                info_ptr->hostname.c_str(),
+                                info_ptr->data.data());
+
+                    info_ptr->status_string = "pass" ;
+                    info_ptr->status = PASS ;
+                }
+            }
+            break ;
+        }
+        default:
+        {
+            info_ptr->status = FAIL_BAD_CASE ;
+            _command_not_supported ( info_ptr );
+            break ;
+        }
+    }
+
+redfishtool_thread_done:
+
+    if ( info_ptr->pw_file_fd > 0 )
+        close(info_ptr->pw_file_fd);
+    info_ptr->pw_file_fd = 0 ;
+
+    if ( ! info_ptr->password_file.empty() )
+    {
+        unlink(info_ptr->password_file.data());
+        daemon_remove_file ( info_ptr->password_file.data() ) ;
+        info_ptr->password_file.clear();
+    }
+
+    pthread_signal_handler ( info_ptr );
+
+    /* Sensor reading specific exit */
+    if ( info_ptr->command == BMC_THREAD_CMD__READ_SENSORS )
+    {
         _parse_sensor_data ( info_ptr );
     }
 

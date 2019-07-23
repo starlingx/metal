@@ -28,10 +28,10 @@
  */
 
 
-/* IPMI Sensor Types
+/* BMC Sensor Types
  * Each Sensor group gets a unique name from this list
  *
- * Is taken from ipmitool private file
+ * Is taken from bmc private file
  */
 
 static const char * canned_group__null =
@@ -98,7 +98,7 @@ static const char * canned_group__misc =
 
 #endif
 
-/* Other types from ipmitool source ********
+/* Other types from bmc source ********
 
     "VA",
     "Nits",
@@ -226,18 +226,18 @@ void groupSensors_print ( sensor_group_type * group_ptr )
 
 /*****************************************************************************
  *
- * Name       : ipmi_get_grouptype
+ * Name       : bmc_get_grouptype
  *
  * Description: returns the group type ; which is really a baseline
- *              ipmi 'sensor type'.
+ *              bmc 'sensor type'.
  *
  *****************************************************************************/
 
-string ipmi_get_grouptype ( string & hostname,
+string bmc_get_grouptype ( string & hostname,
                             string & unittype,
                             string & sensorname)
 {
-    canned_group_enum group_enum = ipmi_get_groupenum (hostname,
+    canned_group_enum group_enum = bmc_get_groupenum (hostname,
                                                        unittype,
                                                        sensorname);
     if (( group_enum < HWMON_CANNED_GROUPS ) &&
@@ -253,14 +253,14 @@ string ipmi_get_grouptype ( string & hostname,
 
 /*****************************************************************************
  *
- * Name       : ipmi_get_groupenum
+ * Name       : bmc_get_groupenum
  *
  * Description: Returns the group enum that the specified unit would
  *              fall into.
  *
  *****************************************************************************/
 
-canned_group_enum ipmi_get_groupenum ( string & hostname,
+canned_group_enum bmc_get_groupenum ( string & hostname,
                                        string & unittype,
                                        string & sensorname )
 {
@@ -362,13 +362,13 @@ canned_group_enum ipmi_get_groupenum ( string & hostname,
 
 /*****************************************************************************
  *
- * Name       : ipmi_get_groupname
+ * Name       : bmc_get_groupname
  *
  * Description: returns the group name for the specified group enum.
  *
  *****************************************************************************/
 
-string ipmi_get_groupname ( canned_group_enum group_enum )
+string bmc_get_groupname ( canned_group_enum group_enum )
 {
     if ( group_enum < HWMON_CANNED_GROUPS )
     {
@@ -405,7 +405,7 @@ void _log_group_add_status ( string hostname,
 
 /********************************************************************************
  *
- * Name       : ipmi_add_group
+ * Name       : bmc_add_group
  *
  * Purpose    : Add a new group to hwmon and then to the sysinv database.
  *
@@ -417,7 +417,7 @@ void _log_group_add_status ( string hostname,
  *
  ****************************************************************************/
 
-int hwmonHostClass::ipmi_add_group ( struct hwmonHostClass::hwmon_host * host_ptr ,
+int hwmonHostClass::bmc_add_group ( struct hwmonHostClass::hwmon_host * host_ptr ,
                                      string datatype,
                                      string sensortype,
                                      canned_group_enum group_enum,
@@ -452,14 +452,14 @@ int hwmonHostClass::ipmi_add_group ( struct hwmonHostClass::hwmon_host * host_pt
 
 /*****************************************************************************
  *
- * Name       : ipmi_create_groups
+ * Name       : bmc_create_groups
  *
  * Description: Perform sensor grouping from sample data.
- *              This is done using similar ipmi unit types from canned groups.
+ *              This is done using similar bmc unit types from canned groups.
  *
  *****************************************************************************/
 
-int hwmonHostClass::ipmi_create_groups ( struct hwmonHostClass::hwmon_host * host_ptr )
+int hwmonHostClass::bmc_create_groups ( struct hwmonHostClass::hwmon_host * host_ptr )
 {
     int rc = PASS ;
     int sample_errors = 0 ;
@@ -506,7 +506,7 @@ int hwmonHostClass::ipmi_create_groups ( struct hwmonHostClass::hwmon_host * hos
         }
 
         /* get the group enum from the sensor type and name */
-        canned_group_index = ipmi_get_groupenum ( host_ptr->hostname,
+        canned_group_index = bmc_get_groupenum ( host_ptr->hostname,
                                                   host_ptr->sample[s].unit,
                                                   host_ptr->sample[s].name );
 
@@ -597,14 +597,14 @@ int hwmonHostClass::ipmi_create_groups ( struct hwmonHostClass::hwmon_host * hos
 
 /****************************************************************************
  *
- * Name       : ipmi_group_sensors
+ * Name       : bmc_group_sensors
  *
  * Description: Group the sensors based on the group enum that was assigned
  *              to the sensor during group creation.
  *
  *****************************************************************************/
 
-int hwmonHostClass::ipmi_group_sensors ( struct hwmonHostClass::hwmon_host * host_ptr )
+int hwmonHostClass::bmc_group_sensors ( struct hwmonHostClass::hwmon_host * host_ptr )
 {
     int rc = FAIL ;
     int grouping_errors = 0 ;
@@ -695,9 +695,9 @@ int hwmonHostClass::ipmi_group_sensors ( struct hwmonHostClass::hwmon_host * hos
 
 /*****************************************************************************
  *
- * Name       : ipmi_set_group_state
+ * Name       : bmc_set_group_state
  *
- * Purpose    : With the introduction of ipmi monitoring, all groups are
+ * Purpose    : With the introduction of bmc monitoring, all groups are
  *              monitored at once. Therefore all should be in the same state.
  *
  * Description: Set all groups to specified state
@@ -708,7 +708,7 @@ int hwmonHostClass::ipmi_group_sensors ( struct hwmonHostClass::hwmon_host * hos
  *
  ******************************************************************************/
 
-int  hwmonHostClass::ipmi_set_group_state  ( struct hwmonHostClass::hwmon_host * host_ptr , string state )
+int  hwmonHostClass::bmc_set_group_state  ( struct hwmonHostClass::hwmon_host * host_ptr , string state )
 {
     int rc = FAIL_NULL_POINTER ;
     if ( host_ptr )

@@ -32,13 +32,13 @@
 
 void groupSensors_print ( sensor_group_type * group_ptr );
 
-string            ipmi_get_groupname ( canned_group_enum group_enum );
+string            bmc_get_groupname ( canned_group_enum group_enum );
 
-string            ipmi_get_grouptype ( string & hostname,
+string            bmc_get_grouptype ( string & hostname,
                                        string & unittype,
                                        string & sensorname);
 
-canned_group_enum ipmi_get_groupenum ( string & hostname,
+canned_group_enum bmc_get_groupenum ( string & hostname,
                                        string & unittype,
                                        string & sensorname );
 

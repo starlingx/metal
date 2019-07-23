@@ -881,7 +881,7 @@ private:
      *
      * Name       : bmc_command_done
      *
-     * Description: This utility frees the ipmitool command thread for next execution.
+     * Description: This utility frees the bmc command thread for next execution.
      *
      *****************************************************************************/
 

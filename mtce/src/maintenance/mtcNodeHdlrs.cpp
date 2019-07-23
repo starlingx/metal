@@ -4046,7 +4046,7 @@ int nodeLinkClass::reset_handler ( struct nodeLinkClass::node * node_ptr )
  *     BMC provisioned cases:
  *
  *          BMC won't power on
- *          BMC ipmi command failure
+ *          BMC command failure
  *          BMC connectivity lost mid-FSM.
  *          BMC access timeout
  *
@@ -5106,7 +5106,7 @@ int nodeLinkClass::powercycle_handler ( struct nodeLinkClass::node * node_ptr )
 
             /* TODO: RELEASE NOTE: Node may be left in the disabled state
              *  - need to track power state and raise logs or alarms if host is stuck in power off state.
-             *  - The ipmitool update does add tracking of the power state but does not introduce the alarm */
+             *  - The bmc update does add tracking of the power state but does not introduce the alarm */
 
             // send_hwmon_command ( node_ptr->hostname, MTC_CMD_START_HOST );
 
@@ -6488,7 +6488,7 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
                 }
                 else if ( rc != PASS )
                 {
-                    /* this error is reported by the ipmi receive driver */
+                    /* this error is reported by the bmc receive driver */
                     node_ptr->bmc_info_query_active = false ;
                     node_ptr->bmc_thread_ctrl.done = true ;
                     mtcTimer_start ( node_ptr->bm_timer, mtcTimer_handler, MTC_POWER_ACTION_RETRY_DELAY );

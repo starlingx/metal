@@ -92,7 +92,7 @@ sensor_severity_enum get_severity ( string status )
     return HWMON_SEVERITY_OFFLINE ;
 }
 
-string get_ipmi_severity ( sensor_severity_enum status )
+string get_bmc_severity ( sensor_severity_enum status )
 {
     switch ( status )
     {
@@ -104,7 +104,7 @@ string get_ipmi_severity ( sensor_severity_enum status )
     }
 }
 
-sensor_severity_enum get_ipmi_severity ( string status )
+sensor_severity_enum get_bmc_severity ( string status )
 {
     if ( status.compare("ok") == 0 )
        return HWMON_SEVERITY_GOOD ;

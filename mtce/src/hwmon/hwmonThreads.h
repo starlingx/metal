@@ -18,8 +18,32 @@
 #define IPMITOOL_MAX_FIELD_LEN        (64)
 #define IPMITOOL_FIT_LINE_LEN       (1000)
 
-void * hwmonThread_ipmitool ( void * );
+#define REDFISH_SENSOR_LABEL_VOLT           "Voltages"
+#define REDFISH_SENSOR_LABEL_TEMP           "Temperatures"
+#define REDFISH_SENSOR_LABEL_FANS           "Fans"
+#define REDFISH_SENSOR_LABEL_POWER_SUPPLY   "PowerSupplies"
+#define REDFISH_SENSOR_LABEL_POWER_CTRL     "PowerControl"
 
+#define REDFISH_SENSOR_LABEL_VOLT_READING          "ReadingVolts"
+#define REDFISH_SENSOR_LABEL_TEMP_READING          "ReadingCelsius"
+#define REDFISH_SENSOR_LABEL_FANS_READING          "Reading"
+#define REDFISH_SENSOR_LABEL_POWER_SUPPLY_READING  "None"
+#define REDFISH_SENSOR_LABEL_POWER_CTRL_READING    "PowerConsumedWatts"
+
+#define REDFISH_SEVERITY__GOOD     "OK"
+#define REDFISH_SEVERITY__MAJOR    "Warning"
+#define REDFISH_SEVERITY__CRITICAL "Critical"
+
+#define BMC_SENSOR_DEFAULT_UNIT_TYPE_TEMP    "degrees"
+#define BMC_SENSOR_DEFAULT_UNIT_TYPE_VOLT    "Volts"
+#define BMC_SENSOR_DEFAULT_UNIT_TYPE_FANS    "RPM"
+#define BMC_SENSOR_DEFAULT_UNIT_TYPE_POWER   "Watts"
+
+#define BMC_SENSOR_POWER_GROUP      0
+#define BMC_SENSOR_THERMAL_GROUP    1
+
+void * hwmonThread_ipmitool ( void * );
+void * hwmonThread_redfish  ( void * );
  /* --------------------
   * ipmitool_sensor_data: outgoing message
   * --------------------
@@ -128,19 +152,20 @@ void * hwmonThread_ipmitool ( void * );
 
 using namespace std;
 
-// #define MAX_HOST_SENSORS (100)
 #define THREAD_RETRY_DELAY_SECS  (60)
 #define MAX_THREAD_RETRIES       (10)
 
-/* Control structure used for ipmitool related functions ; like sensor monitoring */
-#define DEFAULT_IPMITOOL_SENSOR_MONITORING_PERIOD_SECS (120)         /* 2 minutes */
+#define BMC_JSON__SENSOR_DATA_MESSAGE_HEADER ((const char *)("bmc_sensor_data"))
 
-#define IPMITOOL_JSON__SENSOR_DATA_MESSAGE_HEADER ((const char *)("ipmitool_sensor_data"))
+#define BMC_JSON__SENSORS_LABEL              ((const char *)("sensors"))
+#define IPMITOOL_SENSOR_QUERY_CMD            ((const char *)(" sensor list"))
 
-#define IPMITOOL_JSON__SENSORS_LABEL   ((const char *)("sensors"))
-#define IPMITOOL_SENSOR_QUERY_CMD     ((const char *)(" sensor list"))
+#define BMC_SENSOR_OUTPUT_FILE_SUFFIX        ((const char *)("_sensor_data"))
 
-#define IPMITOOL_SENSOR_OUTPUT_FILE_SUFFIX  ((const char *)("_sensor_data"))
+/* TBD */
+#define REDFISHTOOL_READ_POWER_SENSORS_CMD   ((const char *)("Chassis Power"))
+#define REDFISHTOOL_READ_THERMAL_SENSORS_CMD ((const char *)("Chassis Thermal"))
+#define REDFISHTOOL_POWER_STATUS_CMD         ((const char *)("  "))
 
 typedef struct
 {
@@ -154,7 +179,7 @@ typedef struct
     char unc    [IPMITOOL_MAX_FIELD_LEN] ; /* Upper Non-Critical      */
     char ucr    [IPMITOOL_MAX_FIELD_LEN] ; /* Upper Critical          */
     char unr    [IPMITOOL_MAX_FIELD_LEN] ; /* Upper Non-Recoverable   */
-} ipmitool_sample_type ;
+} bmc_sample_type ;
 
 typedef struct
 {
@@ -162,9 +187,7 @@ typedef struct
     string bm_un ;
     string bm_pw ;
 
-    string  sensor_query_request  ; /**< sensor query system call request   */
-    int     samples ;
-
+    int    samples ;
 } thread_extra_info_type ;
 
 #endif // __INCLUDE_HWMONTHREAD_HH__

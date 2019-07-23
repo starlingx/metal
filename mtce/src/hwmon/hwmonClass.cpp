@@ -10,7 +10,7 @@
 #include "secretUtil.h"
 #include "hwmonClass.h"
 #include "hwmonUtil.h"
-#include "hwmonIpmi.h"
+#include "hwmonBmc.h"
 #include "hwmonHttp.h"
 #include "hwmonAlarm.h"
 #include "hwmonGroup.h"
@@ -77,8 +77,8 @@ int hwmonHostClass::addStageChange ( struct hwmonHostClass::hwmon_host * ptr,
     }
 }
 
-/* Initialize bmc data for ipmi mode monitoring */
-void hwmonHostClass::ipmi_bmc_data_init ( struct hwmonHostClass::hwmon_host * host_ptr )
+/* Initialize bmc data for bmc mode monitoring */
+void hwmonHostClass::bmc_data_init ( struct hwmonHostClass::hwmon_host * host_ptr )
 {
     host_ptr->ping_info.timer_handler = &hwmonTimer_handler ;
     host_ptr->accessible = false;
@@ -514,7 +514,7 @@ int hwmonHostClass::set_bm_prov ( struct hwmonHostClass::hwmon_host * host_ptr, 
             host_ptr->ping_info.stage    = PINGUTIL_MONITOR_STAGE__OPEN ;
             host_ptr->ping_info.ip       = host_ptr->bm_ip ;
             host_ptr->ping_info.hostname = host_ptr->hostname ;
-            ipmi_bmc_data_init ( host_ptr );
+            bmc_data_init ( host_ptr );
 
             string host_uuid = hostBase.get_uuid( host_ptr->hostname );
             barbicanSecret_type * secret = secretUtil_find_secret( host_uuid );
@@ -536,7 +536,7 @@ int hwmonHostClass::set_bm_prov ( struct hwmonHostClass::hwmon_host * host_ptr, 
             ilog ("%s board management controller is being deprovisioned\n", host_ptr->hostname.c_str());
             clear_bm_assertions ( host_ptr );
             pingUtil_fini  ( host_ptr->ping_info );
-            ipmi_bmc_data_init ( host_ptr );
+            bmc_data_init ( host_ptr );
         }
         host_ptr->bm_provisioned = state ;
     }
@@ -615,8 +615,8 @@ int hwmonHostClass::mod_host ( node_inv_type & inv )
                 if (( hostUtil_is_valid_bm_type (host_ptr->bm_type) == true ) &&
                     ( host_ptr->bm_un.compare(NONE)))
                 {
-                    ipmi_set_group_state ( host_ptr, "disabled" );
-                    ipmi_disable_sensors ( host_ptr );
+                    bmc_set_group_state ( host_ptr, "disabled" );
+                    bmc_disable_sensors ( host_ptr );
                 }
                 rc = set_bm_prov ( host_ptr, false );
             }
@@ -704,7 +704,7 @@ int hwmonHostClass::add_host ( node_inv_type & inv )
 
             host_ptr->quanta_server= false ;
 
-            ipmi_bmc_data_init ( host_ptr );
+            bmc_data_init ( host_ptr );
 
             /* Default audit interval to zero - disable sensor monitoring by default */
             host_ptr->interval = 0 ;
@@ -716,7 +716,7 @@ int hwmonHostClass::add_host ( node_inv_type & inv )
             /* Additions for sensor monitoring using IPMI protocol */
             host_ptr->want_degrade_audit = false ;
             host_ptr->degrade_audit_log_throttle = 0 ;
-            host_ptr->json_ipmi_sensors.clear();
+            host_ptr->json_bmc_sensors.clear();
 
             /* Sensor Monitoring Control Structure */
             host_ptr->monitor_ctrl.stage            = HWMON_SENSOR_MONITOR__START  ;
@@ -729,7 +729,6 @@ int hwmonHostClass::add_host ( node_inv_type & inv )
             host_ptr->thread_extra_info.bm_ip = host_ptr->bm_ip ;
             host_ptr->thread_extra_info.bm_un = host_ptr->bm_un ;
             host_ptr->thread_extra_info.bm_pw.clear() ;
-            host_ptr->thread_extra_info.sensor_query_request = IPMITOOL_PATH_AND_FILENAME ;
 
             /* Sensor Monitoring Thread Initialization */
             thread_init ( host_ptr->bmc_thread_ctrl,
@@ -912,12 +911,12 @@ int hwmonHostClass::mon_host ( string hostname, bool monitor )
             if ( monitor == false )
             {
                 /* sets all groups state to disable if monitor is false ; handle state change failure alarming internally */
-                rc = ipmi_set_group_state ( hwmon_host_ptr, "disabled" );
+                rc = bmc_set_group_state ( hwmon_host_ptr, "disabled" );
             }
             else if ( hwmon_host_ptr->group[0].group_state.compare("disabled") == 0 )
             {
                  /* or to enabled if presently disabled - don't change from failed to enabled over a monitor start */
-                 rc = ipmi_set_group_state ( hwmon_host_ptr, "enabled" );
+                 rc = bmc_set_group_state ( hwmon_host_ptr, "enabled" );
             }
         }
     }
@@ -1633,7 +1632,7 @@ void hwmonHostClass::restore_group_actions ( struct hwmonHostClass::hwmon_host *
 
 /*****************************************************************************
  *
- * Name       : ipmi_sensor_model_learn
+ * Name       : bmc_learn_sensor_model
  *
  * Description: Setup hwmon for a sesor model relearn.
  *              Relearn is a background operation.
@@ -1641,7 +1640,7 @@ void hwmonHostClass::restore_group_actions ( struct hwmonHostClass::hwmon_host *
  *
  *****************************************************************************/
 
-int hwmonHostClass::ipmi_learn_sensor_model ( string uuid )
+int hwmonHostClass::bmc_learn_sensor_model ( string uuid )
 {
    /* check for empty list condition */
    if ( hwmon_head == NULL )
@@ -2136,7 +2135,7 @@ void hwmonHostClass::audit_interval_change ( string hostname )
  *              monitoring audit interval for this host has changed.
  *
  *              The actual interval change is handled in the DELAY stage of the
- *              ipmi_sensor_monitor.
+ *              bmc_sensor_monitor.
  *
  *              This API is called by http group modify handler to trigger
  *              change of the sensor audit interval to a specific value.
@@ -2171,11 +2170,11 @@ void hwmonHostClass::log_sensor_data ( struct hwmonHostClass::hwmon_host * host_
 {
     string sensor_datafile = IPMITOOL_OUTPUT_DIR ;
     sensor_datafile.append(host_ptr->hostname);
-    sensor_datafile.append(IPMITOOL_SENSOR_OUTPUT_FILE_SUFFIX);
+    sensor_datafile.append(BMC_SENSOR_OUTPUT_FILE_SUFFIX);
 
     string debugfile = "/tmp/" ;
     debugfile.append(host_ptr->hostname);
-    debugfile.append(IPMITOOL_SENSOR_OUTPUT_FILE_SUFFIX);
+    debugfile.append(BMC_SENSOR_OUTPUT_FILE_SUFFIX);
     debugfile.append("_debug");
 
     string source = pt() ;
@@ -2212,11 +2211,10 @@ void hwmonHostClass::mem_log_info ( struct hwmonHostClass::hwmon_host * hwmon_ho
 void hwmonHostClass::mem_log_options ( struct hwmonHostClass::hwmon_host * hwmon_host_ptr )
 {
     char str[MAX_MEM_LOG_DATA] ;
-    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tMonitoring: %s  Provisioned: %s  Connected: %s  Count: %d\n",
+    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tMonitoring: %s  Provisioned: %s  Count: %d\n",
                hwmon_host_ptr->hostname.c_str(),
                hwmon_host_ptr->monitor ? "YES" : "no" ,
                hwmon_host_ptr->bm_provisioned ? "YES" : "no",
-               hwmon_host_ptr->connected ? "YES" : "no",
                hwmon_host_ptr->sensor_query_count);
 
      mem_log (str);

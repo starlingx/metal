@@ -24,7 +24,7 @@
 #include "hwmonSensor.h"  /* for ... this mpodule header              */
 #include "hwmonHttp.h"    /* for ... hwmonHttp_mod_group              */
 #include "hwmonAlarm.h"   /* for ... hwmonAlarm_major                 */
-#include "hwmonIpmi.h"    /* for ... QUANTA_SAMPLE_PROFILE_..         */
+#include "hwmonBmc.h"    /* for ... QUANTA_SAMPLE_PROFILE_..         */
 
 /* Declare the Hardware Monitor Inventory Object */
 hwmonHostClass hostInv ;
@@ -400,7 +400,7 @@ int hwmonHostClass::add_host_handler ( struct hwmonHostClass::hwmon_host * host_
         case HWMON_ADD__START:
         {
             /* force load of sensors from database if sensors = 0 and they exist */
-            int rc = hwmonHostClass::ipmi_load_sensor_model ( host_ptr ) ;
+            int rc = hwmonHostClass::bmc_load_sensor_model ( host_ptr ) ;
             if ( rc == PASS )
             {
                 mtcTimer_start ( host_ptr->addTimer, hwmonTimer_handler, 1);
@@ -410,7 +410,7 @@ int hwmonHostClass::add_host_handler ( struct hwmonHostClass::hwmon_host * host_
             {
                 /* there might be issue accessing the sysinv database */
                 int delay = (rand()%30)+1 ;
-                wlog ("%s ipmi_load_sensor_model failed (rc:%d) ; retrying in %d secs\n", host_ptr->hostname.c_str(), rc , delay);
+                wlog ("%s bmc_load_sensor_model failed (rc:%d) ; retrying in %d secs\n", host_ptr->hostname.c_str(), rc , delay);
                 mtcTimer_start ( host_ptr->addTimer, hwmonTimer_handler, delay );
                 addStageChange ( host_ptr , HWMON_ADD__WAIT );
             }
@@ -559,11 +559,11 @@ int hwmonHostClass::interval_change_handler ( struct hwmonHostClass::hwmon_host 
                 /* only updat the group if they differ */
                 if ( host_ptr->group[g].group_interval != host_ptr->interval )
                 {
-                    /* update the group interval. Even though ipmi
+                    /* update the group interval. Even though bmc
                      * montoring does not need it, we need to be
                      * backwards compatible.
                      *
-                     * ipmi monitors all groups at the same interval */
+                     * bmc monitors all groups at the same interval */
                     int old = host_ptr->group[g].group_interval ;
                     host_ptr->group[g].group_interval = host_ptr->interval ;
 
@@ -630,7 +630,7 @@ int hwmonHostClass::interval_change_handler ( struct hwmonHostClass::hwmon_host 
  *
  *
  *  */
-int hwmonHostClass::ipmi_sensor_monitor ( struct hwmonHostClass::hwmon_host * host_ptr )
+int hwmonHostClass::bmc_sensor_monitor ( struct hwmonHostClass::hwmon_host * host_ptr )
 {
     int rc = RETRY ;
 
@@ -672,7 +672,7 @@ int hwmonHostClass::ipmi_sensor_monitor ( struct hwmonHostClass::hwmon_host * ho
             ilog ("%s handling sensor model relearn request\n",
                       host_ptr->hostname.c_str());
 
-            rc = ipmi_delete_sensor_model ( host_ptr );
+            rc = bmc_delete_sensor_model ( host_ptr );
             if ( rc != PASS )
             {
                 elog ("%s delete model failure ; retry in %d seconds\n",
@@ -1044,7 +1044,7 @@ int hwmonHostClass::ipmi_sensor_monitor ( struct hwmonHostClass::hwmon_host * ho
 
             /******************************************************************
              *
-             * The READ stage requests the launch of the hwmonThread_ipmitool
+             * The READ stage requests the launch of the hwmonThread_bmc
              * thread that will read the sensor data from the specified host.
              *
              * An umbrella timeout timer is started on behalf of the PARSE
@@ -1119,7 +1119,7 @@ int hwmonHostClass::ipmi_sensor_monitor ( struct hwmonHostClass::hwmon_host * ho
             /******************************************************************
              * The PARSE stage has 2 main functions
              *
-             *  1. Wait for the ipmitool command completion from the READ stage
+             *  1. Wait for the bmc command completion from the READ stage
              *     while monitoring for and handling the unbrella timeout case.
              *
              *  2. PARSE the sensor data json string into the sample list
@@ -1244,15 +1244,15 @@ int hwmonHostClass::ipmi_sensor_monitor ( struct hwmonHostClass::hwmon_host * ho
                         struct json_object * raw_obj = json_tokener_parse( host_ptr->bmc_thread_info.data.data() );
                         if ( raw_obj )
                         {
-                            /* Look for ... IPMITOOL_JSON__SENSOR_DATA_MESSAGE_HEADER */
-                            status = json_object_object_get_ex ( raw_obj, IPMITOOL_JSON__SENSOR_DATA_MESSAGE_HEADER, &req_obj );
+                            /* Look for ... BMC_JSON__SENSOR_DATA_MESSAGE_HEADER */
+                            status = json_object_object_get_ex ( raw_obj, BMC_JSON__SENSOR_DATA_MESSAGE_HEADER, &req_obj );
                             if (( status == TRUE ) && req_obj )
                             {
                                 char * msg_ptr = (char*)json_object_to_json_string(req_obj) ;
-                                host_ptr->json_ipmi_sensors = msg_ptr ;
+                                host_ptr->json_bmc_sensors = msg_ptr ;
                                 if ( msg_ptr )
                                 {
-                                    host_ptr->bmc_thread_info.status = ipmi_load_sensor_samples ( host_ptr , msg_ptr);
+                                    host_ptr->bmc_thread_info.status = bmc_load_sensor_samples ( host_ptr , msg_ptr);
                                     if ( host_ptr->bmc_thread_info.status == PASS )
                                     {
                                         if ( host_ptr->samples != host_ptr->sensors )
@@ -1282,14 +1282,14 @@ int hwmonHostClass::ipmi_sensor_monitor ( struct hwmonHostClass::hwmon_host * ho
                             else
                             {
                                 host_ptr->bmc_thread_info.status_string = "failed to find '" ;
-                                host_ptr->bmc_thread_info.status_string.append(IPMITOOL_JSON__SENSOR_DATA_MESSAGE_HEADER);
+                                host_ptr->bmc_thread_info.status_string.append(BMC_JSON__SENSOR_DATA_MESSAGE_HEADER);
                                 host_ptr->bmc_thread_info.status_string.append("' label") ;
                                 host_ptr->bmc_thread_info.status = FAIL_JSON_PARSE ;
                             }
                         }
                         else
                         {
-                            host_ptr->bmc_thread_info.status_string = "failed to parse ipmitool sensor data string" ;
+                            host_ptr->bmc_thread_info.status_string = "failed to parse bmc sensor data string" ;
                             host_ptr->bmc_thread_info.status = FAIL_JSON_PARSE ;
                         }
 
@@ -1310,7 +1310,7 @@ int hwmonHostClass::ipmi_sensor_monitor ( struct hwmonHostClass::hwmon_host * ho
                         }
                         else
                         {
-                            ipmi_set_group_state ( host_ptr, "failed" );
+                            bmc_set_group_state ( host_ptr, "failed" );
                         }
 
                         _stage_change ( host_ptr->hostname,
@@ -1342,7 +1342,7 @@ int hwmonHostClass::ipmi_sensor_monitor ( struct hwmonHostClass::hwmon_host * ho
              *
              *  A stored checksum of zero indicates the first sample read.
              *  If at that time host_ptr->sensors == 0 then a call to
-             *  ipmi_create_sensor_model is made to create a new sensor
+             *  bmc_create_sensor_model is made to create a new sensor
              *  model based on these last sample readings.
              *
              *  If the stored checksums do not match the current checksums
@@ -1428,7 +1428,7 @@ int hwmonHostClass::ipmi_sensor_monitor ( struct hwmonHostClass::hwmon_host * ho
                     }
 
                     /* Create a sensor model from 'this' sample data */
-                    if ( ipmi_create_sensor_model ( host_ptr ) != PASS )
+                    if ( bmc_create_sensor_model ( host_ptr ) != PASS )
                     {
                         elog ("%s failed to create sensor model (in sysinv)\n",
                                   host_ptr->hostname.c_str());
@@ -1499,9 +1499,9 @@ int hwmonHostClass::ipmi_sensor_monitor ( struct hwmonHostClass::hwmon_host * ho
                     hwmonAlarm_clear ( host_ptr->hostname, HWMON_ALARM_ID__SENSORCFG, "profile", REASON_OK );
                 }
 
-                if ( ipmi_update_sensors ( host_ptr ) == PASS )
+                if ( bmc_update_sensors ( host_ptr ) == PASS )
                 {
-                    if ( ( rc = ipmi_set_group_state ( host_ptr, "enabled" ) ) == PASS )
+                    if ( ( rc = bmc_set_group_state ( host_ptr, "enabled" ) ) == PASS )
                     {
                         _stage_change ( host_ptr->hostname,
                                         host_ptr->monitor_ctrl.stage,
@@ -1604,7 +1604,7 @@ int hwmonHostClass::ipmi_sensor_monitor ( struct hwmonHostClass::hwmon_host * ho
 
                        /* debounce of the transient 'na' case is debounced
                         * if ( host_ptr->sensor_query_count > 5 )
-                        *    log_sensor_data ( host_ptr, ptr->sensorname,  ptr->status, get_ipmi_severity(ptr->sample_severity));
+                        *    log_sensor_data ( host_ptr, ptr->sensorname,  ptr->status, get_bmc_severity(ptr->sample_severity));
                         */
                     }
 
@@ -1954,7 +1954,7 @@ int hwmonHostClass::ipmi_sensor_monitor ( struct hwmonHostClass::hwmon_host * ho
 
                 if ( host_ptr->interval )
                 {
-                    ipmi_set_group_state ( host_ptr, "failed" ) ;
+                    bmc_set_group_state ( host_ptr, "failed" ) ;
 
                     _stage_change  ( host_ptr->hostname,
                                      host_ptr->monitor_ctrl.stage,

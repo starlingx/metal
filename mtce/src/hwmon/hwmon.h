@@ -52,7 +52,7 @@ using namespace std;
 #define MAX_HOST_SENSORS            (512) // (100)
 #define MAX_HOST_GROUPS              (20)
 #define MIN_SENSOR_GROUPS             (4)
-#define MAX_SIZE_SENSOR_MSG_BYTES   (4096*4)
+#define HWMON_MAX_BMC_DATA_BUF_SIZE (4096*8) // Thermal sensor data need 20KiB at least
 #define HWMON_DEFAULT_LARGE_INTERVAL (MTC_MINS_15)
 #define HWMON_DEFAULT_AUDIT_INTERVAL (MTC_MINS_2)
 #define HWMON_MIN_AUDIT_INTERVAL     (10)
@@ -230,7 +230,7 @@ typedef struct
     bool logged  ;
 } action_state_type ;
 
-/* Sensor sample data structure for ipmitool output */
+/* Sensor sample data structure for bmc output */
 typedef struct
 {
     string name   ; /* sensor name             */
@@ -255,7 +255,7 @@ typedef struct
 } sensor_data_type;
 
 
-/* Control structure for ipmi sensor monitoring
+/* Control structure for bmc sensor monitoring
  *
  * TODO: The interval is part of the host but
  *       should eventually me moved here.

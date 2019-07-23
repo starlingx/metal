@@ -19,8 +19,6 @@
 #include "hwmonSensor.h"
 #include "bmcUtil.h"       /* for ... board mgmnt utility header         */
 
-//#include "hwmonIpmi.h"     /* for ... sensor_data_type                  */
-
 typedef enum
 {
     HWMON_DEL__START = 0,
@@ -55,16 +53,7 @@ class hwmonHostClass
 
         libEvent secretEvent ;
 
-        /** set true once a connection is estabished and
-         *  set false when error recovery is performed on the connection
-         **/
-        bool connected ;
-
-        /**  'Connected' alternative (see above) for ipmi sensor monitoring.
-         *   We don't 'connect' using ipmi sensor monitoring so a more
-         *   representative word is introduced.
-         *
-         *   The BMC is 'accessible' once provisioning data is available
+        /**  The BMC is 'accessible' once provisioning data is available
          *   and bmc is verified pingable.
          **/
         bool accessible;
@@ -125,7 +114,7 @@ class hwmonHostClass
 
         /* Sensor Monitoring Thread Structs */
 
-        /* the info required by the sensor read thread to issue a ipmitool
+        /* the info required by the sensor read thread to issue a bmc
          * lanplus request to read sensors over the network */
         thread_ctrl_type bmc_thread_ctrl ; /* control data used to manage the thread */
         thread_info_type bmc_thread_info ; /* thread info used to execute and post results */
@@ -140,7 +129,7 @@ class hwmonHostClass
         int want_degrade_audit ;
 
         /* the last json string containing the last read sensor data */
-        string     json_ipmi_sensors ;
+        string     json_bmc_sensors ;
 
         int          sensors ; /**< # of sensors in the sysinv database        */
         int          samples ; /**< # of parsed samples from the reader thread */
@@ -306,7 +295,7 @@ class hwmonHostClass
      *
      *************************************************************************/
 
-    void ipmi_bmc_data_init ( struct hwmonHostClass::hwmon_host * host_ptr );
+    void bmc_data_init ( struct hwmonHostClass::hwmon_host * host_ptr );
 
     /***************************************************************************
      *
@@ -316,43 +305,43 @@ class hwmonHostClass
      *
      * Implemented in hwmonModel.cpp
      *
-     * ipmi_load_sensor_model   - will load an existing sensor and group
+     * bmc_load_sensor_model   - will load an existing sensor and group
      *                            model from the database  for the specified
      *                            host into hwmond.
      *
-     * ipmi_create_sensor_model - will create a new sensor and group model in
+     * bmc_create_sensor_model - will create a new sensor and group model in
      *                            the sysinv database for the specified host.
      *
-     * ipmi_delete_sensor_model - will delete the sensor and group model from
+     * bmc_delete_sensor_model - will delete the sensor and group model from
      *                            the sysinv database for the specified host.
      *
-     * ipmi_create_sample_model - will create a sensor model based on sample
+     * bmc_create_sample_model - will create a sensor model based on sample
      *                            data for the specified host.
      *
-     * ipmi_create_quanta_model - will create a quanta server sensor group model
+     * bmc_create_quanta_model - will create a quanta server sensor group model
      *                            for the specified host from sensor sample data.
      *
      *************************************************************************/
-    int  ipmi_load_sensor_model   ( struct hwmonHostClass::hwmon_host * host_ptr );
-    int  ipmi_create_sensor_model ( struct hwmonHostClass::hwmon_host * host_ptr );
-    int  ipmi_delete_sensor_model ( struct hwmonHostClass::hwmon_host * host_ptr );
-    int  ipmi_create_sample_model ( struct hwmonHostClass::hwmon_host * host_ptr );
-    int  ipmi_create_quanta_model ( struct hwmonHostClass::hwmon_host * host_ptr );
+    int  bmc_load_sensor_model   ( struct hwmonHostClass::hwmon_host * host_ptr );
+    int  bmc_create_sensor_model ( struct hwmonHostClass::hwmon_host * host_ptr );
+    int  bmc_delete_sensor_model ( struct hwmonHostClass::hwmon_host * host_ptr );
+    int  bmc_create_sample_model ( struct hwmonHostClass::hwmon_host * host_ptr );
+    int  bmc_create_quanta_model ( struct hwmonHostClass::hwmon_host * host_ptr );
 
     /*************************************************************************
      *
      * The following are sensor sample sensor data management APIs
      *
-     * File: hwmonIpmi.cpp
+     * File: hwmonBmc.cpp
      *
-     * ipmi_load_sensor_samples   - loads the samples into the sample list.
+     * bmc_load_sensor_samples   - loads the samples into the sample list.
      *
-     * ipmi_update_sensors        - updates the hwmond with the latest sensor
+     * bmc_update_sensors        - updates the hwmond with the latest sensor
      *                              sample severity level for the specified host.
      *
      *************************************************************************/
-    int  ipmi_load_sensor_samples ( struct hwmonHostClass::hwmon_host * host_ptr, char * msg_ptr );
-    int  ipmi_update_sensors      ( struct hwmonHostClass::hwmon_host * host_ptr );
+    int  bmc_load_sensor_samples ( struct hwmonHostClass::hwmon_host * host_ptr, char * msg_ptr );
+    int  bmc_update_sensors      ( struct hwmonHostClass::hwmon_host * host_ptr );
 
     /**************************************************************************
      *
@@ -364,14 +353,14 @@ class hwmonHostClass
      *
      *   This code that was taken from the add_handler and put into this stand
      *   alone procedure for code re-use so that it can be called by the add
-     *   handler for ipmi without cloning it.
+     *   handler for bmc without cloning it.
      *
      **************************************************************************/
     bool manage_startup_states ( struct hwmonHostClass::hwmon_host * host_ptr );
 
     /**************************************************************************
      *
-     *   Handle ipmitool monitoring audit interval changes where there is one
+     *   Handle bmc monitoring audit interval changes where there is one
      *   interval for all sensor groups. Changing a single group's audit
      *   interval does so for all. All for 1 and one for all.
      *
@@ -379,7 +368,7 @@ class hwmonHostClass
     int  interval_change_handler( struct hwmonHostClass::hwmon_host * host_ptr );
 
     /*   The sensor monitor FSM */
-    int  ipmi_sensor_monitor ( struct hwmonHostClass::hwmon_host * host_ptr );
+    int  bmc_sensor_monitor ( struct hwmonHostClass::hwmon_host * host_ptr );
 
     /*   Remove all groups / sensor from hwmon */
     int  hwmon_del_groups    ( struct hwmonHostClass::hwmon_host * host_ptr );
@@ -392,35 +381,35 @@ class hwmonHostClass
      *   and manage sensr group alarms. Since state changes affect alarming
      *   the two functions work well together.
      ***************************************************************************/
-    int  ipmi_set_group_state      ( struct hwmonHostClass::hwmon_host * host_ptr, string state );
+    int  bmc_set_group_state      ( struct hwmonHostClass::hwmon_host * host_ptr, string state );
 
     /*   Set all sensors to disabled-offline state/status */
-    int  ipmi_disable_sensors  ( struct hwmonHostClass::hwmon_host * host_ptr );
+    int  bmc_disable_sensors  ( struct hwmonHostClass::hwmon_host * host_ptr );
 
     /****************************************************************************
-     *   Create sensor groups in hwmon based on sample data using similar ipmi
+     *   Create sensor groups in hwmon based on sample data using similar bmc
      *   unit type canned groups and save those groups into the database.
      ****************************************************************************/
-    int  ipmi_create_groups ( struct hwmonHostClass::hwmon_host * host_ptr );
+    int  bmc_create_groups ( struct hwmonHostClass::hwmon_host * host_ptr );
 
     /****************************************************************************
      *   Load the sensor samples into hwmon and then save them into the database.
      ****************************************************************************/
-    int  ipmi_create_sensors ( struct hwmonHostClass::hwmon_host * host_ptr );
+    int  bmc_create_sensors ( struct hwmonHostClass::hwmon_host * host_ptr );
 
     /*****************************************************************************
      * Add a new group to hwmon and then to the sysinv database.
      ****************************************************************************/
-    int  ipmi_add_group ( struct hwmonHostClass::hwmon_host * host_ptr ,
+    int  bmc_add_group ( struct hwmonHostClass::hwmon_host * host_ptr ,
                           string datatype, string sensortype,
                           canned_group_enum grouptype,
                           string group_name, string path );
 
     /****************************************************************************
-     *   Put the current ipmi sensor list into the previously created sensor type
+     *   Put the current bmc sensor list into the previously created sensor type
      *   based groups and save that grouping in the sysinv database.
      *****************************************************************************/
-    int  ipmi_group_sensors ( struct hwmonHostClass::hwmon_host * host_ptr );
+    int  bmc_group_sensors ( struct hwmonHostClass::hwmon_host * host_ptr );
 
     /***************************************************************************
      *   Check whether the group/sensor accounting looks valid.
@@ -506,7 +495,7 @@ class hwmonHostClass
     int  mon_host ( string hostname, bool monitor );
     int  request_del_host ( string hostname );
 
-    int  ipmi_learn_sensor_model ( string uuid );
+    int  bmc_learn_sensor_model ( string uuid );
 
     /****************************************************************************
      *

@@ -89,7 +89,7 @@
 #define FIT_CODE__CORRUPT_TOKEN                       (1)
 #define FIT_CODE__ADD_DELETE                          (2)
 #define FIT_CODE__STUCK_TASK                          (3)
-#define FIT_CODE__AVOID_N_FAIL_IPMITOOL_REQUEST       (4)
+#define FIT_CODE__AVOID_N_FAIL_BMC_REQUEST            (4)
 #define FIT_CODE__THREAD_TIMEOUT                      (5)
 #define FIT_CODE__THREAD_SEGFAULT                     (6)
 #define FIT_CODE__SIGNAL_NOEXIT                       (7)

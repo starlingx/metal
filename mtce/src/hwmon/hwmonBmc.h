@@ -1,5 +1,5 @@
-#ifndef __INCLUDE_HWMONIPMI_H__
-#define __INCLUDE_HWMONIPMI_H__
+#ifndef __INCLUDE_HWMONBMC_H__
+#define __INCLUDE_HWMONBMC_H__
 
 /*
  * Copyright (c) 2015-2017 Wind River Systems, Inc.
@@ -10,7 +10,7 @@
 
  /**
   * @file
-  * Wind River Titanium Cloud's Hardware Monitor "IPMI Sensor" Header
+  * StarlingX Cloud's Hardware Monitor "BMC Sensor" Header
   */
 
 #include "hwmon.h"         /* for ... sensor_data_type                      */
@@ -44,6 +44,6 @@ void sensor_data_init  (       sensor_data_type & data );
 void sensor_data_print ( const sensor_data_type & data );
 void sensor_data_copy  ( sensor_data_type & from, sensor_data_type & to );
 
-int ipmi_load_json_sensor ( sensor_data_type & sensor_data , string json_sensor_data );
+int bmc_load_json_sensor ( sensor_data_type & sensor_data , string json_sensor_data );
 
 #endif

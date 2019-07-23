@@ -460,9 +460,9 @@ void * mtcThread_bmc ( void * arg )
                     bypass_request = true ;
                     rc = PASS ;
                 }
-                else if ( daemon_want_fit ( FIT_CODE__AVOID_N_FAIL_IPMITOOL_REQUEST, info_ptr->hostname ))
+                else if ( daemon_want_fit ( FIT_CODE__AVOID_N_FAIL_BMC_REQUEST, info_ptr->hostname ))
                 {
-                    slog ("%s FIT FIT_CODE__AVOID_N_FAIL_IPMITOOL_REQUEST\n", info_ptr->hostname.c_str());
+                    slog ("%s FIT FIT_CODE__AVOID_N_FAIL_BMC_REQUEST\n", info_ptr->hostname.c_str());
                     bypass_request = true ;
                     rc = FAIL_FIT ;
                 }

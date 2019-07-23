@@ -56,13 +56,6 @@
 int ipmiUtil_init ( void );
 
 int  ipmiUtil_bmc_info_load ( string hostname, const char * filename, bmc_info_type & mc_info );
-void ipmiUtil_mc_info_init                                         ( bmc_info_type & mc_info );
-
-/* Create a randomly named password filename */
-void ipmiUtil_create_pw_fn ( thread_info_type * info_ptr, string pw );
-
-/* Create the ipmitool output_filename in info_ptr->password_file */
-string ipmiUtil_create_data_fn ( string & hostname, string file_suffix );
 
 /* Create the ipmi request */
 string ipmiUtil_create_request ( string cmd, string & ip, string & un, string & pw, string & out );

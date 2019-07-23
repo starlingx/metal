@@ -6,7 +6,7 @@
  *
  *
  * @file
- * Wind River Titanium Cloud Hardware Monitor IPMI Sensor Utilities
+ * StarlingX Cloud Hardware Monitor BMC Sensor Utilities
  */
 
 #include <stdlib.h>
@@ -17,15 +17,15 @@
 #include "nodeUtil.h"     /* for ... mtce common utilities            */
 #include "jsonUtil.h"     /* for ... json string parse utilities      */
 #include "hwmonUtil.h"    /* for ... get_severity                     */
-#include "hwmonIpmi.h"    /* for ... this module header               */
+#include "hwmonBmc.h"    /* for ... this module header               */
 #include "hwmonHttp.h"    /* for ... hwmonHttp_mod_sensor             */
 #include "hwmonClass.h"   /* for ... service class definition         */
-#include "hwmonGroup.h"   /* for ... ipmi_get_groupenum               */
-#include "hwmonThreads.h" /* for ... IPMITOOL_JSON__SENSORS_LABEL     */
+#include "hwmonGroup.h"   /* for ... bmc_get_groupenum               */
+#include "hwmonThreads.h" /* for ... BMC_JSON__SENSORS_LABEL     */
 
 #ifdef WANT_CORR_STATUS
 #define CORR_STATUS_MAX (6)
-static const char *_ipmi_status_desc[] =
+static const char *_bmc_status_desc[] =
 {
    "ok", // all good - ok
    "nc", // Non-Critical
@@ -38,7 +38,7 @@ static const char *_ipmi_status_desc[] =
 
 #ifdef WANT_CORR_EXTENDED_STATUS
 #define CORR_EXTENDED_STATUS_MAX (6)
-static const char *_ipmi_status_extended_desc[] =
+static const char *_bmc_status_extended_desc[] =
 {
    "lnr", // Lower Non-Recoverable
    "unr", // Upper Non-Recoverable
@@ -53,7 +53,7 @@ static const char *_ipmi_status_extended_desc[] =
  *
  * Name        : sensor_data_init
  *
- * Descrfiption: Initialize an ipmi sample data structure
+ * Descrfiption: Initialize an bmc sample data structure
  *
  *****************************************************************************/
 
@@ -78,7 +78,7 @@ void sensor_data_init ( sensor_data_type & data )
  *
  * Name        : sensor_data_print
  *
- * Descrfiption: Print an ipmi sample data structure
+ * Descrfiption: Print an bmc sample data structure
  *
  *****************************************************************************/
 
@@ -100,14 +100,14 @@ void sensor_data_print ( const sensor_data_type & data )
 
 /****************************************************************************
  *
- * Name       : ipmi_load_json_sensor
+ * Name       : bmc_load_json_sensor
  *
  * Purpose    : Load a json formatted sensor data string into the specifie
  *              sensor data element
  *
  *****************************************************************************/
 
-int ipmi_load_json_sensor ( sensor_data_type & sensor_data , string json_sensor_data )
+int bmc_load_json_sensor ( sensor_data_type & sensor_data , string json_sensor_data )
 {
     int rc = FAIL_KEY_VALUE_PARSE ;
     // ilog ("sensor data:%s\n", json_sensor_data.c_str() );
@@ -261,20 +261,20 @@ bool _handle_dup_sensors ( string             hostname,
 
 /*****************************************************************************
  *
- * Name       : ipmi_load_sensor_samples
+ * Name       : bmc_load_sensor_samples
  *
  * Description: Load all the sensor samples into hardware mon.
  *
  ****************************************************************************/
 
-int hwmonHostClass::ipmi_load_sensor_samples ( struct hwmonHostClass::hwmon_host * host_ptr, char * msg_ptr )
+int hwmonHostClass::bmc_load_sensor_samples ( struct hwmonHostClass::hwmon_host * host_ptr, char * msg_ptr )
 {
     int rc ;
 
     int samples = 0 ;
     host_ptr->samples = 0 ;
 
-    rc = jsonUtil_array_elements ( msg_ptr, IPMITOOL_JSON__SENSORS_LABEL, samples ) ;
+    rc = jsonUtil_array_elements ( msg_ptr, BMC_JSON__SENSORS_LABEL, samples ) ;
     if ( rc == PASS )
     {
         string sensor_data ;
@@ -307,10 +307,10 @@ int hwmonHostClass::ipmi_load_sensor_samples ( struct hwmonHostClass::hwmon_host
         for ( int index = 0 ; index < samples ; index++ )
         {
             sensor_data.clear();
-            rc = jsonUtil_get_array_idx ( msg_ptr, IPMITOOL_JSON__SENSORS_LABEL, index, sensor_data ) ;
+            rc = jsonUtil_get_array_idx ( msg_ptr, BMC_JSON__SENSORS_LABEL, index, sensor_data ) ;
             if ( rc == PASS )
             {
-                if ( ipmi_load_json_sensor ( host_ptr->sample[host_ptr->samples], sensor_data ) == PASS )
+                if ( bmc_load_json_sensor ( host_ptr->sample[host_ptr->samples], sensor_data ) == PASS )
                 {
                     bool found = false ;
 
@@ -336,7 +336,7 @@ int hwmonHostClass::ipmi_load_sensor_samples ( struct hwmonHostClass::hwmon_host
                     {
                         /* Drop any sensors that don't fall into a valid group */
                         host_ptr->sample[host_ptr->samples].group_enum =
-                        ipmi_get_groupenum ( host_ptr->hostname,
+                        bmc_get_groupenum ( host_ptr->hostname,
                                              host_ptr->sample[host_ptr->samples].unit,
                                              host_ptr->sample[host_ptr->samples].name);
 
@@ -372,7 +372,7 @@ int hwmonHostClass::ipmi_load_sensor_samples ( struct hwmonHostClass::hwmon_host
     else
     {
         host_ptr->bmc_thread_info.status_string = "failed to find '" ;
-        host_ptr->bmc_thread_info.status_string.append(IPMITOOL_JSON__SENSORS_LABEL);
+        host_ptr->bmc_thread_info.status_string.append(BMC_JSON__SENSORS_LABEL);
         host_ptr->bmc_thread_info.status_string.append("' label") ;
         host_ptr->bmc_thread_info.status = FAIL_JSON_PARSE ;
     }
@@ -392,7 +392,7 @@ void _generate_transient_log ( sensor_type * sensor_ptr )
 }
 
 
-int hwmonHostClass::ipmi_update_sensors ( struct hwmonHostClass::hwmon_host * host_ptr )
+int hwmonHostClass::bmc_update_sensors ( struct hwmonHostClass::hwmon_host * host_ptr )
 {
     /* Mark all sensors as not being updated only to get changed below when it is updated.
      * This allows us to quickly identify what sensors are missing */
@@ -530,7 +530,7 @@ int hwmonHostClass::ipmi_update_sensors ( struct hwmonHostClass::hwmon_host * ho
                 if ( host_ptr->sample[j].status.compare("na") == 0 )
                 {
                     host_ptr->sensor[i].sample_severity =
-                    get_ipmi_severity (host_ptr->sample[j].status);
+                    get_bmc_severity (host_ptr->sample[j].status);
                 }
                 else if ( host_ptr->sample[j].unit.compare(DISCRETE))
                 {
@@ -538,7 +538,7 @@ int hwmonHostClass::ipmi_update_sensors ( struct hwmonHostClass::hwmon_host * ho
 
                     /* get severity level */
                     host_ptr->sensor[i].sample_severity =
-                    get_ipmi_severity (host_ptr->sample[j].status);
+                    get_bmc_severity (host_ptr->sample[j].status);
 
                     /* Check to see if we need to generate the transient log.
                      * Only generate it if want_debounce_log_if_ok is true and
@@ -549,14 +549,14 @@ int hwmonHostClass::ipmi_update_sensors ( struct hwmonHostClass::hwmon_host * ho
                         _generate_transient_log ( &host_ptr->sensor[i] );
                     }
 
-                    /* Minor severity from get_ipmi_severity means
+                    /* Minor severity from get_bmc_severity means
                      * that the severity status is unexpected */
                     if ( host_ptr->sensor[i].sample_severity == HWMON_SEVERITY_MINOR )
                     {
                         if ( host_ptr->sensor[i].status.compare("minor") == 0 )
                         {
                             /* only print this log on the first state transition */
-                            wlog ("%s '%s' unexpected ipmi sensor reading '%s'\n",
+                            wlog ("%s '%s' unexpected bmc sensor reading '%s'\n",
                                       host_ptr->hostname.c_str(),
                                       host_ptr->sensor[i].sensorname.c_str(),
                                       host_ptr->sample[j].status.c_str());
@@ -586,7 +586,7 @@ int hwmonHostClass::ipmi_update_sensors ( struct hwmonHostClass::hwmon_host * ho
                     /* otherwise correlate the status against the sensors we care about */
                     else
                     {
-                        unsigned short ipmi_status = (unsigned short)strtol((char*)host_ptr->sample[j].status.data(), NULL, 0 );
+                        unsigned short bmc_status = (unsigned short)strtol((char*)host_ptr->sample[j].status.data(), NULL, 0 );
 
                         /* interpret discrete sensor readings for known Quanta discrete
                          * sensors that need to be represented with a correlated status */
@@ -594,14 +594,14 @@ int hwmonHostClass::ipmi_update_sensors ( struct hwmonHostClass::hwmon_host * ho
                                    host_ptr->hostname.c_str(),
                                    host_ptr->sensor[i].sensorname.c_str(),
                                    host_ptr->sample[j].status.c_str(),
-                                   ipmi_status );
+                                   bmc_status );
 
                         /* treat thermal trip sensors failures as Major.
                          * A good reading is 0x0080 */
                         if (( host_ptr->sensor[i].sensorname.compare("PCH Thermal Trip") == 0 ) ||
                             ( host_ptr->sensor[i].sensorname.compare("MB Thermal Trip") == 0 ))
                         {
-                            if ( ipmi_status == 0x0080 )
+                            if ( bmc_status == 0x0080 )
                             {
                                 host_ptr->sensor[i].sample_severity = HWMON_SEVERITY_GOOD ;
                                 if ( host_ptr->sensor[i].want_debounce_log_if_ok == true )
@@ -616,7 +616,7 @@ int hwmonHostClass::ipmi_update_sensors ( struct hwmonHostClass::hwmon_host * ho
                         }
                         else if ( host_ptr->sensor[i].sensorname.compare("PSU Redundancy") == 0 )
                         {
-                            if ( ipmi_status == 0x0180 ) /* Fully Redundant */
+                            if ( bmc_status == 0x0180 ) /* Fully Redundant */
                             {
                                 host_ptr->sensor[i].sample_severity = HWMON_SEVERITY_GOOD ;
                                 if ( host_ptr->sensor[i].want_debounce_log_if_ok == true )
@@ -624,7 +624,7 @@ int hwmonHostClass::ipmi_update_sensors ( struct hwmonHostClass::hwmon_host * ho
                                     _generate_transient_log ( &host_ptr->sensor[i] );
                                 }
                             }
-                            else if ( ipmi_status == 0x0280 ) /* Redundancy Lost */
+                            else if ( bmc_status == 0x0280 ) /* Redundancy Lost */
                             {
                                 host_ptr->sensor[i].sample_severity = HWMON_SEVERITY_MAJOR ;
                             }
@@ -633,7 +633,7 @@ int hwmonHostClass::ipmi_update_sensors ( struct hwmonHostClass::hwmon_host * ho
                                 wlog ("%s '%s' unexpected discrete status reading '0x%04x'\n",
                                           host_ptr->hostname.c_str(),
                                           host_ptr->sensor[i].sensorname.c_str(),
-                                          ipmi_status);
+                                          bmc_status);
 
                                 sensor_data_print (host_ptr->sample[j]);
                                 blog3 ("%s ... %s\n", host_ptr->hostname.c_str(), host_ptr->bmc_thread_info.data.c_str());
@@ -654,8 +654,8 @@ int hwmonHostClass::ipmi_update_sensors ( struct hwmonHostClass::hwmon_host * ho
 #define INPUT_OOR_PRESENT      (0x2000)
 
                             /* Presence Detected and ok */
-                            // if ( ipmi_status == 0x0180 )
-                            if ( (ipmi_status&STATUS_BIT_MASK) == PRESENCE_DETECTED )
+                            // if ( bmc_status == 0x0180 )
+                            if ( (bmc_status&STATUS_BIT_MASK) == PRESENCE_DETECTED )
                             {
                                 host_ptr->sensor[i].sample_severity = HWMON_SEVERITY_GOOD ;
                                 if ( host_ptr->sensor[i].want_debounce_log_if_ok == true )
@@ -665,28 +665,28 @@ int hwmonHostClass::ipmi_update_sensors ( struct hwmonHostClass::hwmon_host * ho
                             }
 
                             /* No Presence Detect */
-                            // else if (( ipmi_status == 0x0080 ) || ( ipmi_status == 0x0000 ))
-                            else if ( (ipmi_status&STATUS_BIT_MASK) == NO_PRESENCE_DETECTED )
+                            // else if (( bmc_status == 0x0080 ) || ( bmc_status == 0x0000 ))
+                            else if ( (bmc_status&STATUS_BIT_MASK) == NO_PRESENCE_DETECTED )
                             {
                                 host_ptr->sensor[i].sample_severity = HWMON_SEVERITY_MINOR ;
                             }
 
                             /* Failure Detected with anything else */
                             /* 0x02xx */
-                            else if ( (ipmi_status&STATUS_BIT_MASK) & FAILURE_DETECTED )
+                            else if ( (bmc_status&STATUS_BIT_MASK) & FAILURE_DETECTED )
                             {
                                 host_ptr->sensor[i].sample_severity = HWMON_SEVERITY_CRITICAL ;
                             }
 
                             /* Presence Detected & Predictive Failure */
-                            //else if ( (ipmi_status&STATUS_BIT_MASK) == ( PRESENCE_DETECTED | PREDICTIVE_FAILURE ))
+                            //else if ( (bmc_status&STATUS_BIT_MASK) == ( PRESENCE_DETECTED | PREDICTIVE_FAILURE ))
                             // TODO: Fix this ...
-                            else if ( ( ipmi_status == 0x1580 ) || /* Presence Detected & Predictive Failure & Input Lost Or Out Of Range */
-                                      ( ipmi_status == 0x2580 ) || /* Presence Detected & Predictive Failure & Input Out Of Range         */
-                                      ( ipmi_status == 0x3580 ) || /* Presence Detected & Predictive Failure & both of the above          */
-                                      ( ipmi_status == 0x0580 ) || /* Presence Detected & Predictive Failure */
-                                      ( ipmi_status == 0x0980 ) || /* Presence Detected & Power Supply Input Lost */
-                                      ( ipmi_status == 0x0d80 ) )  /* Presence Detected & Power Supply Input Out Of Range */
+                            else if ( ( bmc_status == 0x1580 ) || /* Presence Detected & Predictive Failure & Input Lost Or Out Of Range */
+                                      ( bmc_status == 0x2580 ) || /* Presence Detected & Predictive Failure & Input Out Of Range         */
+                                      ( bmc_status == 0x3580 ) || /* Presence Detected & Predictive Failure & both of the above          */
+                                      ( bmc_status == 0x0580 ) || /* Presence Detected & Predictive Failure */
+                                      ( bmc_status == 0x0980 ) || /* Presence Detected & Power Supply Input Lost */
+                                      ( bmc_status == 0x0d80 ) )  /* Presence Detected & Power Supply Input Out Of Range */
                             {
                                 host_ptr->sensor[i].sample_severity = HWMON_SEVERITY_MAJOR ;
                             }
@@ -696,7 +696,7 @@ int hwmonHostClass::ipmi_update_sensors ( struct hwmonHostClass::hwmon_host * ho
                                 wlog ("%s '%s' unexpected discrete status reading '0x%04x'\n",
                                           host_ptr->hostname.c_str(),
                                           host_ptr->sensor[i].sensorname.c_str(),
-                                          ipmi_status);
+                                          bmc_status);
 
                                 sensor_data_print (host_ptr->sample[j]);
                                 blog3 ("%s ... %s\n", host_ptr->hostname.c_str(), host_ptr->bmc_thread_info.data.c_str());

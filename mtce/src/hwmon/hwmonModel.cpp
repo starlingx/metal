@@ -12,22 +12,22 @@
  * These are the utilities that load, create, group and delete sensor models
  *
  *
- * ipmi_load_sensor_model ....... called by add_host_handler FSM
+ * bmc_load_sensor_model ....... called by add_host_handler FSM
  *
- * ipmi_create_sensor_model
+ * bmc_create_sensor_model
  *
- *   ipmi_create_sample_model ... create model based on sample data
- *      ipmi_create_groups
- *      ipmi_create_sensors
- *      ipmi_group_sensors
+ *   bmc_create_sample_model ... create model based on sample data
+ *      bmc_create_groups
+ *      bmc_create_sensors
+ *      bmc_group_sensors
  *
- *   ipmi_create_quanta_model ... create model for Quanta server
- *      ipmi_add_group
+ *   bmc_create_quanta_model ... create model for Quanta server
+ *      bmc_add_group
  *      load_profile_groups
  *      load_profile_sensors
  *      hwmon_group_sensors
  *
- * ipmi_delete_sensor_model ..... called on model re-create
+ * bmc_delete_sensor_model ..... called on model re-create
  *
  *****************************************************************************/
 
@@ -39,11 +39,11 @@
 #include "hwmonClass.h"   /* for ... service class definition                */
 #include "hwmonHttp.h"    /* for ... http podule header                      */
 #include "hwmonSensor.h"  /* for ... this module header                      */
-#include "hwmonIpmi.h"    /* for ... QUANTA_SENSOR_PROFILE_CHECKSUM         */
+#include "hwmonBmc.h"    /* for ... QUANTA_SENSOR_PROFILE_CHECKSUM         */
 
 /*****************************************************************************
  *
- * Name       : ipmi_create_sensor_model
+ * Name       : bmc_create_sensor_model
  *
  * Description: Top level utility that creates a sensor model based on
  *              sample data.
@@ -55,7 +55,7 @@
  *
  ******************************************************************************/
 
-int hwmonHostClass::ipmi_create_sensor_model ( struct hwmonHostClass::hwmon_host * host_ptr )
+int hwmonHostClass::bmc_create_sensor_model ( struct hwmonHostClass::hwmon_host * host_ptr )
 {
     int rc = PASS ;
     ilog ("%s creating sensor model\n", host_ptr->hostname.c_str());
@@ -69,13 +69,13 @@ int hwmonHostClass::ipmi_create_sensor_model ( struct hwmonHostClass::hwmon_host
          * Dynamically create a model based
          * on the sensor sample reading data.
          */
-        rc = ipmi_create_sample_model ( host_ptr );
+        rc = bmc_create_sample_model ( host_ptr );
     }
 
     /* Otherwise create the model based on the known Quanta sensor profile */
     else
     {
-        if ( ( rc = ipmi_create_quanta_model ( host_ptr )) == PASS )
+        if ( ( rc = bmc_create_quanta_model ( host_ptr )) == PASS )
         {
             if ( host_ptr->groups >= MIN_SENSOR_GROUPS )
             {
@@ -216,26 +216,26 @@ int hwmonHostClass::ipmi_create_sensor_model ( struct hwmonHostClass::hwmon_host
 
 /******************************************************************************
  *
- * Name       : ipmi_create_sample_model
+ * Name       : bmc_create_sample_model
  *
  * Description: Create a sensor model based on sample data.
  *
  ******************************************************************************/
 
-int hwmonHostClass::ipmi_create_sample_model ( struct hwmonHostClass::hwmon_host * host_ptr )
+int hwmonHostClass::bmc_create_sample_model ( struct hwmonHostClass::hwmon_host * host_ptr )
 {
     int rc = FAIL ;
     if ( host_ptr->samples )
     {
         /* Start by creating a set of sensor groups based on sample data
          * and specifically sensor type and save those groups in the database */
-        if ( ( rc = ipmi_create_groups ( host_ptr ) ) == PASS )
+        if ( ( rc = bmc_create_groups ( host_ptr ) ) == PASS )
         {
             /* add all the sensors to hwmon and save that in the database */
-            if ( ( rc = ipmi_create_sensors ( host_ptr ) ) == PASS )
+            if ( ( rc = bmc_create_sensors ( host_ptr ) ) == PASS )
             {
                 /* add the sensors to the groups and save that in the database */
-                rc = ipmi_group_sensors ( host_ptr  );
+                rc = bmc_group_sensors ( host_ptr  );
             }
         }
     }
@@ -250,13 +250,13 @@ int hwmonHostClass::ipmi_create_sample_model ( struct hwmonHostClass::hwmon_host
 
 /******************************************************************************
  *
- * Name       : ipmi_create_quanta_model
+ * Name       : bmc_create_quanta_model
  *
  * Description: Create a static Quanta sever sensor group model.
  *
  ******************************************************************************/
 
-int hwmonHostClass::ipmi_create_quanta_model ( struct hwmonHostClass::hwmon_host * host_ptr )
+int hwmonHostClass::bmc_create_quanta_model ( struct hwmonHostClass::hwmon_host * host_ptr )
 {
     int status = PASS ;
     int     rc = PASS ;
@@ -265,26 +265,26 @@ int hwmonHostClass::ipmi_create_quanta_model ( struct hwmonHostClass::hwmon_host
     {
         if ( host_ptr->quanta_server == true )
         {
-            rc = ipmi_add_group ( host_ptr , DISCRETE, "fan" , HWMON_CANNED_GROUP__FANS, "server fans", "show /SYS/fan");
+            rc = bmc_add_group ( host_ptr , DISCRETE, "fan" , HWMON_CANNED_GROUP__FANS, "server fans", "show /SYS/fan");
             if (( rc ) && ( !status )) status = rc ;
 
-            rc = ipmi_add_group ( host_ptr , DISCRETE, "fan" , HWMON_CANNED_GROUP__FANS, "power supply fans", "show /SYS/fan");
+            rc = bmc_add_group ( host_ptr , DISCRETE, "fan" , HWMON_CANNED_GROUP__FANS, "power supply fans", "show /SYS/fan");
             if (( rc ) && ( !status )) status = rc ;
 
-            rc = ipmi_add_group ( host_ptr , DISCRETE, "power" , HWMON_CANNED_GROUP__POWER, "server power", "show /SYS/powerSupply");
+            rc = bmc_add_group ( host_ptr , DISCRETE, "power" , HWMON_CANNED_GROUP__POWER, "server power", "show /SYS/powerSupply");
             if (( rc ) && ( !status )) status = rc ;
 
-            rc = ipmi_add_group ( host_ptr , DISCRETE, "temperature" , HWMON_CANNED_GROUP__TEMP, "server temperature", "show /SYS/temperature");
+            rc = bmc_add_group ( host_ptr , DISCRETE, "temperature" , HWMON_CANNED_GROUP__TEMP, "server temperature", "show /SYS/temperature");
             if (( rc ) && ( !status )) status = rc ;
 
-            rc = ipmi_add_group ( host_ptr , DISCRETE, "voltage" , HWMON_CANNED_GROUP__VOLT, "server voltage", "show /SYS/voltage");
+            rc = bmc_add_group ( host_ptr , DISCRETE, "voltage" , HWMON_CANNED_GROUP__VOLT, "server voltage", "show /SYS/voltage");
             if (( rc ) && ( !status )) status = rc ;
         }
     }
     return (status);
 }
 
-int hwmonHostClass::ipmi_delete_sensor_model ( struct hwmonHostClass::hwmon_host * host_ptr )
+int hwmonHostClass::bmc_delete_sensor_model ( struct hwmonHostClass::hwmon_host * host_ptr )
 {
     int rc = PASS ;
 
@@ -402,7 +402,7 @@ int hwmonHostClass::ipmi_delete_sensor_model ( struct hwmonHostClass::hwmon_host
 
 /* *************************************************************************
  *
- * Name       : ipmi_load_sensor_model
+ * Name       : bmc_load_sensor_model
  *
  * Description: Called from the add_handler to load sensors and groups
  *              for the specified host from the sysinv database.
@@ -411,7 +411,7 @@ int hwmonHostClass::ipmi_delete_sensor_model ( struct hwmonHostClass::hwmon_host
  *              already loaded sensor profile.
  *
  * Assumptions: Inservice sensor model reprovisioning is done with
- *              ipmi_delete_sensor_model and  ipmi_create_sensor_model API.
+ *              bmc_delete_sensor_model and  bmc_create_sensor_model API.
  *
  *
  * Scope      : private hwmonHostClass
@@ -421,7 +421,7 @@ int hwmonHostClass::ipmi_delete_sensor_model ( struct hwmonHostClass::hwmon_host
  * Returns    : TODO: handle modify errors better.
  *
  * *************************************************************************/
-int hwmonHostClass::ipmi_load_sensor_model ( struct hwmonHostClass::hwmon_host * host_ptr )
+int hwmonHostClass::bmc_load_sensor_model ( struct hwmonHostClass::hwmon_host * host_ptr )
 {
     int rc ;
 
@@ -537,7 +537,7 @@ int hwmonHostClass::ipmi_load_sensor_model ( struct hwmonHostClass::hwmon_host *
             if (( host_ptr->sensors ) || (host_ptr->groups ))
             {
                 wlog ("%s has a corrupt sensor profile ; deleting ...\n", host_ptr->hostname.c_str());
-                ipmi_delete_sensor_model ( host_ptr );
+                bmc_delete_sensor_model ( host_ptr );
             }
         }
     }

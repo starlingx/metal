@@ -479,7 +479,7 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
                     mtcInvApi_update_task ( node_ptr, MTC_TASK_RESET_REQUEST);
                 }
 
-                /* bmc power control reset by ipmitool */
+                /* bmc power control reset by bmc */
                     rc = bmc_command_send ( node_ptr, BMC_THREAD_CMD__POWER_RESET );
 
                 if ( rc == PASS )
@@ -518,7 +518,7 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
              {
                   int delay = (((offline_period*offline_threshold)/1000)+3);
 
-                  /* bmc power control reset by ipmitool */
+                  /* bmc power control reset by bmc */
                      rc = bmc_command_recv ( node_ptr );
                      if ( rc == RETRY )
                      {
