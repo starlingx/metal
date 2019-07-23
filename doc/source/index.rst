@@ -28,6 +28,6 @@ Links
 * Code Review: `Gerrit`_
 * Bugs: `Storyboard`_
 
-.. _stx-metal: https://git.starlingx.io/cgit/stx-metal/
-.. _Gerrit: https://review.openstack.org/#/q/project:openstack/stx-metal
-.. _Storyboard: https://storyboard.openstack.org/#!/project/openstack/stx-metal
+.. _stx-metal: https://opendev.org/starlingx/metal
+.. _Gerrit: https://review.opendev.org/#/q/project:starlingx/metal
+.. _Storyboard: https://storyboard.openstack.org/#!/project/starlingx/metal
