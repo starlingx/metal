@@ -399,7 +399,8 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
         {
             if ( ( rc1 = jsonUtil_get_key_val(&msg.buf[0], MTC_JSON_SERVICE, service )) == PASS )
             {
-                if (( msg.cmd == MTC_EVENT_HWMON_CLEAR )    ||
+                if (( msg.cmd == MTC_DEGRADE_RAISE )        ||
+                    ( msg.cmd == MTC_EVENT_HWMON_CLEAR )    ||
                     ( msg.cmd == MTC_EVENT_HWMON_MINOR )    ||
                     ( msg.cmd == MTC_EVENT_HWMON_MAJOR )    ||
                     ( msg.cmd == MTC_EVENT_HWMON_CRIT )     ||
@@ -529,7 +530,7 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
                           service.c_str());
                 obj_ptr->node_degrade_control ( hostname,
                                                 MTC_DEGRADE_CLEAR,
-                                                service );
+                                                service, sensor );
                 break ;
             }
             case MTC_EVENT_HWMON_MINOR:
@@ -543,7 +544,7 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
                           sensor.empty() ? "" : sensor.c_str());
                 obj_ptr->node_degrade_control ( hostname,
                                                 MTC_DEGRADE_RAISE,
-                                                sensor );
+                                                service, sensor );
                 break ;
             }
             case MTC_EVENT_HWMON_RESET:

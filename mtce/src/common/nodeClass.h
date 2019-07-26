@@ -1808,7 +1808,7 @@ public:
 
     /** Hardware Process Monitor Degrade Event handler.
      *  see implementation for details */
-    int node_degrade_control ( string & hostname, int state, string service );
+    int node_degrade_control ( string & hostname, int state, string service, string sensor );
 
     /** Hardware Monitor 'Action' Event method
       *

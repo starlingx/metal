@@ -5004,7 +5004,10 @@ int nodeLinkClass::collectd_notify_handler ( string & hostname,
  *              "hwmon" - The Hardware Monitor process
  *
  **********************************************************************************/
-int nodeLinkClass::node_degrade_control ( string & hostname, int state, string service  )
+int nodeLinkClass::node_degrade_control ( string & hostname,
+                                         int state,
+                                         string service,
+                                         string sensor  )
 {
     int rc  = FAIL_UNKNOWN_HOSTNAME ;
 
@@ -5013,7 +5016,7 @@ int nodeLinkClass::node_degrade_control ( string & hostname, int state, string s
     {
         unsigned int service_flag = 0 ;
 
-        /* convert service string to degrade mask flag 
+        /* convert service string to degrade mask flag
          *  - handle empty string and unsupported service */
         if ( service.empty() )
         {
@@ -5053,7 +5056,10 @@ int nodeLinkClass::node_degrade_control ( string & hostname, int state, string s
             {
                 if (( node_ptr->degrade_mask & service_flag ) == 0 )
                 {
-                    wlog ("%s degrade 'assert' from '%s'\n", hostname.c_str(), service.c_str() );
+                    wlog ("%s degrade 'assert' from '%s' (%s)\n",
+                              hostname.c_str(),
+                              service.c_str(),
+                              sensor.empty() ? "" : sensor.c_str() );
                     node_ptr->degrade_mask |= service_flag ;
                 }
                 rc = PASS ;
