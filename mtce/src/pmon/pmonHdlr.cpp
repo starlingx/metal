@@ -226,7 +226,7 @@ int signal_hdlr_init ( int sig_num )
     int rc ;
 
     memset (&_pmon_ctrl_ptr->info, 0, sizeof(_pmon_ctrl_ptr->info));
-    memset (&_pmon_ctrl_ptr->prev, 0, sizeof(_pmon_ctrl_ptr->info));
+    memset (&_pmon_ctrl_ptr->prev, 0, sizeof(_pmon_ctrl_ptr->prev));
 
     _pmon_ctrl_ptr->info.sa_sigaction = _process_death_hdlr ;
     _pmon_ctrl_ptr->info.sa_flags = (SA_NOCLDSTOP | SA_NOCLDWAIT | SA_SIGINFO) ;
