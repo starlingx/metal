@@ -279,7 +279,6 @@ nfv-client
 vm-topology
 python-networking-odl
 config-gate-worker
-tis-extensions-controller
 wrs-heat-templates
 python-django-horizon
 libmlx5

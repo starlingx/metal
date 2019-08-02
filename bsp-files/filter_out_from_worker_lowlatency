@@ -254,7 +254,6 @@ drbd-pacemaker
 drbd
 kmod-drbd
 python-networking-odl
-tis-extensions-controller
 wrs-heat-templates
 python-django-horizon
 kernel
