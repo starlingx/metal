@@ -73,7 +73,7 @@ void hostw_service ( void )
     hostw_ctrl_type *ctrl = get_ctrl_ptr ();
     daemon_config_type *config = daemon_get_cfg_ptr ();
 
-    ctrl->pmon_grace_loops = config->hostwd_failure_threshold + 1;
+    ctrl->pmon_grace_loops = config->hostwd_failure_threshold;
 
     socks.clear();
     if ( hostw_socket->status_sock )
@@ -121,16 +121,10 @@ void hostw_service ( void )
             {
                 ctrl->pmon_grace_loops--;
 
-                /* we missed a message from PMON */
-                if ( ctrl->pmon_grace_loops == (config->hostwd_failure_threshold - 1) )
-                {
-                    ilog ("Did not receive expected message from PMON - first missed message\n");
-                }
-                ctrl->pmon_grace_loops--;
                 if ( ctrl->pmon_grace_loops )
                 {
                     ilog ("Did not receive expected message from PMON - %d more missed messages allowed\n",
-                          ctrl->pmon_grace_loops);
+                          ctrl->pmon_grace_loops-1);
                 }
             }
         }
