@@ -280,6 +280,13 @@ int barbican_config_handler (     void * user,
     else if (MATCH("DEFAULT", "bind_host")) // bind_host=192.168.204.2
     {
         config_ptr->barbican_api_host = strdup(value);
+        // strip square brackets in case IPv6 format: bind_host=[abde::2]
+        if (config_ptr->barbican_api_host[0] == '[')
+        {
+            memmove(config_ptr->barbican_api_host, config_ptr->barbican_api_host+1,
+                    strlen(config_ptr->barbican_api_host));
+            config_ptr->barbican_api_host[strlen(config_ptr->barbican_api_host)-1] = '\0';
+        }
         ilog("Barbican Host : %s\n", config_ptr->barbican_api_host );
     }
     return (PASS);
