@@ -24,7 +24,7 @@
 
 - job:
     name: flock-devstack-metal
-    parent: flock-devstack-base
+    parent: flock-devstack-base-min
     required-projects:
       - openstack/barbican
       - openstack/python-barbicanclient
