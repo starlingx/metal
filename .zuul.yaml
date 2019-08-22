@@ -1,26 +1,19 @@
 ---
 - project:
     templates:
-      - build-openstack-docs-pti
+      - stx-api-ref-jobs
+      - publish-stx-docs
+      - stx-release-notes-jobs
     check:
       jobs:
-        - build-openstack-api-ref
-        - build-openstack-releasenotes
         - flock-devstack-metal
         - openstack-tox-linters
         - openstack-tox-pep8
     gate:
       jobs:
-        - build-openstack-api-ref
-        - build-openstack-releasenotes
         - flock-devstack-metal
         - openstack-tox-linters
         - openstack-tox-pep8
-    post:
-      jobs:
-        - publish-stx-api-ref
-        - publish-stx-tox
-        - publish-stx-releasenotes
 
 - job:
     name: flock-devstack-metal
