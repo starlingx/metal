@@ -17,7 +17,7 @@ using namespace std;
 #include "nodeBase.h"      /* for ... mtce-common node definitions       */
 #include "hostUtil.h"      /* for ... mtce-common host definitions       */
 #include "bmcUtil.h"       /* for ... mtce-common bmc utility header     */
-
+#include "jsonUtil.h"      /* for ... json_tokener_parse                 */
 
 /**********************************************************************
  *
@@ -93,6 +93,31 @@ string bmcUtil_getProtocol_str ( bmc_protocol_enum protocol )
     }
 }
 
+/**********************************************************************
+ *
+ * Name       : bmcUtil_chop_system_req
+ *
+ * Purpose    : logging ; reduce the length of the system call
+ *              request for logging purposes.
+ *
+ * Warning    : Do not use the chopped string to make the system
+ *              call request. Only use it for logging.
+ *
+ * Description: return the chopped string.
+ *
+ **********************************************************************/
+
+string bmcUtil_chop_system_req ( string request )
+{
+    string chopped_request = "" ;
+    size_t found = request.find(" > ") ;
+    if ( found != string::npos )
+        chopped_request = request.substr(9,found-9);
+    else
+        chopped_request = request.substr(9);
+    return (chopped_request);
+}
+
 /*************************************************************************
  *
  * Name       : bmcUtil_init
@@ -109,6 +134,7 @@ string bmcUtil_getProtocol_str ( bmc_protocol_enum protocol )
 int bmcUtil_init ( void )
 {
     daemon_make_dir(BMC_OUTPUT_DIR) ;
+    daemon_make_dir(BMC_HWMON_TMP_DIR) ;
     ipmiUtil_init ();
     redfishUtil_init ();
 
@@ -221,6 +247,97 @@ void bmcUtil_hwmon_info ( string            hostname,
 
     /* write the data to the file */
     daemon_log ( bmc_info_path_n_filename.data(), info_str.data() );
+}
+
+/*****************************************************************************
+ *
+ * Name        : bmcUtil_read_bmc_info
+ * Description : Read power status and protocol from bmc info file
+ * Parameters  : hostname              - host name
+                 power_state           - read from file
+                 protocol              - read from file
+ * Return      : true                  - file exist
+                 false                 - file not exist
+ *
+ *****************************************************************************/
+
+bool bmcUtil_read_bmc_info( string   hostname,
+                            string & power_state,
+                 bmc_protocol_enum & protocol )
+{
+    struct json_object *json_obj = NULL;
+    string bmc_info_path_n_filename = BMC_OUTPUT_DIR + hostname ;
+
+    if ( ! daemon_is_file_present ( bmc_info_path_n_filename.data() ))
+        return (false);
+
+    string filedata = daemon_read_file (bmc_info_path_n_filename.data()) ;
+
+    blog ("%s data:%s\n", hostname.c_str(), filedata.data());
+    json_obj = json_tokener_parse ( (char *)filedata.data() );
+
+    if ( json_obj )
+    {
+        power_state = jsonUtil_get_key_value_string ( json_obj, "power_state" );
+        if ( strcmp (power_state.data(), BMC_POWER_ON_STATUS) )
+            power_state = BMC_POWER_OFF_STATUS ;
+
+        string protocol_str = jsonUtil_get_key_value_string ( json_obj, "protocol" );
+        if ( strcmp (protocol_str.data(), BMC_PROTOCOL__REDFISHTOOL_STR) )
+            protocol = BMC_PROTOCOL__IPMITOOL ;
+        else
+            protocol = BMC_PROTOCOL__REDFISHTOOL ;
+        json_object_put(json_obj);
+        return (true);
+    }
+    else
+    {
+        /* Set to default value for power state and protocol */
+        power_state = BMC_POWER_OFF_STATUS ;
+        protocol = BMC_PROTOCOL__IPMITOOL ;
+        blog ("%s failed to parse bmc info! set to ipmitool by default!\n", hostname.c_str());
+        return (false);
+    }
+}
+
+/*****************************************************************************
+ *
+ * Name        : bmcUtil_read_hwmond_protocol
+ * Description : Read hwmon protocol from hwmon_hostname_protocol file
+ * Parameters  : hostname              - host name
+ * Return      : bmc protocol
+ *
+ *****************************************************************************/
+
+bmc_protocol_enum bmcUtil_read_hwmond_protocol ( string hostname )
+{
+    bmc_protocol_enum protocol = BMC_PROTOCOL__IPMITOOL ;
+    string hwmond_proto_filename = BMC_HWMON_TMP_DIR + hostname ;
+
+    string proto_str = daemon_read_file ( hwmond_proto_filename.data() ) ;
+    if ( strcmp (proto_str.data(), BMC_PROTOCOL__REDFISHTOOL_STR) )
+        protocol = BMC_PROTOCOL__REDFISHTOOL ;
+
+    return protocol;
+}
+
+/*****************************************************************************
+ *
+ * Name        : bmcUtil_write_hwmond_protocol
+ * Description : Write hwmon protocol to hwmon_hostname_protocol file
+ * Parameters  : hostname              - host name
+                 protocol              - protocol stored to the file
+ *
+ *****************************************************************************/
+
+void bmcUtil_write_hwmond_protocol ( string hostname,
+                          bmc_protocol_enum protocol )
+{
+    string hwmond_proto_filename = BMC_HWMON_TMP_DIR + hostname ;
+    /* remove old file if present and write current protocol to the file*/
+    daemon_remove_file ( hwmond_proto_filename.data() );
+    string proto_str = bmcUtil_getProtocol_str ( protocol ) ;
+    daemon_log ( hwmond_proto_filename.data(), proto_str.data() );
 }
 
 /*************************************************************************

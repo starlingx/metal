@@ -81,6 +81,9 @@ class hwmonHostClass
         /* throttle degrade audit logs */
         int degrade_audit_log_throttle ;
 
+        /* throttle log stating its waiting for prococol from mtce */
+        int general_log_throttle ;
+
         /** set to the protocol used to communicate with this server's BMC */
         bmc_protocol_enum protocol ;
 

@@ -20,7 +20,8 @@ using namespace std;
 #include "nodeBase.h"      /* for ...                                  */
 #include "threadUtil.h"    /* for ... thread_info_type and utilities   */
 
-#define BMC_OUTPUT_DIR  ((const char *)("/var/run/bmc/"))
+#define BMC_OUTPUT_DIR     ((const char *)("/var/run/bmc/"))
+#define BMC_HWMON_TMP_DIR  ((const char *)("/etc/mtc/tmp/hwmon/"))
 
 /* supported protocol strings */
 #define BMC_PROTOCOL__IPMITOOL_STR    ((const char *)("ipmitool"))
@@ -96,12 +97,16 @@ typedef enum
 #define BMC_POWER_STATUS_FILE_SUFFIX   ((const char *)("_power_status"))
 #define BMC_SENSOR_OUTPUT_FILE_SUFFIX  ((const char *)("_sensor_data"))
 
+#define BMC_POWER_ON_STATUS       ((const char *)("on"))
+#define BMC_POWER_OFF_STATUS      ((const char *)("off"))
+
 #define BMC_MAX_RECV_RETRIES      (10)
 
 /* get the thread command name string */
 string bmcUtil_getCmd_str      ( int command );
 string bmcUtil_getAction_str   ( int action  );
 string bmcUtil_getProtocol_str ( bmc_protocol_enum protocol );
+string bmcUtil_chop_system_req ( string request );
 
 /* module initialization */
 int bmcUtil_init ( void );
@@ -118,6 +123,16 @@ void bmcUtil_create_pw_file ( thread_info_type * info_ptr,
 string bmcUtil_create_data_fn ( string & hostname,
                                 string   file_suffix,
                      bmc_protocol_enum   protocol );
+
+/* Read power status and protocol from bmc info file */
+bool bmcUtil_read_bmc_info ( string    hostname,
+                             string &  power_state,
+                  bmc_protocol_enum &  protocol);
+
+bmc_protocol_enum bmcUtil_read_hwmond_protocol ( string hostname );
+
+void bmcUtil_write_hwmond_protocol ( string hostname,
+                          bmc_protocol_enum protocol );
 
 /* this utility creates the bmc info file for hardware monitor */
 void bmcUtil_hwmon_info ( string            hostname,

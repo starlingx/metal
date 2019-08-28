@@ -362,25 +362,25 @@ void * hwmonThread_ipmitool ( void * arg )
                         info_ptr->password_file.c_str());
 
             /*************** Create the output filename ***************/
-            string ipmitool_datafile =
+            string datafile =
             bmcUtil_create_data_fn (info_ptr->hostname,
                                     BMC_POWER_STATUS_FILE_SUFFIX,
                                     BMC_PROTOCOL__IPMITOOL ) ;
 
             dlog_t ("%s power query filename  : %s\n",
                         info_ptr->log_prefix,
-                        ipmitool_datafile.c_str());
+                        datafile.c_str());
 
             /************** Create the ipmitool request **************/
-            string ipmitool_request =
+            string request =
             ipmiUtil_create_request ( command,
                                       extra_ptr->bm_ip,
                                       extra_ptr->bm_un,
                                       info_ptr->password_file,
-                                      ipmitool_datafile );
+                                      datafile );
             dlog_t ("%s power status query cmd: %s\n",
                         info_ptr->log_prefix,
-                        ipmitool_request.c_str());
+                        request.c_str());
 
             if ( daemon_is_file_present ( MTC_CMD_FIT__POWER_STATUS ))
             {
@@ -390,7 +390,7 @@ void * hwmonThread_ipmitool ( void * arg )
             else
             {
                 /* Make the request */
-                rc = system ( ipmitool_request.data()) ;
+                rc = system ( request.data()) ;
             }
 
             unlink(info_ptr->password_file.data());
@@ -400,29 +400,29 @@ void * hwmonThread_ipmitool ( void * arg )
             if ( rc != PASS )
             {
                 info_ptr->status_string = "failed power status query ; " ;
-                info_ptr->status_string.append(ipmitool_request);
+                info_ptr->status_string.append(request);
                 info_ptr->status = FAIL_SYSTEM_CALL ;
             }
             else
             {
-                bool ipmitool_datafile_present = false ;
+                bool datafile_present = false ;
 
                 /* look for the output data file */
                 for ( int i = 0 ; i < 10 ; i++ )
                 {
                     pthread_signal_handler ( info_ptr );
-                    if ( daemon_is_file_present ( ipmitool_datafile.data() ))
+                    if ( daemon_is_file_present ( datafile.data() ))
                     {
-                        ipmitool_datafile_present = true ;
+                        datafile_present = true ;
                         break ;
                     }
                     info_ptr->progress++ ;
                     sleep (1);
                 }
 
-                if ( ipmitool_datafile_present )
+                if ( datafile_present )
                 {
-                    info_ptr->data = daemon_read_file (ipmitool_datafile.data()) ;
+                    info_ptr->data = daemon_read_file (datafile.data()) ;
                     dlog_t ("%s data:%s\n",
                                 info_ptr->hostname.c_str(),
                                 info_ptr->data.data());
@@ -950,18 +950,18 @@ static int _parse_redfish_sensor_data( char * json_str_ptr, thread_info_type * i
  * Name        : _redfishUtil_send_request
  * Description : Construct redfishtool request and send it out
  * Parameters  : info_ptr              - thread info
-                 redfishtool_datafile  - date file used for storing redfishtool comand response
-                 file_suffix           - file suffix for redfishtool_datafile name
+                 datafile              - date file used for storing redfishtool comand response
+                 file_suffix           - file suffix for datafile name
                  redfish_cmd_str       - redfish command string
  * Returns     : PASS if command sent out successfully.
  *
  *****************************************************************************/
 
-static int _redfishUtil_send_request( thread_info_type * info_ptr, string & redfishtool_datafile,
+static int _redfishUtil_send_request( thread_info_type * info_ptr, string & datafile,
                                       const char * file_suffix,    const char * redfish_cmd_str )
 {
-    string redfishtool_request = "" ;
-    string pw_file_content = "" ;
+    string request = "" ;
+    string config_file_content = "" ;
     int rc = PASS ;
     thread_extra_info_type * extra_ptr = (thread_extra_info_type*)info_ptr->extra_info_ptr ;
 
@@ -976,13 +976,15 @@ static int _redfishUtil_send_request( thread_info_type * info_ptr, string & redf
     }
 
     /**************** Create the password file *****************/
-    pw_file_content = "{\"user\" : \"" ;
-    pw_file_content.append(extra_ptr->bm_un) ;
-    pw_file_content.append("\", \"password\" : \"") ;
-    pw_file_content.append(extra_ptr->bm_pw) ;
-    pw_file_content.append("\"}") ;
+    config_file_content = "{\"username\":\"" ;
+    config_file_content.append(extra_ptr->bm_un) ;
+    config_file_content.append("\",\"user\":\"") ;
+    config_file_content.append(extra_ptr->bm_un) ;
+    config_file_content.append("\",\"password\":\"") ;
+    config_file_content.append(extra_ptr->bm_pw) ;
+    config_file_content.append("\"}") ;
 
-    bmcUtil_create_pw_file ( info_ptr, pw_file_content, BMC_PROTOCOL__REDFISHTOOL ) ;
+    bmcUtil_create_pw_file ( info_ptr, config_file_content, BMC_PROTOCOL__REDFISHTOOL ) ;
     if ( info_ptr->password_file.empty() )
     {
         info_ptr->status_string = "failed to get a temporary password filename" ;
@@ -995,69 +997,54 @@ static int _redfishUtil_send_request( thread_info_type * info_ptr, string & redf
     info_ptr->password_file.c_str());
 
     /*************** Create the output filename ***************/
-    redfishtool_datafile =
-        bmcUtil_create_data_fn (info_ptr->hostname, file_suffix, BMC_PROTOCOL__REDFISHTOOL ) ;
-            dlog_t ("%s  create data filename  : %s\n",
-                        info_ptr->log_prefix,
-                        redfishtool_datafile.c_str());
+    datafile = bmcUtil_create_data_fn (info_ptr->hostname, file_suffix, BMC_PROTOCOL__REDFISHTOOL ) ;
+    dlog_t ("%s  create data filename  : %s\n", info_ptr->log_prefix, datafile.c_str());
 
     /************** Create the redfishtool request **************/
-    redfishtool_request =
-        redfishUtil_create_request ( redfish_cmd_str,
-                                     extra_ptr->bm_ip,
-                                     info_ptr->password_file,
-                                     redfishtool_datafile );
+    request = redfishUtil_create_request ( redfish_cmd_str,
+                                           extra_ptr->bm_ip,
+                                           info_ptr->password_file,
+                                           datafile );
 
     dlog_t ("%s query cmd: %s\n",
                         info_ptr->log_prefix,
-                        redfishtool_request.c_str());
+                        request.c_str());
 
-    if ( ( info_ptr->command == BMC_THREAD_CMD__BMC_INFO
-               && daemon_is_file_present ( MTC_CMD_FIT__MC_INFO ) )
-      || ( info_ptr->command == BMC_THREAD_CMD__POWER_STATUS
-               && daemon_is_file_present ( MTC_CMD_FIT__POWER_STATUS ) ) )
+    if (( info_ptr->command == BMC_THREAD_CMD__READ_SENSORS ) &&
+        ( daemon_is_file_present ( MTC_CMD_FIT__SENSOR_DATA )))
     {
-        slog ("%s FIT CMD ： %s\n", info_ptr->hostname.c_str(), redfish_cmd_str);
         rc = PASS ;
-    }
-    else if ( info_ptr->command == BMC_THREAD_CMD__READ_SENSORS )
-    {
-        if( daemon_is_file_present ( MTC_CMD_FIT__SENSOR_DATA ))
-        {
-            rc = PASS ;
-        }
-#ifdef WANT_FIT_TESTING
-        else if ( daemon_want_fit ( FIT_CODE__HWMON__AVOID_SENSOR_QUERY, info_ptr->hostname ))
-        {
-            rc = PASS ; // ilog ("%s FIT Avoiding Sensor Query\n", info_ptr->hostname.c_str());
-        }
-        else if ( daemon_want_fit ( FIT_CODE__AVOID_N_FAIL_BMC_REQUEST, info_ptr->hostname ))
-        {
-            rc = FAIL ; // ilog ("%s FIT Avoiding Sensor Query\n", info_ptr->hostname.c_str());
-        }
-        else
-        {
-            /* Make the request */
-            rc = system ( redfishtool_request.data()) ;
-        }
-#endif
     }
     else
     {
-        /* Make the request */
-        rc = system ( redfishtool_request.data()) ;
+        daemon_remove_file ( datafile.data() ) ;
+        rc = threadUtil_bmcSystemCall (info_ptr->hostname, request,
+                                       DEFAULT_SYSTEM_REQUEST_LATENCY_SECS) ;
+        if ( rc != PASS )
+        {
+            /* crop garbage from the command to reduce log length */
+            string cmd_only = bmcUtil_chop_system_req ( request ) ;
+            elog_t ("%s system call failed [%s] (%d:%d:%m)\n",
+                        info_ptr->hostname.c_str(),
+                        cmd_only.c_str(),
+                        rc, errno );
+
+            info_ptr->status = FAIL_SYSTEM_CALL ;
+            if ( daemon_is_file_present ( datafile.data() ))
+            {
+                /* load in the error. stdio is redirected to the datafile */
+                info_ptr->status_string = daemon_read_file(datafile.data());
+            }
+            else
+            {
+                info_ptr->status_string = "system call failed for info query ; " ;
+                info_ptr->status_string.append(request);
+            }
+        }
     }
 
     unlink(info_ptr->password_file.data());
     daemon_remove_file (info_ptr->password_file.data());
-
-    /* check for system call error case */
-    if ( rc != PASS )
-    {
-        info_ptr->status_string = "system call failed for info query ; " ;
-        info_ptr->status_string.append(redfishtool_request);
-        info_ptr->status = FAIL_SYSTEM_CALL ;
-    }
     return (rc) ;
 }
 
@@ -1065,20 +1052,20 @@ static int _redfishUtil_send_request( thread_info_type * info_ptr, string & redf
  *
  * Name        : wait_for_command_output
  * Description : Wait for some time to check if redfishtool command output is available.
- * Parameters  : info_ptr              - thread info
-                 redfishtool_datafile  - date file used for storing redfishtool comand response
+ * Parameters  : info_ptr     - thread info
+                 datafile     - date file used for storing redfishtool comand response
  * Returns     : True if command response file is availalbe
                  False if command response file is unavailable after timeout.
  *
  *****************************************************************************/
 
-static bool _wait_for_command_output( thread_info_type * info_ptr, string & redfishtool_datafile )
+static bool _wait_for_command_output( thread_info_type * info_ptr, string & datafile )
 {
     /* look for the output data file */
     for ( int i = 0 ; i < 10 ; i++ )
     {
         pthread_signal_handler ( info_ptr );
-        if ( daemon_is_file_present ( redfishtool_datafile.data() ))
+        if ( daemon_is_file_present ( datafile.data() ))
         {
             return true ;
         }
@@ -1097,7 +1084,7 @@ static bool _wait_for_command_output( thread_info_type * info_ptr, string & redf
  * Description : Parse power and thermal sensor data
  * Parameters  : info_ptr              - thread info
                  sensor_group          - power & thermal group
-                 redfishtool_datafile  - date file used for storing redfishtool comand response
+                 datafile  - date file used for storing redfishtool comand response
                  samples       - sensor data index for _sample_list array.
  * Returns     : PASS if file access is OK
  *
@@ -1105,10 +1092,10 @@ static bool _wait_for_command_output( thread_info_type * info_ptr, string & redf
 
 static int _parse_redfish_sensor_data_output_file( thread_info_type * info_ptr,
                                                    int                sensor_group,
-                                                   string &           redfishtool_datafile,
+                                                   string &           datafile,
                                                    int &              samples )
 {
-    FILE * _fp = fopen ( redfishtool_datafile.data(), "r" );
+    FILE * _fp = fopen ( datafile.data(), "r" );
 
     if ( _fp )
     {
@@ -1160,7 +1147,7 @@ static int _parse_redfish_sensor_data_output_file( thread_info_type * info_ptr,
     {
         info_ptr->status = FAIL_FILE_ACCESS ;
         info_ptr->status_string = "failed to open sensor data file: ";
-        info_ptr->status_string.append(redfishtool_datafile);
+        info_ptr->status_string.append(datafile);
     }
 
     return FAIL ;
@@ -1180,7 +1167,7 @@ void * hwmonThread_redfish ( void * arg )
 
     thread_info_type       * info_ptr  ;
     thread_extra_info_type * extra_ptr ;
-    string redfishtool_datafile = "";
+    string datafile = "";
 
     /* Pointer Error Detection and Handling */
     if ( !arg )
@@ -1217,15 +1204,15 @@ void * hwmonThread_redfish ( void * arg )
         case BMC_THREAD_CMD__READ_SENSORS:
         {
             blog2_t ("%s read power sensors \n", info_ptr->log_prefix);
-            if ( _redfishUtil_send_request( info_ptr, redfishtool_datafile,
+            if ( _redfishUtil_send_request( info_ptr, datafile,
                                             BMC_SENSOR_OUTPUT_FILE_SUFFIX,
                                             REDFISHTOOL_READ_POWER_SENSORS_CMD ) == PASS )
             {
                 /* look for the output data file */
-                if( _wait_for_command_output(info_ptr, redfishtool_datafile) )
+                if( _wait_for_command_output(info_ptr, datafile) )
                 {
                     _parse_redfish_sensor_data_output_file( info_ptr, BMC_SENSOR_POWER_GROUP,
-                                                            redfishtool_datafile, samples );
+                                                            datafile, samples );
                 }
                 else
                 {
@@ -1234,15 +1221,15 @@ void * hwmonThread_redfish ( void * arg )
             }
 
             blog2_t ("%s read thermal sensors \n", info_ptr->log_prefix);
-            if (_redfishUtil_send_request( info_ptr, redfishtool_datafile,
+            if (_redfishUtil_send_request( info_ptr, datafile,
                                            BMC_SENSOR_OUTPUT_FILE_SUFFIX,
                                            REDFISHTOOL_READ_THERMAL_SENSORS_CMD ) == PASS )
             {
                 /* look for the output data file */
-                if( _wait_for_command_output(info_ptr, redfishtool_datafile) )
+                if( _wait_for_command_output(info_ptr, datafile) )
                 {
                     _parse_redfish_sensor_data_output_file( info_ptr, BMC_SENSOR_THERMAL_GROUP,
-                                                            redfishtool_datafile, samples );
+                                                            datafile, samples );
                 }
             }
 
@@ -1259,46 +1246,22 @@ void * hwmonThread_redfish ( void * arg )
             }
             break ;
         }
-        case BMC_THREAD_CMD__BMC_INFO:
-        {
-            blog2_t ("%s query BMC info\n", info_ptr->log_prefix);
-            if (_redfishUtil_send_request( info_ptr, redfishtool_datafile,
-                                           BMC_INFO_FILE_SUFFIX, REDFISHTOOL_BMC_INFO_CMD )
-                                        == PASS )
-            {
-                /* look for the output data file */
-                if( _wait_for_command_output(info_ptr, redfishtool_datafile) )
-                {
-                    info_ptr->data = daemon_read_file (redfishtool_datafile.data()) ;
-                    dlog_t ("%s data:%s\n",
-                                info_ptr->hostname.c_str(),
-                                info_ptr->data.data());
-
-                    info_ptr->status_string = "pass" ;
-                    info_ptr->status = PASS ;
-                }
-            }
-            break ;
-        }
         case BMC_THREAD_CMD__POWER_STATUS:
         {
+            string power_status = "" ;
+            bmc_protocol_enum protocol ;
             blog2_t ("%s query power status info\n", info_ptr->log_prefix);
-            if ( _redfishUtil_send_request( info_ptr, redfishtool_datafile,
-                                            BMC_POWER_STATUS_FILE_SUFFIX,
-                                            REDFISHTOOL_POWER_STATUS_CMD ) == PASS )
+            bmcUtil_read_bmc_info (info_ptr->hostname, power_status, protocol);
+            if (power_status.find (BMC_POWER_ON_STATUS) == string::npos)
             {
-                /* look for the output data file */
-                if( _wait_for_command_output(info_ptr, redfishtool_datafile) )
-                {
-                    info_ptr->data = daemon_read_file (redfishtool_datafile.data()) ;
-                    dlog_t ("%s data:%s\n",
-                                info_ptr->hostname.c_str(),
-                                info_ptr->data.data());
-
-                    info_ptr->status_string = "pass" ;
-                    info_ptr->status = PASS ;
-                }
+                info_ptr->data = BMC_POWER_OFF_STATUS ;
             }
+            else
+            {
+                info_ptr->data = BMC_POWER_ON_STATUS ;
+            }
+            info_ptr->status_string = "pass" ;
+            info_ptr->status = PASS ;
             break ;
         }
         default:
@@ -1334,5 +1297,33 @@ redfishtool_thread_done:
     info_ptr->runcount++ ;
     info_ptr->id = 0     ;
     pthread_exit (&info_ptr->status );
+    return NULL ;
+}
+
+/*****************************************************************************
+ *
+ * Name        : hwmonThread_bmc
+ * Purpose     : This thread used for sending bmc command
+ * Description : hwmon thread main function
+ *
+ *****************************************************************************/
+
+void * hwmonThread_bmc ( void * arg )
+{
+    string power_status = "";
+    string protocol = "";
+
+    /* cast pointers from arg */
+    thread_info_type * info_ptr  = (thread_info_type*)arg   ;
+
+    if (info_ptr->proto == BMC_PROTOCOL__REDFISHTOOL )
+    {
+        hwmonThread_redfish ( arg );
+    }
+    else
+    {
+        hwmonThread_ipmitool ( arg );
+    }
+
     return NULL ;
 }

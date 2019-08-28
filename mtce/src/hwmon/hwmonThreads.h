@@ -42,8 +42,8 @@
 #define BMC_SENSOR_POWER_GROUP      0
 #define BMC_SENSOR_THERMAL_GROUP    1
 
-void * hwmonThread_ipmitool ( void * );
-void * hwmonThread_redfish  ( void * );
+void * hwmonThread_bmc ( void * );
+
  /* --------------------
   * ipmitool_sensor_data: outgoing message
   * --------------------
@@ -162,10 +162,8 @@ using namespace std;
 
 #define BMC_SENSOR_OUTPUT_FILE_SUFFIX        ((const char *)("_sensor_data"))
 
-/* TBD */
 #define REDFISHTOOL_READ_POWER_SENSORS_CMD   ((const char *)("Chassis Power"))
 #define REDFISHTOOL_READ_THERMAL_SENSORS_CMD ((const char *)("Chassis Thermal"))
-#define REDFISHTOOL_POWER_STATUS_CMD         ((const char *)("  "))
 
 typedef struct
 {
