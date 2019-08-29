@@ -1004,7 +1004,7 @@ string daemon_read_file ( const char * filename )
             while ( fgets (buffer, BUFFER, _stream) )
             {
                 data.append(buffer);
-                if ( ++lines > 100 )
+                if ( ++lines > 5000 )
                 {
                     wlog ("%s file to big ; aborting\n", filename );
                     break ;

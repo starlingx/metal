@@ -246,8 +246,11 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
         obj_ptr->set_cmd_resp ( hostname , msg ) ;
         if ( msg.num > 0 )
         {
+            /* log if not locked message, not start host services result
+             * message and there is an error */
             if (( msg.cmd != MTC_MSG_LOCKED ) &&
-                ( msg.cmd != MTC_CMD_HOST_SVCS_RESULT ))
+                ( msg.cmd != MTC_CMD_HOST_SVCS_RESULT ) &&
+                ( msg.parm[0] ))
             {
                 ilog ("%s '%s' ACK (rc:%d) (%s)",
                           hostname.c_str(),

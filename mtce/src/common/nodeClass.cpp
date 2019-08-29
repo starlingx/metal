@@ -638,7 +638,12 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
     ptr->bm_pw = NONE ;
 
     ptr->bmc_provisioned = false ; /* assume not provisioned until learned   */
-    ptr->power_on       = false ; /* learned on first BMC connection        */
+
+    if ( hostname == my_hostname )
+        ptr->power_on    = true  ;
+    else
+        ptr->power_on    = false ; /* learned on first BMC connection        */
+
     bmc_access_data_init ( ptr ); /* init all the BMC access vars all modes */
 
     /* init the alarm array only to have it updated later
@@ -711,11 +716,11 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
         ptr->pulse_link[i].next_ptr = NULL  ;
         ptr->pulse_link[i].prev_ptr = NULL  ;
         ptr->monitor[i]             = false ;
-        ptr->hbs_minor[i]           = false ; 
-        ptr->hbs_degrade[i]         = false ; 
-        ptr->hbs_failure[i]         = false ; 
+        ptr->hbs_minor[i]           = false ;
+        ptr->hbs_degrade[i]         = false ;
+        ptr->hbs_failure[i]         = false ;
         ptr->max_count[i]           = 0 ;
-        ptr->hbs_count[i]           = 0 ; 
+        ptr->hbs_count[i]           = 0 ;
         ptr->hbs_minor_count[i]     = 0 ;
         ptr->hbs_misses_count[i]    = 0 ;
         ptr->b2b_misses_count[i]    = 0 ;
@@ -727,15 +732,15 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
 
     ptr->health = NODE_HEALTH_UNKNOWN ;
 
-    ptr->pmon_missing_count = 0; 
-    ptr->pmon_degraded = false ; 
+    ptr->pmon_missing_count = 0;
+    ptr->pmon_degraded = false ;
 
     /* now add it to the node list ; dealing with all conditions */
-  
+
     /* if the node list is empty add it to the head */
     if( head == NULL )
     {
-        head = ptr ;  
+        head = ptr ;
         tail = ptr ;
         ptr->prev = NULL ;
         ptr->next = NULL ;
@@ -749,7 +754,7 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
         tail->next = ptr  ;
         ptr->prev  = tail ;
         ptr->next  = NULL ;
-        tail = ptr ; 
+        tail = ptr ;
     }
 
     /* start with no action and an empty todo list */
@@ -803,7 +808,7 @@ struct nodeLinkClass::node* nodeLinkClass::getNode ( string hostname )
 }
 
 
-struct nodeLinkClass::node* nodeLinkClass::getEventBaseNode ( libEvent_enum request, 
+struct nodeLinkClass::node* nodeLinkClass::getEventBaseNode ( libEvent_enum request,
                                                        struct event_base * base_ptr)
 {
     struct node * ptr = static_cast<struct node *>(NULL) ;
@@ -823,7 +828,7 @@ struct nodeLinkClass::node* nodeLinkClass::getEventBaseNode ( libEvent_enum requ
            {
                if ( ptr->sysinvEvent.base == base_ptr )
                {
-                   hlog1 ("%s Found Sysinv Event Base Pointer (%p)\n", 
+                   hlog1 ("%s Found Sysinv Event Base Pointer (%p)\n",
                              ptr->hostname.c_str(), ptr->sysinvEvent.base);
 
                    return ptr ;
@@ -906,7 +911,7 @@ int nodeLinkClass::remNode( string hostname )
 #ifdef WANT_PULSE_LIST_SEARCH_ON_DELETE
 
     /* Splice the node out of the pulse monitor list */
-   
+
     for ( int i = 0 ; i < MAX_IFACES ; i++ )
     {
         /* Does the pulse monitor list exist ? */
@@ -919,15 +924,15 @@ int nodeLinkClass::remNode( string hostname )
                 {
                     pulse_list[i].head_ptr = NULL ;
                     pulse_list[i].tail_ptr = NULL ;
-                    dlog ("Pulse: Single Node -> Head Case\n");           
+                    dlog ("Pulse: Single Node -> Head Case\n");
                 }
                 else
                 {
                     dlog ("Pulse: Multiple Nodes -> Head Case\n");
                     pulse_list[i].head_ptr = pulse_list[i].head_ptr->pulse_link[i].next_ptr ;
-                    pulse_list[i].head_ptr->pulse_link[i].prev_ptr = NULL ; 
+                    pulse_list[i].head_ptr->pulse_link[i].prev_ptr = NULL ;
                 }
-            }  
+            }
             else if ( pulse_list[i].tail_ptr == pulse_ptr )
             {
                 dlog ("Pulse: Multiple Node -> Tail Case\n");
@@ -961,7 +966,7 @@ int nodeLinkClass::remNode( string hostname )
         {
             dlog ("Multiple Nodes -> Head Case\n");
             head = head->next ;
-            head->prev = NULL ; 
+            head->prev = NULL ;
             delNode ( ptr );
             rc = PASS ;
         }
@@ -4086,9 +4091,6 @@ int nodeLinkClass::set_bm_prov ( struct nodeLinkClass::node * node_ptr, bool sta
     int rc = FAIL_HOSTNAME_LOOKUP ;
     if ( node_ptr != NULL )
     {
-        /* default the bmc info file */
-        string bmc_info_path_n_filename = BMC_OUTPUT_DIR + node_ptr->hostname ;
-
         ilog ("%s bmc %sprovision request (provisioned:%s)\n",
                   node_ptr->hostname.c_str(),
                   state ? "" : "de",
@@ -4097,8 +4099,9 @@ int nodeLinkClass::set_bm_prov ( struct nodeLinkClass::node * node_ptr, bool sta
         /* Clear the alarm if we are starting fresh from an unprovisioned state */
         if (( node_ptr->bmc_provisioned == false ) && ( state == true ))
         {
-            /* default the bmc info file */
-            daemon_log ( bmc_info_path_n_filename.data(), BMC_DEFAULT_INFO );
+            bmcUtil_hwmon_info ( node_ptr->hostname,
+                                        node_ptr->bmc_protocol,
+                                        node_ptr->power_on, "" );
 
             ilog ("%s starting BM ping monitor to address '%s'\n",
                       node_ptr->hostname.c_str(),
@@ -4136,7 +4139,8 @@ int nodeLinkClass::set_bm_prov ( struct nodeLinkClass::node * node_ptr, bool sta
         /* handle the case going from provisioned to not provisioned */
         else if (( node_ptr->bmc_provisioned == true ) && ( state == false ))
         {
-            /* remove the BMC info file */
+            /* remove the old BMC info file if present */
+            string bmc_info_path_n_filename = BMC_OUTPUT_DIR + node_ptr->hostname ;
             daemon_remove_file ( bmc_info_path_n_filename.data() );
 
             ilog ("%s deprovisioning bmc ; accessible:%s\n",

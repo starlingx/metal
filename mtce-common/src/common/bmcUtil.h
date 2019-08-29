@@ -13,24 +13,57 @@
   * Starling-X BMC Utilities Header
   */
 
+#include <list>
+
+using namespace std;
+
 #include "nodeBase.h"      /* for ...                                  */
 #include "threadUtil.h"    /* for ... thread_info_type and utilities   */
 
 #define BMC_OUTPUT_DIR  ((const char *)("/var/run/bmc/"))
 
-#define BMC_DEFAULT_INFO ((const char *)("{\"power_state\":\"off\",\"protocol\":\"ipmitool\"}"))
+/* supported protocol strings */
+#define BMC_PROTOCOL__IPMITOOL_STR    ((const char *)("ipmitool"))
+#define BMC_PROTOCOL__REDFISHTOOL_STR ((const char *)("redfishtool"))
 
 
 /* important BMC query info to log and track */
 typedef struct
 {
+    /* common */
+    std::string manufacturer      ;
+
+    /*      IPMI Product Info     */
+    /* ---------------------------*/
+    /* product info */
     std::string product_name      ;
     std::string product_id        ;
-    std::string manufacturer_name ;
     std::string manufacturer_id   ;
     std::string device_id         ;
+    std::string serial_number     ;
+
+    /* hw/fw info */
     std::string fw_version        ;
     std::string hw_version        ;
+
+    /*    redfish product info    */
+    /* -------------------------- */
+    std::string bios_ver ;
+    std::string bmc_ver  ;
+    std::string pn       ;
+    std::string mn       ;
+    std::string sn       ;
+
+    /* actions */
+    std::list<string> allowable_reset_action_list ;
+
+    /* state info */
+    std::string  restart_cause     ;
+    bool         power_on          ;
+    unsigned int memory_in_gigs    ;
+    unsigned int processors        ;
+    std::list<string> links_list   ;
+
 } bmc_info_type ;
 
 
@@ -85,6 +118,12 @@ void bmcUtil_create_pw_file ( thread_info_type * info_ptr,
 string bmcUtil_create_data_fn ( string & hostname,
                                 string   file_suffix,
                      bmc_protocol_enum   protocol );
+
+/* this utility creates the bmc info file for hardware monitor */
+void bmcUtil_hwmon_info ( string            hostname,
+                          bmc_protocol_enum proto,
+                          bool              power_on,
+                          string            extra );
 
 #include "ipmiUtil.h"      /* for ... mtce-common ipmi utility header    */
 #include "redfishUtil.h"   /* for ... mtce-common redfish utility header */

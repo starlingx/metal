@@ -359,6 +359,17 @@ void nodeLinkClass::bmc_command_done ( struct nodeLinkClass::node * node_ptr )
 }
 
 
+void bmcUtil_hwmon_info ( string            hostname,
+                          bmc_protocol_enum proto,
+                          bool              power_on,
+                          string            extra )
+{
+    UNUSED(hostname);
+    UNUSED(proto);
+    UNUSED(power_on);
+    UNUSED(extra);
+}
+
 int  mtcAlarm_clear    ( string hostname, mtc_alarm_id_enum id ) { UNUSED(hostname); id = id ; return (PASS); }
 int  mtcAlarm_warning  ( string hostname, mtc_alarm_id_enum id ) { UNUSED(hostname); id = id ; return (PASS); }
 int  mtcAlarm_minor    ( string hostname, mtc_alarm_id_enum id ) { UNUSED(hostname); id = id ; return (PASS); }

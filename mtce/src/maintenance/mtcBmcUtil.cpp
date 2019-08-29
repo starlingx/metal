@@ -205,8 +205,6 @@ int nodeLinkClass::bmc_command_recv ( struct nodeLinkClass::node * node_ptr )
             }
             else
             {
-                ilog ("TODO: Handle RedfishTool Response:\n%s",
-                          node_ptr->bmc_thread_info.data.c_str() );
                 rc = PASS ;
             }
         }
@@ -214,14 +212,19 @@ int nodeLinkClass::bmc_command_recv ( struct nodeLinkClass::node * node_ptr )
         {
             if (( rc = node_ptr->bmc_thread_info.status ) != PASS )
             {
-                elog ("%s %s command failed (%s) (data:%s) (rc:%d:%d:%s)\n",
-                            node_ptr->hostname.c_str(),
-                            bmcUtil_getCmd_str(node_ptr->bmc_thread_info.command).c_str(),
-                            bmcUtil_getProtocol_str(node_ptr->bmc_protocol).c_str(),
-                            node_ptr->bmc_thread_info.data.c_str(),
-                            rc,
-                            node_ptr->bmc_thread_info.status,
-                            node_ptr->bmc_thread_info.status_string.c_str());
+                /* Don't log an error if this is just the BMC Query failure
+                 * used for protocol learning */
+                if ( node_ptr->bmc_thread_info.command != BMC_THREAD_CMD__BMC_QUERY )
+                {
+                    elog ("%s %s command failed (%s) (data:%s) (rc:%d:%d:%s)\n",
+                              node_ptr->hostname.c_str(),
+                              bmcUtil_getCmd_str(node_ptr->bmc_thread_info.command).c_str(),
+                              bmcUtil_getProtocol_str(node_ptr->bmc_protocol).c_str(),
+                              node_ptr->bmc_thread_info.data.c_str(),
+                              rc,
+                              node_ptr->bmc_thread_info.status,
+                              node_ptr->bmc_thread_info.status_string.c_str());
+                }
             }
             else
             {

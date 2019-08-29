@@ -241,12 +241,16 @@ void * mtcThread_bmc ( void * arg )
             dlog_t ("%s '%s' command\n", info_ptr->log_prefix, command.c_str());
 
             /*************** create the password file ***************/
-            /* password file contains username and password in format
+            /* password file contains user name and password in format
              *
              * {"username":"<username>","password":"<password>"}
              *
+             * FIXME: Need to settle on username or user.
+             *        Support both for now.
              */
             string config_file_content = "{\"username\":\"" ;
+            config_file_content.append(extra_ptr->bm_un);
+            config_file_content.append("\",\"user\":\"");
             config_file_content.append(extra_ptr->bm_un);
             config_file_content.append("\",\"password\":\"");
             config_file_content.append(extra_ptr->bm_pw);
@@ -324,7 +328,8 @@ void * mtcThread_bmc ( void * arg )
                         info_ptr->status_string = daemon_read_file(datafile.data());
                     }
                 }
-                nodeUtil_latency_log ( info_ptr->hostname, "redfishtool system call", 1000 );
+                /* produce latency log if command takes longer than 5 seconds */
+                nodeUtil_latency_log ( info_ptr->hostname, "redfishtool system call", 5000 );
             }
 
 #ifdef WANT_FIT_TESTING

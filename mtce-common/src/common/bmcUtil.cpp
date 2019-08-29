@@ -87,8 +87,8 @@ string bmcUtil_getProtocol_str ( bmc_protocol_enum protocol )
 {
     switch (protocol)
     {
-        case BMC_PROTOCOL__REDFISHTOOL: return("redfishtool");
-        case BMC_PROTOCOL__IPMITOOL:    return("ipmitool");
+        case BMC_PROTOCOL__REDFISHTOOL: return(BMC_PROTOCOL__REDFISHTOOL_STR);
+        case BMC_PROTOCOL__IPMITOOL:    return(BMC_PROTOCOL__IPMITOOL_STR);
         default:                        return("unknown");
     }
 }
@@ -157,15 +157,71 @@ int bmcUtil_init ( void )
 
 void bmcUtil_info_init ( bmc_info_type & bmc_info )
 {
-    bmc_info.device_id.clear();
-    bmc_info.manufacturer_name.clear();
+    bmc_info.manufacturer.clear();
     bmc_info.manufacturer_id.clear();
     bmc_info.product_name.clear();
     bmc_info.product_id.clear();
+    bmc_info.device_id.clear();
+
     bmc_info.fw_version.clear();
     bmc_info.hw_version.clear();
+
+    bmc_info.power_on = false ;
+    bmc_info.restart_cause.clear() ;
 }
 
+/*************************************************************************
+ *
+ * Name       : bmcUtil_hwmon_info
+ *
+ * Purpose    : Creates the hardware monitor info file and content.
+ *
+ * Description: The hardware monitor learns the hosts power state and
+ *              current bmc protocol being used.
+ *
+ * Future     : An extra string is passed in but currently unused.
+ *
+ * Returns    : nothing
+ *
+ *************************************************************************/
+
+void bmcUtil_hwmon_info ( string            hostname,
+                          bmc_protocol_enum proto,
+                          bool              power_on,
+                          string            extra )
+{
+
+    /* default the bmc info file */
+    string bmc_info_path_n_filename = BMC_OUTPUT_DIR + hostname ;
+
+    /* remove the old BMC info file if present */
+    daemon_remove_file ( bmc_info_path_n_filename.data() );
+
+    /* add the 'protocol' key:val pair */
+    string info_str = "{\"protocol\":\"" ;
+    if ( proto == BMC_PROTOCOL__REDFISHTOOL )
+        info_str.append(BMC_PROTOCOL__REDFISHTOOL_STR);
+    else
+        info_str.append(BMC_PROTOCOL__IPMITOOL_STR);
+
+    /* add the 'power' state key:val pair */
+    if ( power_on )
+        info_str.append("\",\"power\":\"on\"");
+    else
+        info_str.append("\",\"power\":\"off\"");
+
+    /* add the extra data if it exists */
+    if ( ! extra.empty () )
+        info_str.append(extra);
+
+    /* terminate */
+    info_str.append ("}");
+
+    blog ("%s hwmon info: %s", hostname.c_str(), info_str.c_str());
+
+    /* write the data to the file */
+    daemon_log ( bmc_info_path_n_filename.data(), info_str.data() );
+}
 
 /*************************************************************************
  *

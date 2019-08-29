@@ -15,6 +15,7 @@
 using namespace std;
 
 #include "nodeBase.h"      /* for ... mtce node common definitions     */
+#include "nodeUtil.h"      /* for ... tolowercase                      */
 #include "hostUtil.h"      /* for ... mtce host common definitions     */
 #include "jsonUtil.h"      /* for ...      */
 #include "redfishUtil.h"   /* for ... this module header               */
@@ -59,7 +60,7 @@ int redfishUtil_init ( void )
 
 bool redfishUtil_is_supported (string & hostname, string & response)
 {
-    if ( response.length() > strlen(REDFISH_LABEL__FW_VERSION ))
+    if ( response.length() > strlen(REDFISH_LABEL__REDFISH_VERSION ))
     {
         string redfish_version = "" ;
 
@@ -83,7 +84,7 @@ bool redfishUtil_is_supported (string & hostname, string & response)
 
         /* if no error then look for the redfish version number */
         if ( jsonUtil_get_key_val ((char*)response.data(),
-                                   REDFISH_LABEL__FW_VERSION,
+                                   REDFISH_LABEL__REDFISH_VERSION,
                                    redfish_version) == PASS )
         {
             if ( ! redfish_version.empty() )
@@ -109,7 +110,7 @@ bool redfishUtil_is_supported (string & hostname, string & response)
                               hostname.c_str(),
                               redfish_version.c_str(),
                               fields, major, minor, revision );
-                    ilog ("%s response: %s", hostname.c_str(), response.c_str()); // ERIK: make blog ?
+                    blog ("%s response: %s", hostname.c_str(), response.c_str());
                 }
             }
             else
@@ -123,7 +124,7 @@ bool redfishUtil_is_supported (string & hostname, string & response)
         {
             wlog ("%s bmc redfish root query response has no '%s' label\n%s",
                       hostname.c_str(),
-                      REDFISH_LABEL__FW_VERSION,
+                      REDFISH_LABEL__REDFISH_VERSION,
                       response.c_str());
         }
     }
@@ -161,6 +162,9 @@ string redfishUtil_create_request ( string   cmd,
     /* build the command ; starting with the redfishtool binary */
     string command_request = REDFISHTOOL_PATH_AND_FILENAME ;
 
+    /* allow the BMC to redirect http to https */
+    command_request.append(" -S Always");
+
     /* specify the bmc ip address */
     command_request.append(" -r ");
     command_request.append(ip);
@@ -181,4 +185,120 @@ string redfishUtil_create_request ( string   cmd,
     command_request.append (" 2>&1");
 
     return (command_request);
+}
+
+/*************************************************************************
+ *
+ * Name      : redfishUtil_get_bmc_info
+ *
+ * Purpose   :
+ *
+ * Description:
+ *
+ * Returns    : PASS if succesful
+ *              FAIL_OPERATION if unsuccessful
+ *
+ ************************************************************************/
+
+int redfishUtil_get_bmc_info ( string & hostname,
+                               string & bmc_info_filename,
+                               bmc_info_type & bmc_info )
+{
+    if ( bmc_info_filename.empty() )
+    {
+        wlog ("%s bmc info filename empty", hostname.c_str());
+        return (FAIL_NO_DATA);
+    }
+
+    string json_bmc_info = daemon_read_file (bmc_info_filename.data());
+    if ( json_bmc_info.empty() )
+    {
+        wlog ("%s bmc info file empty", hostname.c_str());
+        return (FAIL_STRING_EMPTY) ;
+    }
+
+    struct json_object *json_obj = json_tokener_parse((char*)json_bmc_info.data());
+    if ( !json_obj )
+    {
+        wlog ("%s bmc info file empty", hostname.c_str());
+        return (FAIL_JSON_PARSE) ;
+
+    }
+
+    bmc_info.manufacturer  = jsonUtil_get_key_value_string( json_obj, REDFISH_LABEL__MANUFACTURER );
+    bmc_info.sn            = jsonUtil_get_key_value_string( json_obj, REDFISH_LABEL__SERIAL_NUMBER);
+    bmc_info.mn            = jsonUtil_get_key_value_string( json_obj, REDFISH_LABEL__MODEL_NUMBER );
+    bmc_info.pn            = jsonUtil_get_key_value_string( json_obj, REDFISH_LABEL__PART_NUMBER  );
+    bmc_info.bmc_ver       = jsonUtil_get_key_value_string( json_obj, REDFISH_LABEL__BMC_VERSION  );
+    bmc_info.bios_ver      = jsonUtil_get_key_value_string( json_obj, REDFISH_LABEL__BIOS_VERSION );
+
+    ilog ("%s manufacturer is %s", hostname.c_str(), bmc_info.manufacturer.c_str());
+    ilog ("%s model number:%s  part number:%s  serial number:%s",
+              hostname.c_str(),
+              bmc_info.mn.c_str(),
+              bmc_info.pn.c_str(),
+              bmc_info.sn.c_str());
+
+    ilog ("%s BIOS firmware version is %s",
+              hostname.c_str(),
+              bmc_info.bios_ver != NONE ? bmc_info.bios_ver.c_str() : "unavailable" );
+
+    ilog ("%s BMC  firmware version is %s",
+              hostname.c_str(),
+              bmc_info.bmc_ver != NONE ? bmc_info.bmc_ver.c_str() : "unavailable" );
+
+    /* load the power state */
+    string power_state = tolowercase(jsonUtil_get_key_value_string( json_obj, REDFISH_LABEL__POWER_STATE));
+    if ( power_state == "on" )
+        bmc_info.power_on = true ;
+    else
+        bmc_info.power_on = false ;
+    ilog ("%s power is %s", hostname.c_str(), power_state.c_str());
+
+
+    /* get number of processors */
+    string processors = jsonUtil_get_key_value_string( json_obj, REDFISH_LABEL__PROCESSOR );
+    if ( ! processors.empty() )
+    {
+        struct json_object *proc_obj = json_tokener_parse((char*)processors.data());
+        if ( proc_obj )
+        {
+            bmc_info.processors = jsonUtil_get_key_value_int ( proc_obj, REDFISH_LABEL__COUNT );
+            ilog ("%s has %d processors", hostname.c_str(), bmc_info.processors);
+            json_object_put(proc_obj );
+        }
+        else
+        {
+            slog ("%s processor obj: %s", hostname.c_str(), processors.c_str());
+        }
+    }
+    else
+    {
+         slog ("%s processor count unavailable", hostname.c_str());
+    }
+
+    /* get amount of memory */
+    string memory = jsonUtil_get_key_value_string( json_obj, REDFISH_LABEL__MEMORY );
+    if ( ! memory.empty() )
+    {
+        struct json_object *mem_obj = json_tokener_parse((char*)memory.data());
+        if ( mem_obj )
+        {
+            bmc_info.memory_in_gigs = jsonUtil_get_key_value_int ( mem_obj, REDFISH_LABEL__MEMORY_TOTAL );
+            ilog ("%s has %d gigs of memory", hostname.c_str(), bmc_info.memory_in_gigs );
+            json_object_put(mem_obj );
+        }
+        else
+        {
+            slog ("%s memory obj: %s", hostname.c_str(), memory.c_str() );
+        }
+    }
+    else
+    {
+        slog ("%s memory size unavailable", hostname.c_str());
+    }
+
+    json_object_put(json_obj );
+
+    return PASS ;
 }

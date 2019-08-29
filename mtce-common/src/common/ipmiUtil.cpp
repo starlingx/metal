@@ -130,7 +130,7 @@ void ipmiUtil_bmc_info_log ( string hostname, bmc_info_type & bmc_info, int rc )
     {
         ilog ("%s Manufacturer: %s [id:%s] [ Device: %s  ver %s ]\n",
                   hostname.c_str(),
-                  bmc_info.manufacturer_name.c_str(),
+                  bmc_info.manufacturer.c_str(),
                   bmc_info.manufacturer_id.c_str(),
                   bmc_info.device_id.c_str(),
                   bmc_info.hw_version.c_str());
@@ -229,7 +229,7 @@ int ipmiUtil_bmc_info_load ( string hostname, const char * filename, bmc_info_ty
                     continue;
                 if ( _got_delimited_value ( buffer, BMC_INFO_LABEL_MANUFACTURE_ID, BMC_INFO_LABEL_DELIMITER, bmc_info.manufacturer_id ))
                     continue;
-                if ( _got_delimited_value ( buffer, BMC_INFO_LABEL_MANUFACTURE_NAME, BMC_INFO_LABEL_DELIMITER, bmc_info.manufacturer_name ))
+                if ( _got_delimited_value ( buffer, BMC_INFO_LABEL_MANUFACTURE_NAME, BMC_INFO_LABEL_DELIMITER, bmc_info.manufacturer ))
                     continue;
                 else
                     blog3 ("buffer: %s\n", buffer );
