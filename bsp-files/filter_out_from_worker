@@ -232,7 +232,6 @@ openstack-panko-doc
 python-aodh
 python-aodhclient
 python-barbican
-python2-barbicanclient
 python-ceilometerclient-doc
 python-cinder
 python-cinderclient-doc
