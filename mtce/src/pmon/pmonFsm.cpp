@@ -855,15 +855,6 @@ int pmon_passive_handler ( process_config_type * ptr )
                         start_monitoring = false;
                         waiting_for = config_filename;
                     }
-                    else if ( !strcmp (ptr->subfunction, "worker" ) )
-                    {
-                        if ( daemon_is_file_present ( DISABLE_WORKER_SERVICES ) == true )
-                        {
-                            /* Compute services are disabled - do not start monitoring */
-                            start_monitoring = false;
-                            waiting_for = DISABLE_WORKER_SERVICES;
-                        }
-                    }
 
                     mtcTimer_reset ( ptr->pt_ptr );
                     if ( start_monitoring == true )
