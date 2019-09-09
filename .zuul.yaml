@@ -25,6 +25,7 @@
       - starlingx/integ
       - starlingx/nfv
       - starlingx/update
+      - starlingx/utilities
     vars:
       tox_envlist: functional
       devstack_services:
