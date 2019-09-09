@@ -1,0 +1,17 @@
+-------------------------------------------------------------------
+Tue Jul 30 21:21:46 UTC 2019 - Marcela Rosales <marcelarosalesj@gmail.com>
+
+- Remove tarball from OBS and instead use _service XML to get the source
+  code.
+
+-------------------------------------------------------------------
+Thu Jun 20 13:18:40 UTC 2019 - Marcela Rosales <marcelarosalesj@gmail.com>
+
+- Substitute qemu-kvm-ev with openSUSE's qemu-kvm dependency.
+- Use systemd for Requires instead of /bin/systemctl
+- Remove unused macros
+
+-------------------------------------------------------------------
+Tue Jun 11 16:17:36 UTC 2019 - hayde.martinez.landa@intel.com
+
+-Initial commit
