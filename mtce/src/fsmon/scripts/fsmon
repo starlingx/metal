@@ -5,6 +5,18 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+#
+# chkconfig: 2345 05 95
+#
+### BEGIN INIT INFO
+# Provides:          fsmon
+# Required-Start: $null
+# Required-Stop: $null
+# Default-Start: $null
+# Default-Stop: $null
+# Short-Description: fsmon daemon
+### END INIT INFO
+
 . /etc/init.d/functions
 
 DAEMON_NAME="fsmond"
