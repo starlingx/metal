@@ -10,6 +10,7 @@ kernel-module-openvswitch
 openstack-neutron-openvswitch
 openstack-neutron-sriov-nic-agent
 platform-util-noncontroller
+pm-qos-mgr
 ceilometer-compute
 openstack-ceilometer-compute
 cgcs-dpdk
