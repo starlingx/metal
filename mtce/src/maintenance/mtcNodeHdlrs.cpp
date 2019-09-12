@@ -6222,6 +6222,7 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
         if ( node_ptr->thread_extra_info.bm_pw.empty() )
         {
             barbicanSecret_type * secret = secretUtil_manage_secret( node_ptr->secretEvent,
+                                                                     node_ptr->hostname,
                                                                      node_ptr->uuid,
                                                                      node_ptr->bm_timer,
                                                                      mtcTimer_handler );

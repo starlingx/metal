@@ -504,14 +504,11 @@ int pingUtil_recv ( ping_info_type & ping_info,
                      * are in monitoring mode. */
                     if ( ping_info.monitoring == false )
                     {
-                        /* ... only want the log when we ar first connecting */
-                        ilog ("%s ping recv %s ok ; identity:%04x sequence:%04x (try %d) (%d)\n",
+                        /* ... only want the log when we are first connecting */
+                        ilog ("%s ping to %s ok ; (try %d)",
                                   ping_info.hostname.c_str(),
                                   ping_info.ip.c_str(),
-                                  ping_info.identity,
-                                  ping_info.sequence,
-                                  ping_info.recv_retries+1,
-                                  i);
+                                  ping_info.recv_retries+1);
                     }
                     else
                     {

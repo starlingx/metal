@@ -52,6 +52,7 @@ barbicanSecret_type * secretUtil_find_secret ( string & host_uuid )
 }
 
 barbicanSecret_type * secretUtil_manage_secret ( libEvent & event,
+                                                 string & hostname,
                                                  string & host_uuid,
                                                  struct mtc_timer & secret_timer,
                                                  void (*handler)(int, siginfo_t*, void*))
@@ -77,7 +78,7 @@ barbicanSecret_type * secretUtil_manage_secret ( libEvent & event,
     {
         if ( secret_timer.ring == true )
         {
-            rc = secretUtil_get_secret ( event, host_uuid );
+            rc = secretUtil_get_secret ( event, hostname, host_uuid );
             if (rc)
             {
                 wlog ( "%s getting secret reference failed \n", host_uuid.c_str() );
@@ -100,7 +101,7 @@ barbicanSecret_type * secretUtil_manage_secret ( libEvent & event,
     {
         if ( secret_timer.ring == true )
         {
-            rc = secretUtil_read_secret ( event, host_uuid );
+            rc = secretUtil_read_secret ( event, hostname, host_uuid );
             if (rc)
             {
                 wlog ( "%s getting secret payload failed \n", host_uuid.c_str() );
@@ -169,7 +170,9 @@ barbicanSecret_type * secretUtil_manage_secret ( libEvent & event,
  *
  */
 
-int secretUtil_get_secret ( libEvent & event, string & host_uuid )
+int secretUtil_get_secret ( libEvent & event,
+                            string & hostname,
+                            string & host_uuid )
 {
     httpUtil_event_init ( &event,
                           host_uuid,
@@ -185,11 +188,13 @@ int secretUtil_get_secret ( libEvent & event, string & host_uuid )
     }
     else
     {
-        elog ("%s failed to find secret record\n", host_uuid.c_str());
+        elog ("%s failed to find secret record (%s)\n",
+                  hostname.c_str(),
+                  host_uuid.c_str());
         return FAIL;
     }
 
-    event.hostname    = _hn();
+    event.hostname    = hostname ;
     event.uuid        = host_uuid;
 
     event.token.url = MTC_SECRET_LABEL;
@@ -220,7 +225,9 @@ int secretUtil_get_secret ( libEvent & event, string & host_uuid )
  *
  *********************************************************************/
 
-int secretUtil_read_secret ( libEvent & event, string & host_uuid )
+int secretUtil_read_secret ( libEvent & event,
+                             string & hostname,
+                             string & host_uuid )
 {
     httpUtil_event_init ( &event,
                           host_uuid,
@@ -242,7 +249,7 @@ int secretUtil_read_secret ( libEvent & event, string & host_uuid )
         return FAIL;
     }
 
-    event.hostname    = _hn();
+    event.hostname    = hostname ;
     event.uuid        = host_uuid;
 
     event.token.url = MTC_SECRET_LABEL;
@@ -318,12 +325,12 @@ int secretUtil_handler ( libEvent & event )
             it->second.reference = json_info.secret_ref.substr( pos+1 );
             if ( it->second.reference.empty() )
             {
-                ilog ("%s no barbican secret reference found \n", hn.c_str() );
+                wlog ("%s no barbican secret reference found \n", hn.c_str() );
                 it->second.stage = MTC_SECRET__GET_PWD_RECV;
             }
             else
             {
-                ilog ("%s barbican secret reference found \n", hn.c_str() );
+                dlog ("%s barbican secret reference found \n", hn.c_str() );
                 it->second.stage = MTC_SECRET__GET_REF_RECV;
             }
         }
@@ -332,7 +339,7 @@ int secretUtil_handler ( libEvent & event )
     {
         if ( event.status == HTTP_NOTFOUND )
         {
-            ilog ("%s no barbican secret payload found \n", hn.c_str() );
+            wlog ("%s no barbican secret payload found \n", hn.c_str() );
         }
         else if ( event.status != PASS )
         {
@@ -341,7 +348,7 @@ int secretUtil_handler ( libEvent & event )
             return ( rc ) ;
         }
 
-        ilog ("%s barbican secret payload found \n", hn.c_str() );
+        dlog ("%s barbican secret payload found \n", hn.c_str() );
         it->second.payload = event.response;
         it->second.stage = MTC_SECRET__GET_PWD_RECV;
     }

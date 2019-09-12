@@ -52,12 +52,13 @@ using namespace std;
 
 barbicanSecret_type * secretUtil_find_secret ( string & host_uuid );
 barbicanSecret_type * secretUtil_manage_secret ( libEvent & event,
+                                                 string & hostname,
                                                  string & host_uuid,
                                                  struct mtc_timer & secret_timer,
                                                  void (*handler)(int, siginfo_t*, void*) );
 
 int secretUtil_handler     ( libEvent & event );
-int secretUtil_get_secret  ( libEvent & event, string & host_uuid );
-int secretUtil_read_secret ( libEvent & event, string & host_uuid );
+int secretUtil_get_secret  ( libEvent & event, string & hostname, string & host_uuid );
+int secretUtil_read_secret ( libEvent & event, string & hostname, string & host_uuid );
 
 #endif /* __INCLUDE_MTCSECRETUTIL_H__ */
