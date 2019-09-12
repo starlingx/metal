@@ -106,7 +106,7 @@ def validate_address_within_address_pool(ip, pool):
             "IP address %s is not within address pool ranges") % str(ip))
 
 
-def validate_address_within_nework(ip, network):
+def validate_address_within_network(ip, network):
     """Determine whether an IP address is within the specified IP network.
        :param ip netaddr.IPAddress object
        :param network objects.Network object

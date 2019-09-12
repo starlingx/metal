@@ -1883,7 +1883,7 @@ class HostController(rest.RestController):
     def _validate_ip_in_mgmt_network(ip):
         network = pecan.request.systemconfig.network_get_by_type(
             constants.NETWORK_TYPE_MGMT)
-        utils.validate_address_within_nework(ip, network)
+        utils.validate_address_within_network(ip, network)
 
     @staticmethod
     def _validate_address_not_allocated(name, ip_address):
