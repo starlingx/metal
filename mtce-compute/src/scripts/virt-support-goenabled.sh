@@ -35,6 +35,8 @@ OPTS+="nested_virt:${nested_virt}, "
 hardware_virt_supported=$(virt-host-validate qemu 2>/dev/null | grep -q -w -e FAIL && echo "false" || echo "true")
 OPTS+="hardware_virt_supported:${hardware_virt_supported}"
 REASONS=$(virt-host-validate qemu 2>/dev/null | grep -w -e FAIL)
+openstack_label=$(grep -w -q openstack-compute-node /tmp/puppet/hieradata/host.yaml && echo "true" || echo "false")
+
 
 # Check that virtualization is supported on hardware. It is sufficient just to
 # check the output of virt-host-validate.  Additional facts are gathered for
@@ -47,11 +49,15 @@ REASONS=$(virt-host-validate qemu 2>/dev/null | grep -w -e FAIL)
 # - on emulated systems such as VirtualBox or QEMU, vmx is not required
 # - if vmx is enabled on QEMU, it can also support nested virtualization
 
-if [ "${host_type}" == "physical" ] && [ "${hardware_virt_supported}" == "false" ]; then
-    LOG "Virtualization is not supported: ${OPTS}.  Failing goenabled check."
-    LOG "Failure reasons:"$'\n'"${REASONS}"
-    exit 1
+# Virtualization check is only required if openstack-compute-node label is detected.
+if [ "${openstack_label}" == "true" ]; then
+    LOG "Openstack Label detected"
+    if [ "${host_type}" == "physical" ] && [ "${hardware_virt_supported}" == "false" ]; then
+        LOG "Virtualization is not supported: ${OPTS}.  Failing goenabled check."
+        LOG "Failure reasons:"$'\n'"${REASONS}"
+        exit 1
+    fi
+    LOG "Virtualization is supported: ${OPTS}."
 fi
 
-LOG "Virtualization is supported: ${OPTS}."
 exit 0
