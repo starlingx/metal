@@ -265,6 +265,7 @@ kmod-ixgbe
 kmod-ixgbevf
 kmod-tpm
 kmod-integrity
+kmod-opae-fpga-driver
 mlnx-ofa_kernel-modules
 qat17
 kernel-tools
