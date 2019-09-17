@@ -51,7 +51,7 @@
 # vswitch                        does not support restart
 
 ############################################################################
-. /etc/nova/openrc
+. /etc/platform/openrc
 
 # Linux Standard Base (LSB) Error Codes
 RETVAL=0
