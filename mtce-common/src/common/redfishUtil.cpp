@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <iostream>
 #include <string.h>
+#include <json-c/json.h>   /* for ... json-c json string parsing */
 
 using namespace std;
 
@@ -19,6 +20,12 @@ using namespace std;
 #include "hostUtil.h"      /* for ... mtce host common definitions     */
 #include "jsonUtil.h"      /* for ...      */
 #include "redfishUtil.h"   /* for ... this module header               */
+
+/* static prioritized list of redfish <named> actions.
+ * Higher priority action first. */
+static std::list<string> reset_actions ;
+static std::list<string> poweron_actions ;
+static std::list<string> poweroff_actions ;
 
 /*************************************************************************
  *
@@ -35,8 +42,202 @@ using namespace std;
 int redfishUtil_init ( void )
 {
     daemon_make_dir(REDFISHTOOL_OUTPUT_DIR) ;
+
+    /* Stock reset actions in order of priority */
+    reset_actions.push_front(REDFISHTOOL_RESET__GRACEFUL_RESTART); /* P1 */
+    reset_actions.push_back (REDFISHTOOL_RESET__FORCE_RESTART);    /* P2 */
+
+    poweron_actions.push_front(REDFISHTOOL_POWER_ON__ON);
+    poweron_actions.push_back (REDFISHTOOL_POWER_ON__FORCE_ON);
+
+    poweroff_actions.push_front(REDFISHTOOL_POWER_OFF__GRACEFUL_SHUTDOWN);
+    poweroff_actions.push_back (REDFISHTOOL_POWER_OFF__FORCE_OFF);
+
     return (PASS);
 }
+
+/*************************************************************************
+ *
+ * Name       : _load_action_lists
+ *
+ * Purpose    : Load supported host actions.
+ *
+ * Description: Filter stock actions through host actions.
+ *
+ * Parameters : hostname         - this host amer
+ *              host_action_list - what actions this host reports support for.
+ *
+ * Updates:     bmc_info         - reference that includes host action lists
+ *
+ *************************************************************************/
+
+void _load_action_lists (        string & hostname,
+                          bmc_info_type & bmc_info,
+                      std::list<string> & host_action_list)
+{
+    bmc_info.reset_action_list.clear();
+    bmc_info.power_on_action_list.clear();
+    bmc_info.power_off_action_list.clear();
+
+    /* Walk through the host action list looking for and updating
+     * this host's bmc_info supported actions lists */
+    std::list<string>::iterator _host_action_list_ptr ;
+    for ( _host_action_list_ptr  = host_action_list.begin();
+          _host_action_list_ptr != host_action_list.end() ;
+          _host_action_list_ptr++ )
+    {
+        std::list<string>::iterator _action_list_ptr ;
+        for ( _action_list_ptr  = poweroff_actions.begin();
+              _action_list_ptr != poweroff_actions.end() ;
+              _action_list_ptr++ )
+        {
+            if ( (*_host_action_list_ptr) == (*_action_list_ptr) )
+            {
+                bmc_info.power_off_action_list.push_back(*_action_list_ptr) ;
+                break ;
+            }
+        }
+        for ( _action_list_ptr  = poweron_actions.begin();
+              _action_list_ptr != poweron_actions.end() ;
+              _action_list_ptr++ )
+        {
+            if ( (*_host_action_list_ptr) == (*_action_list_ptr) )
+            {
+                bmc_info.power_on_action_list.push_back(*_action_list_ptr) ;
+                break ;
+            }
+        }
+        for ( _action_list_ptr  = reset_actions.begin();
+              _action_list_ptr != reset_actions.end() ;
+              _action_list_ptr++ )
+        {
+            if ( (*_host_action_list_ptr) == (*_action_list_ptr) )
+            {
+                bmc_info.reset_action_list.push_back(*_action_list_ptr) ;
+                break ;
+            }
+        }
+    }
+    string reset_tmp = "" ;
+    string poweron_tmp = "" ;
+    string poweroff_tmp = "" ;
+    std::list<string>::iterator _ptr ;
+    for ( _ptr  = bmc_info.reset_action_list.begin();
+          _ptr != bmc_info.reset_action_list.end() ;
+          _ptr++ )
+    {
+        if ( !reset_tmp.empty() )
+            reset_tmp.append(",");
+        reset_tmp.append(*_ptr);
+    }
+    for ( _ptr  = bmc_info.power_on_action_list.begin();
+          _ptr != bmc_info.power_on_action_list.end() ;
+          _ptr++ )
+    {
+        if ( !poweron_tmp.empty() )
+            poweron_tmp.append(",");
+        poweron_tmp.append(*_ptr);
+    }
+    for ( _ptr  = bmc_info.power_off_action_list.begin();
+          _ptr != bmc_info.power_off_action_list.end() ;
+          _ptr++ )
+    {
+        if ( !poweroff_tmp.empty() )
+            poweroff_tmp.append(",");
+        poweroff_tmp.append(*_ptr);
+    }
+    ilog ("%s bmc actions ; reset:%s  power-on:%s  power-off:%s",
+              hostname.c_str(),
+              reset_tmp.empty() ? "none" : reset_tmp.c_str(),
+              poweron_tmp.empty() ? "none" : poweron_tmp.c_str(),
+              poweroff_tmp.empty() ? "none" : poweroff_tmp.c_str());
+}
+
+#ifdef SAVE_IMP
+int _get_action_list (              string   hostname,
+                       redfish_action_enum   action,
+                       std::list<string>     host_action_list,
+                       std::list<string>   & supp_action_list)
+{
+    int status = PASS ;
+    std::list<string> * action_ptr = NULL ;
+    string action_str = "" ;
+    supp_action_list.clear();
+    switch ( action )
+    {
+        case REDFISH_ACTION__RESET:
+        {
+            action_ptr = &reset_actions ;
+            action_str = "reset" ;
+            break ;
+        }
+        case REDFISH_ACTION__POWER_ON:
+        {
+            action_ptr = &poweron_actions ;
+            action_str = "power-on" ;
+            break ;
+        }
+        case REDFISH_ACTION__POWER_OFF:
+        {
+            action_ptr = &poweroff_actions ;
+            action_str = "power-off" ;
+            break ;
+        }
+        default:
+        {
+            status = FAIL_BAD_CASE ;
+        }
+    }
+
+    /* Filter */
+    if (( status == PASS ) && (action_ptr))
+    {
+        /* get the best supported action command
+         * for the specified action group. */
+        std::list<string>::iterator _action_list_ptr ;
+        std::list<string>::iterator _host_action_list_ptr ;
+        for ( _action_list_ptr  = action_ptr->begin();
+              _action_list_ptr != action_ptr->end() ;
+              _action_list_ptr++ )
+        {
+            for ( _host_action_list_ptr  = host_action_list.begin();
+                  _host_action_list_ptr != host_action_list.end() ;
+                  _host_action_list_ptr++ )
+            {
+                if ( (*_host_action_list_ptr) == (*_action_list_ptr) )
+                {
+                    supp_action_list.push_back(*_action_list_ptr) ;
+                    break ;
+                }
+            }
+        }
+    }
+    if ( supp_action_list.empty() )
+    {
+        elog ("%s has no %s actions", hostname.c_str(), action_str.c_str());
+        if ( status == PASS )
+            status = FAIL_STRING_EMPTY ;
+    }
+    else
+    {
+        string tmp = "" ;
+        std::list<string>::iterator _ptr ;
+        for ( _ptr  = supp_action_list.begin();
+              _ptr != supp_action_list.end() ;
+              _ptr++ )
+        {
+            if ( !tmp.empty() )
+                tmp.append(", ");
+            tmp.append(*_ptr);
+        }
+        ilog ("%s redfish %s actions: %s",
+                  hostname.c_str(),
+                  action_str.c_str(),
+                  tmp.c_str());
+    }
+    return (status);
+}
+#endif
 
 /*************************************************************************
  *
@@ -95,22 +296,33 @@ bool redfishUtil_is_supported (string & hostname, string & response)
                                       &major,
                                       &minor,
                                       &revision );
-
-                if (( fields ) && ( major >= REDFISH_MIN_MAJOR_VERSION ))
+                if ( fields )
                 {
-                    ilog ("%s bmc redfish version %s (%d.%d.%d)",
-                              hostname.c_str(),
-                              redfish_version.c_str(),
-                              major, minor, revision );
-                    return true ;
+                    if (( major >= REDFISH_MIN_MAJOR_VERSION ) && ( minor >= REDFISH_MIN_MINOR_VERSION ))
+                    {
+                        ilog ("%s bmc supports redfish version %s",
+                                  hostname.c_str(),
+                                  redfish_version.c_str());
+                        return true ;
+                    }
+                    else
+                    {
+                        ilog ("%s bmc redfish version '%s' is below minimum baseline %d.%d.x (%d:%d.%d.%d)",
+                                  hostname.c_str(),
+                                  redfish_version.c_str(),
+                                  REDFISH_MIN_MAJOR_VERSION,
+                                  REDFISH_MIN_MINOR_VERSION,
+                                  fields, major, minor, revision);
+                    }
                 }
                 else
                 {
-                    ilog ("%s bmc has unsupported redfish version %s (%d:%d.%d.%d)",
+                    wlog ("%s failed to parse redfish version %s",
                               hostname.c_str(),
-                              redfish_version.c_str(),
-                              fields, major, minor, revision );
-                    blog ("%s response: %s", hostname.c_str(), response.c_str());
+                              redfish_version.c_str());
+                    blog ("%s response: %s",
+                              hostname.c_str(),
+                              response.c_str());
                 }
             }
             else
@@ -165,13 +377,39 @@ string redfishUtil_create_request ( string   cmd,
     /* allow the BMC to redirect http to https */
     command_request.append(" -S Always");
 
+    /* redfishtool default timeout is 10 seconds.
+     * Seeing requests that are taking a little longer than that.
+     * defaulting to 20 sec timeout */
+    command_request.append(" -T 30");
+
     /* specify the bmc ip address */
     command_request.append(" -r ");
     command_request.append(ip);
 
-    /* add the config file option and config filename */
-    command_request.append(" -c ");
-    command_request.append(config_file);
+#ifdef WANT_INLINE_CREDS
+    if ( daemon_is_file_present ( MTC_CMD_FIT__INLINE_CREDS ) )
+    {
+        string cfg_str = daemon_read_file (config_file.data());
+        struct json_object *_obj = json_tokener_parse( cfg_str.data() );
+        if ( _obj )
+        {
+            command_request.append(" -u ");
+            command_request.append(jsonUtil_get_key_value_string(_obj,"username"));
+            command_request.append(" -p ");
+            command_request.append(jsonUtil_get_key_value_string(_obj,"password"));
+        }
+        else
+        {
+            slog("FIT: failed to get creds from config file");
+        }
+    }
+    else
+#endif
+    {
+        /* add the config file option and config filename */
+        command_request.append(" -c ");
+        command_request.append(config_file);
+    }
 
     /* add the command */
     command_request.append(" ");
@@ -189,11 +427,66 @@ string redfishUtil_create_request ( string   cmd,
 
 /*************************************************************************
  *
- * Name      : redfishUtil_get_bmc_info
+ * Name       : redfishUtil_health_info
  *
- * Purpose   :
+ * Purpose    : Parse the supplied object.
  *
- * Description:
+ * Description: Update callers health state, health and health_rollup
+ *              variables with what is contained in the supplied object.
+ *
+ *       "Status": {
+ *           "HealthRollup": "OK",
+ *           "State": "Enabled",
+ *           "Health": "OK"
+ *       },
+ *
+ * Assumptions: Status label must be a first order label.
+ *              This utility does nto walk the object looking for status.
+ *
+ * Returns    : PASS if succesful
+ *              FAIL_OPERATION if unsuccessful
+ *
+ ************************************************************************/
+
+int redfishUtil_health_info (             string & hostname,
+                                          string   entity,
+                              struct json_object * info_obj,
+                           redfish_entity_status & status )
+{
+    if ( info_obj )
+    {
+        struct json_object *status_obj = (struct json_object *)(NULL);
+        json_bool json_rc = json_object_object_get_ex( info_obj,
+                                                      REDFISH_LABEL__STATUS,
+                                                      &status_obj );
+        if (( json_rc == TRUE ) && ( status_obj ))
+        {
+            status.state         = jsonUtil_get_key_value_string( status_obj,
+                                   REDFISH_LABEL__STATE );
+            status.health        = jsonUtil_get_key_value_string( status_obj,
+                                   REDFISH_LABEL__HEALTH );
+            status.health_rollup = jsonUtil_get_key_value_string( status_obj,
+                                   REDFISH_LABEL__HEALTHROLLUP );
+            return (PASS);
+        }
+    }
+    wlog ("%s unable to get %s state and health info",
+              hostname.c_str(), entity.c_str());
+
+    status.state = UNKNOWN ;
+    status.health = UNKNOWN ;
+    status.health_rollup = UNKNOWN ;
+    return (FAIL_OPERATION);
+}
+
+/*************************************************************************
+ *
+ * Name       : redfishUtil_get_bmc_info
+ *
+ * Purpose    : Parse the Systems get output
+ *
+ * Description: Log all important BMC server info such as processors, memory,
+ *              model number, firmware version, hardware part number, etc.
  *
  * Returns    : PASS if succesful
  *              FAIL_OPERATION if unsuccessful
@@ -204,6 +497,11 @@ int redfishUtil_get_bmc_info ( string & hostname,
                                string & bmc_info_filename,
                                bmc_info_type & bmc_info )
 {
+#ifdef WANT_FIT_TESTING
+    if ( daemon_is_file_present ( MTC_CMD_FIT__MEM_LEAK_DEBUG ))
+        return (PASS) ;
+#endif
+
     if ( bmc_info_filename.empty() )
     {
         wlog ("%s bmc info filename empty", hostname.c_str());
@@ -225,28 +523,6 @@ int redfishUtil_get_bmc_info ( string & hostname,
 
     }
 
-    bmc_info.manufacturer  = jsonUtil_get_key_value_string( json_obj, REDFISH_LABEL__MANUFACTURER );
-    bmc_info.sn            = jsonUtil_get_key_value_string( json_obj, REDFISH_LABEL__SERIAL_NUMBER);
-    bmc_info.mn            = jsonUtil_get_key_value_string( json_obj, REDFISH_LABEL__MODEL_NUMBER );
-    bmc_info.pn            = jsonUtil_get_key_value_string( json_obj, REDFISH_LABEL__PART_NUMBER  );
-    bmc_info.bmc_ver       = jsonUtil_get_key_value_string( json_obj, REDFISH_LABEL__BMC_VERSION  );
-    bmc_info.bios_ver      = jsonUtil_get_key_value_string( json_obj, REDFISH_LABEL__BIOS_VERSION );
-
-    ilog ("%s manufacturer is %s", hostname.c_str(), bmc_info.manufacturer.c_str());
-    ilog ("%s model number:%s  part number:%s  serial number:%s",
-              hostname.c_str(),
-              bmc_info.mn.c_str(),
-              bmc_info.pn.c_str(),
-              bmc_info.sn.c_str());
-
-    ilog ("%s BIOS firmware version is %s",
-              hostname.c_str(),
-              bmc_info.bios_ver != NONE ? bmc_info.bios_ver.c_str() : "unavailable" );
-
-    ilog ("%s BMC  firmware version is %s",
-              hostname.c_str(),
-              bmc_info.bmc_ver != NONE ? bmc_info.bmc_ver.c_str() : "unavailable" );
-
     /* load the power state */
     string power_state = tolowercase(jsonUtil_get_key_value_string( json_obj, REDFISH_LABEL__POWER_STATE));
     if ( power_state == "on" )
@@ -255,50 +531,104 @@ int redfishUtil_get_bmc_info ( string & hostname,
         bmc_info.power_on = false ;
     ilog ("%s power is %s", hostname.c_str(), power_state.c_str());
 
+    bmc_info.manufacturer  = jsonUtil_get_key_value_string( json_obj, REDFISH_LABEL__MANUFACTURER );
+    bmc_info.sn            = jsonUtil_get_key_value_string( json_obj, REDFISH_LABEL__SERIAL_NUMBER);
+    bmc_info.mn            = jsonUtil_get_key_value_string( json_obj, REDFISH_LABEL__MODEL_NUMBER );
+    bmc_info.pn            = jsonUtil_get_key_value_string( json_obj, REDFISH_LABEL__PART_NUMBER  );
+    ilog ("%s manufacturer is %s ; model:%s  part:%s  serial:%s ",
+              hostname.c_str(),
+              bmc_info.manufacturer.c_str(),
+              bmc_info.mn.c_str(),
+              bmc_info.pn.c_str(),
+              bmc_info.sn.c_str());
 
-    /* get number of processors */
-    string processors = jsonUtil_get_key_value_string( json_obj, REDFISH_LABEL__PROCESSOR );
-    if ( ! processors.empty() )
+    bmc_info.bios_ver = jsonUtil_get_key_value_string( json_obj, REDFISH_LABEL__BIOS_VERSION );
+    if (( !bmc_info.bios_ver.empty() ) && ( bmc_info.bios_ver != NONE ))
     {
-        struct json_object *proc_obj = json_tokener_parse((char*)processors.data());
-        if ( proc_obj )
+        ilog ("%s BIOS fw version %s",
+                  hostname.c_str(),
+                  bmc_info.bios_ver.c_str());
+    }
+
+    bmc_info.bmc_ver = jsonUtil_get_key_value_string( json_obj, REDFISH_LABEL__BMC_VERSION  );
+    if (( !bmc_info.bmc_ver.empty() ) && ( bmc_info.bmc_ver != NONE ))
+    {
+        ilog ("%s BMC  fw version %s",
+                  hostname.c_str(),
+                  bmc_info.bmc_ver.c_str());
+    }
+
+    struct json_object *json_obj_actions;
+    if ( json_object_object_get_ex(json_obj, REDFISH_LABEL__ACTIONS, &json_obj_actions ))
+    {
+        std::list<string> action_list ;
+
+        /* get the first level reset action label content */
+        string json_actions =
+        jsonUtil_get_key_value_string (json_obj_actions,
+                                       REDFISHTOOL_RESET_ACTIONS_LABEL);
+
+        if ( jsonUtil_get_list ((char*)json_actions.data(), REDFISHTOOL_RESET_ACTIONS_ALLOWED_LABEL, action_list ) == PASS )
         {
-            bmc_info.processors = jsonUtil_get_key_value_int ( proc_obj, REDFISH_LABEL__COUNT );
-            ilog ("%s has %d processors", hostname.c_str(), bmc_info.processors);
-            json_object_put(proc_obj );
+             _load_action_lists ( hostname, bmc_info, action_list);
         }
         else
         {
-            slog ("%s processor obj: %s", hostname.c_str(), processors.c_str());
+             elog ("%s actions list get failed ; [%s]", hostname.c_str(), json_actions.c_str());
         }
     }
     else
     {
-         slog ("%s processor count unavailable", hostname.c_str());
+        elog ("%s action object get failed", hostname.c_str());
+    }
+
+    /* get number of processors */
+    struct json_object *proc_obj = (struct json_object *)(NULL);
+    json_bool json_rc = json_object_object_get_ex( json_obj,
+                                                   REDFISH_LABEL__PROCESSOR,
+                                                  &proc_obj );
+    if (( json_rc == TRUE ) && ( proc_obj ))
+    {
+        redfish_entity_status status ;
+        bmc_info.processors = jsonUtil_get_key_value_int ( proc_obj, REDFISH_LABEL__COUNT );
+        redfishUtil_health_info ( hostname, REDFISH_LABEL__PROCESSOR,
+                                  proc_obj, status) ;
+        ilog ("%s has %2d Processors ; %s and %s:%s",
+                  hostname.c_str(),
+                  bmc_info.processors,
+                  status.state.c_str(),
+                  status.health.c_str(),
+                  status.health_rollup.c_str());
+    }
+    else
+    {
+         wlog ("%s processor object not found", hostname.c_str());
     }
 
     /* get amount of memory */
-    string memory = jsonUtil_get_key_value_string( json_obj, REDFISH_LABEL__MEMORY );
-    if ( ! memory.empty() )
+    struct json_object *mem_obj = (struct json_object *)(NULL);
+    json_rc = json_object_object_get_ex( json_obj,
+                                         REDFISH_LABEL__MEMORY,
+                                        &mem_obj );
+    if (( json_rc == TRUE ) && ( mem_obj ))
     {
-        struct json_object *mem_obj = json_tokener_parse((char*)memory.data());
-        if ( mem_obj )
-        {
-            bmc_info.memory_in_gigs = jsonUtil_get_key_value_int ( mem_obj, REDFISH_LABEL__MEMORY_TOTAL );
-            ilog ("%s has %d gigs of memory", hostname.c_str(), bmc_info.memory_in_gigs );
-            json_object_put(mem_obj );
-        }
-        else
-        {
-            slog ("%s memory obj: %s", hostname.c_str(), memory.c_str() );
-        }
+        redfish_entity_status status ;
+        bmc_info.memory_in_gigs = jsonUtil_get_key_value_int ( mem_obj, REDFISH_LABEL__MEMORY_TOTAL );
+        redfishUtil_health_info ( hostname, REDFISH_LABEL__MEMORY,
+                                  mem_obj, status) ;
+        ilog ("%s has %d GiB Memory ; %s and %s:%s",
+                  hostname.c_str(),
+                  bmc_info.memory_in_gigs,
+                  status.state.c_str(),
+                  status.health.c_str(),
+                  status.health_rollup.c_str() );
     }
     else
     {
-        slog ("%s memory size unavailable", hostname.c_str());
+        wlog ("%s memory object not found", hostname.c_str());
     }
 
     json_object_put(json_obj );
 
-    return PASS ;
+    return (PASS) ;
 }

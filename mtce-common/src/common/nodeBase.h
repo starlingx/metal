@@ -169,7 +169,12 @@ typedef enum
 
 #define CLUSTER_HOST_SUFFIX    ((const char*)("-cluster-host"))
 
-#define NONE (const char *)"none"
+#define NONE    (const char *)"none"
+
+#ifdef UNKNOWN
+#undef UNKNOWN
+#endif
+#define UNKNOWN (const char *)"unknown"
 
 /** Largest heartbeat pulse (req/resp) message size */
 #define MAX_API_LOG_LEN    (0x1000)

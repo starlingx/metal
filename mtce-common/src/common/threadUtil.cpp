@@ -25,10 +25,10 @@
  *
  ****************************************************************************/
 
-#include "daemon_common.h"   /* for ... daemon_health_test          */
-#include "nodeBase.h"        /* for ... mtce node common definitions     */
-#include "hostUtil.h"        /* for ... mtce host common definitions     */
-#include "threadUtil.h"      /* for ... this module header          */
+#include "daemon_common.h"   /* for ... daemon_health_test           */
+#include "nodeBase.h"        /* for ... mtce node common definitions */
+#include "hostUtil.h"        /* for ... mtce host common definitions */
+#include "threadUtil.h"      /* for ... this module header           */
 
 /* Stores the parent process's timer handler */
 static void (*thread_timer_handler)(int, siginfo_t*, void*) = NULL ;

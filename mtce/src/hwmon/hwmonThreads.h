@@ -160,7 +160,8 @@ using namespace std;
 #define BMC_JSON__SENSORS_LABEL              ((const char *)("sensors"))
 #define IPMITOOL_SENSOR_QUERY_CMD            ((const char *)(" sensor list"))
 
-#define BMC_SENSOR_OUTPUT_FILE_SUFFIX        ((const char *)("_sensor_data"))
+#define BMC_POWER_SENSOR_OUTPUT_FILE_SUFFIX   ((const char *)("_power_sensor_data"))
+#define BMC_THERMAL_SENSOR_OUTPUT_FILE_SUFFIX ((const char *)("_thermal_sensor_data"))
 
 #define REDFISHTOOL_READ_POWER_SENSORS_CMD   ((const char *)("Chassis Power"))
 #define REDFISHTOOL_READ_THERMAL_SENSORS_CMD ((const char *)("Chassis Thermal"))

@@ -91,6 +91,10 @@ void hwmonHostClass::bmc_data_init ( struct hwmonHostClass::hwmon_host * host_pt
     host_ptr->addStage   = HWMON_ADD__START;
 
     host_ptr->sensor_query_count = 0 ;
+
+    /* remove all the bmc related temporary files created
+     * for this host and process */
+    bmcUtil_remove_files ( host_ptr->hostname, host_ptr->protocol );
 }
 
 /*
@@ -611,14 +615,13 @@ int hwmonHostClass::mod_host ( node_inv_type & inv )
             {
                 /* if we have a credentials only change then disable the sensor
                  * model only to get re-enabled if sensor monitoring is
-                 * successful with the new credentils */
+                 * successful with the new credentials */
                 if (( hostUtil_is_valid_bm_type (host_ptr->bm_type) == true ) &&
                     ( host_ptr->bm_un.compare(NONE)))
                 {
                     bmc_set_group_state ( host_ptr, "disabled" );
                     bmc_disable_sensors ( host_ptr );
                 }
-                rc = set_bm_prov ( host_ptr, false );
             }
 
             if (( hostUtil_is_valid_bm_type (host_ptr->bm_type) == true ) &&
@@ -713,6 +716,8 @@ int hwmonHostClass::add_host ( node_inv_type & inv )
             host_ptr->accounting_ok = false ;
             host_ptr->accounting_bad_count = 0 ;
 
+            host_ptr->general_log_throttle = 0 ;
+
             /* Additions for sensor monitoring using IPMI protocol */
             host_ptr->want_degrade_audit = false ;
             host_ptr->degrade_audit_log_throttle = 0 ;
@@ -758,9 +763,7 @@ int hwmonHostClass::add_host ( node_inv_type & inv )
             host_ptr->group_index  = 0 ;
 
             /* Set default BMC protocol */
-            host_ptr->protocol = BMC_PROTOCOL__IPMITOOL ;
-            host_ptr->bmc_thread_info.proto = BMC_PROTOCOL__IPMITOOL ;
-            bmcUtil_write_hwmond_protocol ( host_ptr->hostname, BMC_PROTOCOL__IPMITOOL ) ;
+            host_ptr->protocol = bmcUtil_read_hwmond_protocol(host_ptr->hostname) ;
 
             /* Init sensor model relearn controls, state and status */
             host_ptr->relearn = false ;

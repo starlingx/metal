@@ -38,7 +38,6 @@ using namespace std;
 #include "mtcThreads.h"    /* for ... IPMITOOL_THREAD_CMD__RESET ...   */
 #include "bmcUtil.h"       /* for ... mtce-common bmc utility header   */
 
-
 /**************************************************************************
  *
  * Name       : mtcThread_bmc
@@ -111,6 +110,7 @@ void * mtcThread_bmc ( void * arg )
                     break ;
                 }
                 case BMC_THREAD_CMD__BMC_INFO:
+                case BMC_THREAD_CMD__POWER_STATUS:
                 {
                     command = REDFISHTOOL_BMC_INFO_CMD ;
                     suffix  = BMC_INFO_FILE_SUFFIX ;
@@ -120,26 +120,25 @@ void * mtcThread_bmc ( void * arg )
                 /* control commands */
                 case BMC_THREAD_CMD__POWER_RESET:
                 {
-                    command  = REDFISHTOOL_POWER_RESET_CMD  ;
+                    command  = extra_ptr->bm_cmd ;
                     suffix   = BMC_POWER_CMD_FILE_SUFFIX  ;
                     break ;
                 }
                 case BMC_THREAD_CMD__POWER_ON:
                 {
-                    command  = REDFISHTOOL_POWER_ON_CMD    ;
+                    command  = extra_ptr->bm_cmd ;
                     suffix   = BMC_POWER_CMD_FILE_SUFFIX ;
                     break ;
                 }
                 case BMC_THREAD_CMD__POWER_OFF:
                 {
-                    command  = REDFISHTOOL_POWER_OFF_CMD   ;
+                    command  = extra_ptr->bm_cmd ;
                     suffix   = BMC_POWER_CMD_FILE_SUFFIX ;
                     break ;
                 }
                 case BMC_THREAD_CMD__BOOTDEV_PXE:
                 {
-                    /* json response */
-                    command  = REDFISHTOOL_BOOTDEV_PXE_CMD     ;
+                    command  = REDFISHTOOL_BOOTDEV_PXE_CMD ;
                     suffix   = BMC_BOOTDEV_CMD_FILE_SUFFIX ;
                     break ;
                 }
@@ -153,6 +152,7 @@ void * mtcThread_bmc ( void * arg )
                 }
             }/* end redfishtool switch */
         } /* end if */
+        /* IPMI */
         else
         {
             switch ( info_ptr->command )
@@ -308,17 +308,30 @@ void * mtcThread_bmc ( void * arg )
             else
 #endif
             {
+                string chopped_request = bmcUtil_chop_system_req(request);
                 daemon_remove_file ( datafile.data() ) ;
+                blog_t("%s %s", info_ptr->hostname.c_str(), chopped_request.c_str());
 
-                nodeUtil_latency_log ( info_ptr->hostname, NODEUTIL_LATENCY_MON_START, 0 );
-                rc = system ( request.data()) ;
+                /****** Make the system call ******/
+                rc =
+                threadUtil_bmcSystemCall (info_ptr->hostname,
+                                          request,
+                                          DEFAULT_SYSTEM_REQUEST_LATENCY_SECS);
+
                 if ( rc != PASS )
                 {
-                    if ( info_ptr->command != BMC_THREAD_CMD__BMC_QUERY )
+                    /* Log the command that failed unless ...
+                     *  - its the root query during learning
+                     *  - its not the typical falure to reach the BMC whose
+                     *    error shows up as a ENOENT or
+                     *    'No such file or directory'
+                     */
+                    if (( info_ptr->command != BMC_THREAD_CMD__BMC_QUERY ) &&
+                        (             errno != ENOENT ))
                     {
-                        elog_t ("%s redfishtool system call failed (%s) (%d:%d:%m)\n",
+                        elog_t ("%s system call failed [%s] (%d:%d:%m)\n",
                                     info_ptr->hostname.c_str(),
-                                    request.c_str(),
+                                    chopped_request.c_str(),
                                     rc, errno );
                     }
                     info_ptr->status = FAIL_SYSTEM_CALL ;
@@ -328,8 +341,6 @@ void * mtcThread_bmc ( void * arg )
                         info_ptr->status_string = daemon_read_file(datafile.data());
                     }
                 }
-                /* produce latency log if command takes longer than 5 seconds */
-                nodeUtil_latency_log ( info_ptr->hostname, "redfishtool system call", 5000 );
             }
 
 #ifdef WANT_FIT_TESTING
@@ -478,15 +489,29 @@ void * mtcThread_bmc ( void * arg )
             else
 #endif
             {
-                daemon_remove_file ( datafile.data() ) ;
+                string chopped_request = bmcUtil_chop_system_req(request);
+                daemon_remove_file ( datafile.data() );
+                blog_t("%s %s", info_ptr->hostname.c_str(), chopped_request.c_str());
 
-                nodeUtil_latency_log ( info_ptr->hostname, NODEUTIL_LATENCY_MON_START, 0 );
-                rc = system ( request.data()) ;
+                /****** Make the system call ******/
+                rc =
+                threadUtil_bmcSystemCall (info_ptr->hostname,
+                                          request,
+                                          DEFAULT_SYSTEM_REQUEST_LATENCY_SECS);
+
                 if ( rc != PASS )
                 {
-                    wlog_t ("%s ipmitool system call failed (%d:%d:%m)\n", info_ptr->hostname.c_str(), rc, errno );
+                    elog_t ("%s system call failed [%s] (%d:%d:%m)\n",
+                                info_ptr->hostname.c_str(),
+                                chopped_request.c_str(),
+                                rc, errno );
+                    info_ptr->status = FAIL_SYSTEM_CALL ;
+                    if ( daemon_is_file_present ( datafile.data() ))
+                    {
+                        /* load in the error. stdio is redirected to the datafile */
+                        info_ptr->status_string = daemon_read_file(datafile.data());
+                    }
                 }
-                nodeUtil_latency_log ( info_ptr->hostname, "ipmitool system call", 1000 );
             }
 
 #ifdef WANT_FIT_TESTING

@@ -87,7 +87,7 @@ void mtcHttpSvr_fini ( event_type & mtce_event )
 
 /************************************************************************************
  *
- * event_base_loopcontinue is not supported until version 2.1.2-alpha 
+ * event_base_loopcontinue is not supported until version 2.1.2-alpha
  * It allows processing of events in main loop instead of in the handler.
  * Theoretically this would be nice to use in conjunction with
  * event_base_loopexit in the selected fd
@@ -281,26 +281,26 @@ void _create_error_response ( int rc , string & resp_buffer , node_inv_type & in
  ******************************************************************************/
 /* Test Commands:
  *
- * Test 1: Select host, get uuid and make sure it is unlocked-enabled. 
+ * Test 1: Select host, get uuid and make sure it is unlocked-enabled.
  * Verify: Host should fail, reset and auto re-enable.
 curl -i -X PATCH -H 'Content-Type: application/json' -H 'Accept: application/json' -H 'User-Agent: vim/1.0' http://localhost:2112/v1/hosts/8b216803-c47c-40b3-bf61-ed84ff83754e -d '{"uuid":"8b216803-c47c-40b3-bf61-ed84ff83754e", "hostname": "compute-1", "severity": "failed"}'
 
- * Test 2: Lock Host and issue command with correct uuids and hostname. 
+ * Test 2: Lock Host and issue command with correct uuids and hostname.
  * Verify: The host is rebooted/reset
 curl -i -X PATCH -H 'Content-Type: application/json' -H 'Accept: application/json' -H 'User-Agent: vim/1.0' http://localhost:2112/v1/hosts/8b216803-c47c-40b3-bf61-ed84ff83754e -d '{"uuid":"8b216803-c47c-40b3-bf61-ed84ff83754e", "hostname": "compute-1", "severity": "failed"}'
 
- * Test 3: 
+ * Test 3:
 curl -i -X PATCH -H 'Content-Type: application/json' -H 'Accept: application/json' -H 'User-Agent: vim/1.0' http://localhost:2112/v1/hosts/8b216803-c47c-40b3-bf61-ed84ff83754e -d '{"uuid":"8b216803-c47c-40b3-bf61-ed84ff83754e", "hostname": "compute-1", "severity": "degraded"}'
 
- * Test 4: 
+ * Test 4:
 curl -i -X PATCH -H 'Content-Type: application/json' -H 'Accept: application/json' -H 'User-Agent: vim/1.0' http://localhost:2112/v1/hosts/8b216803-c47c-40b3-bf61-ed84ff83754e -d '{"uuid":"8b216803-c47c-40b3-bf61-ed84ff83754e", "hostname": "compute-1", "severity": "cleared"}'
 
  * Test 5: Unsuppored VIM Command
 curl -i -X PATCH -H 'Content-Type: application/json' -H 'Accept: application/json' -H 'User-Agent: vim/1.0' http://localhost:2112/v1/hosts/8b216803-c47c-40b3-bf61-ed84ff83754e -d '{"uuid":"8b216803-c47c-40b3-bf61-ed84ff83754e", "hostname": "compute-1", "severity": "degradeded"}'
 */
 
-string mtcHttpSvr_vim_req ( char          * buffer_ptr, 
-                            evhttp_cmd_type http_cmd, 
+string mtcHttpSvr_vim_req ( char          * buffer_ptr,
+                            evhttp_cmd_type http_cmd,
                             int           & http_status_code )
 {
     nodeLinkClass * obj_ptr = get_mtcInv_ptr () ;
@@ -311,7 +311,7 @@ string mtcHttpSvr_vim_req ( char          * buffer_ptr,
     int rc1 = jsonUtil_get_key_val ( buffer_ptr, MTC_JSON_SEVERITY, severity );
     int rc2 = jsonUtil_get_key_val ( buffer_ptr, MTC_JSON_INV_NAME, hostname );
 
-    jlog ("%s '%s' request\n", hostname.c_str(), getHttpCmdType_str(http_cmd)); 
+    jlog ("%s '%s' request\n", hostname.c_str(), getHttpCmdType_str(http_cmd));
     if ( rc1 | rc2 )
     {
         wlog ("Failed to parse command key values (%d:%d)\n", rc1, rc2);
@@ -337,7 +337,7 @@ string mtcHttpSvr_vim_req ( char          * buffer_ptr,
             {
                 /* Test 1 */
                 ilog ("%s is now failed due to failed event (host is unlocked)\n", hostname.c_str());
-                obj_ptr->mtcInvApi_update_states ( hostname, 
+                obj_ptr->mtcInvApi_update_states ( hostname,
                                                    get_adminState_str (MTC_ADMIN_STATE__UNLOCKED),
                                                    get_operState_str  (MTC_OPER_STATE__DISABLED ),
                                                    get_availStatus_str(MTC_AVAIL_STATUS__FAILED));
@@ -356,7 +356,7 @@ string mtcHttpSvr_vim_req ( char          * buffer_ptr,
             http_status_code = HTTP_BADMETHOD;
         }
         else if ( ! severity.compare("cleared"))
-        {                
+        {
             /* Test 4 */
             ilog ("%s severity 'cleared' request not supported\n", hostname.c_str() );
             response.append ("{\"status\" : \"fail\"");
@@ -393,8 +393,8 @@ string mtcHttpSvr_vim_req ( char          * buffer_ptr,
  *
  ******************************************************************************/
 
-string mtcHttpSvr_inv_req ( char          * request_ptr, 
-                            evhttp_cmd_type event_type, 
+string mtcHttpSvr_inv_req ( char          * request_ptr,
+                            evhttp_cmd_type event_type,
                             int           & http_status_code )
 {
     int rc = PASS ;
@@ -426,7 +426,7 @@ string mtcHttpSvr_inv_req ( char          * request_ptr,
                 hostname = inv.name ;
             }
 
-            snprintf (&log_str[0], MAX_API_LOG_LEN-1, "%s [%5d] http event seq: %d Payload:%s: %s", 
+            snprintf (&log_str[0], MAX_API_LOG_LEN-1, "%s [%5d] http event seq: %d Payload:%s: %s",
                        pt(), getpid(), sequence, hostname.data(), request_ptr);
             send_log_message ( mtclogd_ptr, obj_ptr->my_hostname.data(), &filename[0],  &log_str[0] );
 
@@ -437,14 +437,14 @@ string mtcHttpSvr_inv_req ( char          * request_ptr,
                 if ( rc == PASS )
                 {
                     ilog ("%s Add Operation\n", inv.name.c_str());
-    
+
                     /* generate event=add alarm if the add_host returns a PASS */
                     mtcAlarm_log ( inv.name, MTC_LOG_ID__EVENT_ADD );
                 }
 
-                /* A RETRY return from add_host indicates that the node is 
-                 * already provisioned. At this point changes can only be 
-                 * implemented as modification so call mod_host 
+                /* A RETRY return from add_host indicates that the node is
+                 * already provisioned. At this point changes can only be
+                 * implemented as modification so call mod_host
                  */
                 if ( rc == RETRY )
                 {
@@ -459,8 +459,8 @@ string mtcHttpSvr_inv_req ( char          * request_ptr,
                 }
                 else
                 {
-                    elog ("%s Inventory Add failed (%s)\n", 
-                              inv.name.length() ? inv.name.c_str() : "none", 
+                    elog ("%s Inventory Add failed (%s)\n",
+                              inv.name.length() ? inv.name.c_str() : "none",
                               inv.uuid.c_str() );
                     _create_error_response ( rc , resp_buffer, inv ) ;
                 }
@@ -685,8 +685,8 @@ string mtcHttpSvr_sm_req ( char          * request_ptr,
  *
  * Verify this request contains valid client info.
  *
- * 1. the URL must have 
- *        CLIENT_SYSINV_URL or 
+ * 1. the URL must have
+ *        CLIENT_SYSINV_URL or
  *        CLIENT_VIM_HOSTS_URL or
  *        CLIENT_VIM_SYSTEMS_URL
  *
@@ -703,16 +703,16 @@ mtc_client_enum _get_client_id ( struct evhttp_request *req )
      * correct User-Agent header and supported version */
     struct evkeyvalq * headers_ptr = evhttp_request_get_input_headers (req);
     const char * header_value_ptr  = evhttp_find_header (headers_ptr, CLIENT_HEADER);
-    if ( header_value_ptr ) 
+    if ( header_value_ptr )
     {
         const char * url_ptr = evhttp_request_get_uri (req);
-    
+
         hlog2 ("URI: %s\n", url_ptr );
 
         if ( ! strncmp ( header_value_ptr, CLIENT_SYSINV_1_0, 20 ) )
         {
             hlog3 ("%s\n", header_value_ptr );
-            
+
             if ( strstr ( url_ptr, CLIENT_SYSINV_URL) )
             {
                client = CLIENT_SYSINV ;
@@ -721,7 +721,7 @@ mtc_client_enum _get_client_id ( struct evhttp_request *req )
         else if ( ! strncmp ( header_value_ptr, CLIENT_VIM_1_0, 20 ) )
         {
             hlog3 ("%s\n", header_value_ptr );
-              
+
             if ( strstr ( url_ptr, CLIENT_VIM_HOSTS_URL))
             {
                 client = CLIENT_VIM_HOSTS ;
@@ -762,14 +762,14 @@ mtc_client_enum _get_client_id ( struct evhttp_request *req )
 void mtcHttpSvr_handler (struct evhttp_request *req, void *arg)
 {
     struct evbuffer *resp_buf ;
-    mtc_client_enum client = CLIENT_NONE ; 
+    mtc_client_enum client = CLIENT_NONE ;
     int http_status_code = HTTP_NOTFOUND ;
     string service  = "" ;
     string uuid     = "" ;
     string response = "" ;
     string hostname = "n/a" ;
 
-    UNUSED(arg);    
+    UNUSED(arg);
 
     response = "{" ;
     response.append (" \"status\" : \"fail\"");
@@ -792,7 +792,7 @@ void mtcHttpSvr_handler (struct evhttp_request *req, void *arg)
     }
 
     const char * url_ptr = evhttp_request_get_uri (req);
- 
+
     /* Extract the operation */
     evhttp_cmd_type http_cmd = evhttp_request_get_command (req);
     jlog ("%s request from '%s'\n", getHttpCmdType_str(http_cmd), host_ptr );
@@ -814,7 +814,7 @@ void mtcHttpSvr_handler (struct evhttp_request *req, void *arg)
         return ;
     }
 
-    if (( client == CLIENT_VIM_HOSTS ) || 
+    if (( client == CLIENT_VIM_HOSTS ) ||
         ( client == CLIENT_VIM_SYSTEMS ))
     {
         service = "vim" ;
@@ -830,7 +830,7 @@ void mtcHttpSvr_handler (struct evhttp_request *req, void *arg)
     else
         service = "unknown" ;
 
-    snprintf (&log_str[0], MAX_API_LOG_LEN-1, "\n%s [%5d] http event seq: %d with %s %s request from %s:%s", 
+    snprintf (&log_str[0], MAX_API_LOG_LEN-1, "\n%s [%5d] http event seq: %d with %s %s request from %s:%s",
                pt(), getpid(), ++sequence, service.c_str(), getHttpCmdType_str(http_cmd), host_ptr, url_ptr );
     send_log_message ( mtclogd_ptr, obj_ptr->my_hostname.data(), &filename[0], &log_str[0] );
 
@@ -842,7 +842,11 @@ void mtcHttpSvr_handler (struct evhttp_request *req, void *arg)
             size_t len = strlen(CLIENT_SYSINV_URL) ;
             uuid = (url_ptr+len) ;
             hostname = obj_ptr->get_host(uuid) ;
-            if (( http_cmd == EVHTTP_REQ_GET ) && ( client == CLIENT_VIM_SYSTEMS ))
+            if ( hostname.empty() )
+            {
+                wlog("uuid to host lookup failed ; '%s' not found ", uuid.c_str());
+            }
+            else if (( http_cmd == EVHTTP_REQ_GET ) && ( client == CLIENT_VIM_SYSTEMS ))
             {
                 http_status_code = obj_ptr->mtcVimApi_system_info ( response );
                 break ;
@@ -852,7 +856,7 @@ void mtcHttpSvr_handler (struct evhttp_request *req, void *arg)
                 http_status_code = HTTP_OK ;
                 if ( uuid.length() != UUID_LEN )
                 {
-                    wlog ("http '%s' request rejected, invalid uuid size (%ld:%s)\n", 
+                    wlog ("http '%s' request rejected, invalid uuid size (%ld:%s)\n",
                            getHttpCmdType_str(http_cmd),
                            uuid.length(), uuid.c_str());
                     response = "{" ;
@@ -861,7 +865,7 @@ void mtcHttpSvr_handler (struct evhttp_request *req, void *arg)
                     response.append (",\"action\" : \"Undetermined\"");
                     response.append ("}");
                     http_status_code = HTTP_BADREQUEST ;
-                }                
+                }
                 if (( http_cmd == EVHTTP_REQ_DELETE ) &&
                     (( hostname.length() == 0 ) || ( !hostname.compare("none"))))
                 {
@@ -918,9 +922,9 @@ void mtcHttpSvr_handler (struct evhttp_request *req, void *arg)
                 {
                     ev_ssize_t bytes = 0 ;
                     char * buffer_ptr = (char*)malloc(len+1);
-                    memset ( buffer_ptr, 0, len+1 ); 
+                    memset ( buffer_ptr, 0, len+1 );
                     bytes = evbuffer_remove(in_buf, buffer_ptr, len );
-                
+
                     if ( bytes <= 0 )
                     {
                         http_status_code = HTTP_BADREQUEST ;
@@ -976,16 +980,17 @@ void mtcHttpSvr_handler (struct evhttp_request *req, void *arg)
         resp_buf = evbuffer_new();
         jlog ("Event Response: %s\n", response.c_str());
         evbuffer_add_printf (resp_buf, "%s\n", response.data());
-        evhttp_send_reply (event_ptr->req, http_status_code, "OK", resp_buf ); 
+        evhttp_send_reply (event_ptr->req, http_status_code, "OK", resp_buf );
         evbuffer_free ( resp_buf );
     }
     else
     {
-        elog ("HTTP Event error:%d ; cmd:%s url:%s response:%s\n", 
-               http_status_code,
-               getHttpCmdType_str(http_cmd), 
-               url_ptr,
-               response.c_str());
+        wlog ("%s sending %d response for %s:%s request ; response:%s\n",
+                  hostname.c_str(),
+                  http_status_code,
+                  getHttpCmdType_str(http_cmd),
+                  url_ptr,
+                  response.c_str());
         evhttp_send_error (event_ptr->req, http_status_code, response.data() );
     }
 }
@@ -1002,7 +1007,7 @@ int mtcHttpSvr_bind ( event_type & event )
    int rc     ;
    int flags  ;
    int one = 1;
-   
+
    event.fd = socket(AF_INET, SOCK_STREAM, 0);
    if (event.fd < 0)
    {
@@ -1012,13 +1017,13 @@ int mtcHttpSvr_bind ( event_type & event )
 
    /* make socket reusable */
    rc = setsockopt(event.fd, SOL_SOCKET, SO_REUSEADDR, (char *)&one, sizeof(int));
- 
+
    memset(&event.addr, 0, sizeof(struct sockaddr_in));
    event.addr.sin_family = AF_INET;
    event.addr.sin_addr.s_addr = inet_addr(LOOPBACK_IP) ; /* INADDR_ANY; TODO: Refine this if we can */
    // event.addr.sin_addr.s_addr = INADDR_ANY;
    event.addr.sin_port = htons(event.port);
- 
+
    /* bind port */
    rc = bind ( event.fd, (struct sockaddr*)&event.addr, sizeof(struct sockaddr_in));
    if (rc < 0)
@@ -1039,7 +1044,7 @@ int mtcHttpSvr_bind ( event_type & event )
    flags = fcntl ( event.fd, F_GETFL, 0) ;
    if ( flags < 0 || fcntl(event.fd, F_SETFL, flags | O_NONBLOCK) < 0)
    {
-       elog ("failed to set HTTP server socket to non-blocking (%d:%m)\n", errno );       
+       elog ("failed to set HTTP server socket to non-blocking (%d:%m)\n", errno );
        return FAIL_SOCKET_OPTION;
    }
 
@@ -1082,7 +1087,7 @@ int mtcHttpSvr_setup ( event_type & event )
        return -1;
    }
    evhttp_set_gencb(event.httpd, mtcHttpSvr_handler, NULL);
-   
+
    return PASS ;
 }
 
@@ -1104,7 +1109,7 @@ int mtcHttpSvr_init ( event_type & mtce_event )
         }
         else if ( mtce_event.fd > 0 )
         {
-            ilog ("Listening On: 'http event server ' socket %s:%d\n", 
+            ilog ("Listening On: 'http event server ' socket %s:%d\n",
                    inet_ntoa(mtce_event.addr.sin_addr), mtce_event.port );
             rc = PASS ;
             break ;

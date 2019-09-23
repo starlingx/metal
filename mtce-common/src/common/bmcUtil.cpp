@@ -14,10 +14,11 @@
 
 using namespace std;
 
-#include "nodeBase.h"      /* for ... mtce-common node definitions       */
-#include "hostUtil.h"      /* for ... mtce-common host definitions       */
-#include "bmcUtil.h"       /* for ... mtce-common bmc utility header     */
-#include "jsonUtil.h"      /* for ... json_tokener_parse                 */
+#include "nodeBase.h"    /* for ... mtce-common node definitions     */
+#include "hostUtil.h"    /* for ... mtce-common host definitions     */
+#include "bmcUtil.h"     /* for ... mtce-common bmc utility header   */
+#include "nodeUtil.h"    /* for ... tolowercase                      */
+#include "jsonUtil.h"    /* for ... jsonUtil_get_key_value_string    */
 
 /**********************************************************************
  *
@@ -133,8 +134,10 @@ string bmcUtil_chop_system_req ( string request )
 
 int bmcUtil_init ( void )
 {
-    daemon_make_dir(BMC_OUTPUT_DIR) ;
-    daemon_make_dir(BMC_HWMON_TMP_DIR) ;
+    if ( daemon_is_file_present ( BMC_OUTPUT_DIR ) == false )
+        daemon_make_dir(BMC_OUTPUT_DIR) ;
+    if ( daemon_is_file_present ( BMC_HWMON_TMP_DIR ) == false )
+        daemon_make_dir(BMC_HWMON_TMP_DIR) ;
     ipmiUtil_init ();
     redfishUtil_init ();
 
@@ -194,6 +197,11 @@ void bmcUtil_info_init ( bmc_info_type & bmc_info )
 
     bmc_info.power_on = false ;
     bmc_info.restart_cause.clear() ;
+
+    /* clear the supported actions lists */
+    bmc_info.reset_action_list.clear();
+    bmc_info.power_on_action_list.clear();
+    bmc_info.power_off_action_list.clear();
 }
 
 /*************************************************************************
@@ -232,9 +240,9 @@ void bmcUtil_hwmon_info ( string            hostname,
 
     /* add the 'power' state key:val pair */
     if ( power_on )
-        info_str.append("\",\"power\":\"on\"");
+        info_str.append("\",\"power_state\":\"on\"");
     else
-        info_str.append("\",\"power\":\"off\"");
+        info_str.append("\",\"power_state\":\"off\"");
 
     /* add the extra data if it exists */
     if ( ! extra.empty () )
@@ -287,7 +295,13 @@ bool bmcUtil_read_bmc_info( string   hostname,
             protocol = BMC_PROTOCOL__IPMITOOL ;
         else
             protocol = BMC_PROTOCOL__REDFISHTOOL ;
+
         json_object_put(json_obj);
+
+        ilog ("%s power is %s with bmc communication using %s",
+                  hostname.c_str(),
+                  power_state.c_str(),
+                  bmcUtil_getProtocol_str(protocol).c_str());
         return (true);
     }
     else
@@ -298,8 +312,9 @@ bool bmcUtil_read_bmc_info( string   hostname,
         blog ("%s failed to parse bmc info! set to ipmitool by default!\n", hostname.c_str());
         return (false);
     }
-}
 
+    return (true);
+}
 /*****************************************************************************
  *
  * Name        : bmcUtil_read_hwmond_protocol
@@ -430,4 +445,141 @@ string bmcUtil_create_data_fn ( string & hostname,
     datafile.append(file_suffix);
 
     return ( datafile );
+}
+
+/*************************************************************************
+ *
+ * Name       : bmcUtil_is_power_on
+ *
+ * Purpose    : Get power state from query response data.
+ *
+ * Description: Parse a BMC protocol specific response for current
+ *              power state.
+ *
+ * Assumptions: supplied power state is not changed on failure.
+ *
+ * Parameters : hostname - string
+ *              protocol - BMC_PROTOCOL__REDFISHTOOL | BMC_PROTOCOL__IPMITOOL
+ *              response - protocol specific power query response data
+ *
+ * Updates    : power_on - updated if response is queried ok
+ *                         set true if power is on
+ *                         set false if power is off
+ *
+ * Returns    : PASS or
+ *              FAIL_NO_DATA , FAIL_JSON_PARSE
+ *
+ *************************************************************************/
+
+int bmcUtil_is_power_on ( string   hostname,
+               bmc_protocol_enum   protocol,
+                          string & response,
+                          bool   & power_on)
+{
+    if ( response.empty() )
+    {
+        wlog ("%s bmc power status query response empty",
+                  hostname.c_str());
+        return (FAIL_NO_DATA);
+    }
+    else if ( protocol == BMC_PROTOCOL__REDFISHTOOL )
+    {
+        struct json_object *json_obj = json_tokener_parse((char*)response.data());
+        if ( !json_obj )
+        {
+            wlog ("%s failed to tokenize bmc info", hostname.c_str());
+            return (FAIL_JSON_PARSE) ;
+        }
+        else if (tolowercase(jsonUtil_get_key_value_string(json_obj,REDFISH_LABEL__POWER_STATE)) == "on" )
+            power_on = true ;
+        else
+            power_on = false ;
+
+        /* free the json object */
+        json_object_put(json_obj );
+    }
+    else /* IPMI */
+    {
+        if ( response.find (IPMITOOL_POWER_ON_STATUS) != std::string::npos )
+            power_on = true ;
+        else
+            power_on = false ;
+    }
+    return (PASS);
+}
+
+
+/****************************************************************************
+ *
+ * Name       : bmcUtil_remove_files
+ *
+ * Purpose    : cleanup temp files.
+ *
+ * Description: Called during de-provision to remove temporary files created
+ *              by host provisioning and command output.
+ *
+ *              Function detects which process is calling it and removes
+ *              only the temp files that daemon created for a specific host.
+ *
+ * Assumptions: Keeps the temp dirs clean and current.
+ *
+ ****************************************************************************/
+
+extern char *program_invocation_short_name;
+void bmcUtil_remove_files ( string hostname, bmc_protocol_enum protocol )
+{
+    /* Read in the list of config files and their contents */
+
+    std::list<string> filelist ;
+    std::list<string>::iterator file_ptr ;
+
+    string dir = BMC_OUTPUT_DIR ;
+    dir.append(bmcUtil_getProtocol_str(protocol));
+
+    int rc = load_filenames_in_dir ( dir.data(), filelist ) ;
+    if ( rc )
+    {
+        ilog ("%s failed to load files (rc:%d)", hostname.c_str(), rc );
+        return ;
+    }
+
+    /* files exist as <process>_<hostname>_<suffix> */
+    if ( !strcmp(MTC_SERVICE_MTCAGENT_NAME, program_invocation_short_name ))
+    {
+        for ( file_ptr  = filelist.begin();
+              file_ptr != filelist.end() ;
+              file_ptr++ )
+        {
+             if ( file_ptr->find (program_invocation_short_name) != string::npos )
+             {
+                  if ( file_ptr->find (hostname) != string::npos )
+                  {
+                      daemon_remove_file ( file_ptr->data() );
+                      blog2 ("%s %s removed", hostname.c_str(), file_ptr->c_str());
+                  }
+             }
+        }
+    }
+    else if ( !strcmp(MTC_SERVICE_HWMOND_NAME, program_invocation_short_name ))
+    {
+        for ( file_ptr  = filelist.begin();
+              file_ptr != filelist.end() ;
+              file_ptr++ )
+        {
+             if ( file_ptr->find (program_invocation_short_name) != string::npos )
+             {
+                  if ( file_ptr->find (hostname) != string::npos )
+                  {
+                      daemon_remove_file ( file_ptr->data() );
+                      blog2 ("%s %s removed", hostname.c_str(), file_ptr->c_str());
+                  }
+             }
+        }
+
+        /* remove the static file that specified the protocol that was used to create this host's sensor model */
+        string hwmond_proto_filename = BMC_HWMON_TMP_DIR ;
+        hwmond_proto_filename.append("/") ;
+        hwmond_proto_filename.append(hostname);
+        daemon_remove_file ( hwmond_proto_filename.data() );
+    }
 }

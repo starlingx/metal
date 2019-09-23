@@ -21,12 +21,38 @@
 /* generic labels */
 #define REDFISH_LABEL__STATUS          ((const char *)("Status"))
 #define REDFISH_LABEL__STATE           ((const char *)("State"))
-#define REDFISH_LABEL__HEALTH          ((const char *)("Health"))
 #define REDFISH_LABEL__COUNT           ((const char *)("Count"))
 #define REDFISH_LABEL__MODEL           ((const char *)("Model"))
+#define REDFISH_LABEL__HEALTH          ((const char *)("Health"))
+#define REDFISH_LABEL__HEALTHROLLUP    ((const char *)("HealthRollup"))
 
-/* redfish version */
+typedef struct
+{
+   /* Enabled indicates the resource is available.
+    * Disabled indicates the resource has been intentionally made unavailable
+    * but it can be enabled.
+    * Offline indicates the resource is unavailable intentionally and requires
+    * action to be made available.
+    * InTest indicates that the component is undergoing testing.
+    * Starting indicates that the resource is on its way to becoming available.
+    * Absent indicates the resources is physically unavailable */
+    string state        ;
+
+    /* Health State of the resource without dependents */
+    string health       ;
+
+    /* Health State of the resource and     dependents */
+    string health_rollup ;
+
+} redfish_entity_status ;
+
+/* Redfish version format is #.#.# or major.minor.revision
+ * This feature does not care about revision.
+ * The following are the minimum version numbers for major and minor
+ * for maintenance to accept it as a selectable option */
 #define REDFISH_MIN_MAJOR_VERSION      (1)
+#define REDFISH_MIN_MINOR_VERSION      (0)
+
 #define REDFISH_LABEL__REDFISH_VERSION ((const char *)("RedfishVersion"))
 
 /* bmc info labels */
@@ -45,17 +71,69 @@
 /* server processor info label */
 #define REDFISH_LABEL__PROCESSOR       ((const char *)("ProcessorSummary"))
 
+/* maintenance administrative action commands */
+#define REDFISHTOOL_ROOT_QUERY_CMD     ((const char *)("root"))
+#define REDFISHTOOL_BMC_INFO_CMD       ((const char *)("Systems get"))
+
+
 /* supported actions */
 #define REDFISH_LABEL__ACTIONS         ((const char *)("Actions"))
 #define REDFISH_LABEL__ACTION_RESET    ((const char *)("#ComputerSystem.Reset"))
 #define REDFISH_LABEL__ACTION_RESET_ALLOWED ((const char *)("ResetType@Redfish.AllowableValues"))
 
-/* maintenance administrative action commands */
-#define REDFISHTOOL_ROOT_QUERY_CMD     ((const char *)("root"))
-#define REDFISHTOOL_BMC_INFO_CMD       ((const char *)("Systems get"))
-#define REDFISHTOOL_POWER_RESET_CMD    ((const char *)("Systems reset GracefulRestart"))
-#define REDFISHTOOL_POWER_ON_CMD       ((const char *)("Systems reset On"))
-#define REDFISHTOOL_POWER_OFF_CMD      ((const char *)("Systems reset ForceOff"))
+/* Redfish Reset Types:
+ *
+ * https://www.dmtf.org/sites/default/files/standards/documents/DSP0268_2019.1a.pdf */
+
+#define REDFISHTOOL_POWER_RESET_CMD    ((const char *)("Systems reset "))
+
+typedef enum
+{
+    REDFISH_ACTION__RESET,
+    REDFISH_ACTION__POWER_ON,
+    REDFISH_ACTION__POWER_OFF,
+} redfish_action_enum ;
+
+/* Reset actions allows json block
+
+    "Actions": {
+        "#ComputerSystem.Reset": {
+            "ResetType@Redfish.AllowableValues": [
+                "On",
+                "ForceOff",
+                "GracefulRestart",
+                "PushPowerButton",
+                "Nmi"
+            ],
+            "target": "/redfish/v1/Systems/System.Embedded.1/Actions/ComputerSystem.Reset"
+        }
+    },
+
+*/
+#define REDFISHTOOL_RESET_ACTIONS_LABEL          ((const char *)("#ComputerSystem.Reset"))             /* level 1 label */
+#define REDFISHTOOL_RESET_ACTIONS_ALLOWED_LABEL  ((const char *)("ResetType@Redfish.AllowableValues")) /* level 2 label */
+
+
+/* Reset sub-commands */
+#define REDFISHTOOL_RESET__GRACEFUL_RESTART      ((const char *)("GracefulRestart"))  /* Perform a graceful shutdown followed by a restart of the system. */
+#define REDFISHTOOL_RESET__FORCE_RESTART         ((const char *)("ForceRestart"))     /* Perform an immediate (non-graceful) shutdown, followed by a restart */
+
+/* Power off sub-commands */
+#define REDFISHTOOL_POWER_OFF__GRACEFUL_SHUTDOWN ((const char *)("GracefulShutdown")) /* Perform a graceful shutdown and power off. */
+#define REDFISHTOOL_POWER_OFF__FORCE_OFF         ((const char *)("ForceOff"))         /* Perform a Non-Graceful immediate power off */
+
+/* Power On sub-commands */
+#define REDFISHTOOL_POWER_ON__ON                 ((const char *)("On"))               /* Turn the unit on. */
+#define REDFISHTOOL_POWER_ON__FORCE_ON           ((const char *)("ForceOn"))          /* Turn the unit on immediately. */
+
+/* Power Cycle sub-commands */
+#define REDFISHTOOL_POWER_CYCLE__POWER_CYCLE     ((const char *)("PowerCycle"))       /*  Perform a power cycle of the unit. */
+
+/* Diagnostic sub-commands */
+#define REDFISHTOOL_DIAG__NMI                    ((const char *)("Nmi")               /* Generate a Diagnostic Interrupt to halt the system. */
+#define REDFISHTOOL_RESET__PUSH_BUTTON           ((const char *)("PushPowerButton"))  /* Simulate the pressing of the physical power button on this unit */
+
+
 #define REDFISHTOOL_BOOTDEV_PXE_CMD    ((const char *)("Systems setBootOverride Once Pxe"))
 
 
@@ -85,4 +163,6 @@ int redfishUtil_get_bmc_info ( string & hostname,
                                string & response,
                                bmc_info_type & bmc_info );
 
+string redfishUtil_get_cmd_option ( redfish_action_enum action,
+                                     std::list<string>  host_action_list );
 #endif // __INCLUDE_REDFISHUTIL_H__

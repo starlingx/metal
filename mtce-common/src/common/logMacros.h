@@ -239,6 +239,7 @@ extern char *program_invocation_short_name;
 
 /** Scheduling Latency */
 #define NSEC_TO_MSEC (1000000)
+#define NSEC_TO_SEC  (1000000000)
 #define llog(format, args...) \
         { syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s:Latncy: " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; } \
 

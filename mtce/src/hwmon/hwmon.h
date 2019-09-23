@@ -52,13 +52,16 @@ using namespace std;
 #define MAX_HOST_SENSORS            (512) // (100)
 #define MAX_HOST_GROUPS              (20)
 #define MIN_SENSOR_GROUPS             (4)
-#define HWMON_MAX_BMC_DATA_BUF_SIZE (4096*8) // Thermal sensor data need 20KiB at least
 #define HWMON_DEFAULT_LARGE_INTERVAL (MTC_MINS_15)
 #define HWMON_DEFAULT_AUDIT_INTERVAL (MTC_MINS_2)
 #define HWMON_MIN_AUDIT_INTERVAL     (10)
 #define DEGRADE_AUDIT_TRIGGER        (2)
 #define MAX_SENSORS_NOT_FOUND        (5)
 #define START_DEBOUCE_COUNT          (1)
+
+// Power sensor data for Dell R740-emc-1 needs 45KiB
+// Thermal sensor readout on wolfpass requires 20KiB
+#define HWMON_MAX_BMC_DATA_BUF_SIZE (102400)
 
 /* Daemon Sensor Config Directory - where profile files are stored */
 #define CONFIG_DIR    ((const char *)("/etc/hwmon.d"))

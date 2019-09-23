@@ -486,7 +486,7 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
                 {
                     dlog ("%s Board Management Interface RESET Requested\n", node_ptr->hostname.c_str());
 
-                    mtcTimer_start ( node_ptr->mtcCmd_timer, mtcTimer_handler, MTC_IPMITOOL_REQUEST_DELAY );
+                    mtcTimer_start ( node_ptr->mtcCmd_timer, mtcTimer_handler, MTC_BMC_REQUEST_DELAY );
                     node_ptr->mtcCmd_work_fifo_ptr->stage = MTC_CMD_STAGE__RESET_ACK;
                     break ;
                 }
@@ -522,7 +522,7 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
                      rc = bmc_command_recv ( node_ptr );
                      if ( rc == RETRY )
                      {
-                         mtcTimer_start ( node_ptr->mtcCmd_timer, mtcTimer_handler, MTC_IPMITOOL_REQUEST_DELAY );
+                         mtcTimer_start ( node_ptr->mtcCmd_timer, mtcTimer_handler, MTC_BMC_REQUEST_DELAY );
                          break ;
                      }
 
@@ -633,7 +633,7 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
                           node_ptr->hostname.c_str(),
                           bmcUtil_getCmd_str(node_ptr->cmdReq).c_str());
 
-                mtcTimer_start ( node_ptr->mtcCmd_timer, mtcTimer_handler, MTC_IPMITOOL_REQUEST_DELAY );
+                mtcTimer_start ( node_ptr->mtcCmd_timer, mtcTimer_handler, MTC_BMC_REQUEST_DELAY );
                 node_ptr->mtcCmd_work_fifo_ptr->stage = MTC_CMD_STAGE__IPMI_COMMAND_RECV ;
             }
             break ;

@@ -58,7 +58,9 @@
 int hwmonHostClass::bmc_create_sensor_model ( struct hwmonHostClass::hwmon_host * host_ptr )
 {
     int rc = PASS ;
-    ilog ("%s creating sensor model\n", host_ptr->hostname.c_str());
+    ilog ("%s creating sensor model using %s\n",
+              host_ptr->hostname.c_str(),
+              bmcUtil_getProtocol_str(host_ptr->protocol).c_str());
 
     host_ptr->groups = 0 ;
 
