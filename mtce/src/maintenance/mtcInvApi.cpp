@@ -60,7 +60,7 @@
  *              number of inventory elements.
  *
  */
-int mtcInvApi_read_inventory ( int batch )
+int mtcInvApi_read_inventory ( uint batch )
 {
     char batch_str [10] ;
     int rc    = PASS ;
@@ -86,7 +86,7 @@ int mtcInvApi_read_inventory ( int batch )
         batch = MTC_INV_BATCH_MAX ;
 
     /* Add the batch integer to the request label */
-    sprintf (&batch_str[0], "%d", batch );
+    snprintf (&batch_str[0], sizeof(batch_str), "%d", batch );
 
     obj_ptr->sysinvEvent.token.url = MTC_INV_LABEL ;
     obj_ptr->sysinvEvent.token.url.append(MTC_INV_BATCH);
