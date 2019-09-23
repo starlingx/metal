@@ -259,6 +259,11 @@ typedef struct
 void threadUtil_fini ( void );
 int  threadUtil_init ( void (*handler)(int, siginfo_t*, void* ));
 
+#define DEFAULT_SYSTEM_REQUEST_LATENCY_SECS (unsigned long long)(15)
+int threadUtil_bmcSystemCall (string hostname,
+                              string request,
+                              unsigned long long latency_threshold_secs);
+
 void threadUtil_setstack_size ( void );
 
 /* Onetime thread init setup */

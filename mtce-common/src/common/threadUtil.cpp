@@ -123,6 +123,40 @@ void threadUtil_fini ( void )
 }
 
 /*****************************************************************************
+  *
+ * Name       : threadUtil_bmcSystemCall
+ *
+ * Description: Execute a bmc system call using the supplied request string.
+ *
+ *              If the call takes longer than the supplied latency threshold
+ *              then print a log indicating how long it took.
+ *
+ * Returns    : the system call's return code.
+ *
+ ****************************************************************************/
+
+#ifndef NSEC_TO_SEC
+#define NSEC_TO_SEC  (1000000000)
+#endif
+
+int threadUtil_bmcSystemCall (string hostname,
+                              string request,
+                              unsigned long long latency_threshold_secs)
+{
+    unsigned long long before_time = gettime_monotonic_nsec () ;
+    int rc = system ( request.data()) ;
+    unsigned long long after_time = gettime_monotonic_nsec () ;
+    unsigned long long delta_time = after_time-before_time ;
+    if ( delta_time > (latency_threshold_secs*1000000000))
+    {
+        wlog ("%s bmc system call took %2llu.%-8llu sec", hostname.c_str(),
+              (delta_time > NSEC_TO_SEC) ? (delta_time/NSEC_TO_SEC) : 0,
+              (delta_time > NSEC_TO_SEC) ? (delta_time%NSEC_TO_SEC) : 0);
+    }
+    return (rc);
+}
+
+/*****************************************************************************
  *
  * Name       : _stage_change
  *

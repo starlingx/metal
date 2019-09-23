@@ -446,11 +446,38 @@ int hwmonHostClass::add_host_handler ( struct hwmonHostClass::hwmon_host * host_
                         mtcTimer_start ( host_ptr->addTimer, hwmonTimer_handler, delay );
                         break ;
                     }
+                    /* get protocol used for last relearn from the file */
+                    host_ptr->protocol = bmcUtil_read_hwmond_protocol ( host_ptr->hostname ) ;
                 }
                 else
                 {
-                    ilog ("%s no sensor model in database ; must be learned\n",
-                              host_ptr->hostname.c_str());
+                    string power_state ;
+                    bmc_protocol_enum protocol ;
+                    if ( bmcUtil_read_bmc_info( host_ptr->hostname, power_state, protocol ))
+                    {
+                        ilog ("%s no sensor model in database ; must be learned\n",
+                                  host_ptr->hostname.c_str());
+
+                        if ( protocol != host_ptr->protocol)
+                        {
+                            ilog ("%s bmc protocol changed to %s",
+                                      host_ptr->hostname.c_str(),
+                                      bmcUtil_getProtocol_str(protocol).c_str());
+                        }
+                        host_ptr->protocol = protocol ;
+                        bmcUtil_write_hwmond_protocol ( host_ptr->hostname, protocol ) ;
+                        host_ptr->general_log_throttle = 0 ;
+                    }
+                    else
+                    {
+                        /* mtc has not yet determined bmc protocol */
+                        mtcTimer_start ( host_ptr->addTimer, hwmonTimer_handler, MTC_SECS_5 );
+                        /* log every minute ; 5*12 */
+                        ilog_throttled (host_ptr->general_log_throttle, 12,
+                                        "%s waiting for bmc protocol from mtce ; %d seconds between retries\n",
+                                        host_ptr->hostname.c_str(), MTC_SECS_5);
+                        break;
+                    }
                 }
                 addStageChange ( host_ptr , HWMON_ADD__DONE );
             }
@@ -691,14 +718,29 @@ int hwmonHostClass::bmc_sensor_monitor ( struct hwmonHostClass::hwmon_host * hos
             /* enter relearn mode */
             host_ptr->relearn = true ;
 
+            /* Update bmc protocol and hwmond_hostname_protocol file */
+            string power_state;
+            bmc_protocol_enum protocol;
+            bmcUtil_read_bmc_info ( host_ptr->hostname, power_state, protocol ) ;
+            if ( protocol != host_ptr->protocol)
+            {
+                 ilog ("%s bmc protocol changed to %s",
+                           host_ptr->hostname.c_str(),
+                           bmcUtil_getProtocol_str(protocol).c_str());
+            }
+
+            host_ptr->protocol = protocol ;
+            bmcUtil_write_hwmond_protocol ( host_ptr->hostname, protocol ) ;
+
             /* exit relearn request mode.
              * allow the relearn operation to proceed */
             host_ptr->relearn_request = false ;
 
             host_ptr->relearn_done_date = future_time ( relearn_time );
-            ilog ("%s next relearn permitted after %s\n",
+            ilog ("%s next relearn permitted after %s (%s)\n",
                       host_ptr->hostname.c_str(),
-                      host_ptr->relearn_done_date.c_str());
+                      host_ptr->relearn_done_date.c_str(),
+                      bmcUtil_getProtocol_str(host_ptr->protocol).c_str());
 
            this->monitor_soon ( host_ptr );
 
@@ -796,6 +838,7 @@ int hwmonHostClass::bmc_sensor_monitor ( struct hwmonHostClass::hwmon_host * hos
                         host_ptr->bmc_thread_info.id = 0       ;
                         host_ptr->bmc_thread_info.signal = 0   ;
                         host_ptr->bmc_thread_info.command = BMC_THREAD_CMD__POWER_STATUS ;
+                        host_ptr->bmc_thread_info.proto = host_ptr->protocol ;
 
                         /* Update / Setup the BMC query credentials */
                         host_ptr->thread_extra_info.bm_ip = host_ptr->bm_ip ;
@@ -852,7 +895,7 @@ int hwmonHostClass::bmc_sensor_monitor ( struct hwmonHostClass::hwmon_host * hos
                     else
                     {
                         host_ptr->interval_changed = true ;
-                        wlog ("%s audit interval is zero ; auto correcting\n", host_ptr->hostname.c_str());
+                        blog ("%s audit interval is zero ; auto correcting\n", host_ptr->hostname.c_str());
                         break ;
                     }
                 }
@@ -943,19 +986,17 @@ int hwmonHostClass::bmc_sensor_monitor ( struct hwmonHostClass::hwmon_host * hos
                             wlog ("%s power query status empty ; retrying query\n",
                                       host_ptr->hostname.c_str());
                         }
-                        else if ( host_ptr->bmc_thread_info.data.find (IPMITOOL_POWER_ON_STATUS) == string::npos )
+                        else if ( host_ptr->bmc_thread_info.data.find (BMC_POWER_ON_STATUS) == string::npos )
                         {
                             ilog ("%s %s\n", host_ptr->hostname.c_str(),
                                              host_ptr->bmc_thread_info.data.c_str());
 
-                            wlog ("%s sensor learning delayed ; need power on\n",
-                                      host_ptr->hostname.c_str());
+                            wlog ("%s power %s sensor learning delayed ; need power on\n",
+                                      host_ptr->hostname.c_str(),
+                                      host_ptr->bmc_thread_info.data.c_str());
                         }
                         else
                         {
-                            ilog ("%s %s\n", host_ptr->hostname.c_str(),
-                                             host_ptr->bmc_thread_info.data.c_str());
-
                             /* OK, this is what we have been waiting for */
                             host_ptr->poweron = true ;
                         }
@@ -1083,12 +1124,12 @@ int hwmonHostClass::bmc_sensor_monitor ( struct hwmonHostClass::hwmon_host * hos
                 host_ptr->bmc_thread_info.id = 0       ;
                 host_ptr->bmc_thread_info.signal = 0   ;
                 host_ptr->bmc_thread_info.command = BMC_THREAD_CMD__READ_SENSORS ;
+                host_ptr->bmc_thread_info.proto = host_ptr->protocol ;
 
                 /* Update / Setup the BMC query credentials */
                 host_ptr->thread_extra_info.bm_ip = host_ptr->bm_ip ;
                 host_ptr->thread_extra_info.bm_un = host_ptr->bm_un ;
                 host_ptr->thread_extra_info.bm_pw = host_ptr->bm_pw ;
-
 
                 rc = thread_launch ( host_ptr->bmc_thread_ctrl, host_ptr->bmc_thread_info ) ;
                 if ( rc != PASS )

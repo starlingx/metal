@@ -734,7 +734,7 @@ int hwmonHostClass::add_host ( node_inv_type & inv )
             thread_init ( host_ptr->bmc_thread_ctrl,
                           host_ptr->bmc_thread_info,
                          &host_ptr->thread_extra_info,
-                          hwmonThread_ipmitool,
+                          hwmonThread_bmc,
                           DEFAULT_THREAD_TIMEOUT_SECS,
                           host_ptr->hostname,
                           THREAD_NAME__BMC);
@@ -756,6 +756,11 @@ int hwmonHostClass::add_host ( node_inv_type & inv )
             host_ptr->bmc_fw_version.clear();
 
             host_ptr->group_index  = 0 ;
+
+            /* Set default BMC protocol */
+            host_ptr->protocol = BMC_PROTOCOL__IPMITOOL ;
+            host_ptr->bmc_thread_info.proto = BMC_PROTOCOL__IPMITOOL ;
+            bmcUtil_write_hwmond_protocol ( host_ptr->hostname, BMC_PROTOCOL__IPMITOOL ) ;
 
             /* Init sensor model relearn controls, state and status */
             host_ptr->relearn = false ;
