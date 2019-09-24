@@ -46,7 +46,8 @@ write_config_file("controller",
                   "post_common.cfg",
                   "post_kernel_controller.cfg",
                   "post_lvm_pv_on_rootfs.cfg",
-                  "post_usb_controller.cfg");
+                  "post_usb_controller.cfg",
+                  "post_usb_addon.cfg");
 write_config_file("controller-worker",
                   "${output_dir}/smallsystem_ks.cfg",
                   "pre_common_head.cfg",
@@ -58,7 +59,8 @@ write_config_file("controller-worker",
                   "post_kernel_aio_and_worker.cfg",
                   "post_lvm_pv_on_rootfs.cfg",
                   "post_system_aio.cfg",
-                  "post_usb_controller.cfg");
+                  "post_usb_controller.cfg",
+                  "post_usb_addon.cfg");
 write_config_file("controller-worker-lowlatency",
                   "${output_dir}/smallsystem_lowlatency_ks.cfg",
                   "pre_common_head.cfg",
@@ -70,7 +72,8 @@ write_config_file("controller-worker-lowlatency",
                   "post_kernel_aio_and_worker.cfg",
                   "post_lvm_pv_on_rootfs.cfg",
                   "post_system_aio.cfg",
-                  "post_usb_controller.cfg");
+                  "post_usb_controller.cfg",
+                  "post_usb_addon.cfg");
 
 system("mkdir -p ${pxeboot_output_dir}");
 
