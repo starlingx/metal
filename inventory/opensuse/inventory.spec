@@ -1,6 +1,6 @@
 Summary: StarlingX Inventory
 Name: inventory
-Version: 1.0
+Version: 1.0.0
 Release: 1
 License: Apache-2.0
 Group: System/Base
@@ -97,7 +97,7 @@ The inventory service for StarlingX
 %define debug_package %{nil}
 
 %prep
-%setup
+%setup -n %{name}-%{version}/%{name}
 
 # Remove bundled egg-info
 rm -rf *.egg-info

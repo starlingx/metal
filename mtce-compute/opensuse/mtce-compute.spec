@@ -1,7 +1,7 @@
 %define local_etc_goenabledd %{_sysconfdir}/goenabled.d
 Summary: Compute Node Maintenance Package
 Name: mtce-compute
-Version: 1.0
+Version: 1.0.0
 Release: 1
 License: Apache-2.0
 Group: Development/Tools/Other
@@ -19,7 +19,7 @@ Requires: qemu-kvm
 Maintenance support files for compute-only node type
 
 %prep
-%autosetup
+%autosetup -n %{name}-%{version}/src
 
 %build
 
