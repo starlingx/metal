@@ -219,7 +219,7 @@ int pmon_process_config ( void * user,
         {
             ptr->full_init_reqd = true;
         }
-        dlog1 ("Full_init_reqd : %d\n", (int) ptr->quorum );
+        dlog1 ("Full_init_reqd : %d\n", (int) ptr->full_init_reqd );
         rc = PASS ;
     }
     if (( ptr->mode != NULL ) && ( !strcmp(ptr->mode, "active" )))
