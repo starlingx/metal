@@ -253,6 +253,7 @@ int daemon_init ( string iface, string nodetype )
     hwmon_hdlr_init ( &hwmon_ctrl );
     hwmon_stages_init ();
     httpUtil_init ();
+    bmcUtil_init();
 
     /* init the control struct */
     hwmon_ctrl.my_hostname  = "" ;

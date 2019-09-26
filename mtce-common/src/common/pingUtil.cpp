@@ -49,6 +49,7 @@ typedef struct
     char msg[PING_MESSAGE_LEN];
 } ping6_rx_message_type ;
 
+
 /*******************************************************************************
  *
  * Name    : pingUtil_init
@@ -244,14 +245,16 @@ int pingUtil_send ( ping_info_type & ping_info )
         wlog ("%s ping %s send failed (rc:%d) (%d:%m)\n", ping_info.hostname.c_str(), ping_info.ip.c_str(), bytes, errno );
         return FAIL ;
     }
-    if ( ping_info.monitoring == false )
+    if (( ping_info.monitoring == false ) &&
+        ( ping_info.send_retries >= PING_MAX_SEND_RETRIES ))
     {
-        ilog ("%s ping send %s ok ; identity:%04x sequence:%04x (try %d)\n",
+        ilog ("%s ping send %s ok ; identity:%04x sequence:%04x (try %d of %d)\n",
                   ping_info.hostname.c_str(),
                   ping_info.ip.c_str(),
                   ping_info.identity,
                   ping_info.sequence,
-                  ping_info.send_retries);
+                  ping_info.send_retries,
+                  PING_MAX_SEND_RETRIES);
     }
     else
     {

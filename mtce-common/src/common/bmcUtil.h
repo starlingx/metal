@@ -56,7 +56,9 @@ typedef struct
     std::string sn       ;
 
     /* actions */
-    std::list<string> allowable_reset_action_list ;
+    std::list<string> reset_action_list ;
+    std::list<string> power_on_action_list ;
+    std::list<string> power_off_action_list ;
 
     /* state info */
     std::string  restart_cause     ;
@@ -139,6 +141,15 @@ void bmcUtil_hwmon_info ( string            hostname,
                           bmc_protocol_enum proto,
                           bool              power_on,
                           string            extra );
+
+/*  Get power state from query response data. */
+int bmcUtil_is_power_on ( string              hostname,
+                          bmc_protocol_enum   protocol,
+                          string            & response,
+                          bool              & power_on);
+
+void bmcUtil_remove_files ( string hostname,
+                            bmc_protocol_enum protocol );
 
 #include "ipmiUtil.h"      /* for ... mtce-common ipmi utility header    */
 #include "redfishUtil.h"   /* for ... mtce-common redfish utility header */

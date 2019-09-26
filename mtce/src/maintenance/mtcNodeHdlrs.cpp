@@ -324,6 +324,19 @@ void nodeLinkClass::timer_handler ( int sig, siginfo_t *si, void *uc)
         }
     }
 
+    /* is the bmc audit timer ? */
+    node_ptr = get_bmc_audit_timer ( *tid_ptr );
+    if ( node_ptr )
+    {
+        /* is this the bm ping timer */
+        if ( *tid_ptr == node_ptr->bmc_audit_timer.tid )
+        {
+            mtcTimer_stop_int_safe ( node_ptr->bmc_audit_timer );
+            node_ptr->bmc_audit_timer.ring = true ;
+            return ;
+        }
+    }
+
     /* is the host services handler timer ? */
     node_ptr = get_host_services_timer ( *tid_ptr );
     if ( node_ptr )
@@ -2741,7 +2754,7 @@ int nodeLinkClass::disable_handler  ( struct nodeLinkClass::node * node_ptr )
                     }
                     else
                     {
-                        mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_IPMITOOL_REQUEST_DELAY );
+                        mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_BMC_REQUEST_DELAY );
                         disableStageChange ( node_ptr, MTC_DISABLE__HANDLE_POWERON_RECV) ;
                     }
 
@@ -2879,7 +2892,7 @@ int nodeLinkClass::disable_handler  ( struct nodeLinkClass::node * node_ptr )
                 }
                 else
                 {
-                    mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_IPMITOOL_REQUEST_DELAY );
+                    mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_BMC_REQUEST_DELAY );
                     disableStageChange ( node_ptr, MTC_DISABLE__HANDLE_POWERON_RECV) ;
                 }
             }
@@ -4779,8 +4792,11 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
                     snprintf ( buffer, 255, MTC_TASK_POWEROFF_QUEUE, attempts, MTC_POWER_ACTION_RETRY_COUNT);
                     mtcInvApi_update_task ( node_ptr, buffer);
 
-                    /* check the thread error status if thetre is one */
-                    if ( node_ptr->bmc_thread_info.status )
+                    /* Check the thread error status if there is one. Skip the
+                     * typical system call log which just floods the log file.
+                     * The failure is reported in the update task log above. */
+                    if (( node_ptr->bmc_thread_info.status ) &&
+                        ( node_ptr->bmc_thread_info.status != FAIL_SYSTEM_CALL))
                     {
                         wlog ("%s ... %s (rc:%d)\n", node_ptr->hostname.c_str(),
                                                      node_ptr->bmc_thread_info.status_string.c_str(),
@@ -4882,7 +4898,7 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
                 powerStageChange ( node_ptr , MTC_POWERON__POWER_STATUS_WAIT );
             }
             mtcTimer_reset ( node_ptr->mtcTimer );
-            mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_IPMITOOL_REQUEST_DELAY );
+            mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_BMC_REQUEST_DELAY );
             break ;
         }
         case MTC_POWERON__POWER_STATUS_WAIT:
@@ -4896,20 +4912,37 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
                 }
                 else if ( rc == PASS )
                 {
-                    if ( node_ptr->bmc_thread_info.data.find (IPMITOOL_POWER_ON_STATUS) != std::string::npos )
+                    rc = bmcUtil_is_power_on ( node_ptr->hostname,
+                                               node_ptr->bmc_protocol,
+                                               node_ptr->bmc_thread_info.data,
+                                               node_ptr->power_on);
+
+                    /* If there was an error in querying the power state,
+                     * assume the power is off so that it will be powered on. */
+                    if ( rc )
+                        node_ptr->power_on = false ;
+
+                    if ( node_ptr->power_on )
                     {
                         ilog ("%s power is already on ; no action required\n", node_ptr->hostname.c_str());
-                        node_ptr->power_on = true ;
                         mtcInvApi_update_task ( node_ptr, "Power Already On" );
                         mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_TASK_UPDATE_DELAY );
                         powerStageChange ( node_ptr , MTC_POWERON__DONE );
                     }
                     else
                     {
-                        node_ptr->power_on = false ;
                         ilog ("%s power is off ; powering on ...\n", node_ptr->hostname.c_str() );
                         powerStageChange ( node_ptr , MTC_POWERON__REQ_SEND );
                     }
+                }
+                /* failure path handling */
+                else if ( node_ptr->power_action_retries <= 0 )
+                {
+                    wlog ("%s current power state query failed ; "
+                              "proceeding with power-on",
+                              node_ptr->hostname.c_str());
+                    powerStageChange ( node_ptr , MTC_POWERON__REQ_SEND );
+                    node_ptr->power_action_retries = MTC_POWER_ACTION_RETRY_COUNT ;
                 }
                 else
                 {
@@ -4961,7 +4994,7 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
                 {
                     blog ("%s Power-On requested\n", node_ptr->hostname.c_str());
 
-                    mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_IPMITOOL_REQUEST_DELAY );
+                    mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_BMC_REQUEST_DELAY );
 
                     powerStageChange ( node_ptr , MTC_POWERON__RESP_WAIT );
                 }
@@ -5194,7 +5227,7 @@ int nodeLinkClass::powercycle_handler ( struct nodeLinkClass::node * node_ptr )
                 {
                     if ( mtcTimer_expired ( node_ptr->hwmon_powercycle.control_timer ) )
                     {
-                        int delay = MTC_IPMITOOL_REQUEST_DELAY ;
+                        int delay = MTC_BMC_REQUEST_DELAY ;
                         ilog ("%s querying current power state\n", node_ptr->hostname.c_str());
 
                             rc = bmc_command_send ( node_ptr, BMC_THREAD_CMD__POWER_STATUS );
@@ -5246,22 +5279,14 @@ int nodeLinkClass::powercycle_handler ( struct nodeLinkClass::node * node_ptr )
                         }
                         else
                         {
-                            bool on = false ;
-
-                            ilog ("%s Power Status: %s\n",
-                                      node_ptr->hostname.c_str(),
-                                      node_ptr->bmc_thread_info.data.c_str());
-
-                            if ( node_ptr->bmc_thread_info.data.find ( IPMITOOL_POWER_ON_STATUS ) != std::string::npos )
+                            int status =
+                            bmcUtil_is_power_on ( node_ptr->hostname,
+                                                  node_ptr->bmc_protocol,
+                                                  node_ptr->bmc_thread_info.data,
+                                                  node_ptr->power_on);
+                            if ( status == PASS )
                             {
-                                on = true ;
-                            }
-                            if ( rc == PASS )
-                            {
-                                /* maintain current power state */
-                                node_ptr->power_on = on ;
-
-                                if ( on == true )
+                                if ( node_ptr->power_on )
                                 {
                                     ilog ("%s invoking 'powerdown' phase\n", node_ptr->hostname.c_str());
 
@@ -5277,9 +5302,7 @@ int nodeLinkClass::powercycle_handler ( struct nodeLinkClass::node * node_ptr )
                             }
                             else
                             {
-                                /* TODO: use FAIL handler */
                                 node_ptr->hwmon_powercycle.retries = MAX_POWERCYCLE_STAGE_RETRIES+1 ;
-                                // powercycleStageChange ( node_ptr, MTC_POWERCYCLE__FAIL );
                                 elog ("%s failed to query power status ; aborting powercycle action\n",
                                           node_ptr->hostname.c_str());
                             }
@@ -5303,7 +5326,7 @@ int nodeLinkClass::powercycle_handler ( struct nodeLinkClass::node * node_ptr )
 
         case MTC_POWERCYCLE__POWEROFF:
         {
-            int delay = MTC_IPMITOOL_REQUEST_DELAY ;
+            int delay = MTC_BMC_REQUEST_DELAY ;
 
             /* Stop heartbeat if we are powering off the host */
             send_hbs_command  ( node_ptr->hostname, MTC_CMD_STOP_HOST );
@@ -5474,7 +5497,7 @@ int nodeLinkClass::powercycle_handler ( struct nodeLinkClass::node * node_ptr )
         {
             if ( mtcTimer_expired ( node_ptr->hwmon_powercycle.control_timer ) )
             {
-                int delay = MTC_IPMITOOL_REQUEST_DELAY ;
+                int delay = MTC_BMC_REQUEST_DELAY ;
                 clog ("%s %s stage\n", node_ptr->hostname.c_str(),
                       get_powercycleStages_str(node_ptr->powercycleStage).c_str());
 
@@ -5551,7 +5574,7 @@ int nodeLinkClass::powercycle_handler ( struct nodeLinkClass::node * node_ptr )
                 else
                 {
                     wlog ("%s power status query requested\n", node_ptr->hostname.c_str() );
-                    mtcTimer_start ( node_ptr->hwmon_powercycle.control_timer, mtcTimer_handler, MTC_IPMITOOL_REQUEST_DELAY  );
+                    mtcTimer_start ( node_ptr->hwmon_powercycle.control_timer, mtcTimer_handler, MTC_BMC_REQUEST_DELAY  );
                     powercycleStageChange ( node_ptr, MTC_POWERCYCLE__POWERON_VERIFY_WAIT );
                 }
             }
@@ -5561,8 +5584,6 @@ int nodeLinkClass::powercycle_handler ( struct nodeLinkClass::node * node_ptr )
         {
             if ( mtcTimer_expired ( node_ptr->hwmon_powercycle.control_timer ) )
             {
-                bool on = false ;
-
                 rc = bmc_command_recv ( node_ptr );
                 if ( rc == RETRY )
                 {
@@ -5571,32 +5592,26 @@ int nodeLinkClass::powercycle_handler ( struct nodeLinkClass::node * node_ptr )
                 }
                 if ( rc == PASS )
                 {
-                    if ( node_ptr->bmc_thread_info.data.find (IPMITOOL_POWER_ON_STATUS) != std::string::npos )
-                    {
-                        on = true ;
-                    }
+                    rc = bmcUtil_is_power_on ( node_ptr->hostname,
+                                               node_ptr->bmc_protocol,
+                                               node_ptr->bmc_thread_info.data,
+                                               node_ptr->power_on);
                 }
 
-                ilog ("%s power state query result: %s\n",
-                          node_ptr->hostname.c_str(),
-                          node_ptr->bmc_thread_info.data.c_str() );
-
-                if (( rc == PASS ) && ( on == true ))
+                if (( rc == PASS ) && ( node_ptr->power_on ))
                 {
-                    node_ptr->power_on = true ;
                     ilog ("%s is Powered On - waiting for 'online' (%d sec timeout)\n",
                               node_ptr->hostname.c_str(),
                               MTC_POWERON_TO_ONLINE_TIMEOUT);
 
                     mtcInvApi_update_task ( node_ptr, MTC_TASK_POWERCYCLE_BOOT, node_ptr->hwmon_powercycle.attempts );
-
                     /* Set the online timeout */
                     mtcTimer_start ( node_ptr->hwmon_powercycle.control_timer, mtcTimer_handler, MTC_POWERON_TO_ONLINE_TIMEOUT );
                     powercycleStageChange ( node_ptr, MTC_POWERCYCLE__POWERON_WAIT );
                 }
                 else
                 {
-                    wlog ("%s Power-On failed or did not occur ; retrying (rc:%d:%d)\n", node_ptr->hostname.c_str(), rc, on );
+                    wlog ("%s Power-On failed or did not occur ; retrying (rc:%d)\n", node_ptr->hostname.c_str(), rc );
                     node_ptr->power_on = false ;
                     mtcInvApi_update_task ( node_ptr, MTC_TASK_POWERCYCLE_RETRY, node_ptr->hwmon_powercycle.attempts );
                     mtcTimer_start ( node_ptr->hwmon_powercycle.control_timer, mtcTimer_handler, MTC_BM_POWERON_TIMEOUT );
@@ -6177,13 +6192,46 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
 {
     if ( node_ptr->bmc_provisioned == true )
     {
-        if (( node_ptr->bmc_accessible == true ) && ( node_ptr->bm_ping_info.ok == false ))
+#ifdef WANT_FIT_TESTING
+        if (( node_ptr->bmc_accessible == true ) &&
+            ( node_ptr->bm_ping_info.ok == true ) &&
+            ( daemon_is_file_present ( MTC_CMD_FIT__JSON_LEAK_SOAK ) == true ))
         {
-            string bmc_info_filename = "" ;
+            node_ptr->bm_ping_info.stage = PINGUTIL_MONITOR_STAGE__FAIL ;
+        }
+#endif
+
+        /* Handle BMC access method changes */
+        if ( node_ptr->bmc_access_method_changed )
+        {
+            node_ptr->bmc_access_method_changed = false ;
+
+            ilog ("%s bmc access method change ; force %s",
+                      node_ptr->hostname.c_str(),
+                      this->bmc_access_method.c_str());
+
+            thread_kill ( node_ptr->bmc_thread_ctrl, node_ptr->bmc_thread_info );
+
+            bmc_access_data_init ( node_ptr );
+            pingUtil_fini ( node_ptr->bm_ping_info );
+            node_ptr->bm_ping_info.stage = PINGUTIL_MONITOR_STAGE__OPEN ;
+
+            /* start a timer that will raise the BM Access alarm
+             * if we are not accessible by the time it expires */
+            mtcTimer_reset ( node_ptr->bm_timer );
+            mtcTimer_reset ( node_ptr->bmc_audit_timer );
+            mtcTimer_reset ( node_ptr->bmc_access_timer );
+            mtcTimer_start ( node_ptr->bmc_access_timer, mtcTimer_handler, MTC_MINS_2 );
+        }
+
+        if (( node_ptr->bmc_accessible == true ) &&
+            ( node_ptr->bm_ping_info.ok == false ))
+        {
             wlog ("%s bmc access lost\n", node_ptr->hostname.c_str());
 
             /* Be sure the BMC info file is removed.
              * The 'hwmond' reads it and gets the bmc fw version from it. */
+            string bmc_info_filename = "" ;
             if ( node_ptr->bmc_protocol == BMC_PROTOCOL__REDFISHTOOL )
             {
                 bmc_info_filename.append(REDFISHTOOL_OUTPUT_DIR) ;
@@ -6207,18 +6255,23 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
             plog ("%s bmc access timer started (%d secs)\n", node_ptr->hostname.c_str(), MTC_MINS_2);
             mtcTimer_reset ( node_ptr->bmc_access_timer );
             mtcTimer_start ( node_ptr->bmc_access_timer, mtcTimer_handler, MTC_MINS_2 );
+            mtcTimer_reset ( node_ptr->bmc_audit_timer );
         }
 
+        /* manage bmc creds refresh ; not expected but should be handled */
         if ( node_ptr->bm_ping_info.ok == false )
         {
-            /* Auto correct key ping information ; should ever occur but if it does ... */
-            if (( node_ptr->bm_ping_info.hostname.empty()) || ( node_ptr->bm_ping_info.ip.empty()))
+            /* Auto correct key ping information ;
+             * should never occur but if it does ... */
+            if (( node_ptr->bm_ping_info.hostname.empty()) ||
+                ( node_ptr->bm_ping_info.ip.empty()))
             {
                  node_ptr->bm_ping_info.hostname = node_ptr->hostname ;
                  node_ptr->bm_ping_info.ip       = node_ptr->bm_ip    ;
             }
         }
 
+        /* manage getting the bm password */
         if ( node_ptr->thread_extra_info.bm_pw.empty() )
         {
             barbicanSecret_type * secret = secretUtil_manage_secret( node_ptr->secretEvent,
@@ -6235,7 +6288,7 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
         /* If the BMC protocol has not yet been learned then do so.
          * Default is ipmi unless the target host responds to a
          * redfish root query with a minimum version number ; 1.0 */
-        else if (( node_ptr->bm_ping_info.ok ) &&
+        else if (( node_ptr->bm_ping_info.ok == true ) &&
                  ( node_ptr->bmc_protocol_learned == false ))
         {
             if ( node_ptr->bmc_protocol_learning == false )
@@ -6277,9 +6330,10 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
                 else if ( rc != PASS )
                 {
                     if (( node_ptr->bmc_thread_info.command == BMC_THREAD_CMD__BMC_QUERY ) &&
-                        ( rc == FAIL_SYSTEM_CALL ))
+                        (( rc == FAIL_SYSTEM_CALL ) || ( rc == FAIL_NOT_ACTIVE )))
                     {
-                        wlog ("%s bmc does not support Redfish ; " \
+                        /* TODO: may need retries */
+                        plog ("%s bmc does not support Redfish ; " \
                                   "defaulting to ipmi",
                                   node_ptr->hostname.c_str());
                     }
@@ -6292,9 +6346,9 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
                                   node_ptr->bmc_thread_info.status,
                                  node_ptr->bmc_thread_info.status_string.c_str());
                     }
+                    node_ptr->bmc_protocol = BMC_PROTOCOL__IPMITOOL ;
                     node_ptr->bmc_protocol_learning = false ;
                     node_ptr->bmc_protocol_learned = true ;
-                    node_ptr->bmc_protocol = BMC_PROTOCOL__IPMITOOL ;
                     node_ptr->bmc_thread_ctrl.done = true ;
                 }
                 else
@@ -6316,13 +6370,12 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
                     {
                         node_ptr->bmc_protocol = BMC_PROTOCOL__IPMITOOL ;
                     }
+                    node_ptr->bmc_protocol_learned = true ;
 
-                    ilog ("%s bmc supports %s",
+                    blog ("%s bmc supports %s",
                               node_ptr->hostname.c_str(),
                               bmcUtil_getProtocol_str(node_ptr->bmc_protocol).c_str());
 
-                    node_ptr->bmc_protocol_learning = false ;
-                    node_ptr->bmc_protocol_learned = true ;
                     node_ptr->bmc_thread_ctrl.done = true ;
                 }
             }
@@ -6339,10 +6392,10 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
                  ( node_ptr->bmc_accessible == false ) &&
                  ( node_ptr->bm_ping_info.ok == true ) &&
                  ( node_ptr->bmc_info_query_done == false ) &&
+                 ( node_ptr->bmc_protocol_learned == true ) &&
                  ( mtcTimer_expired (node_ptr->bm_timer ) == true ))
         {
-            if (( node_ptr->bmc_info_query_active == false ) &&
-                ( node_ptr->bmc_info_query_done   == false ))
+            if ( node_ptr->bmc_info_query_active == false )
             {
                 if ( bmc_command_send ( node_ptr, BMC_THREAD_CMD__BMC_INFO ) != PASS )
                 {
@@ -6355,14 +6408,13 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
                 else
                 {
                     node_ptr->bmc_info_query_active = true ;
-                    ilog ("%s bmc redfish '%s' in progress", /* ERIK: blog */
+                    blog ("%s bmc redfish '%s' in progress",
                               node_ptr->hostname.c_str(),
                               bmcUtil_getCmd_str(node_ptr->bmc_thread_info.command).c_str());
                     mtcTimer_start ( node_ptr->bm_timer, mtcTimer_handler, MTC_FIRST_WAIT );
                 }
             }
-            else if (( node_ptr->bmc_info_query_active == true ) &&
-                     ( node_ptr->bmc_info_query_done   == false))
+            else if ( node_ptr->bmc_info_query_active == true )
             {
                 int rc ;
                 if ( ( rc = bmc_command_recv ( node_ptr ) ) == RETRY )
@@ -6397,15 +6449,18 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
                     else
                     {
                         mtcTimer_reset ( node_ptr->bm_timer );
+                        mtcTimer_reset ( node_ptr->bmc_audit_timer );
+                        mtcTimer_start ( node_ptr->bmc_audit_timer, mtcTimer_handler, MTC_MINS_2 );
+                        plog ("%s bmc audit timer started (%d secs)\n", node_ptr->hostname.c_str(), MTC_MINS_2);
 
-#ifdef REDFISH_INTEGRATION_DONE
                         /* success path */
-                        node_ptr->bmc_info_query_active = false ;
+                        node_ptr->bmc_accessible = true ;
                         node_ptr->bmc_info_query_done = true ;
-                        node_ptr->bmc_protocol = BMC_PROTOCOL__REDFISHTOOL ;
+                        node_ptr->bmc_info_query_active = false ;
+                        node_ptr->bmc_protocol_learning = false ;
+                        node_ptr->bmc_protocol_learned = true ;
 
                         mtcTimer_reset ( node_ptr->bmc_access_timer );
-                        node_ptr->bmc_accessible = true ;
 
                         /* save the host's power state */
                         node_ptr->power_on = node_ptr->bmc_info.power_on ;
@@ -6413,25 +6468,12 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
                         plog ("%s bmc is accessible using redfish",
                                   node_ptr->hostname.c_str());
 
-
                         /* tell the hardware monitor of the power state and protocol */
                         bmcUtil_hwmon_info ( node_ptr->hostname,
-                                                    node_ptr->bmc_protocol,
-                                                    node_ptr->power_on, "" );
+                                             node_ptr->bmc_protocol,
+                                             node_ptr->power_on, "" );
 
                         send_hwmon_command ( node_ptr->hostname, MTC_CMD_MOD_HOST );
-#else
-                        /* Redfish Power Control Commands not Implemented Yet
-                         * Redfish not fully integrated.
-                         * Need to continue to default to IPMI
-                         *
-                         * Start */
-                        node_ptr->bmc_accessible        = false ;
-                        node_ptr->bmc_info_query_active = false ;
-                        node_ptr->bmc_info_query_done   = false ;
-                        node_ptr->bmc_protocol = BMC_PROTOCOL__IPMITOOL ;
-                        /* End */
-#endif
 
                         node_ptr->bmc_thread_ctrl.done = true  ;
                         node_ptr->bmc_thread_info.command = 0  ;
@@ -6640,6 +6682,112 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
             pingUtil_acc_monitor ( node_ptr->bm_ping_info );
         }
 
+        /* BMC Access Audit for Redfish.
+         *  - used to refresh the host power state */
+        if (( node_ptr->bmc_protocol == BMC_PROTOCOL__REDFISHTOOL ) &&
+            ( node_ptr->bmc_provisioned ) &&
+            ( node_ptr->bmc_accessible ) &&
+            ( mtcTimer_expired ( node_ptr->bmc_audit_timer ) == true ) &&
+            ( mtcTimer_expired ( node_ptr->bm_timer ) == true ))
+        {
+            if ( node_ptr->bmc_thread_ctrl.done )
+            {
+                /* send the BMC Query command */
+                if ( bmc_command_send ( node_ptr, BMC_THREAD_CMD__BMC_INFO ) != PASS )
+                {
+                    elog ("%s bmc redfish '%s' send failed\n",
+                              node_ptr->hostname.c_str(),
+                              bmcUtil_getCmd_str(
+                              node_ptr->bmc_thread_info.command).c_str());
+                    node_ptr->bm_ping_info.ok = false ;
+                    node_ptr->bm_ping_info.stage = PINGUTIL_MONITOR_STAGE__FAIL ;
+                }
+                else
+                {
+                    blog1 ("%s bmc redfish '%s' audit in progress",
+                               node_ptr->hostname.c_str(),
+                               bmcUtil_getCmd_str(node_ptr->bmc_thread_info.command).c_str());
+                    mtcTimer_start ( node_ptr->bm_timer, mtcTimer_handler, MTC_RETRY_WAIT );
+                }
+            }
+            else if ( node_ptr->bmc_thread_info.command == BMC_THREAD_CMD__BMC_INFO )
+            {
+                int rc ;
+                if ( ( rc = bmc_command_recv ( node_ptr ) ) == RETRY )
+                {
+                    mtcTimer_start ( node_ptr->bm_timer, mtcTimer_handler, MTC_RETRY_WAIT );
+                }
+                else if ( rc != PASS )
+                {
+                    wlog ("%s bmc audit failed receive (rc:%d)",
+                              node_ptr->hostname.c_str(), rc );
+                    node_ptr->bm_ping_info.ok = false ;
+                    node_ptr->bm_ping_info.stage = PINGUTIL_MONITOR_STAGE__FAIL ;
+                }
+                else if ( node_ptr->bmc_thread_info.data.empty())
+                {
+                    wlog ("%s bmc audit failed get bmc query response data",
+                              node_ptr->hostname.c_str());
+                    node_ptr->bm_ping_info.ok = false ;
+                    node_ptr->bm_ping_info.stage = PINGUTIL_MONITOR_STAGE__FAIL ;
+                }
+                else
+                {
+                    string filedata = daemon_read_file (node_ptr->bmc_thread_info.data.data()) ;
+                    struct json_object *json_obj =
+                    json_tokener_parse((char*)filedata.data());
+                    if ( json_obj )
+                    {
+                        /* load the power state */
+                        bool power_on ;
+                        string power_state =
+                        tolowercase(jsonUtil_get_key_value_string( json_obj, REDFISH_LABEL__POWER_STATE));
+                        if ( power_state == BMC_POWER_ON_STATUS )
+                            power_on = true ;
+                        else if ( power_state == BMC_POWER_OFF_STATUS )
+                            power_on = false ;
+                        else
+                        {
+                            wlog ("%s bmc audit failed to get power state",
+                                      node_ptr->hostname.c_str());
+                            node_ptr->bm_ping_info.ok = false ;
+                            node_ptr->bm_ping_info.stage = PINGUTIL_MONITOR_STAGE__FAIL ;
+                            rc = FAIL_JSON_PARSE ;
+                        }
+                        if ( rc == PASS )
+                        {
+                            if ( power_on != node_ptr->power_on )
+                            {
+                                ilog ("%s power state changed to %s",
+                                          node_ptr->hostname.c_str(),
+                                          power_state.c_str());
+
+                                /* tell the hardware monitor of the power state and protocol */
+                                bmcUtil_hwmon_info ( node_ptr->hostname,
+                                                     node_ptr->bmc_protocol,
+                                                     power_on, "" );
+                                send_hwmon_command ( node_ptr->hostname, MTC_CMD_MOD_HOST );
+                            }
+                            node_ptr->power_on = power_on ;
+                            blog1 ("%s bmc audit timer re-started (%d secs)\n",
+                                       node_ptr->hostname.c_str(), MTC_MINS_2);
+                            mtcTimer_start ( node_ptr->bmc_audit_timer,
+                                             mtcTimer_handler,
+                                             MTC_MINS_2 );
+                        }
+                        json_object_put(json_obj);
+                    }
+                    else
+                    {
+                        node_ptr->bm_ping_info.ok = false ;
+                        node_ptr->bm_ping_info.stage = PINGUTIL_MONITOR_STAGE__FAIL ;
+                        wlog ("%s bmc audit failed parse bmc query response",
+                                  node_ptr->hostname.c_str());
+                    }
+                }
+            }
+        }
+
         /******************************************************************
          *        Manage the Board Management Access Alarm
          ******************************************************************/
@@ -6652,11 +6800,11 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
 
             /* start a timer that will raise the BM Access alarm
              * if we are not accessible by the time it expires */
-            plog ("%s bmc access timer started (%d secs)\n", node_ptr->hostname.c_str(), MTC_MINS_2);
             mtcTimer_start ( node_ptr->bmc_access_timer, mtcTimer_handler, MTC_MINS_2 );
 
             if ( node_ptr->alarms[MTC_ALARM_ID__BM] == FM_ALARM_SEVERITY_CLEAR )
             {
+                plog ("%s bmc access timer started (%d secs)\n", node_ptr->hostname.c_str(), MTC_MINS_2);
                 mtcAlarm_warning ( node_ptr->hostname, MTC_ALARM_ID__BM );
                 node_ptr->alarms[MTC_ALARM_ID__BM] = FM_ALARM_SEVERITY_WARNING ;
             }
@@ -6668,21 +6816,19 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
          * ... if BMs are accessible then see if we need to clear the
          *     major BM Alarm.
          *****************************************************************/
-        else if ( node_ptr->alarms[MTC_ALARM_ID__BM] != FM_ALARM_SEVERITY_CLEAR )
+        if (( node_ptr->bmc_accessible == true ) &&
+            ( node_ptr->alarms[MTC_ALARM_ID__BM] != FM_ALARM_SEVERITY_CLEAR ) &&
+             ((( node_ptr->bmc_protocol == BMC_PROTOCOL__IPMITOOL ) &&
+               ( node_ptr->bmc_info_query_done == true )            &&
+               ( node_ptr->reset_cause_query_done == true )         &&
+               ( node_ptr->power_status_query_done == true )) ||
+              (( node_ptr->bmc_protocol == BMC_PROTOCOL__REDFISHTOOL ) &&
+               ( node_ptr->bmc_protocol_learned == true ))))
         {
-            if ((( node_ptr->bmc_protocol == BMC_PROTOCOL__IPMITOOL ) &&
-                 ( node_ptr->bmc_info_query_done == true )            &&
-                 ( node_ptr->reset_cause_query_done == true )         &&
-                 ( node_ptr->power_status_query_done == true ))  ||
-                (( node_ptr->bmc_protocol == BMC_PROTOCOL__REDFISHTOOL ) &&
-                 ( node_ptr->bmc_protocol_learned == true )))
-            {
-                mtcAlarm_clear ( node_ptr->hostname, MTC_ALARM_ID__BM );
-                node_ptr->alarms[MTC_ALARM_ID__BM] = FM_ALARM_SEVERITY_CLEAR ;
-            }
+            mtcAlarm_clear ( node_ptr->hostname, MTC_ALARM_ID__BM );
+            node_ptr->alarms[MTC_ALARM_ID__BM] = FM_ALARM_SEVERITY_CLEAR ;
         } /* else alarms already cleared */
     } /* end if bmc_provisioned */
-
     else if ( node_ptr->alarms[MTC_ALARM_ID__BM] != FM_ALARM_SEVERITY_CLEAR )
     {
         mtcAlarm_clear ( node_ptr->hostname, MTC_ALARM_ID__BM );
@@ -6885,6 +7031,15 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
         }
         case MTC_INSV_TEST__RUN:
         {
+            if ( daemon_is_file_present ( MTC_CMD_FIT__BMC_ACC_FAIL ))
+            {
+                if ( node_ptr->bm_ping_info.ok )
+                {
+                    ilog ("%s FIT failing bmc ping monitor", node_ptr->hostname.c_str());
+                    node_ptr->bm_ping_info.stage = PINGUTIL_MONITOR_STAGE__FAIL ;
+                }
+            }
+
 #ifdef WANT_FIT_TESTING
 
             daemon_load_fit ();
@@ -6916,7 +7071,6 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
                  node_ptr->thread_extra_info.bm_ip   = node_ptr->bm_ip   ;
                  node_ptr->thread_extra_info.bm_un   = node_ptr->bm_un   ;
                  node_ptr->thread_extra_info.bm_pw   = node_ptr->bm_pw   ;
-                 node_ptr->thread_extra_info.bm_type = node_ptr->bm_type ;
                  node_ptr->bmc_thread_info.extra_info_ptr = &node_ptr->thread_extra_info ;
                  if ( thread_launch_thread ( mtcThread_bmc, &node_ptr->bmc_thread_info ) == 0 )
                  {

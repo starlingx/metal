@@ -599,7 +599,7 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
             }
             else
             {
-                wlog ("%s is ENABLED-degraded\n", name.c_str());
+                plog ("%s is ENABLED-degraded\n", name.c_str());
             }
             enableStageChange ( node_ptr, MTC_ENABLE__DONE );
 

@@ -19,8 +19,7 @@ typedef struct
     string bm_ip ;
     string bm_un ;
     string bm_pw ;
-    string bm_type ;
-
+    string bm_cmd ;
 } thread_extra_info_type ;
 
 void * mtcThread_bmc ( void * );

@@ -584,6 +584,7 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
     mtcTimer_init ( ptr->bm_timer,         hostname, "bm timer" );       /* Init node's bm timer             */
     mtcTimer_init ( ptr->bm_ping_info.timer,hostname,"ping timer" );     /* Init node's ping timer           */
     mtcTimer_init ( ptr->bmc_access_timer, hostname, "bmc acc timer" );  /* Init node's bm access timer      */
+    mtcTimer_init ( ptr->bmc_audit_timer,  hostname, "bmc aud timer" );  /* Init node's bm audit timer       */
     mtcTimer_init ( ptr->host_services_timer, hostname, "host services timer" ); /* host services timer      */
 
     mtcTimer_init ( ptr->hwmon_powercycle.control_timer,  hostname, "powercycle control timer");
@@ -633,11 +634,22 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
     /* initialize all board management variables for this host */
     ptr->bmc_protocol = BMC_PROTOCOL__IPMITOOL ;
     ptr->bm_ip = NONE ;
-    ptr->bm_type = NONE ;
     ptr->bm_un = NONE ;
     ptr->bm_pw = NONE ;
+    ptr->bm_cmd= NONE ;
+    ptr->bm_type = NONE ; /* TODO: OBS */
 
-    ptr->bmc_provisioned = false ; /* assume not provisioned until learned   */
+    /* restart command tht need to learned for Redfish.
+     * ipmi commands are hard coded fro legacy support.
+     */
+    ptr->bm_reset_cmd    = NONE ;
+    ptr->bm_restart_cmd  = NONE ;
+    ptr->bm_poweron_cmd  = NONE ;
+    ptr->bm_poweroff_cmd = NONE ;
+
+    ptr->bmc_provisioned = false ; /* assume not provisioned until learned */
+    ptr->bmc_accessible  = false ; /* assume not accessible  until proven  */
+    ptr->bmc_access_method_changed = false ;
 
     if ( hostname == my_hostname )
         ptr->power_on    = true  ;
@@ -908,6 +920,7 @@ int nodeLinkClass::remNode( string hostname )
 
     mtcTimer_fini ( ptr->bm_timer );
     mtcTimer_fini ( ptr->bmc_access_timer );
+    mtcTimer_fini ( ptr->bmc_audit_timer );
     mtcTimer_fini ( ptr->bm_ping_info.timer );
 
 #ifdef WANT_PULSE_LIST_SEARCH_ON_DELETE
@@ -2745,7 +2758,7 @@ int nodeLinkClass::add_host ( node_inv_type & inv )
 
             node_ptr->thread_extra_info.bm_ip  = node_ptr->bm_ip   = inv.bm_ip   ;
             node_ptr->thread_extra_info.bm_un  = node_ptr->bm_un   = inv.bm_un   ;
-            node_ptr->thread_extra_info.bm_type= node_ptr->bm_type = inv.bm_type ;
+            node_ptr->bm_type = inv.bm_type ;
 
             node_ptr->bm_ping_info.sock = 0 ;
 
@@ -4068,9 +4081,35 @@ void nodeLinkClass::bmc_access_data_init ( struct nodeLinkClass::node * node_ptr
         node_ptr->reset_cause_query_done      = false ;
         node_ptr->power_status_query_active   = false ;
         node_ptr->power_status_query_done     = false ;
-        node_ptr->bmc_protocol_learned        = false ;
-        node_ptr->bmc_protocol_learning = false ;
-        node_ptr->bmc_protocol = BMC_PROTOCOL__IPMITOOL ;
+
+        /* remove all the bmc related temporary files created
+         * for this host and process */
+        bmcUtil_remove_files ( node_ptr->hostname, node_ptr->bmc_protocol );
+
+        if ( this->bmc_access_method == "ipmi" )
+        {
+            blog2 ("%s BMC access method set to 'ipmi'",
+                       node_ptr->hostname.c_str());
+            node_ptr->bmc_protocol = BMC_PROTOCOL__IPMITOOL ;
+            node_ptr->bmc_protocol_learning = false ;
+            node_ptr->bmc_protocol_learned = true ;
+        }
+        else if ( this->bmc_access_method == "redfish" )
+        {
+            blog2 ("%s BMC access method set to 'redfish'",
+                       node_ptr->hostname.c_str());
+            node_ptr->bmc_protocol = BMC_PROTOCOL__REDFISHTOOL ;
+            node_ptr->bmc_protocol_learning = false ;
+            node_ptr->bmc_protocol_learned = true ;
+        }
+        else
+        {
+            blog2 ("%s BMC access method will be learned",
+                       node_ptr->hostname.c_str());
+            node_ptr->bmc_protocol_learned  = false ;
+            node_ptr->bmc_protocol_learning = false ;
+            node_ptr->bmc_protocol = BMC_PROTOCOL__IPMITOOL ;
+        }
         bmcUtil_info_init ( node_ptr->bmc_info );
     }
 }
@@ -4101,10 +4140,6 @@ int nodeLinkClass::set_bm_prov ( struct nodeLinkClass::node * node_ptr, bool sta
         /* Clear the alarm if we are starting fresh from an unprovisioned state */
         if (( node_ptr->bmc_provisioned == false ) && ( state == true ))
         {
-            bmcUtil_hwmon_info ( node_ptr->hostname,
-                                        node_ptr->bmc_protocol,
-                                        node_ptr->power_on, "" );
-
             ilog ("%s starting BM ping monitor to address '%s'\n",
                       node_ptr->hostname.c_str(),
                       node_ptr->bm_ip.c_str());
@@ -4151,7 +4186,7 @@ int nodeLinkClass::set_bm_prov ( struct nodeLinkClass::node * node_ptr, bool sta
 
             pingUtil_fini  ( node_ptr->bm_ping_info );
             bmc_access_data_init ( node_ptr );
-
+            mtcTimer_reset ( node_ptr->bmc_audit_timer );
             if ( !thread_idle( node_ptr->bmc_thread_ctrl ) )
             {
                  thread_kill ( node_ptr->bmc_thread_ctrl , node_ptr->bmc_thread_info);
@@ -6889,6 +6924,24 @@ struct nodeLinkClass::node * nodeLinkClass::get_bmc_access_timer ( timer_t tid )
 }
 
 
+struct nodeLinkClass::node * nodeLinkClass::get_bmc_audit_timer ( timer_t tid )
+{
+   /* check for empty list condition */
+   if ( tid != NULL )
+   {
+       for ( struct node * ptr = head ;  ; ptr = ptr->next )
+       {
+           if ( ptr->bmc_audit_timer.tid == tid )
+           {
+               return ptr ;
+           }
+           if (( ptr->next == NULL ) || ( ptr == tail ))
+               break ;
+        }
+    }
+    return static_cast<struct node *>(NULL);
+}
+
 
 struct nodeLinkClass::node * nodeLinkClass::get_mtcConfig_timer ( timer_t tid )
 {
@@ -8617,14 +8670,20 @@ void nodeLinkClass::mem_log_general_mtce_hosts ( void )
 void nodeLinkClass::mem_log_bm ( struct nodeLinkClass::node * node_ptr )
 {
     char str[MAX_MEM_LOG_DATA] ;
-    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tBMC %s %s:%s prov:%s learn:%s:%s\n",
+    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tBMC %s %s:%s prov:%s acc:%s ping:%s learn:%s:%s Query:%s:%s Timer:%s:%s\n",
                 node_ptr->hostname.c_str(),
                 bmcUtil_getProtocol_str(node_ptr->bmc_protocol).c_str(),
                 node_ptr->bm_un.c_str(),
                 node_ptr->bm_ip.c_str(),
-                node_ptr->bmc_provisioned ? "Yes" : "No",
-                node_ptr->bmc_protocol_learned ? "Yes" : "No",
-                node_ptr->bmc_protocol_learning ? "Yes" : "No");
+                node_ptr->bmc_provisioned ? "Y" : "N",
+                node_ptr->bmc_accessible ? "Y" : "N",
+                node_ptr->bm_ping_info.ok ? "Y" : "N",
+                node_ptr->bmc_protocol_learned ? "Y" : "N",
+                node_ptr->bmc_protocol_learning ? "Y" : "N",
+                node_ptr->bmc_info_query_active ? "Y" : "N",
+                node_ptr->bmc_info_query_done ? "Y" : "N",
+                node_ptr->bm_timer.active ? "Y" : "N",
+                node_ptr->bmc_access_timer.active ? "Y" : "N" );
     mem_log (str);
 }
 
@@ -8729,14 +8788,16 @@ void nodeLinkClass::mem_log_alarm1 ( struct nodeLinkClass::node * node_ptr )
 void nodeLinkClass::mem_log_stage ( struct nodeLinkClass::node * node_ptr )
 {
     char str[MAX_MEM_LOG_DATA] ;
-    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tAdd:%d Offline:%d: Swact:%d Recovery:%d Enable:%d Disable:%d\n",
+    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tAdd:%d Offline:%d: Swact:%d Recovery:%d Enable:%d Disable:%d Power:%d Cycle:%d\n",
                 node_ptr->hostname.c_str(),
                 node_ptr->addStage,
                 node_ptr->offlineStage,
                 node_ptr->swactStage,
                 node_ptr->recoveryStage,
                 node_ptr->enableStage,
-                node_ptr->disableStage);
+                node_ptr->disableStage,
+                node_ptr->powerStage,
+                node_ptr->powercycleStage);
     mem_log (str);
 }
 

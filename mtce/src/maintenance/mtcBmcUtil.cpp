@@ -45,9 +45,8 @@ int nodeLinkClass::bmc_command_send ( struct nodeLinkClass::node * node_ptr,
     node_ptr->thread_extra_info.bm_ip   = node_ptr->bm_ip   ;
     node_ptr->thread_extra_info.bm_un   = node_ptr->bm_un   ;
     node_ptr->thread_extra_info.bm_pw   = node_ptr->bm_pw   ;
-    node_ptr->thread_extra_info.bm_type = node_ptr->bm_type ;
 
-    /* Special case handliong for Redfish Root (BMC) Query command.
+    /* Special case handling for Redfish Root (BMC) Query command.
      * Current protocol override for this command that only applies
      * to redfish and used for the bmc protocol learning process. */
     if ( command == BMC_THREAD_CMD__BMC_QUERY )
@@ -55,6 +54,26 @@ int nodeLinkClass::bmc_command_send ( struct nodeLinkClass::node * node_ptr,
     else
         node_ptr->bmc_thread_info.proto = node_ptr->bmc_protocol ;
 
+    if ( node_ptr->bmc_thread_info.proto == BMC_PROTOCOL__REDFISHTOOL )
+    {
+        /* build the reset/power control command */
+        switch (command)
+        {
+            case BMC_THREAD_CMD__POWER_RESET:
+                node_ptr->bm_cmd = REDFISHTOOL_POWER_RESET_CMD ;
+                node_ptr->bm_cmd.append(node_ptr->bmc_info.reset_action_list.front());
+                break ;
+            case BMC_THREAD_CMD__POWER_ON:
+                node_ptr->bm_cmd = REDFISHTOOL_POWER_RESET_CMD ;
+                node_ptr->bm_cmd.append(node_ptr->bmc_info.power_on_action_list.front());
+                break ;
+            case BMC_THREAD_CMD__POWER_OFF:
+                node_ptr->bm_cmd = REDFISHTOOL_POWER_RESET_CMD ;
+                node_ptr->bm_cmd.append(node_ptr->bmc_info.power_off_action_list.front());
+                break ;
+        }
+        node_ptr->thread_extra_info.bm_cmd  = node_ptr->bm_cmd  ;
+    }
 #ifdef WANT_FIT_TESTING
     {
         bool want_fit = false ;
@@ -170,38 +189,37 @@ int nodeLinkClass::bmc_command_recv ( struct nodeLinkClass::node * node_ptr )
     {
         if ( node_ptr->bmc_protocol == BMC_PROTOCOL__REDFISHTOOL )
         {
-            /* handle the redfishtool root query as a special case because
-             * it is likely to fail and we don't want un-necessary error logs */
-            if ( node_ptr->bmc_thread_info.command == BMC_THREAD_CMD__BMC_QUERY )
+            if (( rc = node_ptr->bmc_thread_info.status ) != PASS )
             {
-                if (( rc = node_ptr->bmc_thread_info.status ) != PASS )
+                /* handle the redfishtool root query as a special case because
+                 * it is likely to fail and we don't want un-necessary error logs */
+                if (( node_ptr->bmc_thread_info.command == BMC_THREAD_CMD__BMC_QUERY ) &&
+                    (( rc == FAIL_SYSTEM_CALL ) || ( rc == FAIL_NOT_ACTIVE )))
                 {
-                    blog2 ("%s %s command failed (%s) (data:%s) (rc:%d:%d:%s)\n",
-                               node_ptr->hostname.c_str(),
-                               bmcUtil_getCmd_str(node_ptr->bmc_thread_info.command).c_str(),
-                               bmcUtil_getProtocol_str(node_ptr->bmc_protocol).c_str(),
-                               node_ptr->bmc_thread_info.data.c_str(),
-                               rc,
-                               node_ptr->bmc_thread_info.status,
-                               node_ptr->bmc_thread_info.status_string.c_str());
+                    blog ("%s bmc redfish %s failed",
+                              node_ptr->hostname.c_str(),
+                              bmcUtil_getCmd_str(
+                              node_ptr->bmc_thread_info.command).c_str());
+                }
+                else if (( node_ptr->bmc_thread_info.command == BMC_THREAD_CMD__BMC_INFO ) &&
+                         (( rc == FAIL_SYSTEM_CALL ) || ( rc == FAIL_NOT_ACTIVE )))
+                {
+                    wlog ("%s bmc redfish %s failed",
+                              node_ptr->hostname.c_str(),
+                              bmcUtil_getCmd_str(
+                              node_ptr->bmc_thread_info.command).c_str());
                 }
                 else
                 {
-                    ilog("%s Redfish Root Query:\n%s",
-                             node_ptr->hostname.c_str(),
-                             node_ptr->bmc_thread_info.data.c_str());
+                    elog ("%s bmc redfish %s command failed (%s) (data:%s) (rc:%d:%d:%s)\n",
+                              node_ptr->hostname.c_str(),
+                              bmcUtil_getCmd_str(node_ptr->bmc_thread_info.command).c_str(),
+                              bmcUtil_getProtocol_str(node_ptr->bmc_protocol).c_str(),
+                              node_ptr->bmc_thread_info.data.c_str(),
+                              rc,
+                              node_ptr->bmc_thread_info.status,
+                              node_ptr->bmc_thread_info.status_string.c_str());
                 }
-            }
-            else if (( rc = node_ptr->bmc_thread_info.status ) != PASS )
-            {
-                elog ("%s %s command failed (%s) (data:%s) (rc:%d:%d:%s)\n",
-                          node_ptr->hostname.c_str(),
-                          bmcUtil_getCmd_str(node_ptr->bmc_thread_info.command).c_str(),
-                          bmcUtil_getProtocol_str(node_ptr->bmc_protocol).c_str(),
-                          node_ptr->bmc_thread_info.data.c_str(),
-                          rc,
-                          node_ptr->bmc_thread_info.status,
-                          node_ptr->bmc_thread_info.status_string.c_str());
             }
             else
             {
@@ -261,11 +279,11 @@ int nodeLinkClass::bmc_command_recv ( struct nodeLinkClass::node * node_ptr )
                 }
                 else
                 {
-                     blog ("%s %s Response: %s\n",
-                               node_ptr->hostname.c_str(),
-                               bmcUtil_getCmd_str(
-                               node_ptr->bmc_thread_info.command).c_str(),
-                               node_ptr->bmc_thread_info.data.c_str());
+                     blog1 ("%s %s Response: %s\n",
+                                node_ptr->hostname.c_str(),
+                                bmcUtil_getCmd_str(
+                                node_ptr->bmc_thread_info.command).c_str(),
+                                node_ptr->bmc_thread_info.data.c_str());
                 }
             }
         }
@@ -318,6 +336,10 @@ int nodeLinkClass::bmc_command_recv ( struct nodeLinkClass::node * node_ptr )
     }
 
     /* handle max retries reached */
+    if ( rc == PASS )
+    {
+        ;
+    }
     else if ( node_ptr->bmc_thread_ctrl.retries++ >= BMC__MAX_RECV_RETRIES )
     {
         wlog ("%s %s command timeout (%d of %d)\n",
@@ -334,18 +356,28 @@ int nodeLinkClass::bmc_command_recv ( struct nodeLinkClass::node * node_ptr )
     {
         if ( node_ptr->bmc_thread_ctrl.id == 0 )
         {
-            slog ("%s %s command not-running\n",
-                      node_ptr->hostname.c_str(),
-                      bmcUtil_getCmd_str(node_ptr->bmc_thread_info.command).c_str());
+            /* don't log a warning for redfish query failures. */
+            if (( node_ptr->bmc_thread_info.command != BMC_THREAD_CMD__BMC_QUERY ) &&
+                ( node_ptr->bmc_thread_info.command != BMC_THREAD_CMD__BMC_INFO ))
+            {
+                wlog ("%s %s command not-running\n",
+                          node_ptr->hostname.c_str(),
+                          bmcUtil_getCmd_str(node_ptr->bmc_thread_info.command).c_str());
+            }
             rc = FAIL_NOT_ACTIVE ;
         }
         else
         {
-            ilog ("%s %s command in-progress (polling %d of %d)\n",
-                      node_ptr->hostname.c_str(),
-                      bmcUtil_getCmd_str(node_ptr->bmc_thread_info.command).c_str(),
-                      node_ptr->bmc_thread_ctrl.retries,
-                      BMC__MAX_RECV_RETRIES);
+            /* The BMC is sometimes slow,
+             * No need to log till we reach lalf of the retry threshold */
+            if ( node_ptr->bmc_thread_ctrl.retries > (BMC__MAX_RECV_RETRIES/2) )
+            {
+                ilog ("%s %s command in-progress (polling %d of %d)\n",
+                          node_ptr->hostname.c_str(),
+                          bmcUtil_getCmd_str(node_ptr->bmc_thread_info.command).c_str(),
+                          node_ptr->bmc_thread_ctrl.retries,
+                          BMC__MAX_RECV_RETRIES);
+            }
             rc = RETRY ;
         }
     }

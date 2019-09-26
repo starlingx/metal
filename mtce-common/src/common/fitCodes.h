@@ -53,6 +53,7 @@
 #define MTC_CMD_FIT__LINKLIST     ("/var/run/fit/linklist")     /* hbsAgent */
 #define MTC_CMD_FIT__HBSSILENT    ("/var/run/fit/hbs_silent_fault") /* hbsAgent */
 #define MTC_CMD_FIT__SENSOR_DATA  ("/var/run/fit/sensor_data")      /* hwmond */
+#define MTC_CMD_FIT__INLINE_CREDS ("/var/run/fit/inline_creds")     /* mtcAgent */
 #define MTC_CMD_FIT__POWER_CMD    ("/var/run/fit/power_cmd_result") /* mtcAgent */
 #define MTC_CMD_FIT__ROOT_QUERY   ("/var/run/fit/root_query")       /* mtcAgent */
 #define MTC_CMD_FIT__MC_INFO      ("/var/run/fit/mc_info")          /* mtcAgent */
@@ -63,6 +64,9 @@
 #define MTC_CMD_FIT__START_SVCS   ("/var/run/fit/host_services")    /* mtcClient */
 #define MTC_CMD_FIT__NO_HS_ACK    ("/var/run/fit/no_hs_ack")        /* mtcClient */
 #define MTC_CMD_FIT__GOENABLE_AUDIT ("/var/run/fit/goenable_audit") /* mtcAgent  */
+#define MTC_CMD_FIT__JSON_LEAK_SOAK ("/var/run/fit/json_leak_soak") /* mtcAgent  */
+#define MTC_CMD_FIT__BMC_ACC_FAIL   ("/var/run/fit/bmc_access_fail")/* mtcAgent  */
+#define MTC_CMD_FIT__MEM_LEAK_DEBUG ("/var/run/fit/mem_leak_debug")/* mtcAgent  */
 
 /*****************************************************
  *           Fault Insertion Codes

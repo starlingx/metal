@@ -84,7 +84,7 @@
 #define MTC_REINSTALL_TIMEOUT_MIN      (MTC_MINS_1)
 #define MTC_REINSTALL_TIMEOUT_MAX      (MTC_HRS_4)
 #define MTC_REINSTALL_WAIT_TIMER       (10)
-#define MTC_IPMITOOL_REQUEST_DELAY     (10) /* consider making this shorter */
+#define MTC_BMC_REQUEST_DELAY     (10) /* consider making this shorter */
 #define LAZY_REBOOT_RETRY_DELAY_SECS   (60)
 #define SM_NOTIFY_UNHEALTHY_DELAY_SECS  (5)
 #define MTC_MIN_ONLINE_PERIOD_SECS      (7)

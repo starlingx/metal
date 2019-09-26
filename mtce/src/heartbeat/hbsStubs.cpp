@@ -340,6 +340,11 @@ void bmcUtil_info_init ( bmc_info_type & bmc_info )
     UNUSED(bmc_info);
 }
 
+void bmcUtil_remove_files ( string hostname, bmc_protocol_enum protocol )
+{
+    UNUSED(hostname);
+    UNUSED(protocol);
+}
 int nodeLinkClass::bmc_command_send ( struct nodeLinkClass::node * node_ptr, int command )
 {
     UNUSED(node_ptr);

@@ -583,24 +583,31 @@ private:
 
         /** A string label that represents the board management
          *  controller type for this host */
-        string bm_type ;
+        string bm_type ; /* TODO: OBS */
 
         /** The operator provisioned board management hostname */
         string bm_un ;
 
-        /* Indicates there is a board management test
-         * for this host in progress */
-        bool bm_test_in_progress ;
+        /** the command to use in the bmc thread.
+         *  introduced for redfish reset sub command ; reset type */
+        string bm_cmd;
 
-        /* Indicates there is a board management operation
-         * in progress on this host */
-        bool bm_oper_in_progress ;
+        /* restart command tht need to learned for Redfish.
+         * ipmi commands are hard coded fro legacy support. */
+        string bm_reset_cmd    ;
+        string bm_restart_cmd  ;
+        string bm_poweron_cmd  ;
+        string bm_poweroff_cmd ;
 
         /**
          *   The BMC is 'accessible' once provisioning data is available
          *   and bmc is verified pingable.
          **/
         bool bmc_accessible;
+
+        /* tell the host level bmc_handler that this hosts access
+         * method has changed */
+        bool bmc_access_method_changed ;
 
         /** @} private_boad_management_variables */
 
@@ -693,6 +700,9 @@ private:
 
         /* timer used to manage the bmc access alarm */
         struct mtc_timer bmc_access_timer ;
+
+        /* timer used to audit bmc info */
+        struct mtc_timer bmc_audit_timer ;
 
         /*****************************************************
          *            Maintenance Thread Structs
@@ -1092,6 +1102,7 @@ private:
     struct nodeLinkClass::node * get_ping_timer       ( timer_t tid );
     struct nodeLinkClass::node * get_bm_timer         ( timer_t tid );
     struct nodeLinkClass::node * get_bmc_access_timer ( timer_t tid );
+    struct nodeLinkClass::node * get_bmc_audit_timer  ( timer_t tid );
     struct nodeLinkClass::node * get_host_services_timer ( timer_t tid );
 
     struct nodeLinkClass::node * get_powercycle_control_timer  ( timer_t tid );
@@ -1363,6 +1374,8 @@ public:
     /* the main fsm entrypoint to service all hosts */
     void fsm ( void ) ;
 
+    void bmc_access_method_change_notifier ( void );
+
    /** This controller's hostname set'er */
     void   set_my_hostname ( string hostname );
 
@@ -1485,6 +1498,13 @@ public:
 
     std::list<string>           mnfa_awol_list ;
     void                        mnfa_timeout_handler ( void );
+
+    /* How to communicate with the BMCs in this lab.
+     * Options are: ipmi, redfish, learn */
+    string bmc_access_method ;
+
+    /* handle bmc access method change by service parameter */
+    bool bmc_access_method_changed ;
 
     /** Return the number of inventoried hosts */
     int num_hosts ( void );
@@ -1675,9 +1695,6 @@ public:
 
     /** Returns number of enabled controllers */
     int num_controllers_enabled ( void );
-
-    /** Run the FSM against the specified host */
-    int run_fsm ( string hostname );
 
     /** Post a specific enable handler stage */
     int set_enableStage ( string & hostname, mtc_enableStages_enum stage );
