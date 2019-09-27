@@ -67,6 +67,7 @@
 #define MTC_CMD_FIT__JSON_LEAK_SOAK ("/var/run/fit/json_leak_soak") /* mtcAgent  */
 #define MTC_CMD_FIT__BMC_ACC_FAIL   ("/var/run/fit/bmc_access_fail")/* mtcAgent  */
 #define MTC_CMD_FIT__MEM_LEAK_DEBUG ("/var/run/fit/mem_leak_debug")/* mtcAgent  */
+#define MTC_CMD_FIT__FM_ERROR_CODE  ("/var/run/fit/fm_error_code")  /* mtcAgent  */
 
 /*****************************************************
  *           Fault Insertion Codes
@@ -120,7 +121,8 @@
 
 #define FIT_CODE__FM_SET_ALARM                       (40)
 #define FIT_CODE__FM_GET_ALARM                       (41)
-#define FIT_CODE__FM_QRY_ALARMS                      (42)
+#define FIT_CODE__FM_CLR_ALARM                       (42)
+#define FIT_CODE__FM_QRY_ALARMS                      (43)
 
 #define FIT_CODE__BMC_COMMAND_SEND                   (60)
 #define FIT_CODE__BMC_COMMAND_RECV                   (61)

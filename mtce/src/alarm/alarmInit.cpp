@@ -192,6 +192,13 @@ int daemon_init ( string iface, string nodeType_str )
 void daemon_service_run ( void )
 {
    int rc = PASS ;
+
+#ifdef WANT_FIT_TESTING
+   daemon_init_fit ();
+#endif
+
+   alarmMgr_queue_clear();
+
    if (( mtcalarm_req_sock_ptr ) && ( mtcalarm_req_sock_ptr->getFD() ))
    {
       std::list<int> socks ;
@@ -213,7 +220,7 @@ void daemon_service_run ( void )
       {
          daemon_signal_hdlr ();
          waitd.tv_sec = 0;
-         waitd.tv_usec = SOCKET_WAIT;
+         waitd.tv_usec = SOCKET_WAIT_100MS;
 
          /* Initialize the master fd_set */
          FD_ZERO(&readfds);
@@ -269,6 +276,12 @@ void daemon_service_run ( void )
                break ;
             }
          }
+
+#ifdef WANT_FIT_TESTING
+         daemon_load_fit();
+#endif
+
+         alarmMgr_service_queue();
       }
    }
    else

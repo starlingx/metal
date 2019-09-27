@@ -650,6 +650,7 @@ private:
         /** @} private_monitoring_services_variables */
 
         /* List of alarms and current severity */
+        #define MAX_ALARMS           (10)
         EFmAlarmSeverityT alarms[MAX_ALARMS];
 
         /* tracks whether the alarms for this host have been loaded already or not */
