@@ -1,5 +1,5 @@
 Name:           mtce-common
-Version:        1.0
+Version:        1.0.0
 Release:        1
 Summary:        Maintenance Common Base Package
 License:        Apache-2.0
@@ -86,7 +86,7 @@ and related items necessary for software development.
 %define debug_package %{nil}
 
 %prep
-%autosetup
+%autosetup -n %{name}-%{version}/src
 
 %build
 VER=%{version}
@@ -94,7 +94,7 @@ MAJOR=$(echo $VER | awk -F . '{print $1}')
 MINOR=$(echo $VER | awk -F . '{print $2}')
 make MAJOR=$MAJOR MINOR=$MINOR %{?_smp_mflags} build
 
-%global _buildsubdir %{_builddir}/%{name}-%{version}
+%global _buildsubdir %{_builddir}/%{name}-%{version}/src
 
 %install
 VER=%{version}

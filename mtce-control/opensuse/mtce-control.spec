@@ -1,6 +1,6 @@
 Summary: Controller Node Maintenance Package
 Name: mtce-control
-Version: 1.0
+Version: 1.0.0
 Release: 1
 License: Apache-2.0
 Group: Development/Tools/Other
@@ -20,7 +20,7 @@ Requires: qemu-kvm
 Maintenance support files for controller-only node type
 
 %prep
-%autosetup
+%autosetup -n %{name}-%{version}/src
 
 %build
 
