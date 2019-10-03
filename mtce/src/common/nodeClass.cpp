@@ -4066,6 +4066,7 @@ void nodeLinkClass::bmc_access_data_init ( struct nodeLinkClass::node * node_ptr
 {
     if ( node_ptr )
     {
+        node_ptr->bm_pw.clear();
         node_ptr->bmc_accessible              = false ;
         node_ptr->bm_ping_info.ok             = false ;
         node_ptr->bmc_info_query_active       = false ;
@@ -4148,12 +4149,8 @@ int nodeLinkClass::set_bm_prov ( struct nodeLinkClass::node * node_ptr, bool sta
                 secret->reference.clear() ;
                 secret->payload.clear() ;
                 secret->stage = MTC_SECRET__START ;
+                mtcTimer_start ( node_ptr->bm_timer, mtcTimer_handler, SECRET_START_DELAY );
             }
-            mtcTimer_start( node_ptr->bm_timer, mtcTimer_handler, SECRET_START_DELAY );
-
-            node_ptr->thread_extra_info.bm_pw.clear() ;
-            node_ptr->thread_extra_info.bm_ip = node_ptr->bm_ip ;
-            node_ptr->thread_extra_info.bm_un = node_ptr->bm_un ;
 
             send_hwmon_command(node_ptr->hostname, MTC_CMD_ADD_HOST);
             send_hwmon_command(node_ptr->hostname, MTC_CMD_START_HOST);

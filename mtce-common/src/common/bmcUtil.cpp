@@ -90,7 +90,11 @@ string bmcUtil_getProtocol_str ( bmc_protocol_enum protocol )
     {
         case BMC_PROTOCOL__REDFISHTOOL: return(BMC_PROTOCOL__REDFISHTOOL_STR);
         case BMC_PROTOCOL__IPMITOOL:    return(BMC_PROTOCOL__IPMITOOL_STR);
-        default:                        return("unknown");
+        default:
+        {
+            blog ("unknown bmc protocol %d", protocol );
+            return("unknown");
+        }
     }
 }
 
@@ -329,10 +333,12 @@ bmc_protocol_enum bmcUtil_read_hwmond_protocol ( string hostname )
     bmc_protocol_enum protocol = BMC_PROTOCOL__IPMITOOL ;
     string hwmond_proto_filename = BMC_HWMON_TMP_DIR + hostname ;
 
-    string proto_str = daemon_read_file ( hwmond_proto_filename.data() ) ;
-    if ( strcmp (proto_str.data(), BMC_PROTOCOL__REDFISHTOOL_STR) )
-        protocol = BMC_PROTOCOL__REDFISHTOOL ;
-
+    if ( daemon_is_file_present ( hwmond_proto_filename.data() ) == true )
+    {
+        string proto_str = daemon_read_file ( hwmond_proto_filename.data() ) ;
+        if ( !strcmp (proto_str.data(), BMC_PROTOCOL__REDFISHTOOL_STR) )
+            protocol = BMC_PROTOCOL__REDFISHTOOL ;
+    }
     return protocol;
 }
 

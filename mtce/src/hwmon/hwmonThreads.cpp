@@ -993,8 +993,8 @@ static int _redfishUtil_send_request( thread_info_type * info_ptr, string & data
     }
 
     dlog_t ("%s password filename     : %s\n",
-    info_ptr->log_prefix,
-    info_ptr->password_file.c_str());
+                info_ptr->log_prefix,
+                info_ptr->password_file.c_str());
 
     /*************** Create the output filename ***************/
     datafile = bmcUtil_create_data_fn (info_ptr->hostname, file_suffix, BMC_PROTOCOL__REDFISHTOOL ) ;
@@ -1007,8 +1007,8 @@ static int _redfishUtil_send_request( thread_info_type * info_ptr, string & data
                                            datafile );
 
     dlog_t ("%s query cmd: %s\n",
-                        info_ptr->log_prefix,
-                        request.c_str());
+                info_ptr->log_prefix,
+                request.c_str());
 
     if (( info_ptr->command == BMC_THREAD_CMD__READ_SENSORS ) &&
         ( daemon_is_file_present ( MTC_CMD_FIT__SENSOR_DATA )))
