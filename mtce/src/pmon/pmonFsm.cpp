@@ -562,7 +562,7 @@ int pmon_passive_handler ( process_config_type * ptr )
         /* Spawn the process */
         case PMON_STAGE__RESPAWN:
         {
-            ilog ("%s stability period (%d secs)\n", ptr->process, ptr->debounce );
+            dlog ("%s stability period (%d secs)\n", ptr->process, ptr->debounce );
 
             /* Restart the process */
             respawn_process ( ptr ) ;
@@ -570,20 +570,9 @@ int pmon_passive_handler ( process_config_type * ptr )
             /* Start the monitor debounce timer. */
             mtcTimer_reset ( ptr->pt_ptr );
 
-            /* Don't wait for the debounce timer to take this process out of 'commanded restart' mode.
-             * Do it now, otherwise tight patch loop stress testing might fail */
-            if ( ptr->restart == true )
-            {
-                ilog ("%s Restarted\n", ptr->process )
-                ptr->restart = false ;
-                ptr->registered = false ;
-                passiveStageChange ( ptr, PMON_STAGE__MANAGE ) ;
-            }
-            else
-            {
-                mtcTimer_start ( ptr->pt_ptr, pmon_timer_handler, ptr->startuptime );
-                passiveStageChange ( ptr, PMON_STAGE__MONITOR_WAIT ) ;
-            }
+            mtcTimer_start ( ptr->pt_ptr, pmon_timer_handler, ptr->startuptime );
+            passiveStageChange ( ptr, PMON_STAGE__MONITOR_WAIT ) ;
+
             break ;
         }
 
@@ -619,10 +608,21 @@ int pmon_passive_handler ( process_config_type * ptr )
                     /* clear the monitor debounce counter */
                     ptr->debounce_cnt = 0 ;
 
-                    /* Start debounce monitor phase */
-                    passiveStageChange ( ptr, PMON_STAGE__MONITOR ) ;
-                    process_running ( ptr );
-                    ilog ("%s Monitor    (%d)\n", ptr->process, ptr->pid );
+                    if ( ptr->restart == true )
+                    {
+                        ptr->restart = false ;
+                        ptr->registered = false ;
+                        ptr->pid = get_process_pid ( ptr );
+                        ilog ("%s Restarted  (%d)\n", ptr->process, ptr->pid );
+                        passiveStageChange ( ptr, PMON_STAGE__MANAGE ) ;
+                    }
+                    else
+                    {
+                        /* Start debounce monitor phase */
+                        passiveStageChange ( ptr, PMON_STAGE__MONITOR ) ;
+                        process_running ( ptr );
+                        ilog ("%s Monitor    (%d)\n", ptr->process, ptr->pid );
+                    }
                 }
 
                 ptr->sigchld_rxed = false ;
