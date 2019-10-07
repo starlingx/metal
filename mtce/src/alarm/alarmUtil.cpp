@@ -217,6 +217,7 @@ int alarmUtil_query_identity ( string identity, SFmAlarmDataT * alarm_list_ptr, 
  *
  *
  ********************************************************************************/
+
 int alarmUtil ( string & hostname,
                 string & identity,
                 string & instance,
@@ -280,28 +281,26 @@ int alarmUtil ( string & hostname,
                   alarm.service_affecting ? 'Y' : 'N',
                   alarm.suppression ? 'Y' : 'N' );
 
-        ilog  ( "fm_set_fault: %s %s state:%d sev:%d type:%d cause:%d sa:%c supp:%c",
-                   hostname.c_str(),
-                   alarm.alarm_id,
-                   alarm.alarm_state,
-                   alarm.severity,
-                   alarm.alarm_type,
-                   alarm.probable_cause,
-                   alarm.service_affecting ? 'Y' : 'N',
-                   alarm.suppression ? 'Y' : 'N' );
-
-        rc = fm_set_fault ( &alarm , NULL );
-        if ( rc != FM_ERR_OK )
+#ifdef WANT_FIT_TESTING
+        if (( daemon_is_file_present ( MTC_CMD_FIT__FM_ERROR_CODE )) &&
+            ( daemon_want_fit ( FIT_CODE__FM_SET_ALARM, hostname )))
         {
-            wlog ("%s fm_set_fault call failed for alarm %s (rc:%d) ; retrying\n", hostname.c_str(), alarm.alarm_id, rc);
-            usleep (100000); /* sleep 100 msec */
-            rc = fm_set_fault ( &alarm , NULL );
-            if ( rc != FM_ERR_OK )
-            {
-                elog ("%s failed to set alarm %s (rc:%d) ; giving up\n", hostname.c_str(), alarm.alarm_id, rc);
-                rc = FAIL ;
-            }
+            rc = daemon_get_file_int(MTC_CMD_FIT__FM_ERROR_CODE) ;
         }
+        else
+#endif
+        {
+            rc = fm_set_fault ( &alarm , NULL );
+        }
+        if ( rc == FM_ERR_OK )
+        {
+            ilog  ( "%s %s %s alarm raised (%s)",
+                        hostname.c_str(),
+                        alarm.alarm_id,
+                        alarm.entity_instance_id,
+                        alarmUtil_getSev_str(alarm.severity).c_str());
+        }
+        /* error cases are handled/logged in the caller's ; dequeue API */
     }
     else
     {
@@ -313,19 +312,26 @@ int alarmUtil ( string & hostname,
 
         alog ( "fm_clear_fault: %s %s:%s", hostname.c_str(), alarm.entity_instance_id, alarm.alarm_id );
 
-        ilog ("%s clearing %s %s alarm\n", hostname.c_str(), alarm.alarm_id, alarm.entity_instance_id);
-        if ( ( rc = fm_clear_fault ( &filter )) != FM_ERR_OK )
+#ifdef WANT_FIT_TESTING
+        if (( daemon_is_file_present ( MTC_CMD_FIT__FM_ERROR_CODE )) &&
+            ( daemon_want_fit ( FIT_CODE__FM_CLR_ALARM, hostname )))
         {
-            if ( rc != FM_ERR_ENTITY_NOT_FOUND )
-            {
-                elog ("%s failed to fm_clear_fault (rc:%d)\n", hostname.c_str(), rc );
-                rc = FAIL ;
-            }
-            else
-            {
-                rc = PASS ;
-            }
+            rc = daemon_get_file_int(MTC_CMD_FIT__FM_ERROR_CODE) ;
         }
+        else
+#endif
+        {
+            rc = fm_clear_fault ( &filter );
+        }
+
+        if ( rc == FM_ERR_OK )
+        {
+            ilog ("%s %s %s alarm cleared\n",
+                      hostname.c_str(),
+                      alarm.alarm_id,
+                      alarm.entity_instance_id);
+        }
+        /* error cases are handled/logged in the caller's ; dequeue API */
     }
 
     return (rc);
@@ -348,7 +354,7 @@ int alarmUtil_clear ( string hostname, string alarm_id , string entity )
 }
 
 /** Assert a specified hosts's alarm with a CRITICAL severity level */
-int alarmUtil_critical ( string hostname, string alarm_id , string entity )
+int alarmUtil_critical ( string hostname, string alarm_id , string entity, FMTimeT & timestamp )
 {
     alarmUtil_type * alarm_ptr = alarmData_getAlarm_ptr(alarm_id);
     if ( alarm_ptr )
@@ -358,6 +364,7 @@ int alarmUtil_critical ( string hostname, string alarm_id , string entity )
 
         alarm_ptr->alarm.severity    = FM_ALARM_SEVERITY_CRITICAL ;
         alarm_ptr->alarm.alarm_state = FM_ALARM_STATE_SET ;
+        if ( timestamp ) alarm_ptr->alarm.timestamp = timestamp ;
 
         snprintf ( alarm_ptr->alarm.reason_text, FM_MAX_BUFFER_LENGTH, "%s %s", hostname.data(), alarm_ptr->critl_reason.data());
 
@@ -368,7 +375,7 @@ int alarmUtil_critical ( string hostname, string alarm_id , string entity )
 
 
 /** Assert a specified host's alarm with a MAJOR severity level */
-int alarmUtil_major ( string hostname, string alarm_id , string entity )
+int alarmUtil_major ( string hostname, string alarm_id , string entity, FMTimeT & timestamp )
 {
     alarmUtil_type * alarm_ptr = alarmData_getAlarm_ptr(alarm_id);
     if ( alarm_ptr )
@@ -378,6 +385,7 @@ int alarmUtil_major ( string hostname, string alarm_id , string entity )
 
         alarm_ptr->alarm.severity    = FM_ALARM_SEVERITY_MAJOR ;
         alarm_ptr->alarm.alarm_state = FM_ALARM_STATE_SET ;
+        if ( timestamp ) alarm_ptr->alarm.timestamp = timestamp ;
 
         snprintf ( alarm_ptr->alarm.reason_text, FM_MAX_BUFFER_LENGTH, "%s %s", hostname.data(), alarm_ptr->major_reason.data());
 
@@ -385,8 +393,9 @@ int alarmUtil_major ( string hostname, string alarm_id , string entity )
     }
     return (FAIL_NULL_POINTER);
 }
+
 /** Assert a specified host's alarm with a MINOR severity level */
-int alarmUtil_minor        ( string hostname, string alarm_id , string entity )
+int alarmUtil_minor        ( string hostname, string alarm_id , string entity, FMTimeT & timestamp )
 {
     alarmUtil_type * alarm_ptr = alarmData_getAlarm_ptr(alarm_id);
     if ( alarm_ptr )
@@ -396,6 +405,7 @@ int alarmUtil_minor        ( string hostname, string alarm_id , string entity )
 
         alarm_ptr->alarm.severity    = FM_ALARM_SEVERITY_MINOR ;
         alarm_ptr->alarm.alarm_state = FM_ALARM_STATE_SET ;
+        if ( timestamp ) alarm_ptr->alarm.timestamp = timestamp ;
 
         snprintf ( alarm_ptr->alarm.reason_text, FM_MAX_BUFFER_LENGTH, "%s %s", hostname.data(), alarm_ptr->minor_reason.data());
 
@@ -405,7 +415,7 @@ int alarmUtil_minor        ( string hostname, string alarm_id , string entity )
 }
 
 /** Assert a specified host's alarm with a WARNING severity level */
-int alarmUtil_warning        ( string hostname, string alarm_id , string entity )
+int alarmUtil_warning        ( string hostname, string alarm_id , string entity, FMTimeT & timestamp )
 {
     alarmUtil_type * alarm_ptr = alarmData_getAlarm_ptr(alarm_id);
     if ( alarm_ptr )
@@ -415,6 +425,7 @@ int alarmUtil_warning        ( string hostname, string alarm_id , string entity 
 
         alarm_ptr->alarm.severity    = FM_ALARM_SEVERITY_WARNING ;
         alarm_ptr->alarm.alarm_state = FM_ALARM_STATE_SET ;
+        if ( timestamp ) alarm_ptr->alarm.timestamp = timestamp ;
 
         snprintf ( alarm_ptr->alarm.reason_text, FM_MAX_BUFFER_LENGTH, "%s %s", hostname.data(), alarm_ptr->minor_reason.data());
 
@@ -424,7 +435,7 @@ int alarmUtil_warning        ( string hostname, string alarm_id , string entity 
 }
 
 /** Create CRITICAL log */
-int alarmUtil_critical_log ( string hostname, string alarm_id , string entity )
+int alarmUtil_critical_log ( string hostname, string alarm_id , string entity, FMTimeT & timestamp )
 {
     alarmUtil_type * alarm_ptr = alarmData_getAlarm_ptr(alarm_id);
     if ( alarm_ptr )
@@ -434,6 +445,7 @@ int alarmUtil_critical_log ( string hostname, string alarm_id , string entity )
 
         alarm_ptr->alarm.severity    = FM_ALARM_SEVERITY_CRITICAL ;
         alarm_ptr->alarm.alarm_state = FM_ALARM_STATE_MSG ;
+        if ( timestamp ) alarm_ptr->alarm.timestamp = timestamp ;
 
         snprintf ( alarm_ptr->alarm.reason_text, FM_MAX_BUFFER_LENGTH, "%s %s", hostname.data(), alarm_ptr->critl_reason.data());
 
@@ -444,7 +456,7 @@ int alarmUtil_critical_log ( string hostname, string alarm_id , string entity )
 
 
 /** Create MAJOR log */
-int alarmUtil_major_log ( string hostname, string alarm_id , string entity )
+int alarmUtil_major_log ( string hostname, string alarm_id , string entity, FMTimeT & timestamp )
 {
     alarmUtil_type * alarm_ptr = alarmData_getAlarm_ptr(alarm_id);
     if ( alarm_ptr )
@@ -454,6 +466,7 @@ int alarmUtil_major_log ( string hostname, string alarm_id , string entity )
 
         alarm_ptr->alarm.severity    = FM_ALARM_SEVERITY_MAJOR ;
         alarm_ptr->alarm.alarm_state = FM_ALARM_STATE_MSG ;
+        if ( timestamp ) alarm_ptr->alarm.timestamp = timestamp ;
 
         snprintf ( alarm_ptr->alarm.reason_text, FM_MAX_BUFFER_LENGTH, "%s %s", hostname.data(), alarm_ptr->major_reason.data());
 
@@ -462,7 +475,7 @@ int alarmUtil_major_log ( string hostname, string alarm_id , string entity )
     return (FAIL_NULL_POINTER);
 }
 /** Create MINOR log */
-int alarmUtil_minor_log        ( string hostname, string alarm_id , string entity )
+int alarmUtil_minor_log        ( string hostname, string alarm_id , string entity, FMTimeT & timestamp )
 {
     alarmUtil_type * alarm_ptr = alarmData_getAlarm_ptr(alarm_id);
     if ( alarm_ptr )
@@ -472,6 +485,7 @@ int alarmUtil_minor_log        ( string hostname, string alarm_id , string entit
 
         alarm_ptr->alarm.severity    = FM_ALARM_SEVERITY_MINOR ;
         alarm_ptr->alarm.alarm_state = FM_ALARM_STATE_MSG ;
+        if ( timestamp ) alarm_ptr->alarm.timestamp = timestamp ;
 
         snprintf ( alarm_ptr->alarm.reason_text, FM_MAX_BUFFER_LENGTH, "%s %s", hostname.data(), alarm_ptr->minor_reason.data());
 
@@ -481,7 +495,7 @@ int alarmUtil_minor_log        ( string hostname, string alarm_id , string entit
 }
 
 /** Create WARNING log */
-int alarmUtil_warning_log ( string hostname, string alarm_id, string entity, string prefix )
+int alarmUtil_warning_log ( string hostname, string alarm_id, string entity, string prefix, FMTimeT & timestamp )
 {
     alarmUtil_type * alarm_ptr = alarmData_getAlarm_ptr(alarm_id);
     if ( alarm_ptr )
@@ -491,6 +505,7 @@ int alarmUtil_warning_log ( string hostname, string alarm_id, string entity, str
 
         alarm_ptr->alarm.severity    = FM_ALARM_SEVERITY_WARNING ;
         alarm_ptr->alarm.alarm_state = FM_ALARM_STATE_MSG ;
+        if ( timestamp ) alarm_ptr->alarm.timestamp = timestamp ;
 
         snprintf ( alarm_ptr->alarm.reason_text, FM_MAX_BUFFER_LENGTH, "%s %s", hostname.data(), entity.data());
 

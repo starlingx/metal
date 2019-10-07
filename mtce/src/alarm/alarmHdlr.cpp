@@ -31,6 +31,24 @@ using namespace std;
 
 void daemon_sigchld_hdlr ( void ) { ; }
 
+/*****************************************************************************
+ *
+ * Name       : _fm_timestamp
+ *
+ * Purpose    : Get a microsecond timestamp of the current time.
+ *
+ * Description: Used to record the time the alarm/log was requested
+ *
+ * Uses       : FMTimeT from fmAPI.h
+ *
+ ****************************************************************************/
+
+FMTimeT _fm_timestamp ( void )
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    return ( ts.tv_sec*1000000 + ts.tv_nsec/1000 );
+}
 
 /** Daemon timer handler */
 void _timer_handler ( int sig, siginfo_t *si, void *uc)
@@ -62,23 +80,19 @@ int alarmHdlr_request_handler ( char * msg_ptr )
         if ( elements )
         {
             #define PARSE_FAILURE ((const char *)"failed to parse value for key")
-            string alarmid = "" ;
-            string hostname = "" ;
+            queue_entry_type entry ;
+            string alarm_req = "" ;
             string operation = "" ;
             string severity = "" ;
-            string entity = "" ;
-            string prefix = "" ;
-            string alarm_req = "" ;
-
             for ( int i = 0 ; i < elements ; i++ )
             {
                 if ( ( rc = jsonUtil_get_array_idx ( msg_ptr, MTCALARM_REQ_LABEL, i, alarm_req ) ) == PASS )
                 {
-                    if (( rc = jsonUtil_get_key_val ( (char*)alarm_req.data(), MTCALARM_REQ_KEY__ALARMID, alarmid )) != PASS )
+                    if (( rc = jsonUtil_get_key_val ( (char*)alarm_req.data(), MTCALARM_REQ_KEY__ALARMID, entry.alarmid )) != PASS )
                     {
                      elog ("%s '%s'\n", PARSE_FAILURE, MTCALARM_REQ_KEY__ALARMID);
                     }
-                    else if (( rc = jsonUtil_get_key_val ( (char*)alarm_req.data(), MTCALARM_REQ_KEY__HOSTNAME, hostname )) != PASS )
+                    else if (( rc = jsonUtil_get_key_val ( (char*)alarm_req.data(), MTCALARM_REQ_KEY__HOSTNAME, entry.hostname )) != PASS )
                     {
                        elog ("%s '%s'\n", PARSE_FAILURE, MTCALARM_REQ_KEY__HOSTNAME);
                     }
@@ -90,23 +104,19 @@ int alarmHdlr_request_handler ( char * msg_ptr )
                     {
                        elog ("%s '%s'\n", PARSE_FAILURE, MTCALARM_REQ_KEY__SEVERITY);
                     }
-                    else if (( rc = jsonUtil_get_key_val ( (char*)alarm_req.data(), MTCALARM_REQ_KEY__ENTITY, entity )) != PASS )
+                    else if (( rc = jsonUtil_get_key_val ( (char*)alarm_req.data(), MTCALARM_REQ_KEY__ENTITY, entry.entity )) != PASS )
                     {
                        elog ("%s '%s'\n", PARSE_FAILURE, MTCALARM_REQ_KEY__ENTITY);
                     }
-                    else if (( rc = jsonUtil_get_key_val ( (char*)alarm_req.data(), MTCALARM_REQ_KEY__PREFIX, prefix)) != PASS )
+                    else if (( rc = jsonUtil_get_key_val ( (char*)alarm_req.data(), MTCALARM_REQ_KEY__PREFIX, entry.prefix)) != PASS )
                     {
                        elog ("%s '%s'\n", PARSE_FAILURE, MTCALARM_REQ_KEY__PREFIX);
                     }
                     else
-                    {
-                        jlog ("Alarm Message has %d requests\n", elements );
-                        rc = alarmMgr_manage_alarm ( alarmid,
-                                                     hostname,
-                                                     tolowercase(operation),
-                                                     tolowercase(severity),
-                                                     entity,
-                                                     prefix);
+                    {   entry.timestamp = _fm_timestamp ();
+                        entry.operation = tolowercase(operation);
+                        entry.severity = tolowercase(severity);
+                        alarmMgr_queue_alarm (entry);
                     }
                     if ( rc ) break ;
                 }

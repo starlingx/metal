@@ -371,6 +371,8 @@ typedef enum
 /* 50 milliseconds */
 #define SOCKET_WAIT 50000
 
+#define SOCKET_WAIT_100MS (100000)
+
 /* 5 milliseconds */
 #define MTCAGENT_SELECT_TIMEOUT (5000)
 

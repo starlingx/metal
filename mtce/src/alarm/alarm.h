@@ -23,7 +23,6 @@
 
 #define ENTITY_PREFIX        ((const char *)"host=")
 
-#define MAX_ALARMS           (10)
 #define MAX_ALARM_REQ_PER_MSG                (4)
 #define MAX_ALARM_REQ_MSG_SIZE               (500)
 #define MAX_ALARM_REQ_SIZE                   (MAX_ALARM_REQ_PER_MSG*MAX_ALARM_REQ_MSG_SIZE)
@@ -97,6 +96,17 @@ typedef struct
     string clear_reason ;
 } alarmUtil_type ;
 
+typedef struct
+{
+    string  alarmid   ;
+    string  hostname  ;
+    string  operation ;
+    string  severity  ;
+    string  entity    ;
+    string  prefix    ;
+    FMTimeT timestamp ;
+
+} queue_entry_type;
 
 #define MAX_FAILED_B2B_RECEIVES_B4_RESTART   (5)
 
@@ -130,13 +140,9 @@ alarmUtil_type * alarmData_getAlarm_ptr ( string alarm_id_str );
 /* in alarmHdlr.cpp */
 int alarmHdlr_request_handler ( char * msg_ptr );
 
-/* in alarmMgr.cpp */
-int alarmMgr_manage_alarm ( string alarmid ,
-                            string hostname,
-                            string operation,
-                            string severity,
-                            string entity,
-                            string prefix);
+void alarmMgr_queue_clear ( void );
+void alarmMgr_queue_alarm (queue_entry_type entry);
+void alarmMgr_service_queue(void);
 
 /* Clear all alarms against this host */
 void alarmUtil_clear_all ( string hostname );
@@ -154,14 +160,14 @@ int alarmUtil_query_identity ( string          identity,
                                unsigned int    alarms_max );
 
 int alarmUtil_clear        ( string hostname, string alarm_id, string entity );
-int alarmUtil_critical     ( string hostname, string alarm_id, string entity );
-int alarmUtil_major        ( string hostname, string alarm_id, string entity );
-int alarmUtil_minor        ( string hostname, string alarm_id, string entity );
-int alarmUtil_warning      ( string hostname, string alarm_id, string entity );
-int alarmUtil_critical_log ( string hostname, string alarm_id, string entity );
-int alarmUtil_major_log    ( string hostname, string alarm_id, string entity );
-int alarmUtil_minor_log    ( string hostname, string alarm_id, string entity );
-int alarmUtil_warning_log  ( string hostname, string alarm_id, string entity, string prefix );
+int alarmUtil_critical     ( string hostname, string alarm_id, string entity, FMTimeT & timestamp );
+int alarmUtil_major        ( string hostname, string alarm_id, string entity, FMTimeT & timestamp );
+int alarmUtil_minor        ( string hostname, string alarm_id, string entity, FMTimeT & timestamp );
+int alarmUtil_warning      ( string hostname, string alarm_id, string entity, FMTimeT & timestamp );
+int alarmUtil_critical_log ( string hostname, string alarm_id, string entity, FMTimeT & timestamp );
+int alarmUtil_major_log    ( string hostname, string alarm_id, string entity, FMTimeT & timestamp );
+int alarmUtil_minor_log    ( string hostname, string alarm_id, string entity, FMTimeT & timestamp );
+int alarmUtil_warning_log  ( string hostname, string alarm_id, string entity, string prefix, FMTimeT & timestamp );
 
 #endif // _MODULE_PRIVATE_
 #endif // __INCLUDE_ALARM_H__
