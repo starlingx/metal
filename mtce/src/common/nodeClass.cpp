@@ -352,14 +352,7 @@ nodeLinkClass::nodeLinkClass()
 /* nodeLinkClass destructor */
 nodeLinkClass::~nodeLinkClass()
 {
-    /* Free any allocated host memory */
-    for ( int i = 0 ; i < MAX_HOSTS ; i++ )
-    {
-        if ( node_ptrs[i] )
-        {
-            delete node_ptrs[i] ;
-        }
-    }
+    ;
 }
 
 /* Clear start host service controls */
