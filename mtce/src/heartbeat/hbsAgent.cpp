@@ -1963,11 +1963,11 @@ void daemon_service_run ( void )
                                 hbsInv.mon_host ( hostname, true, true );
                             }
                         }
-                        else if ( msg.cmd == MTC_RESTART_HBS )
+                        else if (( msg.cmd == MTC_RESTART_HBS ) &&
+                                 ( hostname != hbsInv.my_hostname ))
                         {
-                            hbsInv.mon_host ( hostname, false, false );
-                            hbsInv.mon_host ( hostname, true, false  );
-                            ilog ("%s restarting heartbeat service\n", hostname.c_str());
+                            hbsInv.mon_host ( hostname, true, true  );
+                            ilog ("%s heartbeat restart", hostname.c_str());
                             hbsInv.print_node_info();
                         }
                         else if ( msg.cmd == MTC_RECOVER_HBS )
@@ -1978,7 +1978,6 @@ void daemon_service_run ( void )
                         }
                         else if ( msg.cmd == MTC_BACKOFF_HBS )
                         {
-
                             hbsInv.hbs_pulse_period = (hbsInv.hbs_pulse_period_save * HBS_BACKOFF_FACTOR) ;
                             ilog ("%s starting heartbeat backoff (period:%d msecs)\n", hostname.c_str(), hbsInv.hbs_pulse_period );
                             hbs_cluster_change ( "backoff" );

@@ -7516,16 +7516,12 @@ int nodeLinkClass::mon_host ( const string & hostname, bool true_false, bool sen
     node_ptr = nodeLinkClass::getNode ( hostname );
     if ( node_ptr != NULL )
     {
-        bool want_log = true ;
         for ( int iface = 0 ; iface < MAX_IFACES ; iface++ )
         {
             if ( iface == CLSTR_IFACE )
             {
                 if ( this->clstr_network_provisioned == false )
                     continue ;
-
-                if ( node_ptr->monitor[MGMNT_IFACE] == true_false )
-                    want_log = false ;
             }
 
             if ( send_clear == true )
@@ -7536,11 +7532,7 @@ int nodeLinkClass::mon_host ( const string & hostname, bool true_false, bool sen
 
             if ( true_false == true )
             {
-                if ( want_log )
-                {
-                    ilog ("%s starting heartbeat service \n",
-                              hostname.c_str());
-                }
+                ilog ("%s heartbeat start", hostname.c_str());
                 node_ptr->no_work_log_throttle = 0 ;
                 node_ptr->b2b_misses_count[iface] = 0 ;
                 node_ptr->hbs_misses_count[iface] = 0 ;
@@ -7552,11 +7544,7 @@ int nodeLinkClass::mon_host ( const string & hostname, bool true_false, bool sen
             }
             else
             {
-                if ( want_log )
-                {
-                    ilog ("%s stopping heartbeat service\n",
-                              hostname.c_str());
-                }
+                ilog ("%s heartbeat stop", hostname.c_str());
             }
             node_ptr->monitor[iface] = true_false ;
         }
