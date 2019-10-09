@@ -761,13 +761,14 @@ mtc_client_enum _get_client_id ( struct evhttp_request *req )
 
 void mtcHttpSvr_handler (struct evhttp_request *req, void *arg)
 {
+    size_t len = 0 ;
     struct evbuffer *resp_buf ;
     mtc_client_enum client = CLIENT_NONE ;
     int http_status_code = HTTP_NOTFOUND ;
     string service  = "" ;
     string uuid     = "" ;
     string response = "" ;
-    string hostname = "n/a" ;
+    string hostname = "" ;
 
     UNUSED(arg);
 
@@ -781,6 +782,10 @@ void mtcHttpSvr_handler (struct evhttp_request *req, void *arg)
     msgSock_type * mtclogd_ptr = get_mtclogd_sockPtr ();
     event_type   *   event_ptr = get_eventPtr ();
     event_ptr->req = req ;
+
+    /* default hostname to self for those requests not targeted to
+     * any other specific host */
+    hostname = obj_ptr->my_hostname ;
 
     /* Get sender must be localhost */
     const char * host_ptr = evhttp_request_get_host (req);
@@ -799,36 +804,44 @@ void mtcHttpSvr_handler (struct evhttp_request *req, void *arg)
 
     /* Acquire the client that sent this event from the url URI */
     client = _get_client_id ( req );
-    if ( client == CLIENT_NONE )
+    switch ( client )
     {
-        response = ("{\"status\" : \"fail\"");
-        response.append (",\"reason\" : \"unknown client in User-Agent header\"");
-        response.append (",\"action\" : \"use ");
-        response.append (CLIENT_VIM_1_0);
-        response.append (" or ");
-        response.append (CLIENT_SYSINV_1_0);
-        response.append (" in User-Agent header\"}");
-        http_status_code = HTTP_BADREQUEST ;
-        elog ("%s\n", response.c_str());
-        evhttp_send_error (event_ptr->req, MTC_HTTP_FORBIDDEN, response.data() );
-        return ;
+        case CLIENT_VIM_SYSTEMS:
+        {
+            service = "vim" ;
+            len = strlen(CLIENT_VIM_SYSTEMS_URL) ;
+            break ;
+        }
+        case CLIENT_VIM_HOSTS:
+        {
+            service = "vim" ;
+            len = strlen(CLIENT_VIM_HOSTS_URL) ;
+            break ;
+        }
+        case CLIENT_SYSINV:
+        {
+            service = "sysinv" ;
+            len = strlen(CLIENT_SYSINV_URL);
+            break ;
+        }
+        case CLIENT_SM:
+        {
+            service = "sm";
+            len = strlen(CLIENT_SM_URL);
+            break ;
+        }
+        case CLIENT_NONE:
+        default:
+        {
+            response = ("{\"status\" : \"fail\"");
+            response.append (",\"reason\" : \"unknown client in User-Agent header\"");
+            response.append (",\"action\" : \"use valid client in User-Agent header\"");
+            http_status_code = HTTP_BADREQUEST ;
+            elog ("%s\n", response.c_str());
+            evhttp_send_error (event_ptr->req, MTC_HTTP_FORBIDDEN, response.data() );
+            return ;
+        }
     }
-
-    if (( client == CLIENT_VIM_HOSTS ) ||
-        ( client == CLIENT_VIM_SYSTEMS ))
-    {
-        service = "vim" ;
-    }
-    else if ( client == CLIENT_SYSINV )
-    {
-        service = "sysinv" ;
-    }
-    else if ( client == CLIENT_SM )
-    {
-        service = "sm";
-    }
-    else
-        service = "unknown" ;
 
     snprintf (&log_str[0], MAX_API_LOG_LEN-1, "\n%s [%5d] http event seq: %d with %s %s request from %s:%s",
                pt(), getpid(), ++sequence, service.c_str(), getHttpCmdType_str(http_cmd), host_ptr, url_ptr );
@@ -839,20 +852,20 @@ void mtcHttpSvr_handler (struct evhttp_request *req, void *arg)
         case EVHTTP_REQ_GET:
         case EVHTTP_REQ_DELETE:
         {
-            size_t len = strlen(CLIENT_SYSINV_URL) ;
-            uuid = (url_ptr+len) ;
-            hostname = obj_ptr->get_host(uuid) ;
-            if ( hostname.empty() )
-            {
-                wlog("uuid to host lookup failed ; '%s' not found ", uuid.c_str());
-            }
-            else if (( http_cmd == EVHTTP_REQ_GET ) && ( client == CLIENT_VIM_SYSTEMS ))
+            if (( http_cmd == EVHTTP_REQ_GET ) && ( client == CLIENT_VIM_SYSTEMS ))
             {
                 http_status_code = obj_ptr->mtcVimApi_system_info ( response );
                 break ;
             }
             else
             {
+                uuid = (url_ptr+len) ;
+                hostname = obj_ptr->get_host(uuid) ;
+                if ( hostname.empty() )
+                {
+                    wlog("uuid to host lookup failed ; '%s' not found ", uuid.c_str());
+                    break ;
+                }
                 http_status_code = HTTP_OK ;
                 if ( uuid.length() != UUID_LEN )
                 {
