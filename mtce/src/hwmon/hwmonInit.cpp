@@ -296,7 +296,6 @@ int daemon_init ( string iface, string nodetype )
     }
 
     threadUtil_init ( hwmonTimer_handler ) ;
-    ilog ("BMC Acc Mode: %s\n", "ipmi/ipmitool" );
 
     /* override the config reload for the startup case */
     obj_ptr->config_reload = false ;
@@ -304,7 +303,6 @@ int daemon_init ( string iface, string nodetype )
     /* Init the hwmon service timers */
     hwmon_timer_init ();
 
-    daemon_make_dir(IPMITOOL_OUTPUT_DIR) ;
 
 #ifdef WANT_FIT_TESTING
     daemon_make_dir(FIT__INFO_FILEPATH);

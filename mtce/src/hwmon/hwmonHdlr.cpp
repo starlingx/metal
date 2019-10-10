@@ -1205,19 +1205,33 @@ int hwmonHostClass::bmc_sensor_monitor ( struct hwmonHostClass::hwmon_host * hos
                     /* Consume done results */
                     mtcTimer_stop ( host_ptr->monitor_ctrl.timer );
 
-                    if ( host_ptr->bmc_thread_info.status ) // == FAIL_SYSTEM_CALL )
+                    if ( host_ptr->bmc_thread_info.status )
                     {
-                        if ( ++host_ptr->bmc_thread_ctrl.retries < MAX_THREAD_RETRIES )
+                        host_ptr->bmc_thread_ctrl.retries++ ;
+                        if (!(host_ptr->bmc_thread_ctrl.retries>MAX_THREAD_RETRIES))
                         {
-                            elog ("%s %s thread %2d failed (rc:%d) (try %d of %d) (%d:%d)\n",
-                                      host_ptr->bmc_thread_ctrl.hostname.c_str(),
-                                      host_ptr->bmc_thread_ctrl.name.c_str(),
-                                      host_ptr->bmc_thread_info.command,
-                                      host_ptr->bmc_thread_info.status,
-                                      host_ptr->bmc_thread_ctrl.retries,
-                                      MAX_THREAD_RETRIES,
-                                      host_ptr->bmc_thread_info.progress,
-                                      host_ptr->bmc_thread_info.runcount);
+                            if ( host_ptr->bmc_thread_info.status == FAIL_SYSTEM_CALL )
+                            {
+                                elog ("%s '%s' system call failed (retry %d of %d) (%s)",
+                                          host_ptr->bmc_thread_info.log_prefix,
+                                          bmcUtil_getCmd_str(
+                                          host_ptr->bmc_thread_info.command).c_str(),
+                                          host_ptr->bmc_thread_ctrl.retries,
+                                          MAX_THREAD_RETRIES, host_ptr->thread_extra_info.bm_pw.c_str());
+                            }
+                            else if (( host_ptr->bmc_thread_ctrl.retries == (MAX_THREAD_RETRIES-1)) ||
+                                     (  host_ptr->bmc_thread_ctrl.retries == 1 ))
+                            {
+                                elog ("%s '%s' failed (rc:%d) (retry %d of %d) (%d:%d)\n",
+                                          host_ptr->bmc_thread_info.log_prefix,
+                                          bmcUtil_getCmd_str(
+                                          host_ptr->bmc_thread_info.command).c_str(),
+                                          host_ptr->bmc_thread_info.status,
+                                          host_ptr->bmc_thread_ctrl.retries,
+                                          MAX_THREAD_RETRIES,
+                                          host_ptr->bmc_thread_info.progress,
+                                          host_ptr->bmc_thread_info.runcount);
+                            }
 
                             /* don't flood the logs with the same error data over and over */
                             if ( host_ptr->bmc_thread_ctrl.retries == 1 )
@@ -1234,22 +1248,6 @@ int hwmonHostClass::bmc_sensor_monitor ( struct hwmonHostClass::hwmon_host * hos
                                             HWMON_SENSOR_MONITOR__DELAY );
                             break ;
                         }
-#ifdef WANT_THIS
-                        /* don't flood the logs with the same error data over and over */
-                        if ( host_ptr->bmc_thread_ctrl.retries > 1 )
-                        {
-                            wlog ("%s %s thread '%d' command is done ; (%d:%d) (rc:%d)\n",
-                                      host_ptr->bmc_thread_ctrl.hostname.c_str(),
-                                      host_ptr->bmc_thread_ctrl.name.c_str(),
-                                      host_ptr->bmc_thread_info.command,
-                                      host_ptr->bmc_thread_info.progress,
-                                      host_ptr->bmc_thread_info.runcount,
-                                      host_ptr->bmc_thread_info.status);
-                            blog ("%s ... data: %s\n",
-                                      host_ptr->bmc_thread_ctrl.hostname.c_str(),
-                                      host_ptr->bmc_thread_info.status_string.c_str());
-                        }
-#endif
                     }
                     else
                     {
@@ -1636,7 +1634,7 @@ int hwmonHostClass::bmc_sensor_monitor ( struct hwmonHostClass::hwmon_host * hos
 
                     if ( severity != ptr->severity)
                     {
-                        blog ("%s %s status change ; %s:%s -> %s\n",
+                        ilog ("%s %s status change ; %s:%s -> %s\n",
                                   host_ptr->hostname.c_str(),
                                   ptr->sensorname.c_str(),
                                   get_severity(ptr->severity).c_str(),

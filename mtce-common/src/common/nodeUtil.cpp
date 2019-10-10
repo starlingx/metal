@@ -803,6 +803,7 @@ int load_filenames_in_dir ( const char * directory, std::list<string> & filelist
 {
     DIR           *d;
     struct dirent *dir;
+    int rc = PASS ;
 
     /* Clear the content of the config file list and running counter */
     filelist.clear ();
@@ -813,7 +814,7 @@ int load_filenames_in_dir ( const char * directory, std::list<string> & filelist
         while ((dir = readdir(d)) != NULL)
         {
             dlog3 ("File: %s\n", dir->d_name);
-            if ( strcmp ( dir->d_name , "."  ) && 
+            if ( strcmp ( dir->d_name , "."  ) &&
                  strcmp ( dir->d_name , ".." ))
             {
                 string temp = directory ;
@@ -828,8 +829,9 @@ int load_filenames_in_dir ( const char * directory, std::list<string> & filelist
     else
     {
         elog ("Failed to open %s\n", directory );
+        rc = FAIL_FILE_ACCESS ;
     }
-    return(PASS);
+    return(rc);
 }
 
 int setup_child ( bool close_file_descriptors )

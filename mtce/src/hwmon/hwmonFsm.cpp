@@ -96,59 +96,6 @@ void hwmonHostClass::hwmon_fsm ( void )
 
                     pingUtil_acc_monitor ( host_ptr->ping_info );
 
-                    /* Check to see if sensor monitoring for this host is disabled.
-                     * If it is ... */
-                    if (( host_ptr->monitor == false ) || ( host_ptr->bm_pw.empty()))
-                    {
-                        /* ... make sure the thread sits in the
-                         *     idle state while disabled or there is no pw learned yet */
-                        if ( thread_idle ( host_ptr->bmc_thread_ctrl ) == false )
-                        {
-                            if ( thread_done ( host_ptr->bmc_thread_ctrl ) == true )
-                            {
-                                host_ptr->bmc_thread_ctrl.done = true ;
-                            }
-                            else
-                            {
-                                thread_kill ( host_ptr->bmc_thread_ctrl, host_ptr->bmc_thread_info );
-                            }
-                        }
-                        if ( host_ptr->bm_pw.empty( ))
-                        {
-                            string host_uuid = hostBase.get_uuid(host_ptr->hostname);
-
-                            barbicanSecret_type * secret =
-                                secretUtil_manage_secret( host_ptr->secretEvent,
-                                                          host_ptr->hostname,
-                                                          host_uuid,
-                                                          host_ptr->secretTimer,
-                                                          hwmonTimer_handler );
-
-                            if ( secret->stage == MTC_SECRET__GET_PWD_RECV )
-                            {
-                                host_ptr->thread_extra_info.bm_pw = host_ptr->bm_pw = secret->payload ;
-                            }
-                            ilog_throttled (host_ptr->empty_secret_log_throttle, 50,
-                                "%s waiting on bm password learn", host_ptr->hostname.c_str());
-                        }
-                        continue ;
-                    }
-
-                    else if (( host_ptr->accessible == false ) && ( host_ptr->ping_info.ok == true ))
-                    {
-                        ilog ("%s bmc is accessible\n", host_ptr->hostname.c_str());
-                        host_ptr->accessible = true ;
-                    }
-                    else if (( host_ptr->accessible == true ) && ( host_ptr->ping_info.ok == false ))
-                    {
-                        wlog ("%s bmc access lost\n", host_ptr->hostname.c_str());
-                        thread_kill ( host_ptr->bmc_thread_ctrl, host_ptr->bmc_thread_info );
-                        host_ptr->accessible = false ;
-                        host_ptr->sensor_query_count = 0 ;
-                        host_ptr->bmc_fw_version.clear();
-                        host_ptr->ping_info.stage = PINGUTIL_MONITOR_STAGE__FAIL ;
-                    }
-
                     if ( host_ptr->ping_info.ok == false )
                     {
                         /* Auto correct key ping information ; should never occur but if it does ... */
@@ -163,15 +110,81 @@ void hwmonHostClass::hwmon_fsm ( void )
                             host_ptr->ping_info.hostname = host_ptr->hostname ;
                             host_ptr->ping_info.ip       = host_ptr->bm_ip    ;
                         }
-                        // pingUtil_acc_monitor ( host_ptr->ping_info );
                     }
+
+                    /* Check to see if sensor monitoring for this host is
+                     * disabled or the bm password has not yet been learned */
+                    else if (( host_ptr->monitor == false ) || ( host_ptr->bm_pw.empty()))
+                    {
+                        /* ... make sure the thread sits in the
+                         *     idle state while disabled or there
+                         *     is no pw learned yet */
+                        if ( thread_idle ( host_ptr->bmc_thread_ctrl ) == false )
+                        {
+                            if ( thread_done ( host_ptr->bmc_thread_ctrl ) == true )
+                            {
+                                host_ptr->bmc_thread_ctrl.done = true ;
+                            }
+                            else
+                            {
+                                thread_kill ( host_ptr->bmc_thread_ctrl, host_ptr->bmc_thread_info );
+                            }
+                        }
+                        /* Only try and get the password if sensor monitoring
+                         * is enabled */
+                        if (( host_ptr->monitor ) && ( host_ptr->bm_pw.empty( )))
+                        {
+                            string host_uuid = hostBase.get_uuid(host_ptr->hostname);
+
+                            barbicanSecret_type * secret =
+                                secretUtil_manage_secret( host_ptr->secretEvent,
+                                                          host_ptr->hostname,
+                                                          host_uuid,
+                                                          host_ptr->secretTimer,
+                                                          hwmonTimer_handler );
+
+                            if ( secret->stage == MTC_SECRET__GET_PWD_RECV )
+                            {
+                                host_ptr->bm_pw = secret->payload ;
+                                ilog ("%s bmc credentials received",
+                                          hostname.c_str());
+                            }
+                            else
+                            {
+                                ilog_throttled (host_ptr->empty_secret_log_throttle, 50,
+                                    "%s waiting on bm credentials", host_ptr->hostname.c_str());
+                            }
+                        }
+                        continue ;
+                    }
+
+                    else if (( host_ptr->accessible == false ) && ( host_ptr->ping_info.ok == true ) && ( !host_ptr->bm_pw.empty() ))
+                    {
+                        ilog ("%s bmc is accessible ; using %s\n",
+                                  host_ptr->hostname.c_str(),
+                                  bmcUtil_getProtocol_str(host_ptr->protocol).c_str());
+                        host_ptr->accessible = true ;
+                    }
+                    else if (( host_ptr->accessible == true ) && ( host_ptr->ping_info.ok == false ))
+                    {
+                        wlog ("%s bmc access lost, changed or being retried ; using %s\n",
+                                  host_ptr->hostname.c_str(),
+                                  bmcUtil_getProtocol_str(host_ptr->protocol).c_str());
+                        thread_kill ( host_ptr->bmc_thread_ctrl, host_ptr->bmc_thread_info );
+                        host_ptr->accessible = false ;
+                        host_ptr->sensor_query_count = 0 ;
+                        host_ptr->bmc_fw_version.clear();
+                        host_ptr->bm_pw.clear();
+                        host_ptr->ping_info.stage = PINGUTIL_MONITOR_STAGE__FAIL ;
+                    }
+
 #ifdef WANT_FIT_TESTING
                     if ( daemon_want_fit ( FIT_CODE__EMPTY_BM_PASSWORD ))
                     {
                         host_ptr->thread_extra_info.bm_pw = "" ;
                     }
 #endif
-                    if ( host_ptr->accessible )
+                    if (( host_ptr->accessible ) && ( !host_ptr->bm_pw.empty()))
                     {
                         /* typical success path */
                         hwmonHostClass::bmc_sensor_monitor ( host_ptr );

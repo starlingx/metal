@@ -504,21 +504,32 @@ int hwmonHostClass::set_bm_prov ( struct hwmonHostClass::hwmon_host * host_ptr, 
     {
         rc = PASS ;
 
-        /* Clear the alarm if we are starting fresh from an unprovisioned state */
+        bool connect = false ;
+        bool reconnect = false ;
+
         if (( host_ptr->bm_provisioned == false ) && ( state == true ))
+            connect = true ;
+        else if (( host_ptr->bm_provisioned == true ) && ( state == true ))
+            reconnect = true ;
+
+        if ( connect || reconnect )
         {
-            ilog ("%s board management controller is being provisioned\n", host_ptr->hostname.c_str());
-            ilog ("%s setting up ping socket\n", host_ptr->hostname.c_str() );
+            ilog ("%s board management controller is being %sprovisioned\n",
+                      host_ptr->hostname.c_str(),
+                      host_ptr->bm_provisioned ? "re":"" );
 
             /* ---------------------------------------
              * Init bmc data based on monitoring mode
              * ---------------------------------------*/
 
+            blog ("%s setting up ping socket\n", host_ptr->hostname.c_str() );
             mtcTimer_reset ( host_ptr->ping_info.timer ) ;
             host_ptr->ping_info.stage    = PINGUTIL_MONITOR_STAGE__OPEN ;
             host_ptr->ping_info.ip       = host_ptr->bm_ip ;
             host_ptr->ping_info.hostname = host_ptr->hostname ;
-            bmc_data_init ( host_ptr );
+
+            if ( connect || host_ptr->relearn )
+                bmc_data_init ( host_ptr );
 
             string host_uuid = hostBase.get_uuid( host_ptr->hostname );
             barbicanSecret_type * secret = secretUtil_find_secret( host_uuid );
@@ -534,6 +545,7 @@ int hwmonHostClass::set_bm_prov ( struct hwmonHostClass::hwmon_host * host_ptr, 
             host_ptr->thread_extra_info.bm_ip = host_ptr->bm_ip ;
             host_ptr->thread_extra_info.bm_un = host_ptr->bm_un ;
         }
+
         /* handle the case going from provisioned to not provisioned */
         if (( host_ptr->bm_provisioned == true ) && ( state == false ))
         {

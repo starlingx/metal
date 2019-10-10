@@ -6201,7 +6201,9 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
         }
 #endif
 
-        /* Handle BMC access method changes */
+        /*****************************************************************
+         * Handle BMC access method changes
+         ****************************************************************/
         if ( node_ptr->bmc_access_method_changed )
         {
             node_ptr->bmc_access_method_changed = false ;
@@ -6216,12 +6218,61 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
             pingUtil_fini ( node_ptr->bm_ping_info );
             node_ptr->bm_ping_info.stage = PINGUTIL_MONITOR_STAGE__OPEN ;
 
+            /* force re-fetch of the BMC password */
+            node_ptr->bm_pw.clear();
+
             /* start a timer that will raise the BM Access alarm
              * if we are not accessible by the time it expires */
             mtcTimer_reset ( node_ptr->bm_timer );
             mtcTimer_reset ( node_ptr->bmc_audit_timer );
             mtcTimer_reset ( node_ptr->bmc_access_timer );
             mtcTimer_start ( node_ptr->bmc_access_timer, mtcTimer_handler, MTC_MINS_2 );
+        }
+
+        /*****************************************************************
+         * Run the ping monitor if BMC provisioned and ip address is valid
+         *****************************************************************/
+        if (( node_ptr->bmc_provisioned ) &&
+            ( hostUtil_is_valid_ip_addr ( node_ptr->bm_ping_info.ip )))
+        {
+            pingUtil_acc_monitor ( node_ptr->bm_ping_info );
+        }
+
+        /*****************************************************************
+         * Manage bmc creds refresh
+         ****************************************************************/
+        if ( node_ptr->bm_ping_info.ok == false )
+        {
+            /* Auto correct key ping information ;
+             * should never occur but if it does ... */
+            if (( node_ptr->bm_ping_info.hostname.empty()) ||
+                ( node_ptr->bm_ping_info.ip.empty()))
+            {
+                 node_ptr->bm_ping_info.hostname = node_ptr->hostname ;
+                 node_ptr->bm_ping_info.ip       = node_ptr->bm_ip    ;
+            }
+            if ( ! node_ptr->bm_pw.empty() )
+            {
+                node_ptr->bm_pw.clear();
+            }
+        }
+
+        /*****************************************************************
+         * Manage getting the bm password but only when ping is ok
+         ****************************************************************/
+        else if ( node_ptr->bm_pw.empty() )
+        {
+            barbicanSecret_type * secret = secretUtil_manage_secret( node_ptr->secretEvent,
+                                                                     node_ptr->hostname,
+                                                                     node_ptr->uuid,
+                                                                     node_ptr->bm_timer,
+                                                                     mtcTimer_handler );
+            if ( secret->stage == MTC_SECRET__GET_PWD_RECV )
+            {
+                node_ptr->bm_pw = secret->payload ;
+                ilog ("%s bmc credentials received",
+                          node_ptr->hostname.c_str());
+            }
         }
 
         if (( node_ptr->bmc_accessible == true ) &&
@@ -6258,38 +6309,12 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
             mtcTimer_reset ( node_ptr->bmc_audit_timer );
         }
 
-        /* manage bmc creds refresh ; not expected but should be handled */
-        if ( node_ptr->bm_ping_info.ok == false )
-        {
-            /* Auto correct key ping information ;
-             * should never occur but if it does ... */
-            if (( node_ptr->bm_ping_info.hostname.empty()) ||
-                ( node_ptr->bm_ping_info.ip.empty()))
-            {
-                 node_ptr->bm_ping_info.hostname = node_ptr->hostname ;
-                 node_ptr->bm_ping_info.ip       = node_ptr->bm_ip    ;
-            }
-        }
-
-        /* manage getting the bm password */
-        if ( node_ptr->thread_extra_info.bm_pw.empty() )
-        {
-            barbicanSecret_type * secret = secretUtil_manage_secret( node_ptr->secretEvent,
-                                                                     node_ptr->hostname,
-                                                                     node_ptr->uuid,
-                                                                     node_ptr->bm_timer,
-                                                                     mtcTimer_handler );
-            if ( secret->stage == MTC_SECRET__GET_PWD_RECV )
-            {
-                node_ptr->thread_extra_info.bm_pw = node_ptr->bm_pw = secret->payload ;
-            }
-        }
-
         /* If the BMC protocol has not yet been learned then do so.
          * Default is ipmi unless the target host responds to a
          * redfish root query with a minimum version number ; 1.0 */
-        else if (( node_ptr->bm_ping_info.ok == true ) &&
-                 ( node_ptr->bmc_protocol_learned == false ))
+        if (( node_ptr->bm_ping_info.ok == true ) &&
+            (!node_ptr->bm_pw.empty()) &&
+            ( node_ptr->bmc_protocol_learned == false ))
         {
             if ( node_ptr->bmc_protocol_learning == false )
             {
@@ -6673,20 +6698,12 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
             } /* end handling ipmi query, info, restart cause, power state */
         } /* end main condition handling                                   */
 
-        /*****************************************************************
-         * Run the ping monitor if BMC provisioned and ip address is valid
-         *****************************************************************/
-        if (( node_ptr->bmc_provisioned ) &&
-            ( hostUtil_is_valid_ip_addr ( node_ptr->bm_ping_info.ip )))
-        {
-            pingUtil_acc_monitor ( node_ptr->bm_ping_info );
-        }
-
         /* BMC Access Audit for Redfish.
          *  - used to refresh the host power state */
         if (( node_ptr->bmc_protocol == BMC_PROTOCOL__REDFISHTOOL ) &&
             ( node_ptr->bmc_provisioned ) &&
             ( node_ptr->bmc_accessible ) &&
+            (!node_ptr->bm_pw.empty() ) &&
             ( mtcTimer_expired ( node_ptr->bmc_audit_timer ) == true ) &&
             ( mtcTimer_expired ( node_ptr->bm_timer ) == true ))
         {

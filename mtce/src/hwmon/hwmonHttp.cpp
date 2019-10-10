@@ -37,11 +37,6 @@
 
 static event_type hwmon_event ;
 
-
-void hwmonHttp_server_init ( void )
-{
- }
-
 /* Cleanup */
 void hwmonHttp_server_fini ( void )
 {
