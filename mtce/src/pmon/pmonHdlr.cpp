@@ -297,13 +297,16 @@ void manage_process_failure ( process_config_type * ptr )
      * If not, then query the current system state and save it. */
     if ( _pmon_ctrl_ptr->system_state != MTC_SYSTEM_STATE__STOPPING )
     {
+        elog ("%s failed (%d) (p:%d a:%d)\n", ptr->process,
+                                              ptr->pid,
+                                              ptr->failed,
+                                              ptr->active_failed);
         /* update current state */
         _pmon_ctrl_ptr->system_state = get_system_state();
     }
-
-    /* Ignore process failures while in stopping (i.e. shutdown) mode */
-    if ( _pmon_ctrl_ptr->system_state == MTC_SYSTEM_STATE__STOPPING )
+    else
     {
+        /* Ignore process failures while in stopping (i.e. shutdown) mode */
         /* don't report process failures during system shutdown. */
         wlog ("%s terminated by system shutdown (pid:%d) ; ignoring\n",
                   ptr->process , ptr->pid );
@@ -317,7 +320,6 @@ void manage_process_failure ( process_config_type * ptr )
         slog ("%s process is in the stopped state\n", ptr->process);
     }
 
-    elog ("%s failed (%d) (p:%d a:%d)\n", ptr->process, ptr->pid, ptr->failed, ptr->active_failed);
     passiveStageChange   ( ptr, PMON_STAGE__MANAGE) ;
 
     if ( ptr->failed == false )
@@ -836,15 +838,12 @@ int process_config_load (process_config_type * pc_ptr, const char * config_file_
 int get_process_pid ( process_config_type * ptr )
 {
     int pid = 0 ;
-    FILE * pid_file_stream = fopen ( ptr->pidfile, "r" );
-    if ( pid_file_stream != NULL )
+    if ( ptr )
     {
-        int num = fscanf ( pid_file_stream, "%d", &pid);
-        if ( num != 1 )
+        if ( daemon_is_file_present ( ptr->pidfile ) == true )
         {
-            wlog ("fscanf failed to read pid from %s\n", ptr->pidfile );
+            pid = daemon_get_file_int ( ptr->pidfile );
         }
-        fclose (pid_file_stream);
     }
     return (pid);
 }
@@ -939,7 +938,7 @@ bool kill_running_process ( int pid )
                         daemon_remove_file ( ptr->pidfile );
                     }
                 }
-                wlog ("%s kill succeeded (%d)\n", proc_name_ptr, pid );
+                wlog ("%s Killed     (%d)\n", proc_name_ptr, pid );
                 rc = true ;
             }
             else
@@ -1100,7 +1099,7 @@ int unregister_process ( process_config_type * ptr )
         }
         else
         {
-             ilog ("%s unregistered   (%d)\n", ptr->process, ptr->pid );
+             ilog ("%s Unregister (%d)\n", ptr->process, ptr->pid );
         }
     }
     ptr->registered = false ;
@@ -1202,7 +1201,7 @@ int respawn_process ( process_config_type * ptr )
     unregister_process ( ptr );
     if ( process_running ( ptr ) == true )
     {
-        ilog ("%s restart of running process\n", ptr->process );
+        dlog ("%s still running\n", ptr->process );
         restart = true ;
         kill_running_process ( ptr->pid );
     }
@@ -1454,7 +1453,7 @@ void daemon_sigchld_hdlr ( void )
                 {
                     if ( process_ptr->status_monitoring == false )
                     {
-                        dlog ("%s spawn failed (rc:%d:%x) (%ld.%03ld secs)\n",
+                        ilog ("%s spawn failed (rc:%d:%x) (%ld.%03ld secs)\n",
                                process_ptr->process,
                                process_ptr->status,
                                process_ptr->status,
