@@ -285,8 +285,8 @@ int msgClassAddr::getAddressFromInterface(const char* interface, char* address, 
     char *clstr_iface_name = NULL;
 
     get_clstr_iface(&clstr_iface_name);
-    if (clstr_iface_name && strlen(clstr_iface_name)) {
-        if (!strcmp(interface, clstr_iface_name)) {
+    if (clstr_iface_name) {
+        if (strlen(clstr_iface_name) && (!strcmp(interface, clstr_iface_name))) {
             if (!strcmp(clstr_iface_name, daemon_mgmnt_iface().data())) {
                 // cluster-host and mgmt interface name are the same
                 interface_type = MGMNT_IFACE;
