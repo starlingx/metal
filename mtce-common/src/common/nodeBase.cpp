@@ -376,6 +376,7 @@ void mtc_stages_init ( void )
    enableStages_str  [MTC_ENABLE__STAGES               ] = "unknown" ;
 
    recoveryStages_str[MTC_RECOVERY__START              ] = "Handler-Start";
+   recoveryStages_str[MTC_RECOVERY__RETRY_WAIT         ] = "Req-Retry-Wait";
    recoveryStages_str[MTC_RECOVERY__REQ_MTCALIVE       ] = "Req-MtcAlive";
    recoveryStages_str[MTC_RECOVERY__REQ_MTCALIVE_WAIT  ] = "Req-MtcAlive-Wait";
    recoveryStages_str[MTC_RECOVERY__RESET_RECV_WAIT    ] = "Reset-Recv-Wait";

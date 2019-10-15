@@ -1173,6 +1173,9 @@ int _self_provision ( void )
     return(rc);
 }
 
+static int sm_unhealthy_log_throttle = 0 ;
+#define SM_UNHEALTHY_LOG_THROTTLE (100)
+
 /* Main FSM Loop */
 void nodeLinkClass::fsm ( void )
 {
@@ -1181,7 +1184,23 @@ void nodeLinkClass::fsm ( void )
         int rc ;
         daemon_signal_hdlr ();
         this->uptime_handler ();
-        for ( struct node * node_ptr = head ; node_ptr != NULL ; node_ptr = node_ptr->next )
+
+        /* Controller HA Improvements Feature
+         * Handle the SM unhealthy of self case.
+         * If the active controller is unhealthy then stop doing
+         * work while its in this state. Allow for self healing */
+        struct node * node_ptr = nodeLinkClass::getNode ( this->my_hostname ) ;
+        if ( node_ptr->mtce_flags & MTC_FLAG__SM_UNHEALTHY )
+        {
+            elog_throttled (sm_unhealthy_log_throttle, SM_UNHEALTHY_LOG_THROTTLE,
+                 "%s SM Unhealthy ; wait on health recovery or process shutdown",
+                 node_ptr->hostname.c_str());
+             return ;
+        }
+        if ( sm_unhealthy_log_throttle )
+            sm_unhealthy_log_throttle = 0 ;
+
+        for ( node_ptr = head ; node_ptr != NULL ; node_ptr = node_ptr->next )
         {
             string hn = node_ptr->hostname ;
             rc = fsm ( node_ptr ) ;
