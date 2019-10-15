@@ -1042,8 +1042,6 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
             node_ptr->goEnabled               = false ;
             node_ptr->ar_cause = MTC_AR_DISABLE_CAUSE__NONE ;
 
-            clear_service_readies ( node_ptr );
-
             /* Set uptime to zero in mtce and in the database */
             node_ptr->uptime_save = 0 ;
             set_uptime ( node_ptr, 0 , false );
@@ -1083,6 +1081,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
              * have come in while we were purging */
             node_ptr->mtcAlive_online  = false ;
             node_ptr->mtcAlive_offline = true  ;
+            clear_service_readies ( node_ptr );
             break ;
         }
         case MTC_ENABLE__MTCALIVE_WAIT:
@@ -1090,6 +1089,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
             /* search for the mtc alive message */
             if ( node_ptr->mtcAlive_online == true )
             {
+                node_ptr->hbsClient_ready = false ;
                 mtcTimer_reset ( node_ptr->mtcTimer );
 
                 /* Check to see if the host is/got configured correctly */
