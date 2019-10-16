@@ -1685,16 +1685,29 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
             }
             else
             {
-                /* TODO: Consider taking this log out as writing to the database
-                 *       during a fast graceful recovery might no be the best idea */
+                wlog ("%s Graceful Recovery (%d of %d)\n",
+                          node_ptr->hostname.c_str(),
+                          node_ptr->graceful_recovery_counter,
+                          MTC_MAX_FAST_ENABLES );
+
                 if ( node_ptr->graceful_recovery_counter > 1 )
                     mtcInvApi_update_task ( node_ptr, "Graceful Recovery Retry" );
                 else
                     mtcInvApi_update_task ( node_ptr, "Graceful Recovery");
-
+                /* need to force a 2 second wait if we are in the
+                 * graceful recovery retry so that we honor the 5
+                 * second grace period */
+                mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_SECS_2 );
+                recoveryStageChange ( node_ptr, MTC_RECOVERY__RETRY_WAIT ) ;
+            }
+            break ;
+        }
+        case MTC_RECOVERY__RETRY_WAIT:
+        {
+            if ( mtcTimer_expired ( node_ptr->mtcTimer ))
+            {
                 recoveryStageChange ( node_ptr, MTC_RECOVERY__REQ_MTCALIVE ) ;
             }
-
             break ;
         }
         case MTC_RECOVERY__REQ_MTCALIVE:
