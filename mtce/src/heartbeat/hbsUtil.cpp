@@ -163,7 +163,7 @@ void hbs_cluster_log ( string & hostname,
         if ( cluster.history[h].entries == MTCE_HBS_HISTORY_ENTRIES )
         {
 #define MAX_CLUSTER_LINE_LEN 100
-#define MAX_ENTRY_STR_LEN     10 /* "9999:9999 " */
+#define MAX_ENTRY_STR_LEN     13 /* "9999:9999 " */
             mtce_hbs_cluster_entry_type e = { 0, 0 } ;
             char str[MAX_CLUSTER_LINE_LEN] ;
             string line  = "";
