@@ -1,6 +1,6 @@
 Summary: StarlingX Common Maintenance Package
 Name: mtce
-Version: 1.0
+Version: 1.0.0
 Release: 2
 License: Apache-2.0
 Group: System/Base
@@ -25,7 +25,7 @@ BuildRequires: postgresql
 BuildRequires: libuuid-devel
 BuildRequires: systemd-devel
 BuildRequires: cppcheck
-BuildRequires: mtce-common-devel >= 1.0
+BuildRequires: mtce-common-devel >= 1.0.0
 
 Requires: util-linux
 Requires: systemd
@@ -149,7 +149,7 @@ netlink monitoring for provisioned oam, mgmt and cluster-host interfaces.
 %define ocf_resourced %{_libdir}/ocf/resource.d
 
 %prep
-%setup
+%setup -n %{name}-%{version}/src
 
 # Build mtce package
 %build
@@ -158,7 +158,7 @@ MAJOR=$(echo $VER | awk -F . '{print $1}')
 MINOR=$(echo $VER | awk -F . '{print $2}')
 make MAJOR=$MAJOR MINOR=$MINOR %{?_smp_mflags} build
 
-%global _buildsubdir %{_builddir}/%{name}-%{version}
+%global _buildsubdir %{_builddir}/%{name}-%{version}/src
 
 # Install mtce package
 %install
