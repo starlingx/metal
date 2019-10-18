@@ -1205,7 +1205,7 @@ void * hwmonThread_redfish ( void * arg )
         {
             blog2_t ("%s read power sensors \n", info_ptr->log_prefix);
             if ( _redfishUtil_send_request( info_ptr, datafile,
-                                            BMC_SENSOR_OUTPUT_FILE_SUFFIX,
+                                            BMC_POWER_SENSOR_FILE_SUFFIX,
                                             REDFISHTOOL_READ_POWER_SENSORS_CMD ) == PASS )
             {
                 /* look for the output data file */
@@ -1222,7 +1222,7 @@ void * hwmonThread_redfish ( void * arg )
 
             blog2_t ("%s read thermal sensors \n", info_ptr->log_prefix);
             if (_redfishUtil_send_request( info_ptr, datafile,
-                                           BMC_SENSOR_OUTPUT_FILE_SUFFIX,
+                                           BMC_THERMAL_SENSOR_FILE_SUFFIX,
                                            REDFISHTOOL_READ_THERMAL_SENSORS_CMD ) == PASS )
             {
                 /* look for the output data file */

@@ -98,6 +98,8 @@ typedef enum
 #define BMC_RESTART_CAUSE_FILE_SUFFIX  ((const char *)("_restart_cause"))
 #define BMC_POWER_STATUS_FILE_SUFFIX   ((const char *)("_power_status"))
 #define BMC_SENSOR_OUTPUT_FILE_SUFFIX  ((const char *)("_sensor_data"))
+#define BMC_POWER_SENSOR_FILE_SUFFIX   ((const char *)("_power_sensor_data"))
+#define BMC_THERMAL_SENSOR_FILE_SUFFIX ((const char *)("_thermal_sensor_data"))
 
 #define BMC_POWER_ON_STATUS       ((const char *)("on"))
 #define BMC_POWER_OFF_STATUS      ((const char *)("off"))

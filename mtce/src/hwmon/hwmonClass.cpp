@@ -2184,34 +2184,6 @@ void hwmonHostClass::modify_audit_interval ( string hostname , int interval )
     }
 }
 
-
-/* log sensor data to a tmp file to assis debug of sensor read issues */
-void hwmonHostClass::log_sensor_data ( struct hwmonHostClass::hwmon_host * host_ptr, string & sensorname, string from, string to )
-{
-    string sensor_datafile = IPMITOOL_OUTPUT_DIR ;
-    sensor_datafile.append(host_ptr->hostname);
-    sensor_datafile.append(BMC_SENSOR_OUTPUT_FILE_SUFFIX);
-
-    string debugfile = "/tmp/" ;
-    debugfile.append(host_ptr->hostname);
-    debugfile.append(BMC_SENSOR_OUTPUT_FILE_SUFFIX);
-    debugfile.append("_debug");
-
-    string source = pt() ;
-    source.append (" - ");
-    source.append (sensorname);
-    source.append (" from '");
-    source.append (from );
-    source.append ("' to '");
-    source.append (to );
-    source.append ("'\n");
-    daemon_log ( debugfile.data(), source.data());
-    daemon_log ( debugfile.data(), host_ptr->bmc_thread_info.data.data());
-    daemon_log ( debugfile.data(), daemon_read_file ( sensor_datafile.data()).data());
-    daemon_log ( debugfile.data(), "---------------------------------------------------------------------\n");
-}
-
-
 void hwmonHostClass::print_node_info ( void )
 {
     fflush (stdout);

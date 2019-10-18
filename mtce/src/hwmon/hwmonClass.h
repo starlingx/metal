@@ -283,7 +283,6 @@ class hwmonHostClass
     /** handled deleting a host from the hwmonHostClass object */
     int delete_handler   ( struct hwmonHostClass::hwmon_host * host_ptr );
 
-    void log_sensor_data ( struct hwmonHostClass::hwmon_host * host_ptr, string & sensorname, string data, string note);
     void mem_log_info    ( struct hwmonHostClass::hwmon_host * host_ptr );
     void mem_log_options ( struct hwmonHostClass::hwmon_host * host_ptr );
     void mem_log_bm      ( struct hwmonHostClass::hwmon_host * host_ptr );
