@@ -293,7 +293,6 @@ kmod-ixgbe-rt
 kmod-ixgbevf-rt
 kmod-tpm-rt
 kmod-integrity-rt
-kmod-opae-fpga-driver
 kmod-opae-fpga-driver-rt
 mlnx-ofa_kernel-rt-modules
 rtctl
