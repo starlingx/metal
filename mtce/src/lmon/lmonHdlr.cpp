@@ -703,7 +703,7 @@ void daemon_service_run ( void )
     lmon_ctrl.ioctl_socket = 0 ;
     lmon_ctrl.netlink_socket = 0 ;
     memset (&lmon_ctrl.mtclogd, 0, sizeof(lmon_ctrl.mtclogd));
-    memset (&interfaces, 0, sizeof(interface_ctrl_type));
+    memset (&interfaces, 0, sizeof(interfaces));
 
     get_hostname (&lmon_ctrl.my_hostname[0], MAX_HOST_NAME_SIZE );
     mtcTimer_init ( lmon_ctrl.audit_timer, lmon_ctrl.my_hostname, "audit");
