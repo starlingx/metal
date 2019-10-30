@@ -69,7 +69,6 @@ using namespace std;
 #define CONFIG_HOSTWD_REBOOT            0x02
 #define CONFIG_HOSTWD_USE_KERN_WD       0x04
 #define CONFIG_HOSTWD_CONSOLE_PATH      0x10
-#define CONFIG_START_DELAY              0x20
 #define CONFIG_HOSTWD_UPDATE_PERIOD     0x40
 #define CONFIG_KERNWD_UPDATE_PERIOD     0x80
 
@@ -79,7 +78,6 @@ using namespace std;
                        CONFIG_HOSTWD_REBOOT            |\
                        CONFIG_HOSTWD_USE_KERN_WD       |\
                        CONFIG_HOSTWD_CONSOLE_PATH      |\
-                       CONFIG_START_DELAY              |\
                        CONFIG_HOSTWD_UPDATE_PERIOD     |\
                        CONFIG_KERNWD_UPDATE_PERIOD)
 
