@@ -10,7 +10,7 @@ kernel
 kernel-module-igb-uio
 kmod-e1000e
 kmod-i40e
-kmod-i40evf
+kmod-iavf
 kmod-ixgbe
 kmod-ixgbevf
 kmod-tpm
