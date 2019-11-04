@@ -135,8 +135,6 @@ void daemon_exit ( void );
 #define CONFIG_COMPLETE_STORAGE ((const char *)"/var/run/.storage_config_complete")
 #define CONFIG_COMPLETE_FILE    ((const char *)"/etc/platform/.initial_config_complete")
 
-#define DISABLE_WORKER_SERVICES ((const char *)"/var/run/.disable_worker_services")
-
 #define PATCHING_IN_PROG_FILE   ((const char *)"/var/run/patch_installing")
 #define NODE_IS_PATCHED_FILE    ((const char *)"/var/run/node_is_patched")
 
