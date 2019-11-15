@@ -383,8 +383,9 @@ string redfishUtil_create_request ( string   cmd,
     command_request.append(" -T 30");
 
     /* specify the bmc ip address */
-    command_request.append(" -r ");
+    command_request.append(" -r [");
     command_request.append(ip);
+    command_request.append("]");
 
 #ifdef WANT_INLINE_CREDS
     if ( daemon_is_file_present ( MTC_CMD_FIT__INLINE_CREDS ) )
