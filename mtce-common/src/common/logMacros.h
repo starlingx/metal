@@ -95,7 +95,7 @@ typedef struct
     int   mtc_to_hbs_cmd_port   ; /**< mtcAgent to hbsAgent command port      */
     int   mtc_to_guest_cmd_port ; /**< mtcAgent to guestAgent command port    */
     int   hwmon_cmd_port        ; /**< mtcAgent to hwmon command port         */
-    int   hbs_to_mtc_event_port ; /**< hbsAgent tm mtcAgent event port        */
+    int   hbs_to_mtc_event_port ; /**< hbsAgent to mtcAgent event port        */
     int   inv_event_port        ; /**< Port inventory sends change events on  */
     int   per_node              ; /**< Memory usage per node or per resource  */
     int   audit_period          ; /**< daemon specific audit period           */
