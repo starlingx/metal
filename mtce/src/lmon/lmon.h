@@ -25,8 +25,9 @@ using namespace std;
 
 #define INTERFACES_DIR ((const char *)"/sys/class/net/")
 #define PLATFORM_DIR   ((const char *)"/etc/platform/platform.conf")
+#define LMON_DIR       ((const char *)"/etc/lmon/lmon.conf")
 
-#define INTERFACES_MAX (3) /* maximum number of interfaces to monitor */
+#define INTERFACES_MAX (4) /* maximum number of interfaces to monitor */
 
 enum interface_type { ethernet = 0, vlan = 1, bond = 2 };
 string iface_type ( interface_type type_enum );
@@ -56,11 +57,13 @@ typedef struct
     #define MGMT_INTERFACE_NAME  ((const char *)"mgmt")
     #define CLUSTER_HOST_INTERFACE_NAME ((const char *)"cluster-host")
     #define OAM_INTERFACE_NAME   ((const char *)"oam")
+    #define DATA_NETWORK_INTERFACE_NAME   ((const char *)"data-network")
 
     /* name labels used in platform.conf */
     #define MGMT_INTERFACE_FULLNAME  ((const char *)"management_interface")
     #define CLUSTER_HOST_INTERFACE_FULLNAME ((const char *)"cluster_host_interface")
     #define OAM_INTERFACE_FULLNAME   ((const char *)"oam_interface")
+    #define DATA_NETWORK_INTERFACE_FULLNAME   ((const char *)"data_network_interface")
 
     /* true if the interface is configured.
      * i.e. the name label shown above is found in platform.conf */
@@ -95,7 +98,13 @@ void lmon_learn_interfaces ( int ioctl_sock );
 
 /* lmonUtils.cpp */
 FMTimeT lmon_fm_timestamp     ( void );
-int     lmon_interfaces_init  ( interface_ctrl_type * ptr );
+int     lmon_interfaces_init  ( interface_ctrl_type * ptr,
+                                string physical_iface_name );
 int     lmon_get_link_state   ( int    ioctl_socket,
                                 char   iface[IF_NAMESIZE],
                                 bool & link_up );
+string  get_interface_fullname( const char * iface_name );
+int     read_the_lmon_config  ( string iface_fullname,
+                                string& physical_interface );
+void    set_the_link_state    ( int ioctl_socket,
+                                interface_ctrl_type * ptr );

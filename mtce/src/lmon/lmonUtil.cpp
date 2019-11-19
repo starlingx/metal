@@ -191,168 +191,126 @@ int lmon_get_link_state ( int    ioctl_socket,
  *
  *****************************************************************************/
 
-int lmon_interfaces_init ( interface_ctrl_type * ptr )
+int lmon_interfaces_init ( interface_ctrl_type * ptr, string physical_interface )
 {
-    FILE * file_ptr;
     char line_buf[MAX_CHARS_ON_LINE];
-    string str;
-    string physical_interface = "";
 
-    /* iface enum to pltform.conf iface name */
-    if ( strcmp(ptr->name, MGMT_INTERFACE_NAME) == 0 )
-        str = MGMT_INTERFACE_FULLNAME;
-    else if ( strcmp(ptr->name, CLUSTER_HOST_INTERFACE_NAME) == 0 )
-        str = CLUSTER_HOST_INTERFACE_FULLNAME;
-    else if ( strcmp(ptr->name, OAM_INTERFACE_NAME) == 0 )
-        str = OAM_INTERFACE_FULLNAME;
+    /* determine the interface type */
+    string uevent_interface_file =
+           INTERFACES_DIR + physical_interface + "/uevent";
+    ifstream finUevent( uevent_interface_file.data() );
+
+    if (!finUevent)
+    {
+        elog ("Cannot find '%s' ; unable to monitor '%s' interface\n",
+              uevent_interface_file.c_str(), ptr->name );
+
+        ptr->used = false;
+        return FAIL_OPERATION ;
+    }
     else
     {
-        slog ("%s is an unsupported iface\n", ptr->name );
-        return (FAIL_BAD_PARM);
-    }
-
-    /* open platform.conf and find the line containing this interface name. */
-    file_ptr = fopen (PLATFORM_DIR , "r");
-    if (file_ptr)
-    {
-        ifstream fin( PLATFORM_DIR );
         string line;
-
-        while ( getline( fin, line ))
+        ptr->type_enum = ethernet;
+        while( getline( finUevent, line ) )
         {
-            /* does this line contain it ? */
-            if ( line.find(str) != string::npos )
+            if ( line.find ("DEVTYPE") == 0 )
             {
-                stringstream ss( line );
-                getline( ss, physical_interface, '=' ); // string before
-                getline( ss, physical_interface, '=' ); // string after
-
-                plog ("%s is the %s primary network interface",
-                          physical_interface.c_str(),
-                          ptr->name);
-
-                /* determine the interface type */
-                string uevent_interface_file =
-                       INTERFACES_DIR + physical_interface + "/uevent";
-                ifstream finUevent( uevent_interface_file.data() );
-
-                if (!finUevent)
-                {
-                    elog ("Cannot find '%s' ; unable to monitor '%s' interface\n",
-                          uevent_interface_file.c_str(), ptr->name );
-
-                    ptr->used = false;
-                    fclose(file_ptr);
-                    return FAIL_OPERATION ;
-                }
-                else
-                {
-                    string line;
-                    ptr->type_enum = ethernet;
-                    while( getline( finUevent, line ) )
-                    {
-                        if ( line.find ("DEVTYPE") == 0 )
-                        {
-                            if ( line.find ("=vlan") != string::npos )
-                                ptr->type_enum = vlan;
-                            else if ( line.find ("=bond") != string::npos )
-                                ptr->type_enum = bond;
-                            break;
-                        }
-                    }
-                }
-
-                switch (ptr->type_enum)
-                {
-                    case ethernet:
-                    {
-                        memcpy(ptr->interface_one,
-                               physical_interface.c_str(),
-                               physical_interface.size());
-
-                        ilog("%s is a %s ethernet interface\n",
-                             ptr->interface_one, ptr->name );
-
-                        break;
-                    }
-                    case bond:
-                    {
-                        memcpy(ptr->bond,
-                               physical_interface.c_str(),
-                               physical_interface.size());
-
-                        ilog("%s is a bonded %s network interface\n",
-                             ptr->bond, ptr->name);
-
-                        break;
-                    }
-                    case vlan:
-                    {
-                        /****************************************************
-                         *
-                         * If it is a VLAN interface, we need to determine its
-                         * parent interface, which may be a single ethernet
-                         * link or a bonded interface.
-                         *
-                         ****************************************************/
-
-                        string parent = get_iflink_interface(physical_interface);
-                        if (!parent.empty())
-                        {
-                            string physical_interface_save = physical_interface ;
-                            physical_interface = parent;
-
-                            string uevent_parent_file =
-                                   INTERFACES_DIR + parent + "/uevent";
-
-                            ifstream finUevent2( uevent_parent_file.c_str() );
-
-                            string line;
-                            bool bond_configured = false;
-                            while( getline( finUevent2, line ) )
-                            {
-                                // if this uevent does not have a DEVTYPE
-                                // then its a ethernet interface. If this
-                                // does have a DEVTYPE then check explicity
-                                // for bond. Since we don't allow vlan over
-                                // vlan, for all other DEVTYPEs, assume
-                                // this is a ethernet interface.
-                                if ( (line.find ("DEVTYPE") == 0) &&
-                                     (line.find ("=bond") != string::npos) ) {
-
-                                     ilog("%s is a vlan off the %s network whose parent is %s\n",
-                                              physical_interface_save.c_str(),
-                                              ptr->name,
-                                              parent.c_str());
-                                    bond_configured = true;
-                                    break;
-                                }
-                            }
-
-                            if (!bond_configured)
-                            {
-                                ilog("%s is a vlan off the %s network whose parent is %s\n",
-                                     physical_interface.c_str(),
-                                     ptr->name,
-                                     parent.c_str());
-
-                                memcpy(ptr->interface_one,
-                                       parent.c_str(),
-                                       parent.size());
-                            }
-                        }
-                        else
-                        {
-                            ilog("%s is a vlan %s network\n",
-                                     physical_interface.c_str(), ptr->name);
-                        }
-                        break;
-                    }
-                } // end of switch
+                if ( line.find ("=vlan") != string::npos )
+                    ptr->type_enum = vlan;
+                else if ( line.find ("=bond") != string::npos )
+                    ptr->type_enum = bond;
                 break;
             }
         }
-        fclose(file_ptr);
+    }
+
+    switch (ptr->type_enum)
+    {
+        case ethernet:
+        {
+            memcpy(ptr->interface_one,
+                   physical_interface.c_str(),
+                   physical_interface.size());
+
+            ilog("%s is a %s ethernet interface\n",
+                 ptr->interface_one, ptr->name );
+
+            break;
+        }
+        case bond:
+        {
+            memcpy(ptr->bond,
+                   physical_interface.c_str(),
+                   physical_interface.size());
+
+            ilog("%s is a bonded %s network interface\n",
+                 ptr->bond, ptr->name);
+
+            break;
+        }
+        case vlan:
+        {
+            /****************************************************
+             *
+             * If it is a VLAN interface, we need to determine its
+             * parent interface, which may be a single ethernet
+             * link or a bonded interface.
+             *
+             ****************************************************/
+
+            string parent = get_iflink_interface(physical_interface);
+            if (!parent.empty())
+            {
+                string physical_interface_save = physical_interface ;
+                physical_interface = parent;
+
+                string uevent_parent_file =
+                       INTERFACES_DIR + parent + "/uevent";
+
+                ifstream finUevent2( uevent_parent_file.c_str() );
+
+                string line;
+                bool bond_configured = false;
+                while( getline( finUevent2, line ) )
+                {
+                    // if this uevent does not have a DEVTYPE
+                    // then its a ethernet interface. If this
+                    // does have a DEVTYPE then check explicity
+                    // for bond. Since we don't allow vlan over
+                    // vlan, for all other DEVTYPEs, assume
+                    // this is a ethernet interface.
+                    if ( (line.find ("DEVTYPE") == 0) &&
+                         (line.find ("=bond") != string::npos) ) {
+
+                         ilog("%s is a vlan off the %s network whose parent is %s\n",
+                                  physical_interface_save.c_str(),
+                                  ptr->name,
+                                  parent.c_str());
+                        bond_configured = true;
+                        break;
+                    }
+                }
+
+                if (!bond_configured)
+                {
+                    ilog("%s is a vlan off the %s network whose parent is %s\n",
+                         physical_interface.c_str(),
+                         ptr->name,
+                         parent.c_str());
+
+                    memcpy(ptr->interface_one,
+                           parent.c_str(),
+                           parent.size());
+                }
+            }
+            else
+            {
+                ilog("%s is a vlan %s network\n",
+                         physical_interface.c_str(), ptr->name);
+            }
+            break;
+        }
     }
 
     /* Lagged interface */
@@ -411,5 +369,99 @@ int lmon_interfaces_init ( interface_ctrl_type * ptr )
     return (PASS);
 }
 
+void set_the_link_state( int ioctl_socket, interface_ctrl_type * ptr ){
+
+    /* set the link state for all the primary physical interfaces */
+    if ( lmon_get_link_state ( ioctl_socket,
+                               ptr->interface_one,
+                               ptr->interface_one_link_up ) )
+    {
+        ptr->interface_one_event_time = lmon_fm_timestamp();
+        ptr->interface_one_link_up = false ;
+        wlog ("%s interface state query failed ; defaulting to Down\n",
+                  ptr->interface_one) ;
+    }
+    else
+    {
+        ptr->interface_one_event_time = lmon_fm_timestamp();
+        ilog ("%s is %s\n",
+                  ptr->interface_one,
+                  ptr->interface_one_link_up ?
+                  "Up" : "Down" );
+
+        if ( ptr->lagged == true )
+        {
+            /* set the link state for all the lagged physical interfaces */
+            if ( lmon_get_link_state ( ioctl_socket,
+                                       ptr->interface_two,
+                                       ptr->interface_two_link_up ) )
+            {
+                ptr->interface_two_event_time = lmon_fm_timestamp();
+                ptr->interface_two_link_up = false ;
+                wlog ("%s lag interface state query failed ; defaulting to Down\n",
+                          ptr->interface_two) ;
+            }
+            else
+            {
+                ptr->interface_two_event_time = lmon_fm_timestamp();
+                ilog ("%s is %s (lag)\n",
+                          ptr->interface_two,
+                          ptr->interface_two_link_up ?
+                          "Up" : "Down" );
+            }
+        }
+    }
+}
+
+int read_the_lmon_config( string iface_fullname, string& physical_interface){
+    FILE * file_ptr;
+
+    file_ptr = fopen (LMON_DIR , "r");
+    if (file_ptr)
+    {
+        ifstream fin( LMON_DIR );
+        string line;
+
+        while ( getline( fin, line ))
+        {
+            /* does this line contain it ? */
+            if ( line.find(iface_fullname) != string::npos )
+            {
+                stringstream ss( line );
+
+                // Config file Format like
+                // ....
+                // management_interface=ens7
+                // cluster_host_interface=ens7
+                // ...
+                getline( ss, physical_interface, '=' ); // get string before "="
+                getline( ss, physical_interface, '=' ); // get string after "="
+
+                plog ("%s is the %s primary network interface",
+                          physical_interface.c_str(),
+                          iface_fullname.c_str());
+
+                fclose(file_ptr);
+                return (PASS);
+            }
+        }
+        fclose(file_ptr);
+    }
+
+    return (FAIL);
+}
+
+string get_interface_fullname(const char * iface_name){
+    string iface_fullname = "";
+    if ( strcmp(iface_name, MGMT_INTERFACE_NAME) == 0 )
+        iface_fullname = MGMT_INTERFACE_FULLNAME;
+    else if ( strcmp(iface_name, CLUSTER_HOST_INTERFACE_NAME) == 0 )
+        iface_fullname = CLUSTER_HOST_INTERFACE_FULLNAME;
+    else if ( strcmp(iface_name, OAM_INTERFACE_NAME) == 0 )
+        iface_fullname = OAM_INTERFACE_FULLNAME;
+    else if ( strcmp(iface_name, DATA_NETWORK_INTERFACE_NAME) == 0 )
+        iface_fullname = DATA_NETWORK_INTERFACE_FULLNAME;
+    return iface_fullname;
+}
 
 
