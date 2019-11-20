@@ -1142,6 +1142,7 @@ int register_process ( process_config_type * ptr )
                 ilog ("%s Registered (%d)\n", ptr->process , pid );
                 ptr->failed = false ;
                 ptr->registered = true ;
+                ptr->restarts_cnt = 0  ;
                 passiveStageChange ( ptr, PMON_STAGE__MANAGE ) ;
                 if ( ptr->active_monitoring == false )
                 {
@@ -1166,6 +1167,7 @@ int register_process ( process_config_type * ptr )
             else
             {
                 ptr->failed = false ;
+                ptr->restarts_cnt = 0  ;
                 manage_alarm ( ptr, PMON_CLEAR );
                 passiveStageChange ( ptr, PMON_STAGE__MANAGE ) ;
             }
