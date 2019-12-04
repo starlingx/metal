@@ -145,7 +145,7 @@ void hwmonHostClass::hwmon_fsm ( void )
 
                             if ( secret->stage == MTC_SECRET__GET_PWD_RECV )
                             {
-                                host_ptr->bm_pw = secret->payload ;
+                                host_ptr->bm_pw = host_ptr->thread_extra_info.bm_pw = secret->payload ;
                                 ilog ("%s bmc credentials received",
                                           hostname.c_str());
                             }

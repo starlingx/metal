@@ -45,6 +45,7 @@ string hostUtil_getPrefixPath  ( void );
 
 bool hostUtil_is_valid_uuid    ( string uuid );
 bool hostUtil_is_valid_ip_addr ( string ip );
+bool hostUtil_is_valid_username ( string un );
 bool hostUtil_is_valid_bm_type ( string bm_type );
 
 int  hostUtil_mktmpfile ( string hostname, string basename, string & filename, string data );

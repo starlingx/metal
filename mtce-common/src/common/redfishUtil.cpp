@@ -519,7 +519,7 @@ int redfishUtil_get_bmc_info ( string & hostname,
     struct json_object *json_obj = json_tokener_parse((char*)json_bmc_info.data());
     if ( !json_obj )
     {
-        wlog ("%s bmc info file empty", hostname.c_str());
+        wlog ("%s bmc info data parse error", hostname.c_str());
         return (FAIL_JSON_PARSE) ;
 
     }
@@ -594,7 +594,7 @@ int redfishUtil_get_bmc_info ( string & hostname,
         bmc_info.processors = jsonUtil_get_key_value_int ( proc_obj, REDFISH_LABEL__COUNT );
         redfishUtil_health_info ( hostname, REDFISH_LABEL__PROCESSOR,
                                   proc_obj, status) ;
-        ilog ("%s has %2d Processors ; %s and %s:%s",
+        ilog ("%s has %2u Processors ; %s and %s:%s",
                   hostname.c_str(),
                   bmc_info.processors,
                   status.state.c_str(),
@@ -617,7 +617,7 @@ int redfishUtil_get_bmc_info ( string & hostname,
         bmc_info.memory_in_gigs = jsonUtil_get_key_value_int ( mem_obj, REDFISH_LABEL__MEMORY_TOTAL );
         redfishUtil_health_info ( hostname, REDFISH_LABEL__MEMORY,
                                   mem_obj, status) ;
-        ilog ("%s has %d GiB Memory ; %s and %s:%s",
+        ilog ("%s has %u GiB Memory ; %s and %s:%s",
                   hostname.c_str(),
                   bmc_info.memory_in_gigs,
                   status.state.c_str(),

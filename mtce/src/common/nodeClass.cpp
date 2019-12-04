@@ -16,6 +16,7 @@
 #include <string>
 #include <errno.h>  /* for ENODEV, EFAULT and ENXIO */
 #include <unistd.h> /* for close and usleep */
+#include <algorithm>
 
 using namespace std;
 
@@ -494,6 +495,9 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
     ptr->clstr_ip  = "" ;
     ptr->clstr_mac = "" ;
 
+    /* key value dictionary */
+    ptr->mtce_info = "" ;
+
     ptr->patching              = false ;
     ptr->patched               = false ;
 
@@ -625,12 +629,13 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
     ptr->mnfa_graceful_recovery = false ;
 
     /* initialize all board management variables for this host */
-    ptr->bmc_protocol = BMC_PROTOCOL__IPMITOOL ;
-    ptr->bm_ip = NONE ;
-    ptr->bm_un = NONE ;
-    ptr->bm_pw = NONE ;
-    ptr->bm_cmd= NONE ;
-    ptr->bm_type = NONE ; /* TODO: OBS */
+    ptr->bm_http_mode = "https" ;
+    ptr->bmc_protocol = BMC_PROTOCOL__DYNAMIC ;
+    ptr->bm_ip        = NONE ;
+    ptr->bm_un        = NONE ;
+    ptr->bm_pw        = NONE ;
+    ptr->bm_cmd       = NONE ;
+    ptr->bm_type      = NONE ;
 
     /* restart command tht need to learned for Redfish.
      * ipmi commands are hard coded fro legacy support.
@@ -642,14 +647,12 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
 
     ptr->bmc_provisioned = false ; /* assume not provisioned until learned */
     ptr->bmc_accessible  = false ; /* assume not accessible  until proven  */
-    ptr->bmc_access_method_changed = false ;
+    ptr->bm_ping_info.ok = false ;
 
     if ( hostname == my_hostname )
         ptr->power_on    = true  ;
     else
         ptr->power_on    = false ; /* learned on first BMC connection        */
-
-    bmc_access_data_init ( ptr ); /* init all the BMC access vars all modes */
 
     /* init the alarm array only to have it updated later
      * with current alarm severities */
@@ -1865,24 +1868,26 @@ int nodeLinkClass::update_key_value ( string hostname, string key , string value
 {
     int rc = PASS ;
     struct nodeLinkClass::node * node_ptr = nodeLinkClass::getNode( hostname );
-    if ( node_ptr ) 
+    if ( node_ptr )
     {
             /* TODO: Add all database members to this utility */
             if ( !key.compare(MTC_JSON_INV_BMIP) )
                 node_ptr->bm_ip = value ;
             else if ( !key.compare(MTC_JSON_INV_TASK) )
                 node_ptr->task = value ;
+            else if ( !key.compare(MTC_JSON_INV_MTCE_INFO) )
+                node_ptr->mtce_info = value ;
             else
             {
-                wlog ("%s Unsupported key '%s' update with value '%s'\n", 
+                wlog ("%s Unsupported key '%s' update with value '%s'\n",
                           hostname.c_str(), key.c_str(), value.c_str());
-                rc = FAIL_BAD_PARM ; 
+                rc = FAIL_BAD_PARM ;
             }
     }
     else
     {
-        wlog ("Cannot change 'admin' state for unknown hostname (%s)\n", 
-               hostname.c_str()); 
+        wlog ("Cannot change 'admin' state for unknown hostname (%s)\n",
+               hostname.c_str());
     }
     return (rc);
 }
@@ -2343,6 +2348,8 @@ int nodeLinkClass::mod_host ( node_inv_type & inv )
                       node_ptr->hostname.c_str(),
                       node_ptr->ip.c_str(), inv.ip.c_str());
             node_ptr->ip = inv.ip ;
+            mtcInfo_clr ( node_ptr, MTCE_INFO_KEY__BMC_PROTOCOL );
+            mtcInvApi_update_mtcInfo ( node_ptr );
 
             /* Tell the guestAgent the new IP */
             rc = send_guest_command(node_ptr->hostname,MTC_CMD_MOD_HOST);
@@ -2402,13 +2409,6 @@ int nodeLinkClass::mod_host ( node_inv_type & inv )
             modify    = true ; /* we have some delta */
         }
 
-        /* PATCHBACK - issue found during BMC refactoring user story
-         * where there was a race condition found where the bmc dnsmasq file
-         * was updated with a new bm_ip close to when there was an
-         * administrative operation (unlock in this case). The newly learned
-         * bm_ip was overwritten by the now stale bm_ip that came in from
-         * inventory. The bm_ip should never come from sysinv while in
-         * internal mode. */
         if (( node_ptr->bm_ip.compare ( inv.bm_ip )))
         {
             if ( inv.bm_ip.empty () )
@@ -2428,9 +2428,13 @@ int nodeLinkClass::mod_host ( node_inv_type & inv )
 
             node_ptr->bm_ip = inv.bm_ip ;
 
+            mtcInfo_clr ( node_ptr, MTCE_INFO_KEY__BMC_PROTOCOL );
+            mtcInvApi_update_mtcInfo ( node_ptr );
+
             modify_bm = true ; /* board mgmnt change */
             modify    = true ; /* we have some delta */
         }
+
         if ( node_ptr->bm_type.compare ( inv.bm_type ) )
         {
             if ( inv.bm_type.empty() )
@@ -2441,6 +2445,10 @@ int nodeLinkClass::mod_host ( node_inv_type & inv )
             plog ("%s Modify 'bm_type' from %s -> %s\n",
                       node_ptr->hostname.c_str(),
                       node_ptr->bm_type.c_str(), inv.bm_type.c_str());
+
+            mtcInfo_clr ( node_ptr, MTCE_INFO_KEY__BMC_PROTOCOL );
+            mtcInvApi_update_mtcInfo ( node_ptr );
+            node_ptr->bm_type = inv.bm_type ;
 
             modify_bm = true ; /* board mgmnt change */
             modify    = true ; /* we have some delta */
@@ -2453,36 +2461,54 @@ int nodeLinkClass::mod_host ( node_inv_type & inv )
         }
         if ( modify_bm == true )
         {
-            wlog ("%s Board Management provisioning has changed\n", node_ptr->hostname.c_str());
-            bool bm_type_was_valid = hostUtil_is_valid_bm_type (node_ptr->bm_type) ;
-            bool bm_type_now_valid = hostUtil_is_valid_bm_type (inv.bm_type) ;
+            blog ("%s Board Management provisioning has changed\n", node_ptr->hostname.c_str());
 
-            /* update bm_type now */
-            node_ptr->bm_type = inv.bm_type ;
-
-            /* BM is provisioned */
-            if ( bm_type_now_valid == true )
+            /* Assume this modify has invalid provisioning until ... */
+            bool valid_provisioning = false ;
+            if (( hostUtil_is_valid_ip_addr ( node_ptr->bm_ip )) &&
+                ( hostUtil_is_valid_username( node_ptr->bm_un )) &&
+                ( hostUtil_is_valid_bm_type ( node_ptr->bm_type )))
             {
-                /* force (re)provision */
-                manage_bmc_provisioning ( node_ptr );
+                /* ... proven otherwise */
+                valid_provisioning = true ;
             }
 
-            /* BM is already provisioned but is now deprovisioned */
-            else if (( bm_type_was_valid == true ) && ( bm_type_now_valid == false ))
+            /* ------------------------------------ */
+            /* Start From Already Provisioned Cases */
+            /* ------------------------------------ */
+            if ( node_ptr->bmc_provisioned == true )
             {
-                node_ptr->bm_type   = NONE ;
-                node_ptr->bm_ip     = NONE ;
-                node_ptr->bm_un     = NONE ;
-                node_ptr->bm_pw     = NONE ;
-                mtcAlarm_log ( node_ptr->hostname, MTC_LOG_ID__COMMAND_BM_DEPROVISIONED );
-                set_bm_prov ( node_ptr, false );
+                /* Deprovisioning Case */
+                if ( valid_provisioning == false )
+                {
+                    node_ptr->bm_type   = NONE ;
+                    node_ptr->bm_ip     = NONE ;
+                    node_ptr->bm_un     = NONE ;
+                    node_ptr->bm_pw     = NONE ;
+                    set_bm_prov ( node_ptr, false );
+                    mtcAlarm_log ( node_ptr->hostname, MTC_LOG_ID__COMMAND_BM_DEPROVISIONED );
+                }
+                /* Reprovisioning Case */
+                else
+                {
+                    set_bm_prov ( node_ptr, true );
+                    mtcAlarm_log ( node_ptr->hostname, MTC_LOG_ID__COMMAND_BM_REPROVISIONED );
+                }
             }
-
-            /* BM was not provisioned and is still not provisioned */
+            /* -------------------------------------- */
+            /* Start From Already Deprovisioned Cases */
+            /* -------------------------------------- */
             else
             {
-                /* Handle all other provisioning changes ; username, ip address */
-                manage_bmc_provisioning ( node_ptr );
+                if ( valid_provisioning == true )
+                {
+                    set_bm_prov ( node_ptr, true );
+                    mtcAlarm_log ( node_ptr->hostname, MTC_LOG_ID__COMMAND_BM_PROVISIONED );
+                }
+                else
+                {
+                    ; // do nothing ; deprovisioned with invalid provisioning
+                }
             }
         }
     }
@@ -2628,13 +2654,13 @@ int nodeLinkClass::add_host ( node_inv_type & inv )
     int rc = FAIL ;
     struct nodeLinkClass::node * node_ptr = static_cast<struct node *>(NULL);
 
-    if ((!inv.name.compare("controller-0")) || 
+    if ((!inv.name.compare("controller-0")) ||
         (!inv.name.compare("controller-1")))
     {
         dlog ("Adding %s\n", inv.name.c_str());
-        node_ptr = nodeLinkClass::getNode(inv.name); 
+        node_ptr = nodeLinkClass::getNode(inv.name);
     }
-    else if  (( inv.name.empty())           || 
+    else if  (( inv.name.empty())           ||
              ( !inv.name.compare ("none") ) ||
              ( !inv.name.compare ("None") ))
     {
@@ -2642,17 +2668,17 @@ int nodeLinkClass::add_host ( node_inv_type & inv )
                inv.uuid.c_str());
         return (FAIL_INVALID_HOSTNAME) ;
     }
-    else if  (( inv.uuid.empty())           || 
+    else if  (( inv.uuid.empty())           ||
              ( !inv.uuid.compare ("none") ) ||
              ( !inv.uuid.compare ("None") ))
     {
-        wlog ("Refusing to add host with 'null' or 'invalid' uuid (%s)\n", 
+        wlog ("Refusing to add host with 'null' or 'invalid' uuid (%s)\n",
                inv.uuid.c_str());
         return (FAIL_INVALID_UUID) ;
     }
 
     /* Ensure we don't add a host with critical info that is
-     * already used by other members of inventory like ; 
+     * already used by other members of inventory like ;
      * hostname, uuid, ip, mac, bm_ip */
     else if ( ( rc = add_host_precheck ( inv )) > RETRY )
     {
@@ -2738,6 +2764,7 @@ int nodeLinkClass::add_host ( node_inv_type & inv )
             node_ptr->mac  = inv.mac  ;
             node_ptr->uuid = inv.uuid ;
             node_ptr->clstr_ip  = inv.clstr_ip  ;
+            node_ptr->mtce_info = inv.mtce_info ;
 
             if ( inv.uptime.length() )
             {
@@ -2752,7 +2779,7 @@ int nodeLinkClass::add_host ( node_inv_type & inv )
             node_ptr->thread_extra_info.bm_ip  = node_ptr->bm_ip   = inv.bm_ip   ;
             node_ptr->thread_extra_info.bm_un  = node_ptr->bm_un   = inv.bm_un   ;
             node_ptr->bm_type = inv.bm_type ;
-
+            node_ptr->bm_pw_wait_log_throttle = 0 ;
             node_ptr->bm_ping_info.sock = 0 ;
 
             /* initialize the host power and reset control thread */
@@ -3048,6 +3075,226 @@ void nodeLinkClass::set_task ( string hostname, string task )
     }
 }
 
+/******************************************************************************
+ *
+ * Name       : set_mtcInfo
+ *
+ * Purpose    : Set the 'mtce info' for the specified host.
+ *              Really only used for the first controller on process startup.
+ *
+ *****************************************************************************/
+
+int nodeLinkClass::set_mtcInfo ( string hostname, string & mtce_info )
+{
+    return (set_mtcInfo ( nodeLinkClass::getNode(hostname), mtce_info ));
+}
+
+int nodeLinkClass::set_mtcInfo ( struct nodeLinkClass::node * node_ptr,
+                                                     string & mtce_info)
+{
+    if ( node_ptr == NULL )
+        return FAIL_NULL_POINTER ;
+    node_ptr->mtce_info = mtce_info ;
+    mtcInfo_log(node_ptr);
+    return (PASS);
+}
+
+/******************************************************************************
+ *
+ * Name       : mtcInfo_set, mtcInfo_get, mtcInfo_clr, mtcInfo_log
+ *
+ * Purpose    : Manage the node's 'mtce info' database string used as a
+ *              key / value pair dictionary.
+ *
+ * Description: Set updates mtce info dictionary with specified key's value
+ *              Get returns the specified key's value from mtce info dictionary
+ *              Clr removes a specified key and its value pair from dictionary
+ *              Log the data in mtce_info ; just loaded or ongoing changes
+ *
+ * Assumptions: The database element mtce_info can't hold quoted key
+ *              value pairs. Therefore the support utilities manage
+ *              (add, modify, delete) the key value content without quotes.
+ *
+ *              These utilities do not push mtce_info changes to the database.
+ *
+ * Testing    : All these utilities have been tested setting, getting and
+ *              clearing a key value pair when the target key/value pair ...
+ *
+ *              1. is the only key/value pair
+ *              2. is the last key/value pair in a list of 3.
+ *              3. is the first key/value pair in a list of 3
+ *              4. is the middle key/value pair list of 3.
+ *
+ *****************************************************************************/
+
+int nodeLinkClass::mtcInfo_set ( string hostname, string key, string value )
+{
+    return (mtcInfo_set ( nodeLinkClass::getNode(hostname), key, value ));
+}
+
+int nodeLinkClass::mtcInfo_set ( struct nodeLinkClass::node * node_ptr,
+                                                     string   key,
+                                                     string   value )
+{
+    if ( node_ptr == NULL )
+        return FAIL_NULL_POINTER ;
+
+    else if (( node_ptr->mtce_info.empty()) ||
+             ( node_ptr->mtce_info.at(0) != '{' ))
+    {
+        /* mtce info empty ; just create new content
+         *
+         *     {key:value}
+         */
+        node_ptr->mtce_info = '{' + key + ':' + value + '}' ;
+    }
+    else
+    {
+        /* Remove all whitespace.
+         *
+         * Should not be any but would mess up parsing if there
+         * was so always do it.
+         */
+        node_ptr->mtce_info.erase(remove(node_ptr->mtce_info.begin(),
+                                         node_ptr->mtce_info.end(), ' '),
+                                         node_ptr->mtce_info.end());
+
+        /* find this key */
+        size_t pos = node_ptr->mtce_info.find(key + ':');
+        if ( pos != std::string::npos )
+        {
+            pos = pos+key.length() +1 ;
+            string mtce_info_tmp = node_ptr->mtce_info.substr(0, pos);
+            if (node_ptr->mtce_info.substr(pos, value.length()) != value )
+            {
+                /* add the new value following the *key: content */
+                mtce_info_tmp.append(value);
+
+                /* now look for other the key/value data that needs to be
+                 * appended after the revised key/value.
+                 * This is indicated by a following ',' */
+                size_t pos1 = node_ptr->mtce_info.find(',' , pos-1);
+                if ( pos1 != std::string::npos )
+                {
+                    mtce_info_tmp.append(node_ptr->mtce_info.substr(pos1));
+                }
+                else
+                {
+                    /* Otherwise just terminate the dictionary */
+                    mtce_info_tmp +=  '}';
+                }
+
+                /* save the revised mtce_info string */
+                node_ptr->mtce_info = mtce_info_tmp ;
+            }
+            /* else the value is the same and does not need to be set */
+        }
+        else
+        {
+            /* add the new key and value */
+            node_ptr->mtce_info.pop_back();
+            node_ptr->mtce_info.append(',' + key + ':' + value + '}');
+        }
+    }
+    dlog ("%s %s", node_ptr->hostname.c_str(), node_ptr->mtce_info.c_str());
+    return(PASS);
+}
+
+string nodeLinkClass::mtcInfo_get ( string hostname, string key )
+{
+    struct nodeLinkClass::node * node_ptr = nodeLinkClass::getNode(hostname);
+    return (mtcInfo_get ( node_ptr, key ));
+}
+
+string nodeLinkClass::mtcInfo_get ( struct nodeLinkClass::node * node_ptr,
+                                                        string   key )
+{
+    if ( node_ptr )
+    {
+        /* Remove all whitespace. */
+        node_ptr->mtce_info.erase(remove(node_ptr->mtce_info.begin(),
+                                         node_ptr->mtce_info.end(), ' '),
+                                         node_ptr->mtce_info.end());
+
+        /* find this key */
+        size_t pos = node_ptr->mtce_info.find(key + ':');
+        if ( pos != std::string::npos )
+        {
+            size_t value_start_pos = pos + key.length() + 1 ;
+            size_t value_end_pos = node_ptr->mtce_info.find(',', value_start_pos) ;
+            if ( value_end_pos == std::string::npos )
+            {
+                value_end_pos = node_ptr->mtce_info.find('}') ;
+            }
+            return (node_ptr->mtce_info.substr(value_start_pos,
+                                               value_end_pos-value_start_pos ));
+        }
+    }
+    return "" ;
+}
+
+void nodeLinkClass::mtcInfo_clr ( string hostname, string key )
+{
+    struct nodeLinkClass::node * node_ptr = nodeLinkClass::getNode(hostname);
+    mtcInfo_clr ( node_ptr, key );
+}
+
+
+void nodeLinkClass::mtcInfo_clr ( struct nodeLinkClass::node * node_ptr,
+                                                     string   key )
+{
+    if ( node_ptr && ( ! node_ptr->mtce_info.empty()) )
+    {
+        /* Remove all whitespace. */
+        node_ptr->mtce_info.erase(remove(node_ptr->mtce_info.begin(),
+                                         node_ptr->mtce_info.end(), ' '),
+                                         node_ptr->mtce_info.end());
+        /* find this key */
+        size_t pos = node_ptr->mtce_info.find(key + ':');
+        if ( pos != std::string::npos )
+        {
+            string mtce_info_tmp = node_ptr->mtce_info.substr(0,pos);
+
+            /* Now search for next ',' and/or '}' */
+            size_t pair_end_pos = node_ptr->mtce_info.find(',', pos) ;
+            if ( pair_end_pos != std::string::npos )
+            {
+                mtce_info_tmp.append(node_ptr->mtce_info.substr(pair_end_pos+1));
+            }
+            else
+            {
+                /* handle not leaving a stray ',' when there are no remaining
+                 * elements in the dictionary ; avoid this k:v, */
+                if ( ! mtce_info_tmp.empty() )
+                    mtce_info_tmp.pop_back();
+
+                /* handle leaving the dictionary empty completely
+                 * empty (no "{}") if there are no more key value pairs */
+                if ( ! mtce_info_tmp.empty() )
+                    mtce_info_tmp.append("}");
+            }
+            dlog ("%s mtcInfo dictionary before: %s after : %s\n",
+                      node_ptr->hostname.c_str(),
+                      node_ptr->mtce_info.c_str(),
+                      mtce_info_tmp.c_str());
+            node_ptr->mtce_info = mtce_info_tmp ;
+        }
+    }
+}
+
+void nodeLinkClass::mtcInfo_log ( struct nodeLinkClass::node * node_ptr )
+{
+    if ( node_ptr )
+    {
+        if ( node_ptr->mtce_info.length() > 2 )
+        {
+            ilog("%s %s",
+                     node_ptr->hostname.c_str(),
+                     node_ptr->mtce_info.substr(1,node_ptr->mtce_info.length()-2).c_str());
+        }
+    }
+}
+
 /* Lock Rules
  *
  * 1. Cannot lock this controller
@@ -3061,7 +3308,7 @@ bool nodeLinkClass::can_uuid_be_locked ( string uuid , int & reason )
     if ( node_ptr )
     {
         dlog1 ("%s Lock permission query\n", node_ptr->hostname.c_str());
-        
+
         /* Allow lock of already locked 'any' host */
         if ( node_ptr->adminState == MTC_ADMIN_STATE__LOCKED )
         {
@@ -3082,7 +3329,7 @@ bool nodeLinkClass::can_uuid_be_locked ( string uuid , int & reason )
                 reason = FAIL_UNIT_ACTIVE ;
                 return (false);
             }
-            /* Rule 2 - Cannot lock inactive controller if the floating storage 
+            /* Rule 2 - Cannot lock inactive controller if the floating storage
              *          ceph monitor is locked */
             if (( get_storage_backend() == CGCS_STORAGE_CEPH ) &&
                 (  is_storage_mon_enabled () == false ))
@@ -3918,71 +4165,6 @@ void nodeLinkClass::set_health ( string & hostname, int health )
     }
 }
 
-/*************************************************************************************
- *
- * Name       : manage_bmc_provisioning
- *
- * Description: This utility manages a change in bmc provisioning for
- *              bm region EXTERNAL mode. Creates provisioning logs and
- *              sends START and STOP monitoring commands to the hardware monitor.
- *
- * Warning    : Should only be called when there is a change to BM provisioning.
- *              as it will first always first disable provisioning and then
- *              decides whether it needs to be re-enabled or not.
- *
- *************************************************************************************/
-
-int nodeLinkClass::manage_bmc_provisioning ( struct node * node_ptr )
-{
-    int rc = PASS ;
-
-    bool was_provisioned = node_ptr->bmc_provisioned ;
-
-    set_bm_prov ( node_ptr, false);
-    if ((hostUtil_is_valid_ip_addr ( node_ptr->bm_ip )) &&
-        (!node_ptr->bm_un.empty()))
-    {
-        if ( was_provisioned == true )
-        {
-            mtcAlarm_log ( node_ptr->hostname, MTC_LOG_ID__COMMAND_BM_REPROVISIONED );
-        }
-        else
-        {
-            mtcAlarm_log ( node_ptr->hostname, MTC_LOG_ID__COMMAND_BM_PROVISIONED );
-        }
-
-        set_bm_prov ( node_ptr, true );
-    }
-    else if ( was_provisioned == true )
-    {
-       send_hwmon_command(node_ptr->hostname,MTC_CMD_STOP_HOST);
-       mtcAlarm_log ( node_ptr->hostname, MTC_LOG_ID__COMMAND_BM_DEPROVISIONED );
-    }
-
-    /* Send hmond updated bm info */
-    ilog ("%s sending board management info update to hwmond\n", node_ptr->hostname.c_str() );
-    if ( ( rc = send_hwmon_command(node_ptr->hostname,MTC_CMD_MOD_HOST) ) == PASS )
-    {
-        if ( node_ptr->bmc_provisioned == true )
-        {
-            rc = send_hwmon_command(node_ptr->hostname,MTC_CMD_START_HOST);
-        }
-        else
-        {
-            rc = send_hwmon_command(node_ptr->hostname,MTC_CMD_STOP_HOST);
-        }
-        if ( rc )
-        {
-            wlog ("%s failed to send START or STOP command to hwmond\n", node_ptr->hostname.c_str());
-        }
-    }
-    else
-    {
-        wlog ("%s failed to send MODIFY command to hwmond\n", node_ptr->hostname.c_str());
-    }
-    return (rc);
-}
-
 bool nodeLinkClass::is_bm_ip_already_used ( string bm_ip )
 {
     if ( hostUtil_is_valid_ip_addr ( bm_ip ) == true )
@@ -4003,15 +4185,15 @@ bool nodeLinkClass::is_bm_ip_already_used ( string bm_ip )
 int nodeLinkClass::set_bm_type ( string hostname , string bm_type )
 {
     int rc = FAIL_HOSTNAME_LOOKUP ;
-    
+
     nodeLinkClass::node* node_ptr ;
     node_ptr = nodeLinkClass::getNode ( hostname );
     if ( node_ptr != NULL )
     {
         node_ptr->bm_type = bm_type ;
-        dlog ("%s '%s' updated to '%s'\n", 
-                      hostname.c_str(), 
-                      MTC_JSON_INV_BMTYPE, 
+        dlog ("%s '%s' updated to '%s'\n",
+                      hostname.c_str(),
+                      MTC_JSON_INV_BMTYPE,
                       node_ptr->bm_type.c_str());
         rc = PASS ;
     }
@@ -4062,6 +4244,67 @@ int nodeLinkClass::set_bm_ip   ( string hostname , string bm_ip )
     return (rc);
 }
 
+void nodeLinkClass::bmc_load_protocol ( struct nodeLinkClass::node * node_ptr )
+{
+    string bmc_protocol_in_database =
+    mtcInfo_get ( node_ptr, MTCE_INFO_KEY__BMC_PROTOCOL );
+
+    if ( node_ptr->bm_type == "ipmi" )
+    {
+        ilog ("%s BMC access method set to 'ipmi' (host)",
+                  node_ptr->hostname.c_str());
+        node_ptr->bmc_protocol = BMC_PROTOCOL__IPMITOOL ;
+        mtcInfo_set ( node_ptr, MTCE_INFO_KEY__BMC_PROTOCOL, BMC_PROTOCOL__IPMI_STR );
+    }
+    else if ( node_ptr->bm_type == "redfish" )
+    {
+        ilog ("%s BMC access method set to 'redfish' (host)",
+                  node_ptr->hostname.c_str());
+        node_ptr->bmc_protocol = BMC_PROTOCOL__REDFISHTOOL ;
+        mtcInfo_set ( node_ptr, MTCE_INFO_KEY__BMC_PROTOCOL, BMC_PROTOCOL__REDFISH_STR );
+    }
+    else if (( node_ptr->bm_type == "dynamic" ) ||
+             ( node_ptr->bm_type == "bmc" ))
+    {
+        if ( ! bmc_protocol_in_database.empty() )
+        {
+            if ( bmc_protocol_in_database == BMC_PROTOCOL__IPMI_STR )
+            {
+                ilog ("%s BMC access method set to 'ipmi' (from sysinv)",
+                           node_ptr->hostname.c_str());
+                node_ptr->bmc_protocol = BMC_PROTOCOL__IPMITOOL ;
+            }
+            else if ( bmc_protocol_in_database == BMC_PROTOCOL__REDFISH_STR )
+            {
+                ilog ("%s BMC access method set to 'redfish' (from sysinv)",
+                           node_ptr->hostname.c_str());
+                node_ptr->bmc_protocol = BMC_PROTOCOL__REDFISHTOOL ;
+            }
+            else if ( bmc_protocol_in_database == BMC_PROTOCOL__DYNAMIC_STR )
+            {
+                ilog ("%s BMC method will be learned (from sysinv)",
+                           node_ptr->hostname.c_str());
+                node_ptr->bmc_protocol = BMC_PROTOCOL__DYNAMIC ;
+            }
+            else
+            {
+                ilog ("%s BMC method will be learned (unexpected:%s)",
+                          node_ptr->hostname.c_str(),
+                          bmc_protocol_in_database.c_str());
+                node_ptr->bmc_protocol = BMC_PROTOCOL__DYNAMIC ;
+            }
+        }
+        else
+        {
+            ilog ("%s BMC method will be learned (%s)",
+                      node_ptr->hostname.c_str(),
+                     node_ptr->bm_type.c_str());
+            node_ptr->bmc_protocol = BMC_PROTOCOL__DYNAMIC ;
+        }
+    }
+    mtcInvApi_update_mtcInfo ( node_ptr );
+}
+
 void nodeLinkClass::bmc_access_data_init ( struct nodeLinkClass::node * node_ptr )
 {
     if ( node_ptr )
@@ -4076,34 +4319,18 @@ void nodeLinkClass::bmc_access_data_init ( struct nodeLinkClass::node * node_ptr
         node_ptr->power_status_query_active   = false ;
         node_ptr->power_status_query_done     = false ;
 
+        node_ptr->bm_ping_info.stage = PINGUTIL_MONITOR_STAGE__OPEN ;
+        mtcTimer_reset ( node_ptr->bm_ping_info.timer );
+        node_ptr->bm_ping_info.timer_handler = &mtcTimer_handler ;
+        node_ptr->bm_ping_info.ip = node_ptr->bm_ip ;
+
+        node_ptr->bmc_protocol_learning = false ;
+
         /* remove all the bmc related temporary files created
          * for this host and process */
-        bmcUtil_remove_files ( node_ptr->hostname, node_ptr->bmc_protocol );
+        bmcUtil_remove_files ( node_ptr->hostname, BMC_PROTOCOL__IPMITOOL );
+        bmcUtil_remove_files ( node_ptr->hostname, BMC_PROTOCOL__REDFISHTOOL );
 
-        if ( this->bmc_access_method == "ipmi" )
-        {
-            blog2 ("%s BMC access method set to 'ipmi'",
-                       node_ptr->hostname.c_str());
-            node_ptr->bmc_protocol = BMC_PROTOCOL__IPMITOOL ;
-            node_ptr->bmc_protocol_learning = false ;
-            node_ptr->bmc_protocol_learned = true ;
-        }
-        else if ( this->bmc_access_method == "redfish" )
-        {
-            blog2 ("%s BMC access method set to 'redfish'",
-                       node_ptr->hostname.c_str());
-            node_ptr->bmc_protocol = BMC_PROTOCOL__REDFISHTOOL ;
-            node_ptr->bmc_protocol_learning = false ;
-            node_ptr->bmc_protocol_learned = true ;
-        }
-        else
-        {
-            blog2 ("%s BMC access method will be learned",
-                       node_ptr->hostname.c_str());
-            node_ptr->bmc_protocol_learned  = false ;
-            node_ptr->bmc_protocol_learning = false ;
-            node_ptr->bmc_protocol = BMC_PROTOCOL__IPMITOOL ;
-        }
         bmcUtil_info_init ( node_ptr->bmc_info );
     }
 }
@@ -4126,22 +4353,11 @@ int nodeLinkClass::set_bm_prov ( struct nodeLinkClass::node * node_ptr, bool sta
     int rc = FAIL_HOSTNAME_LOOKUP ;
     if ( node_ptr != NULL )
     {
-        ilog ("%s bmc %sprovision request (provisioned:%s)\n",
-                  node_ptr->hostname.c_str(),
-                  state ? "" : "de",
-                  node_ptr->bmc_provisioned ? "Yes" : "No" );
-
-        /* Clear the alarm if we are starting fresh from an unprovisioned state */
-        if (( node_ptr->bmc_provisioned == false ) && ( state == true ))
+        /* All Provisioning Cases */
+        if ( state == true )
         {
-            ilog ("%s starting BM ping monitor to address '%s'\n",
-                      node_ptr->hostname.c_str(),
-                      node_ptr->bm_ip.c_str());
-
-            node_ptr->bm_ping_info.ip = node_ptr->bm_ip ;
-            node_ptr->bm_ping_info.stage = PINGUTIL_MONITOR_STAGE__OPEN ;
             bmc_access_data_init ( node_ptr );
-            node_ptr->bm_ping_info.timer_handler = &mtcTimer_handler ;
+            bmc_load_protocol ( node_ptr );
 
             barbicanSecret_type * secret = secretUtil_find_secret( node_ptr->uuid );
             if ( secret )
@@ -4149,46 +4365,44 @@ int nodeLinkClass::set_bm_prov ( struct nodeLinkClass::node * node_ptr, bool sta
                 secret->reference.clear() ;
                 secret->payload.clear() ;
                 secret->stage = MTC_SECRET__START ;
+                mtcTimer_reset ( node_ptr->bm_timer );
                 mtcTimer_start ( node_ptr->bm_timer, mtcTimer_handler, SECRET_START_DELAY );
             }
-
-            send_hwmon_command(node_ptr->hostname, MTC_CMD_ADD_HOST);
-            send_hwmon_command(node_ptr->hostname, MTC_CMD_START_HOST);
 
             /* start the connection timer - if it expires before we
              * are 'accessible' then the BM Alarm is raised.
              * Timer is further managed in mtcNodeHdlrs.cpp */
-            plog ("%s bmc access timer started (%d secs)\n", node_ptr->hostname.c_str(), MTC_MINS_2);
+            blog ("%s bmc access timer started (%d secs)\n", node_ptr->hostname.c_str(), MTC_MINS_2);
             mtcTimer_reset ( node_ptr->bmc_access_timer );
             mtcTimer_start ( node_ptr->bmc_access_timer, mtcTimer_handler, MTC_MINS_2 );
+
+            ilog ("%s bmc %sprovisioned",
+                      node_ptr->hostname.c_str(),
+                      node_ptr->bmc_provisioned ? "re":"");
         }
 
-        /* handle the case going from provisioned to not provisioned */
-        else if (( node_ptr->bmc_provisioned == true ) && ( state == false ))
+        /* Deprovision Case */
+        else
         {
-            /* remove the old BMC info file if present */
-            string bmc_info_path_n_filename = BMC_OUTPUT_DIR + node_ptr->hostname ;
-            daemon_remove_file ( bmc_info_path_n_filename.data() );
-
-            ilog ("%s deprovisioning bmc ; accessible:%s\n",
-                      node_ptr->hostname.c_str(),
-                      node_ptr->bmc_accessible ? "Yes" : "No" );
-
+            if ( node_ptr->bmc_provisioned == true )
+            {
+                ilog ("%s bmc deprovisioning", node_ptr->hostname.c_str());
+            }
             pingUtil_fini  ( node_ptr->bm_ping_info );
             bmc_access_data_init ( node_ptr );
+            node_ptr->bmc_protocol = BMC_PROTOCOL__DYNAMIC ;
             mtcTimer_reset ( node_ptr->bmc_audit_timer );
             if ( !thread_idle( node_ptr->bmc_thread_ctrl ) )
             {
                  thread_kill ( node_ptr->bmc_thread_ctrl , node_ptr->bmc_thread_info);
             }
 
-            /* send a delete to hwmon if the provisioning data is NONE */
-            if ( hostUtil_is_valid_bm_type ( node_ptr->bm_type ) == false )
-            {
-                send_hwmon_command(node_ptr->hostname, MTC_CMD_DEL_HOST);
-            }
-        }
+            mtcInfo_clr ( node_ptr, MTCE_INFO_KEY__BMC_PROTOCOL);
+            mtcInvApi_update_mtcInfo ( node_ptr );
 
+            /* send a delete to hwmon if was provisioned */
+            send_hwmon_command(node_ptr->hostname, MTC_CMD_MOD_HOST);
+        }
         node_ptr->bmc_provisioned = state ;
     }
     return (rc);
@@ -4238,11 +4452,7 @@ string nodeLinkClass::get_hwmon_info ( string hostname )
     {
         string hwmon_info = "" ;
 
-        hwmon_info.append( "{ \"personality\":\"" ) ;
-        hwmon_info.append( node_ptr->type );
-        hwmon_info.append( "\"");
-
-        hwmon_info.append( ",\"hostname\":\"" ) ;
+        hwmon_info.append( "{ \"hostname\":\"" ) ;
         hwmon_info.append( node_ptr->hostname );
         hwmon_info.append( "\"");
 
@@ -4250,12 +4460,24 @@ string nodeLinkClass::get_hwmon_info ( string hostname )
         hwmon_info.append( node_ptr->bm_ip );
         hwmon_info.append( "\"");
 
-        hwmon_info.append( ",\"bm_type\":\"");
-        hwmon_info.append( node_ptr->bm_type );
-        hwmon_info.append( "\"");
-
         hwmon_info.append( ",\"bm_username\":\"");
         hwmon_info.append( node_ptr->bm_un );
+        hwmon_info.append( "\"");
+
+        hwmon_info.append( ",\"bm_http\":\"");
+        hwmon_info.append( node_ptr->bm_http_mode );
+        hwmon_info.append( "\"");
+
+        hwmon_info.append( ",\"");
+        hwmon_info.append( MTCE_INFO_KEY__BMC_PROTOCOL );
+        hwmon_info.append( "\":\"");
+        if ( node_ptr->bmc_protocol == BMC_PROTOCOL__REDFISHTOOL )
+            hwmon_info.append( BMC_PROTOCOL__REDFISH_STR );
+        else if ( node_ptr->bmc_protocol == BMC_PROTOCOL__IPMITOOL )
+            hwmon_info.append( BMC_PROTOCOL__IPMI_STR );
+        else
+            hwmon_info.append(BMC_PROTOCOL__DYNAMIC_STR);
+
         hwmon_info.append( "\"");
 
         hwmon_info.append( ",\"uuid\":\"" ) ;
@@ -4268,13 +4490,11 @@ string nodeLinkClass::get_hwmon_info ( string hostname )
     return ("");
 }
 
-
-
 int  nodeLinkClass::manage_shadow_change ( string hostname )
 {
     int rc = FAIL ;
     if ( ! hostname.empty() )
-    {  
+    {
         nodeLinkClass::node* node_ptr ;
         node_ptr = nodeLinkClass::getNode ( hostname );
         if ( node_ptr != NULL )
@@ -4927,7 +5147,9 @@ int nodeLinkClass::declare_service_ready  ( string & hostname,
         plog ("%s %s ready event\n",
                   hostname.c_str(),
                   MTC_SERVICE_HWMOND_NAME);
-        if ( node_ptr->bmc_provisioned == true )
+        if (( node_ptr->bmc_accessible == true ) &&
+            (( node_ptr->bmc_protocol == BMC_PROTOCOL__IPMITOOL ) ||
+             ( node_ptr->bmc_protocol == BMC_PROTOCOL__REDFISHTOOL )))
         {
             send_hwmon_command ( node_ptr->hostname, MTC_CMD_ADD_HOST );
             send_hwmon_command ( node_ptr->hostname, MTC_CMD_START_HOST );
@@ -8648,7 +8870,7 @@ void nodeLinkClass::mem_log_general_mtce_hosts ( void )
 void nodeLinkClass::mem_log_bm ( struct nodeLinkClass::node * node_ptr )
 {
     char str[MAX_MEM_LOG_DATA] ;
-    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tBMC %s %s:%s prov:%s acc:%s ping:%s learn:%s:%s Query:%s:%s Timer:%s:%s\n",
+    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tBMC %s %s:%s prov:%s acc:%s ping:%s learning:%s Query:%s:%s Timer:%s:%s\n",
                 node_ptr->hostname.c_str(),
                 bmcUtil_getProtocol_str(node_ptr->bmc_protocol).c_str(),
                 node_ptr->bm_un.c_str(),
@@ -8656,7 +8878,6 @@ void nodeLinkClass::mem_log_bm ( struct nodeLinkClass::node * node_ptr )
                 node_ptr->bmc_provisioned ? "Y" : "N",
                 node_ptr->bmc_accessible ? "Y" : "N",
                 node_ptr->bm_ping_info.ok ? "Y" : "N",
-                node_ptr->bmc_protocol_learned ? "Y" : "N",
                 node_ptr->bmc_protocol_learning ? "Y" : "N",
                 node_ptr->bmc_info_query_active ? "Y" : "N",
                 node_ptr->bmc_info_query_done ? "Y" : "N",
@@ -8727,11 +8948,12 @@ void nodeLinkClass::mem_log_state2 ( struct nodeLinkClass::node * node_ptr )
     char str[MAX_MEM_LOG_DATA] ;
     string aa = adminAction_enum_to_str(node_ptr->adminAction) ;
 
-    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tmtcAction:%s invAction:%s Task:%s\n",
+    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tAction:%s:%s Task:%s Info:%s\n",
                 node_ptr->hostname.c_str(),
                 aa.c_str(),
                 node_ptr->action.c_str(),
-                node_ptr->task.c_str());
+                node_ptr->task.c_str(),
+                node_ptr->mtce_info.c_str());
     mem_log (str);
 }
 

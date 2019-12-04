@@ -729,7 +729,7 @@ int thread_handler ( thread_ctrl_type & ctrl, thread_info_type & info )
 
                 if ( info.runcount != (ctrl.runcount+1))
                 {
-                    wlog ("%s %s thread runcount jumped from %d to %d (rc:%d)\n",
+                    wlog ("%s %s thread runcount jumped from %d to %d (rc:%u)\n",
                               ctrl.hostname.c_str(),
                               ctrl.name.c_str(),
                               ctrl.runcount,
@@ -740,7 +740,7 @@ int thread_handler ( thread_ctrl_type & ctrl, thread_info_type & info )
                 {
                     if ( info.status )
                     {
-                        blog ("%s %s thread completed (rc:%d)\n",
+                        blog ("%s %s thread completed (rc:%u)\n",
                                   ctrl.hostname.c_str(),
                                   ctrl.name.c_str(),
                                   info.status);
@@ -757,7 +757,7 @@ int thread_handler ( thread_ctrl_type & ctrl, thread_info_type & info )
             info.signal = SIGKILL ;
             if ( info.id != 0 )
             {
-                wlog ("%s %s thread kill req  (rc:%d)\n",
+                wlog ("%s %s thread kill req  (rc:%u)\n",
                           ctrl.hostname.c_str(),
                           ctrl.name.c_str(),
                           info.status);

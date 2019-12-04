@@ -317,7 +317,7 @@ void mtcTimer_reset ( struct mtc_timer & mtcTimer )
     if ( mtcTimer.active )
         mtcTimer.active = false ;
 
-    mtcTimer.ring = false ;
+    mtcTimer.ring = true ;
 }
 
 void mtcTimer_reset ( struct mtc_timer * mtcTimer_ptr )
@@ -330,7 +330,7 @@ void mtcTimer_reset ( struct mtc_timer * mtcTimer_ptr )
         if ( mtcTimer_ptr->active )
             mtcTimer_ptr->active = false ;
 
-        mtcTimer_ptr->ring = false ;
+        mtcTimer_ptr->ring = true ;
     }
 }
 
@@ -479,7 +479,7 @@ void _timer_init ( struct mtc_timer * mtcTimer_ptr , string hostname, string ser
     mtcTimer_ptr->tid  = NULL ;
     mtcTimer_ptr->secs = 0 ;
     mtcTimer_ptr->msec = 0 ;
-    mtcTimer_ptr->ring = false ;
+    mtcTimer_ptr->ring = true ;
     mtcTimer_ptr->active= false ;
     mtcTimer_ptr->error = false ;
     mtcTimer_ptr->mutex = false ;

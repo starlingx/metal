@@ -31,6 +31,7 @@ hwmonHostClass::hwmonHostClass()
     hosts = 0 ;
     host_deleted = false ;
     config_reload = false ;
+    hostlist.clear() ;
 
     return ;
 }
@@ -91,10 +92,6 @@ void hwmonHostClass::bmc_data_init ( struct hwmonHostClass::hwmon_host * host_pt
     host_ptr->addStage   = HWMON_ADD__START;
 
     host_ptr->sensor_query_count = 0 ;
-
-    /* remove all the bmc related temporary files created
-     * for this host and process */
-    bmcUtil_remove_files ( host_ptr->hostname, host_ptr->protocol );
 }
 
 /*
@@ -514,9 +511,10 @@ int hwmonHostClass::set_bm_prov ( struct hwmonHostClass::hwmon_host * host_ptr, 
 
         if ( connect || reconnect )
         {
-            ilog ("%s board management controller is being %sprovisioned\n",
+            ilog ("%s bmc %sprovisioning ; using %s",
                       host_ptr->hostname.c_str(),
-                      host_ptr->bm_provisioned ? "re":"" );
+                      host_ptr->bm_provisioned ? "re":"",
+                      bmcUtil_getProtocol_str(host_ptr->protocol).c_str());
 
             /* ---------------------------------------
              * Init bmc data based on monitoring mode
@@ -544,16 +542,27 @@ int hwmonHostClass::set_bm_prov ( struct hwmonHostClass::hwmon_host * host_ptr, 
             host_ptr->thread_extra_info.bm_pw.clear() ;
             host_ptr->thread_extra_info.bm_ip = host_ptr->bm_ip ;
             host_ptr->thread_extra_info.bm_un = host_ptr->bm_un ;
+
+            if ( reconnect )
+            {
+                host_ptr->bmc_thread_ctrl.retries  = 0    ;
+                host_ptr->bmc_thread_ctrl.runcount = 0    ;
+                host_ptr->bmc_thread_ctrl.status   = PASS ;
+            }
         }
 
         /* handle the case going from provisioned to not provisioned */
         if (( host_ptr->bm_provisioned == true ) && ( state == false ))
         {
-            ilog ("%s board management controller is being deprovisioned\n", host_ptr->hostname.c_str());
             clear_bm_assertions ( host_ptr );
             pingUtil_fini  ( host_ptr->ping_info );
             bmc_data_init ( host_ptr );
+            ilog ("%s bmc is deprovisioned\n", host_ptr->hostname.c_str());
         }
+        /* remove all the bmc related temporary files created
+         * for this host and process */
+        bmcUtil_remove_files ( host_ptr->hostname, BMC_PROTOCOL__REDFISHTOOL );
+        bmcUtil_remove_files ( host_ptr->hostname, BMC_PROTOCOL__IPMITOOL );
         host_ptr->bm_provisioned = state ;
     }
     return (rc);
@@ -578,22 +587,53 @@ int hwmonHostClass::mod_host ( node_inv_type & inv )
     {
         rc = PASS ;
         bool modify_bm = false ;
+        bool need_relearn = false ;
+
+        /* save the http mode */
+        host_ptr->bm_http_mode = inv.bm_http ;
+
+        /* Manage getting the bmc access protocol method */
+        bmc_protocol_enum protocol ;
+        if ( inv.bm_proto == BMC_PROTOCOL__REDFISH_STR )
+            protocol = BMC_PROTOCOL__REDFISHTOOL ;
+        else if ( inv.bm_proto == BMC_PROTOCOL__IPMI_STR )
+            protocol = BMC_PROTOCOL__IPMITOOL ;
+        else
+            protocol = BMC_PROTOCOL__DYNAMIC ;
+
+        if ( host_ptr->protocol != protocol )
+        {
+            ilog ("%s modify bmc protocol from %s to %s",
+                      inv.name.c_str(),
+                      bmcUtil_getProtocol_str(host_ptr->protocol).c_str(),
+                      bmcUtil_getProtocol_str(protocol).c_str());
+
+            if ( hostUtil_is_valid_ip_addr ( inv.bm_ip ) )
+                need_relearn = true ;
+
+            host_ptr->protocol = protocol ;
+
+            modify_bm = true ;
+        }
 
         if ( host_ptr->bm_ip.compare( inv.bm_ip ) )
         {
-            ilog ("%s modify board management 'ip' from '%s' to '%s'\n",
+            ilog ("%s modify bmc 'ip' from '%s' to '%s'\n",
                       inv.name.c_str(),
                       host_ptr->bm_ip.c_str(),
                       inv.bm_ip.c_str());
 
-            host_ptr->bm_ip = inv.bm_ip   ;
+            if ( hostUtil_is_valid_ip_addr ( inv.bm_ip ) )
+                need_relearn = true ;
+
+            host_ptr->bm_ip = inv.bm_ip ;
 
             modify_bm = true ;
         }
 
         if ( host_ptr->bm_un.compare( inv.bm_un ) )
         {
-            ilog ("%s modify board management 'username' from '%s' to '%s'\n",
+            ilog ("%s modify bmc 'username' from '%s' to '%s'\n",
                       inv.name.c_str(),
                       host_ptr->bm_un.c_str(),
                       inv.bm_un.c_str());
@@ -603,50 +643,43 @@ int hwmonHostClass::mod_host ( node_inv_type & inv )
             modify_bm = true ;
         }
 
-        if ( host_ptr->bm_type.compare( inv.bm_type ) )
-        {
-            ilog ("%s modify board management 'type' from '%s' to '%s'\n",
-                      inv.name.c_str(),
-                      host_ptr->bm_type.c_str(),
-                      inv.bm_type.c_str());
-
-            host_ptr->bm_type = inv.bm_type ;
-
-            modify_bm = true ;
-        }
+        /* force password relearn for all provisioning changes */
+        host_ptr->bm_pw.clear();
 
         if ( modify_bm == true )
         {
-            ilog ("%s modify summary %s %s@%s ... provisioned = %s\n",
+            ilog ("%s modify bmc summary %s %s@%s",
                   inv.name.c_str(),
-                  host_ptr->bm_type.c_str(),
+                  bmcUtil_getProtocol_str(host_ptr->protocol).c_str(),
                   host_ptr->bm_un.c_str(),
-                  host_ptr->bm_ip.c_str(),
-                  host_ptr->bm_provisioned ? "Yes" : "No" );
-            if ( host_ptr->bm_provisioned == true )
+                  host_ptr->bm_ip.c_str());
+
+            if (( host_ptr->protocol != BMC_PROTOCOL__DYNAMIC ) &&
+                ( hostUtil_is_valid_ip_addr (host_ptr->bm_ip) == true ) &&
+                ( hostUtil_is_valid_username (host_ptr->bm_un) == true ))
             {
-                /* if we have a credentials only change then disable the sensor
-                 * model only to get re-enabled if sensor monitoring is
-                 * successful with the new credentials */
-                if (( hostUtil_is_valid_bm_type (host_ptr->bm_type) == true ) &&
-                    ( host_ptr->bm_un.compare(NONE)))
-                {
-                    bmc_set_group_state ( host_ptr, "disabled" );
-                    bmc_disable_sensors ( host_ptr );
-                }
+                set_bm_prov ( host_ptr, true );
+            }
+            else
+            {
+                if ( host_ptr->groups )
+                    bmc_delete_sensor_model ( host_ptr );
+
+                set_bm_prov ( host_ptr, false );
+                need_relearn = false ;
             }
 
-            if (( hostUtil_is_valid_bm_type (host_ptr->bm_type) == true ) &&
-                ( hostUtil_is_valid_ip_addr (host_ptr->bm_ip) == true ) &&
-                  !host_ptr->bm_un.empty())
+            if (( need_relearn == true ) && ( host_ptr->groups ))
             {
-                rc = set_bm_prov ( host_ptr, true );
+                ilog ("%s sensor model will be deleted and relearned", inv.name.c_str());
+                bmc_learn_sensor_model (hostBase.get_uuid( inv.name ));
             }
         }
         else
         {
             /* Only reprovision if the provisioning data has changed */
             dlog ("%s bmc provisioning unchanged\n", host_ptr->hostname.c_str());
+            return (rc);
         }
     }
     else
@@ -712,7 +745,14 @@ int hwmonHostClass::add_host ( node_inv_type & inv )
             /* Add board management stuff */
             host_ptr->bm_ip       = inv.bm_ip   ;
             host_ptr->bm_un       = inv.bm_un   ;
-            host_ptr->bm_type     = inv.bm_type ;
+            host_ptr->bm_http_mode= inv.bm_http ;
+
+            if ( inv.bm_proto == BMC_PROTOCOL__REDFISH_STR )
+                host_ptr->protocol = BMC_PROTOCOL__REDFISHTOOL ;
+            else if ( inv.bm_proto == BMC_PROTOCOL__IPMI_STR )
+                host_ptr->protocol = BMC_PROTOCOL__IPMITOOL ;
+            else
+                host_ptr->protocol = BMC_PROTOCOL__DYNAMIC ;
 
             /* default the socket number to closed */
             host_ptr->ping_info.sock = 0 ;
@@ -739,6 +779,7 @@ int hwmonHostClass::add_host ( node_inv_type & inv )
             host_ptr->monitor_ctrl.stage            = HWMON_SENSOR_MONITOR__START  ;
             host_ptr->monitor_ctrl.last_sample_time = 0 ;
             host_ptr->monitor_ctrl.this_sample_time = 0 ;
+            host_ptr->bmc_thread_ctrl.retries       = 0 ;
             host_ptr->sensor_query_count            = 0 ;
 
             /* Sensor Monitoring Thread 'Extra Request Information' */
@@ -756,11 +797,9 @@ int hwmonHostClass::add_host ( node_inv_type & inv )
                           host_ptr->hostname,
                           THREAD_NAME__BMC);
 
-            /* TODO: create a is_bm_info_valid */
-            if ( ( hostUtil_is_valid_ip_addr (host_ptr->bm_ip) == true ) &&
-                 ( hostUtil_is_valid_bm_type (host_ptr->bm_type) == true ) &&
-                 ( !host_ptr->bm_un.empty() ) &&
-                 (  host_ptr->bm_un.compare(NONE)) )
+            if (( host_ptr->protocol != BMC_PROTOCOL__DYNAMIC ) &&
+                ( hostUtil_is_valid_ip_addr (host_ptr->bm_ip) == true ) &&
+                ( hostUtil_is_valid_username (host_ptr->bm_un) == true ))
             {
                 set_bm_prov ( host_ptr, true );
             }
@@ -768,20 +807,15 @@ int hwmonHostClass::add_host ( node_inv_type & inv )
             {
                 set_bm_prov ( host_ptr, false );
             }
-            ilog ("%s BMC is %sprovisioned\n", host_ptr->hostname.c_str(), host_ptr->bm_provisioned ? "" : "not " );
 
             host_ptr->bmc_fw_version.clear();
 
             host_ptr->group_index  = 0 ;
 
-            /* Set default BMC protocol */
-            host_ptr->protocol = bmcUtil_read_hwmond_protocol(host_ptr->hostname) ;
-
             /* Init sensor model relearn controls, state and status */
             host_ptr->relearn = false ;
             host_ptr->relearn_request = false ;
             host_ptr->relearn_retry_counter = 0 ;
-            host_ptr->relearn_done_date.clear();
             init_model_attributes ( host_ptr->model_attributes_preserved );
 
             /* Add to the end of inventory */
@@ -983,19 +1017,6 @@ string hwmonHostClass::get_bm_ip ( string hostname )
     return ("");
 }
 
-/** Get this hosts board management TYPE ilo3/ilo4/quanta/etc */
-string hwmonHostClass::get_bm_type ( string hostname )
-{
-    hwmonHostClass::hwmon_host * hwmon_host_ptr ;
-    hwmon_host_ptr = hwmonHostClass::getHost ( hostname );
-    if ( hwmon_host_ptr != NULL )
-    {
-         return (hwmon_host_ptr->bm_type);
-    }
-    elog ("%s bm type lookup failed\n", hostname.c_str() );
-    return ("");
-}
-
 /** Get this hosts board management user name */
 string hwmonHostClass::get_bm_un ( string hostname )
 {
@@ -1015,24 +1036,6 @@ string hwmonHostClass::get_bm_un ( string hostname )
     elog ("%s bm username lookup failed\n", hostname.c_str() );
     return ("");
 }
-
-
-
-string hwmonHostClass::get_relearn_done_date ( string hostname )
-{
-    hwmonHostClass::hwmon_host * hwmon_host_ptr ;
-    hwmon_host_ptr = hwmonHostClass::getHost ( hostname );
-    if ( hwmon_host_ptr != NULL )
-    {
-        if ( !hwmon_host_ptr->relearn_done_date.empty())
-        {
-            return (hwmon_host_ptr->relearn_done_date);
-        }
-    }
-    elog ("%s relearn done date empty or hostname lookup failed\n", hostname.c_str());
-    return (pt());
-}
-
 
 struct hwmonHostClass::hwmon_host * hwmonHostClass::getHost_timer ( timer_t tid )
 {
@@ -1689,15 +1692,11 @@ int hwmonHostClass::bmc_learn_sensor_model ( string uuid )
                wlog ("%s sensor model relearn already in progress\n",
                          ptr->hostname.c_str());
 
-               wlog ("%s ... projected completion time: %s\n",
-                         ptr->hostname.c_str(),
-                         ptr->relearn_done_date.c_str());
-
                rc = RETRY ;
            }
            else
            {
-               ilog ("%s sensor model relearn request accepted\n",
+               blog ("%s sensor model relearn request accepted\n",
                          ptr->hostname.c_str());
 
                ptr->bmc_fw_version.clear();
@@ -2221,11 +2220,11 @@ void hwmonHostClass::mem_log_options ( struct hwmonHostClass::hwmon_host * hwmon
 void hwmonHostClass::mem_log_bm ( struct hwmonHostClass::hwmon_host * hwmon_host_ptr )
 {
     char str[MAX_MEM_LOG_DATA] ;
-    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tbm_ip:%s bm_un:%s bm_type:%s\n",
+    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tbm_ip:%s bm_un:%s (%s)\n",
                 hwmon_host_ptr->hostname.c_str(),
                 hwmon_host_ptr->bm_ip.c_str(),
                 hwmon_host_ptr->bm_un.c_str(),
-                hwmon_host_ptr->bm_type.c_str());
+                bmcUtil_getProtocol_str(hwmon_host_ptr->protocol).c_str());
     mem_log (str);
 }
 

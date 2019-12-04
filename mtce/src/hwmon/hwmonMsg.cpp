@@ -249,18 +249,15 @@ int  hwmon_service_inbox  ( void )
         print_mtc_message ( inv.name, MTC_CMD_RX, msg, get_iface_name_str(MGMNT_IFACE) , false);
 
         rc = PASS;
-        if ( msg.cmd == MTC_CMD_ADD_HOST )
+        if (( msg.cmd == MTC_CMD_ADD_HOST ) || ( msg.cmd == MTC_CMD_MOD_HOST ))
         {
+            mlog ("%s %s host message\n", inv.name.c_str(), get_event_str(msg.cmd).c_str());
+
             /* If the add returns a RETRY that means this host was already
              * provisioned so turn around and run the modify */
             if ( get_hwmonHostClass_ptr()->add_host ( inv ) == RETRY )
             {
-                mlog ("%s modify host (from add ) message\n", inv.name.c_str());
                 get_hwmonHostClass_ptr()->mod_host ( inv );
-            }
-            else
-            {
-                mlog ("%s add host message\n", inv.name.c_str());
             }
         }
         else if ( msg.cmd == MTC_CMD_DEL_HOST )
@@ -278,21 +275,6 @@ int  hwmon_service_inbox  ( void )
         {
             mlog ("%s stop monitoring message\n", inv.name.c_str());
             get_hwmonHostClass_ptr()->mon_host ( inv.name , false );
-        }
-        else if ( msg.cmd == MTC_CMD_MOD_HOST )
-        {
-            /* If the add returns a RETRY that means this host was already
-             * provisioned so turn around and run the modify otherwise
-             * default the modify to be an add */
-            if ( get_hwmonHostClass_ptr()->add_host ( inv ) == RETRY )
-            {
-                mlog ("%s modify host message\n", inv.name.c_str());
-                get_hwmonHostClass_ptr()->mod_host ( inv );
-            }
-            else
-            {
-                mlog ("%s add host (from modify) message\n", inv.name.c_str());
-            }
         }
         else if ( msg.cmd == MTC_CMD_QRY_HOST )
         {

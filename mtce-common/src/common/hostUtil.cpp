@@ -122,6 +122,14 @@ bool hostUtil_is_valid_ip_addr ( string ip )
     return (false);
 }
 
+bool hostUtil_is_valid_username ( string un )
+{
+    if ( !un.empty() )
+        if ( un.compare(NONE) )
+            return (true);
+    return (false);
+}
+
 bool hostUtil_is_valid_mac_addr ( string mac )
 {
     if ( !mac.empty() )
@@ -136,10 +144,9 @@ bool hostUtil_is_valid_bm_type ( string bm_type )
     if ( !bm_type.empty() )
     {
         if (( bm_type == "bmc" ) ||
-            ( bm_type == "ilo" ) ||
-            ( bm_type == "ilo3" ) ||
-            ( bm_type == "ilo4" ) ||
-            ( bm_type == "quanta" ))
+            ( bm_type == "dynamic" ) ||  /* auto-learn */
+            ( bm_type == "redfish" ) ||
+            ( bm_type == "ipmi" ))
         {
             return (true);
         }

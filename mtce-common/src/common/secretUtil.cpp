@@ -76,7 +76,7 @@ barbicanSecret_type * secretUtil_manage_secret ( libEvent & event,
     if ( it->second.stage == MTC_SECRET__START ||
          it->second.stage == MTC_SECRET__GET_REF_FAIL )
     {
-        if ( secret_timer.ring == true )
+        if ( mtcTimer_expired ( secret_timer ) )
         {
             rc = secretUtil_get_secret ( event, hostname, host_uuid );
             if (rc)
@@ -99,7 +99,7 @@ barbicanSecret_type * secretUtil_manage_secret ( libEvent & event,
     else if ( it->second.stage == MTC_SECRET__GET_REF_RECV ||
               it->second.stage == MTC_SECRET__GET_PWD_FAIL )
     {
-        if ( secret_timer.ring == true )
+        if ( mtcTimer_expired ( secret_timer ) )
         {
             rc = secretUtil_read_secret ( event, hostname, host_uuid );
             if (rc)
@@ -211,7 +211,8 @@ int secretUtil_get_secret ( libEvent & event,
     event.timeout     = HTTP_SECRET_TIMEOUT ;
     event.handler     = &secretUtil_handler ;
 
-    dlog ("Path:%s\n", event.token.url.c_str() );
+    hlog ("%s secretUtil_get_secret %s\n",
+              hostname.c_str(), event.token.url.c_str() );
 
     return ( httpUtil_api_request ( event ) ) ;
 }
@@ -266,7 +267,8 @@ int secretUtil_read_secret ( libEvent & event,
     event.timeout     = HTTP_SECRET_TIMEOUT ;
     event.handler     = &secretUtil_handler ;
 
-    dlog ("Path:%s\n", event.token.url.c_str() );
+    hlog ("%s secretUtil_read_secret %s",
+              hostname.c_str(), event.token.url.c_str() );
 
     return ( httpUtil_api_request ( event ) ) ;
 }

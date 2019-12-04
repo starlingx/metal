@@ -154,6 +154,7 @@ void daemon_exit ( void );
 /* supported BMC communication protocols ; access method */
 typedef enum
 {
+   BMC_PROTOCOL__DYNAMIC,
    BMC_PROTOCOL__IPMITOOL,
    BMC_PROTOCOL__REDFISHTOOL,
 } bmc_protocol_enum ;
@@ -202,15 +203,21 @@ typedef enum
 #define MTC_JSON_INV_TYPE      "personality"
 #define MTC_JSON_INV_FUNC      "subfunctions" // personality"
 #define MTC_JSON_INV_TASK      "task"
+#define MTC_JSON_INV_MTCE_INFO "mtce_info"
 #define MTC_JSON_INV_ACTION    "action"
 #define MTC_JSON_INV_UPTIME    "uptime"
 #define MTC_JSON_INV_BMIP      "bm_ip"
 #define MTC_JSON_INV_BMTYPE    "bm_type"
 #define MTC_JSON_INV_BMUN      "bm_username"
+#define MTC_JSON_INV_BMHTTP    "bm_http"     // http method 'http'/'https'
 #define MTC_JSON_SERVICE       "service"
 #define MTC_JSON_SEVERITY      "severity"
 #define MTC_JSON_SENSOR        "sensor"
 #define MTC_JSON_PROCESS       "process"
+
+/* Mtce Info Keys */
+#define MTCE_INFO_KEY__BMC_PROTOCOL "bmc_protocol"
+
 
 /* These Task strings should not be changed without
  * the corresponding change in Horizon.
@@ -462,12 +469,15 @@ typedef struct
     std::string bm_ip    ;
     std::string bm_un    ;
     std::string bm_type  ;
+    std::string bm_proto ; // access protocol 'ipmi','redfish' or 'dynamic'
+    std::string bm_http  ; // Security Mode   'http' or 'https'
     std::string id       ;
 
     /* Added to support sub-function state and status */
     std::string func       ;
     std::string oper_subf  ;
     std::string avail_subf ;
+    std::string mtce_info  ;
 
 } node_inv_type ;
 void node_inv_init (node_inv_type & inv);

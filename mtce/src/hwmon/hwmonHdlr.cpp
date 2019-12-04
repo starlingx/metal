@@ -446,38 +446,12 @@ int hwmonHostClass::add_host_handler ( struct hwmonHostClass::hwmon_host * host_
                         mtcTimer_start ( host_ptr->addTimer, hwmonTimer_handler, delay );
                         break ;
                     }
-                    /* get protocol used for last relearn from the file */
-                    host_ptr->protocol = bmcUtil_read_hwmond_protocol ( host_ptr->hostname ) ;
                 }
                 else
                 {
-                    string power_state ;
-                    bmc_protocol_enum protocol ;
-                    if ( bmcUtil_read_bmc_info( host_ptr->hostname, power_state, protocol ))
-                    {
-                        ilog ("%s no sensor model in database ; must be learned\n",
-                                  host_ptr->hostname.c_str());
-
-                        if ( protocol != host_ptr->protocol)
-                        {
-                            ilog ("%s bmc protocol changed to %s",
-                                      host_ptr->hostname.c_str(),
-                                      bmcUtil_getProtocol_str(protocol).c_str());
-                        }
-                        host_ptr->protocol = protocol ;
-                        bmcUtil_write_hwmond_protocol ( host_ptr->hostname, protocol ) ;
-                        host_ptr->general_log_throttle = 0 ;
-                    }
-                    else
-                    {
-                        /* mtc has not yet determined bmc protocol */
-                        mtcTimer_start ( host_ptr->addTimer, hwmonTimer_handler, MTC_SECS_5 );
-                        /* log every minute ; 5*12 */
-                        ilog_throttled (host_ptr->general_log_throttle, 12,
-                                        "%s waiting for bmc protocol from mtce ; %d seconds between retries\n",
-                                        host_ptr->hostname.c_str(), MTC_SECS_5);
-                        break;
-                    }
+                    ilog ("%s no sensor model ; must be learned ; using %s\n",
+                              host_ptr->hostname.c_str(),
+                              bmcUtil_getProtocol_str(host_ptr->protocol).c_str());
                 }
                 addStageChange ( host_ptr , HWMON_ADD__DONE );
             }
@@ -713,41 +687,21 @@ int hwmonHostClass::bmc_sensor_monitor ( struct hwmonHostClass::hwmon_host * hos
                 return (RETRY);
             }
 
-            relearn_time = MTC_MINS_5 ;
+            relearn_time = MTC_MINS_2;
 
             /* enter relearn mode */
             host_ptr->relearn = true ;
-
-            /* Update bmc protocol and hwmond_hostname_protocol file */
-            string power_state;
-            bmc_protocol_enum protocol;
-            bmcUtil_read_bmc_info ( host_ptr->hostname, power_state, protocol ) ;
-            if ( protocol != host_ptr->protocol)
-            {
-                 ilog ("%s bmc protocol changed to %s",
-                           host_ptr->hostname.c_str(),
-                           bmcUtil_getProtocol_str(protocol).c_str());
-            }
-
-            host_ptr->protocol = protocol ;
-            bmcUtil_write_hwmond_protocol ( host_ptr->hostname, protocol ) ;
 
             /* exit relearn request mode.
              * allow the relearn operation to proceed */
             host_ptr->relearn_request = false ;
 
-            host_ptr->relearn_done_date = future_time ( relearn_time );
-            ilog ("%s next relearn permitted after %s (%s)\n",
-                      host_ptr->hostname.c_str(),
-                      host_ptr->relearn_done_date.c_str(),
-                      bmcUtil_getProtocol_str(host_ptr->protocol).c_str());
+            this->monitor_soon ( host_ptr );
 
-           this->monitor_soon ( host_ptr );
-
-           /* start the relearn timer */
-           mtcTimer_start ( host_ptr->relearnTimer,
-                            hwmonTimer_handler,
-                            relearn_time );
+            /* start the relearn timer */
+            mtcTimer_start ( host_ptr->relearnTimer,
+                             hwmonTimer_handler,
+                             relearn_time );
         }
 
         switch ( host_ptr->monitor_ctrl.stage )
@@ -801,7 +755,6 @@ int hwmonHostClass::bmc_sensor_monitor ( struct hwmonHostClass::hwmon_host * hos
             case HWMON_SENSOR_MONITOR__START:
             {
                 mtcTimer_reset ( host_ptr->monitor_ctrl.timer );
-
                 if ( host_ptr->monitor )
                 {
                    /* Handle Audit Interval Change */
@@ -880,7 +833,7 @@ int hwmonHostClass::bmc_sensor_monitor ( struct hwmonHostClass::hwmon_host * hos
                         host_ptr->bmc_thread_info.extra_info_ptr = (void*)&host_ptr->thread_extra_info ;
 
                         /* randomize the first audit a little so that over a swact we don't spike hwmond */
-                        int r = (rand() % host_ptr->interval) + 1 ;
+                        int r = (rand() % MTC_MINS_1) + 1 ;
 
                         /* poll all the sensors right away - between 1 and 10 seconds */
                         ilog ("%s sensor monitoring begins in %d seconds\n",
@@ -935,6 +888,13 @@ int hwmonHostClass::bmc_sensor_monitor ( struct hwmonHostClass::hwmon_host * hos
                               host_ptr->hostname.c_str());
 
                     thread_kill ( host_ptr->bmc_thread_ctrl, host_ptr->bmc_thread_info );
+
+                    mtcTimer_start ( host_ptr->monitor_ctrl.timer,
+                                     hwmonTimer_handler, MTC_MINS_1 );
+
+                    _stage_change ( host_ptr->hostname,
+                                    host_ptr->monitor_ctrl.stage,
+                                    HWMON_SENSOR_MONITOR__RESTART );
                 }
 
                 /* check for 'thread done' completion */
@@ -988,40 +948,33 @@ int hwmonHostClass::bmc_sensor_monitor ( struct hwmonHostClass::hwmon_host * hos
                         }
                         else if ( host_ptr->bmc_thread_info.data.find (BMC_POWER_ON_STATUS) == string::npos )
                         {
-                            ilog ("%s %s\n", host_ptr->hostname.c_str(),
-                                             host_ptr->bmc_thread_info.data.c_str());
-
-                            wlog ("%s power %s sensor learning delayed ; need power on\n",
-                                      host_ptr->hostname.c_str(),
-                                      host_ptr->bmc_thread_info.data.c_str());
+                            host_ptr->poweron = false ;
+                            wlog ("%s sensor model learning delayed ; need power on",
+                                      host_ptr->hostname.c_str());
                         }
                         else
                         {
                             /* OK, this is what we have been waiting for */
+                            ilog ("%s power is on", host_ptr->hostname.c_str());
                             host_ptr->poweron = true ;
                         }
                     }
 
                     host_ptr->bmc_thread_ctrl.done = true ;
 
+                    /* Start monitoring in 10 seconds */
+                    int delay = MTC_SECS_10 ;
+
+                    /* If power is off, retry in 2 minutes ; hold-off period */
                     if ( host_ptr->poweron == false )
-                    {
-                        mtcTimer_start ( host_ptr->monitor_ctrl.timer,
-                                         hwmonTimer_handler, MTC_MINS_1 );
+                        delay = MTC_MINS_2 ;
 
-                        _stage_change ( host_ptr->hostname,
-                                        host_ptr->monitor_ctrl.stage,
-                                        HWMON_SENSOR_MONITOR__RESTART );
-                    }
-                    else
-                    {
-                        mtcTimer_start ( host_ptr->monitor_ctrl.timer,
-                                         hwmonTimer_handler, MTC_MINS_2 );
+                    mtcTimer_start ( host_ptr->monitor_ctrl.timer,
+                                     hwmonTimer_handler, delay );
 
-                        _stage_change ( host_ptr->hostname,
-                                        host_ptr->monitor_ctrl.stage,
-                                        HWMON_SENSOR_MONITOR__RESTART );
-                    }
+                    _stage_change ( host_ptr->hostname,
+                                    host_ptr->monitor_ctrl.stage,
+                                    HWMON_SENSOR_MONITOR__RESTART );
                 }
                 break ;
             }
@@ -1929,7 +1882,6 @@ int hwmonHostClass::bmc_sensor_monitor ( struct hwmonHostClass::hwmon_host * hos
                     ( host_ptr->sensors ) && ( host_ptr->groups ))
                 {
                     mtcTimer_reset ( host_ptr->relearnTimer );
-                    host_ptr->relearn_done_date.clear();
                     host_ptr->relearn = false ;
                     plog ("%s sensor model relearn complete\n",
                               host_ptr->hostname.c_str());
@@ -2035,11 +1987,6 @@ int hwmonHostClass::delete_handler ( struct hwmonHostClass::hwmon_host * host_pt
         {
             ilog ("%s Delete Operation Started\n", host_ptr->hostname.c_str());
             host_ptr->retries = 0 ;
-
-            if ( host_ptr->bm_provisioned == true )
-            {
-                set_bm_prov ( host_ptr, false);
-            }
 
             if ( host_ptr->bmc_thread_ctrl.stage != THREAD_STAGE__IDLE )
             {
@@ -2545,7 +2492,7 @@ void hwmonHostClass::monitor_now ( struct hwmonHostClass::hwmon_host * host_ptr 
  *
  * Name        : monitor_soon
  *
- * Description: Force monitor to occur in 30 seconds.
+ * Description: Force monitor to occur in 5 seconds.
  *
  ****************************************************************************/
 

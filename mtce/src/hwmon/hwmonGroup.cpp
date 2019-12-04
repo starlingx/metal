@@ -267,6 +267,10 @@ canned_group_enum bmc_get_groupenum ( string & hostname,
     canned_group_enum group_enum = HWMON_CANNED_GROUP__NULL ;
     if ( !unittype.empty() )
     {
+        /* convert sensorname and unittype to lower case for compares below */
+        string _unittype = tolowercase (unittype);
+        string _sensorname = tolowercase (sensorname);
+
         /* search canned groups for one having units that match this
          * sensor sample. */
         for ( int canned_group = (HWMON_CANNED_GROUP__NULL+1) ; canned_group < HWMON_CANNED_GROUPS ; ++canned_group )
@@ -291,7 +295,7 @@ canned_group_enum bmc_get_groupenum ( string & hostname,
          /* handle some special cases */
 
          /* 1. Quanta Power Sensors */
-         if  (( unittype.compare("discrete") == 0 ) &&
+         if  (( _unittype.compare("discrete") == 0 ) &&
               ((sensorname.find("PSU Redundancy") != std::string::npos ) ||
                (sensorname.find("PSU1 Status") != std::string::npos ) ||
                (sensorname.find("PSU2 Status") != std::string::npos )))
@@ -303,7 +307,7 @@ canned_group_enum bmc_get_groupenum ( string & hostname,
                        canned_group_array[group_enum].group_name,
                        sensorname.c_str());
          }
-         else if (( unittype.compare("discrete") == 0 ) &&
+         else if (( _unittype.compare("discrete") == 0 ) &&
                  ((sensorname.find("MB Thermal Trip") != std::string::npos ) ||
                   (sensorname.find("PCH Thermal Trip") != std::string::npos )))
          {
@@ -315,10 +319,9 @@ canned_group_enum bmc_get_groupenum ( string & hostname,
                        sensorname.c_str());
          }
 
-         /* 1. HP Fans show up as 'percent' sensor type with Fan in the name */
-         else if (( unittype.compare("percent") == 0 ) &&
-                 ((sensorname.find("Fan") != std::string::npos ) ||
-                  (sensorname.find("fan") != std::string::npos )))
+         /* HP Fans show up as 'percent' sensor type with Fan in the name */
+         else if (( _unittype == "percent" ) &&
+                  ( _sensorname.find("fan") != std::string::npos ))
          {
              group_enum = HWMON_CANNED_GROUP__FANS ;
 
@@ -327,10 +330,9 @@ canned_group_enum bmc_get_groupenum ( string & hostname,
                        canned_group_array[group_enum].group_name,
                        sensorname.c_str());
          }
-         /* 1. HP Fans show up as 'percent' sensor type with Fan in the name */
-         else if (( unittype.compare("percent") == 0 ) &&
-                 ((sensorname.find("Usage") != std::string::npos ) ||
-                  (sensorname.find("usage") != std::string::npos )))
+         /* HP sensor usage shows up as 'percent' sensor type with usage in the name */
+         else if (( _unittype == "percent") &&
+                  ( _sensorname.find("usage") != std::string::npos ))
          {
              group_enum = HWMON_CANNED_GROUP__USAGE ;
 

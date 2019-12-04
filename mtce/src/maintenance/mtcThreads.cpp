@@ -322,7 +322,7 @@ void * mtcThread_bmc ( void * arg )
                 {
                     /* Log the command that failed unless ...
                      *  - its the root query during learning
-                     *  - its not the typical falure to reach the BMC whose
+                     *  - its not the typical failure to reach the BMC whose
                      *    error shows up as a ENOENT or
                      *    'No such file or directory'
                      */
@@ -337,8 +337,10 @@ void * mtcThread_bmc ( void * arg )
                     info_ptr->status = FAIL_SYSTEM_CALL ;
                     if ( daemon_is_file_present ( datafile.data() ))
                     {
-                        /* load in the error. stdio is redirected to the datafile */
+                        /* stdio is redirected to the datafile.
+                         * load in the error and remove the file. */
                         info_ptr->status_string = daemon_read_file(datafile.data());
+                        daemon_remove_file(datafile.data());
                     }
                 }
             }

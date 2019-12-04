@@ -432,15 +432,6 @@ static int mtc_ini_handler   ( void * user,
             }
         }
     }
-    else if (MATCH("agent", "bmc_access_method"))
-    {
-        string bmc_access_method_current = mtcInv.bmc_access_method ;
-        mtcInv.bmc_access_method = value ;
-        if ( mtcInv.bmc_access_method != bmc_access_method_current )
-        {
-            mtcInv.bmc_access_method_changed = true ;
-        }
-    }
     return (PASS);
 }
 
@@ -681,8 +672,6 @@ int daemon_configure ( void )
     mtc_config.active = daemon_get_run_option ("active") ;
     ilog ("Controller  : %s\n",
           mtc_config.active ? "Active" : "In-Active" );
-
-    ilog ("BMC Access  : %s", mtcInv.bmc_access_method.c_str());
 
     /* remove any existing fit */
     daemon_init_fit ();
@@ -996,10 +985,6 @@ int daemon_init ( string iface, string nodetype )
         return ( FAIL_DAEMON_CONFIG ) ;
     }
 
-    /* bmc access method should not be considered changed if we
-     * are going through daemon_init ; i.e. process startup */
-    mtcInv.bmc_access_method_changed = false ;
-
     return (rc);
 }
 
@@ -1095,10 +1080,10 @@ int _self_provision ( void )
             mtcInv.set_bm_un   ( my_identity.name, record_info.bm_un );
             mtcInv.set_bm_ip   ( my_identity.name, record_info.bm_ip );
             mtcInv.set_bm_type ( my_identity.name, record_info.bm_type );
+            mtcInv.set_mtcInfo ( my_identity.name, record_info.mtce_info );
 
             if ( my_identity.name == record_info.name )
             {
-
                 /* If the active controller was 'locked' and is being auto-corrected
                  * to 'unlocked' then ensure that there is no locked alarm set for it */
                 if ( record_info.admin != "locked" )
@@ -1218,23 +1203,6 @@ void nodeLinkClass::fsm ( void )
             mtcHttpSvr_look ( mtce_event );
         }
     }
-}
-
-/* handle BMC access method change */
-void nodeLinkClass::bmc_access_method_change_notifier ( void )
-{
-    if ( head )
-    {
-        struct node * node_ptr ;
-        for ( node_ptr = head  ;
-              node_ptr != NULL ;
-              node_ptr = node_ptr->next )
-        {
-            if ( node_ptr->bmc_provisioned )
-                node_ptr->bmc_access_method_changed = true ;
-        }
-    }
-    mtcInv.bmc_access_method_changed = false ;
 }
 
 void daemon_service_run ( void )
@@ -1614,11 +1582,6 @@ void daemon_service_run ( void )
         {
             ilog ("DOR mode disable\n");
             mtcInv.dor_mode_active = false ;
-        }
-
-        if ( mtcInv.bmc_access_method_changed == true )
-        {
-            mtcInv.bmc_access_method_change_notifier();
         }
     }
     daemon_exit ();

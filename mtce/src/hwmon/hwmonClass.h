@@ -40,10 +40,6 @@ class hwmonHostClass
         /** The PW of the host's board management controller */
         string bm_pw  ;
 
-        /** A string label that represents the board management
-         *  controller type for this host */
-        string bm_type ;
-
         /** The operator provisioned board management hostname */
         string bm_un ;
 
@@ -86,6 +82,9 @@ class hwmonHostClass
 
         /** set to the protocol used to communicate with this server's BMC */
         bmc_protocol_enum protocol ;
+
+        /** http or https security mode */
+        string bm_http_mode ;
 
         /** Pointer to the previous host in the list */
         struct hwmon_host * prev;
@@ -206,12 +205,6 @@ class hwmonHostClass
         /* Count relearn failure retries.
          * Used to avoid repeating some retry operations. */
         int relearn_retry_counter ;
-
-        /* Store the date/time when learning mode will be disabled.
-         * Put into error message to tell the administrator when the
-         * next sensor relearn is permitted when the current request
-         * is rejected due to already being in relearn mode. */
-        string relearn_done_date ;
 
         /* a structure used to preserved some key sensor model attributes
          * so that they can be restored over/after the relearn action */
@@ -465,11 +458,8 @@ class hwmonHostClass
     bool is_bm_provisioned ( string hostname );
 
     string get_bm_ip    ( string hostname );
-    string get_bm_type  ( string hostname );
     string get_bm_un    ( string hostname );
     string get_hostname ( string uuid ); /**< lookup hostname from the host uuid */
-
-    string get_relearn_done_date ( string hostname );
 
     int hosts ;
 
