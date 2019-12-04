@@ -146,4 +146,14 @@ void pingUtil_fini ( ping_info_type & ping_info ); /* the preopened ping socket 
 
 int pingUtil_acc_monitor ( ping_info_type & ping_info );
 
+/********************************************************************************
+ *
+ * Name    : pingUtil_restart
+ *
+ * Purpose : Restart the ping monitor
+ *
+ *******************************************************************************/
+
+void pingUtil_restart ( ping_info_type & ping_info );
+
 #endif

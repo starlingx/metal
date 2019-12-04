@@ -113,6 +113,7 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
                 plog ("%s Subf Configured OK\n", name.c_str());
                 enableStageChange ( node_ptr, MTC_ENABLE__GOENABLED_TIMER );
                 alarm_config_clear ( node_ptr );
+                break ;
             }
 
             if ((( !node_ptr->mtce_flags & MTC_FLAG__I_AM_CONFIGURED )) ||

@@ -134,6 +134,9 @@ private:
          *  taking on this host */
         std::string task ;
 
+        /** String containing key value pairs acting like a dictionary */
+        std::string mtce_info ;
+
         /** Administrative action from inventory */
         std::string action ;
 
@@ -580,6 +583,7 @@ private:
 
         /** The password of the host's board management controller */
         string bm_pw ;
+        int    bm_pw_wait_log_throttle ;
 
         /** A string label that represents the board management
          *  controller type for this host */
@@ -587,6 +591,9 @@ private:
 
         /** The operator provisioned board management hostname */
         string bm_un ;
+
+        /** The security mode for BMC Access http requests */
+        string bm_http_mode ;
 
         /** the command to use in the bmc thread.
          *  introduced for redfish reset sub command ; reset type */
@@ -604,10 +611,6 @@ private:
          *   and bmc is verified pingable.
          **/
         bool bmc_accessible;
-
-        /* tell the host level bmc_handler that this hosts access
-         * method has changed */
-        bool bmc_access_method_changed ;
 
         /** @} private_boad_management_variables */
 
@@ -670,11 +673,6 @@ private:
          *
          * defaults to 0 or BMC_PROTOCOL__IPMITOOL */
         bmc_protocol_enum bmc_protocol ;
-
-        /* set true once the best BMC protocol has been learned
-         *
-         * looked at in the bmc_handler to decide learn or use bmc_protocol */
-        bool bmc_protocol_learned ;
 
         /* set true while bmc protocol learning is in progress */
         bool bmc_protocol_learning ;
@@ -852,6 +850,13 @@ private:
     bool get_mtcAlive_gate ( struct nodeLinkClass::node * node_ptr );
     void ctl_mtcAlive_gate ( struct nodeLinkClass::node * node_ptr, bool gate_state );
     void set_mtcAlive      ( struct nodeLinkClass::node * node_ptr, int interface );
+
+    int    mtcInfo_set ( struct nodeLinkClass::node * node_ptr, string key, string value );
+    string mtcInfo_get ( struct nodeLinkClass::node * node_ptr, string key );
+    void   mtcInfo_clr ( struct nodeLinkClass::node * node_ptr, string key );
+    void   mtcInfo_log ( struct nodeLinkClass::node * node_ptr );
+
+    int    set_mtcInfo ( struct nodeLinkClass::node * node_ptr, string & mtc_info );
 
     /*****************************************************************************
      *
@@ -1132,6 +1137,7 @@ private:
     int mtcInvApi_update_states     ( struct nodeLinkClass::node * node_ptr, string admin, string oper, string avail );
     int mtcInvApi_update_states_now ( struct nodeLinkClass::node * node_ptr, string admin, string oper, string avail, string oper_subf, string avail_subf);
     int mtcInvApi_update_state      ( struct nodeLinkClass::node * node_ptr, string state, string value );
+    int mtcInvApi_update_mtcInfo    ( struct nodeLinkClass::node * node_ptr );
 
     /* Private SM API */
     int mtcSmgrApi_request          ( struct nodeLinkClass::node * node_ptr, mtc_cmd_enum operation, int retries );
@@ -1139,7 +1145,8 @@ private:
     /* Private VIM API */
     int mtcVimApi_state_change      ( struct nodeLinkClass::node * node_ptr, libEvent_enum operation, int retries );
 
-    int  set_bm_prov ( struct nodeLinkClass::node * node_ptr, bool state );
+    int  set_bm_prov                ( struct nodeLinkClass::node * node_ptr, bool state );
+    void bmc_load_protocol          ( struct nodeLinkClass::node * node_ptr );
 
     void set_uptime ( struct nodeLinkClass::node * node_ptr, unsigned int uptime, bool force );
 
@@ -1375,8 +1382,6 @@ public:
     /* the main fsm entrypoint to service all hosts */
     void fsm ( void ) ;
 
-    void bmc_access_method_change_notifier ( void );
-
    /** This controller's hostname set'er */
     void   set_my_hostname ( string hostname );
 
@@ -1397,6 +1402,12 @@ public:
 
     /** get ip address for any hostname */
     string get_hostaddr ( string & hostname );
+
+    int    mtcInfo_set ( string hostname, string key, string value );
+    string mtcInfo_get ( string hostname, string key );
+    void   mtcInfo_clr ( string hostname, string key );
+
+    int    set_mtcInfo ( string hostname, string & mtc_info );
 
     /** get mac address for any hostname and specified interface */
     string get_hostIfaceMac ( string & hostname, int iface );
@@ -1499,13 +1510,6 @@ public:
 
     std::list<string>           mnfa_awol_list ;
     void                        mnfa_timeout_handler ( void );
-
-    /* How to communicate with the BMCs in this lab.
-     * Options are: ipmi, redfish, learn */
-    string bmc_access_method ;
-
-    /* handle bmc access method change by service parameter */
-    bool bmc_access_method_changed ;
 
     /** Return the number of inventoried hosts */
     int num_hosts ( void );
@@ -1779,8 +1783,6 @@ public:
     int    set_bm_un   ( string hostname , string bm_un );
 
     bool   is_bm_ip_already_used  ( string bm_ip  );
-
-    int    manage_bmc_provisioning ( struct node * node_ptr );
 
     string get_bm_ip   ( string hostname );
     string get_bm_un   ( string hostname );

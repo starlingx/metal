@@ -810,7 +810,8 @@ static void _set_default_unit_type_for_sensor( thread_info_type * info_ptr,
     {
         strcpy( _sample_list[samples].unit, BMC_SENSOR_DEFAULT_UNIT_TYPE_TEMP);
     }
-    else if ( label == REDFISH_SENSOR_LABEL_POWER_CTRL )
+    else if (( label == REDFISH_SENSOR_LABEL_POWER_CTRL ) ||
+             ( label == REDFISH_SENSOR_LABEL_POWER_SUPPLY ))
     {
         strcpy( _sample_list[samples].unit, BMC_SENSOR_DEFAULT_UNIT_TYPE_POWER);
     }
@@ -849,17 +850,36 @@ static int _parse_redfish_sensor_data( char * json_str_ptr, thread_info_type * i
                                        string label, const char * reading_label, int & samples )
 {
     int rc = PASS ;
-    struct json_object *json_obj = NULL;
+
+    /*************************************************************************
+     *
+     * Gracefully handle a missing sensor group label.
+     * Return failure, that is ignored, if its not there.
+     *
+     * Calling jsonUtil_get_list directly results in noisy json error logs.
+     * If a server is not providing a canned group then so be it.
+     *
+     *************************************************************************
+     *
+     * Start by objectifying the output data followed by getting that
+     * sensor group key value */
+    struct json_object *json_obj = json_tokener_parse(json_str_ptr);
+    if ( !json_obj )
+        return (FAIL_JSON_PARSE);
+    string value = jsonUtil_get_key_value_string ( json_obj, label.data());
+    json_object_put(json_obj);
+    if (( value.empty() || value == NONE ))
+        return (FAIL_NO_DATA);
+
     std::list<string> sensor_list ;
-    std::list<string>::iterator iter_curr_ptr ;
-    string status_str;
-    string temp_str;
-
     sensor_list.clear();
-
     rc = jsonUtil_get_list(json_str_ptr, label, sensor_list);
     if ( rc == PASS )
     {
+        string status_str;
+        string temp_str;
+        std::list<string>::iterator iter_curr_ptr ;
+
         for ( iter_curr_ptr  = sensor_list.begin();
               iter_curr_ptr != sensor_list.end() ;
             ++iter_curr_ptr )
@@ -870,17 +890,49 @@ static int _parse_redfish_sensor_data( char * json_str_ptr, thread_info_type * i
                 elog_t ("%s no or invalid sensor record\n", info_ptr->hostname.c_str());
                 return (FAIL_JSON_PARSE);
             }
-            /* parse value from json string according to key, if value is none, return na
-               Put the value to _sample_list */
+
+            /* Name   : GET_SENSOR_DATA_VALUE
+             *
+             * Purpose: Parse value from json string according to key.
+             *
+             * If value is none, return na.
+             * Put the value to _sample_list.
+             *
+             * Start with just 'Name' and 'Reading'
+             */
             GET_SENSOR_DATA_VALUE( temp_str, json_obj, "Name", name )
             GET_SENSOR_DATA_VALUE( temp_str, json_obj, reading_label, value )
+            GET_SENSOR_DATA_VALUE( temp_str, json_obj, "ReadingUnits", unit )
+
+            /* Abort on this sensor if the sensor name is missing.
+             * A missing name is parsed as 'na' by GET_SENSOR_DATA_VALUE macro.
+             *
+             * This check was added after seeing a missing 'Name' and 'Status'
+             * on one of the integration servers this feature was tested against.
+             * Without this check the code will create a sensor with name = na */
+            if ( !strcmp(_sample_list[samples].name, "na") )
+            {
+                /* Another special case handling
+                 *
+                 * Its a Fan sensor if ReadingUnits is RPM */
+                 if ( strcmp(_sample_list[samples].unit, "RPM"))
+                    return (FAIL_NOT_FOUND);
+
+                 /* So it might be a Fan sensor. Still need a sensor name.
+                  * Some Dell servers that publish the fan sensor name key
+                  * as 'FanName' rather than 'Name' like all other sensors. */
+                 GET_SENSOR_DATA_VALUE( temp_str, json_obj, "FanName", name )
+                 if ( !strcmp(_sample_list[samples].name,"na") )
+                    return (FAIL_NOT_FOUND);
+                 strcpy( _sample_list[samples].unit, BMC_SENSOR_DEFAULT_UNIT_TYPE_FANS);
+            }
+
             GET_SENSOR_DATA_VALUE( temp_str, json_obj, "LowerThresholdNonRecoverable", lnr )
             GET_SENSOR_DATA_VALUE( temp_str, json_obj, "LowerThresholdCritical", lcr )
             GET_SENSOR_DATA_VALUE( temp_str, json_obj, "LowerThresholdNonCritical", lnc )
             GET_SENSOR_DATA_VALUE( temp_str, json_obj, "UpperThresholdNonCritical", unc )
             GET_SENSOR_DATA_VALUE( temp_str, json_obj, "UpperThresholdCritical", ucr )
             GET_SENSOR_DATA_VALUE( temp_str, json_obj, "UpperThresholdNonRecoverable", unr )
-            GET_SENSOR_DATA_VALUE( temp_str, json_obj, "ReadingUnits", unit )
 
             /* Set default unit type if can not get unit type from json string */
             if ( !strcmp(_sample_list[samples].unit, "na") )
@@ -1248,20 +1300,66 @@ void * hwmonThread_redfish ( void * arg )
         }
         case BMC_THREAD_CMD__POWER_STATUS:
         {
-            string power_status = "" ;
-            bmc_protocol_enum protocol ;
-            blog2_t ("%s query power status info\n", info_ptr->log_prefix);
-            bmcUtil_read_bmc_info (info_ptr->hostname, power_status, protocol);
-            if (power_status.find (BMC_POWER_ON_STATUS) == string::npos)
+            blog2_t ("%s read power state\n", info_ptr->log_prefix);
+            if ( _redfishUtil_send_request( info_ptr, datafile,
+                                            BMC_POWER_STATUS_FILE_SUFFIX,
+                                            REDFISHTOOL_BMC_INFO_CMD ) != PASS )
             {
-                info_ptr->data = BMC_POWER_OFF_STATUS ;
+                info_ptr->status_string = "failed to send request" ;
+                info_ptr->status = FAIL_OPERATION ;
+                goto redfishtool_thread_done ;
             }
-            else
+            /* look for the output data file */
+            if( _wait_for_command_output(info_ptr, datafile) )
             {
-                info_ptr->data = BMC_POWER_ON_STATUS ;
+               /* need to add one of the following 2 strings
+                * to info_ptr->data
+                *     - Chassis Power is on
+                *     - Chassis Power is off
+                */
+                if ( datafile.empty() )
+                {
+                    info_ptr->status_string = "bmc info filename empty" ;
+                    info_ptr->status = FAIL_NO_DATA ;
+                    goto redfishtool_thread_done ;
+                }
+
+                /* read the output data */
+                string json_bmc_info = daemon_read_file (datafile.data());
+                if ( json_bmc_info.empty() )
+                {
+                    info_ptr->status_string = "bmc info file empty" ;
+                    info_ptr->status = FAIL_STRING_EMPTY ;
+                    goto redfishtool_thread_done ;
+                }
+
+                /* parse the output data */
+                struct json_object *json_obj =
+                    json_tokener_parse((char*)json_bmc_info.data());
+                if ( !json_obj )
+                {
+                    info_ptr->status_string = "bmc info data parse error" ;
+                    info_ptr->status = FAIL_JSON_PARSE ;
+                    goto redfishtool_thread_done ;
+                }
+
+                /* load the power state */
+                string power_state = tolowercase(
+                jsonUtil_get_key_value_string( json_obj, REDFISH_LABEL__POWER_STATE));
+                if ( power_state == "on" )
+                {
+                    info_ptr->data = "Chassis Power is on" ;
+                }
+                else
+                {
+                    info_ptr->data = "Chassis Power is off" ;
+                }
+                info_ptr->status_string = "pass" ;
+                info_ptr->status = PASS ;
+                ilog_t ("%s %s", info_ptr->hostname.c_str(),
+                                 info_ptr->data.c_str());
+                json_object_put( json_obj );
             }
-            info_ptr->status_string = "pass" ;
-            info_ptr->status = PASS ;
             break ;
         }
         default:

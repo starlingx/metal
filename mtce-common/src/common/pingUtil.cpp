@@ -583,6 +583,20 @@ void pingUtil_fini ( ping_info_type & ping_info )
     ping_info.stage = PINGUTIL_MONITOR_STAGE__IDLE ;
 }
 
+void pingUtil_restart ( ping_info_type & ping_info )
+{
+    ilog ("%s ping monitor restart", ping_info.hostname.c_str());
+    ping_info.ok = false ;
+    ping_info.send_retries = 0 ;
+    ping_info.monitoring = false ;
+    pingUtil_fini (ping_info);
+    pingUtil_init (ping_info.hostname, ping_info, ping_info.ip.data());
+
+    mtcTimer_reset ( ping_info.timer );
+    mtcTimer_start ( ping_info.timer, ping_info.timer_handler, 1 );
+    ping_info.stage = PINGUTIL_MONITOR_STAGE__WAIT;
+}
+
 /********************************************************************************
  *
  * Name    : pingUtil_acc_monitor

@@ -300,12 +300,7 @@ int hostBaseClass::add_host ( node_inv_type & inv )
         if ( host_ptr )
         {
             host_ptr->ip   = inv.ip   ;
-            host_ptr->mac  = inv.mac  ;
             host_ptr->uuid = inv.uuid ;
-
-            host_ptr->type = inv.type ;
-            host_ptr->nodetype = CGTS_NODE_NULL ;
-            
             host_ptr->retries = 0 ;
             host_ptr->toggle = false ;
 
@@ -427,12 +422,10 @@ void hostBaseClass::memLogDelimit ( void )
 void hostBaseClass::mem_log_host ( struct hostBaseClass::host * host_ptr )
 {
     char str[MAX_MEM_LOG_DATA] ;
-    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\t%s - %s - %s - %s\n", 
-               host_ptr->hostname.c_str(), 
+    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\t%s - %s\n",
+               host_ptr->hostname.c_str(),
                host_ptr->ip.c_str(),
-               host_ptr->mac.c_str(),
-               host_ptr->uuid.c_str(), 
-               host_ptr->type.c_str());
+               host_ptr->uuid.c_str());
     mem_log (str);
 }
 

@@ -83,14 +83,14 @@ void ipmiUtil_bmc_info_log ( string hostname, bmc_info_type & bmc_info, int rc )
     }
     else
     {
-        ilog ("%s Manufacturer: %s [id:%s] [ Device: %s  ver %s ]\n",
+        ilog ("%s manufacturer: %s [id:%s] [ Device: %s  ver %s ]\n",
                   hostname.c_str(),
                   bmc_info.manufacturer.c_str(),
                   bmc_info.manufacturer_id.c_str(),
                   bmc_info.device_id.c_str(),
                   bmc_info.hw_version.c_str());
 
-        ilog ("%s Product Name: %s [id:%s] [ BMC FW: ver %s ]\n",
+        ilog ("%s product name: %s [id:%s] [ BMC FW: ver %s ]\n",
                   hostname.c_str(),
                   bmc_info.product_name.c_str(),
                   bmc_info.product_id.c_str(),

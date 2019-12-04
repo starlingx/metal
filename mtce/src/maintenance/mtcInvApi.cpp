@@ -545,6 +545,46 @@ int nodeLinkClass::mtcInvApi_update_value ( string hostname,
 
 /*****************************************************************************
  *
+ * Name    : mtcInvApi_update_mtcInfo
+ *
+ * Purpose : Update this host's mtce_info content in the sysinv database.
+ *
+ *****************************************************************************/
+int nodeLinkClass::mtcInvApi_update_mtcInfo ( struct nodeLinkClass::node * node_ptr )
+{
+    CHK_NODE_PTR(node_ptr);
+    int rc = mtcHttpUtil_event_init ( &node_ptr->httpReq,
+                                      node_ptr->hostname,
+                                      "mtcInvApi_update_mtce_info",
+                                      hostUtil_getServiceIp  (SERVICE_SYSINV),
+                                      hostUtil_getServicePort(SERVICE_SYSINV));
+    if ( rc )
+    {
+        elog ("%s failed to allocate libEvent memory (%d)\n", node_ptr->hostname.c_str(), rc );
+        return (rc);
+    }
+
+    /* Set the host context */
+    node_ptr->httpReq.hostname    = node_ptr->hostname      ;
+    node_ptr->httpReq.uuid        = node_ptr->uuid;
+    node_ptr->httpReq.request     = SYSINV_UPDATE ;
+    node_ptr->httpReq.operation   = SYSINV_OPER__UPDATE_VALUE ;
+    node_ptr->httpReq.max_retries = 3             ;
+    node_ptr->httpReq.cur_retries = 0             ;
+    node_ptr->httpReq.timeout     = get_mtcInv_ptr()->sysinv_timeout ;
+    node_ptr->httpReq.payload = "[" ;
+    node_ptr->httpReq.payload.append ("{\"path\":\"/") ;
+    node_ptr->httpReq.payload.append (MTC_JSON_INV_MTCE_INFO);
+    node_ptr->httpReq.payload.append ("\",\"value\":\"");
+    node_ptr->httpReq.payload.append (node_ptr->mtce_info.data());
+    node_ptr->httpReq.payload.append ( "\",\"op\":\"replace\"}]");
+
+    hlog ("%s %s", node_ptr->hostname.c_str(), node_ptr->httpReq.payload.c_str());
+    return(this->workQueue_enqueue( node_ptr->httpReq));
+}
+
+/*****************************************************************************
+ *
  * Name    : mtcInvApi_update_uptime
  *
  * Purpose : Write a hosts uptime to the inventory database.
@@ -1479,6 +1519,7 @@ void nodeLinkClass::mtcInvApi_get_handler ( struct evhttp_request *req, void *ar
                 node.oper_subf  = json_info.host[i].oper_subf ;
                 node.avail_subf = json_info.host[i].avail_subf ;
                 node.clstr_ip = json_info.host[i].clstr_ip ;
+                node.mtce_info = json_info.host[i].mtce_info ;
 
                 if (node.name.compare("none"))
                 {

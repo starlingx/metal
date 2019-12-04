@@ -306,11 +306,16 @@ int nodeLinkClass::mtcVimApi_state_change ( struct nodeLinkClass::node * node_pt
                                             libEvent_enum operation,
                                             int retries )
 {
-
     UNUSED(node_ptr);
     UNUSED(operation);
     UNUSED(retries);
     return(PASS);
+}
+
+int nodeLinkClass::mtcInvApi_update_mtcInfo (struct nodeLinkClass::node * node_ptr)
+{
+    UNUSED(node_ptr);
+    return (PASS);
 }
 
 int nodeLinkClass::doneQueue_purge    (  struct nodeLinkClass::node * node_ptr ) { node_ptr = node_ptr ; return (PASS) ; }

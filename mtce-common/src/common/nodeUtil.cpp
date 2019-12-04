@@ -120,6 +120,8 @@ void node_inv_init (node_inv_type & inv)
     inv.bm_ip.clear();
     inv.bm_un.clear();
     inv.bm_type.clear();
+    inv.bm_proto.clear();
+    inv.bm_http.clear();
     inv.action.clear();
     inv.uptime.clear();
     inv.oper_subf.clear();
@@ -138,10 +140,10 @@ void print_inv ( node_inv_type & info )
     syslog ( LOG_INFO, "| personality: %s\n", info.type.c_str());
     syslog ( LOG_INFO, "| hostname   : %s\n", info.name.c_str());
     syslog ( LOG_INFO, "| task       : %s\n", info.task.c_str());
+    syslog ( LOG_INFO, "| info       : %s\n", info.mtce_info.c_str());
     syslog ( LOG_INFO, "| ip         : %s\n", info.ip.c_str());
     syslog ( LOG_INFO, "| mac        : %s\n", info.mac.c_str());
     syslog ( LOG_INFO, "| uuid       : %s\n", info.uuid.c_str());
-    syslog ( LOG_INFO, "|   operState: %s\n", info.oper_subf.c_str());
     syslog ( LOG_INFO, "|  adminState: %s\n", info.admin.c_str());
     syslog ( LOG_INFO, "|   operState: %s\n", info.oper.c_str());
     syslog ( LOG_INFO, "| availStatus: %s\n", info.avail.c_str());
@@ -184,9 +186,9 @@ bool is_combo_system (unsigned int nodetype_mask )
 }
 
 
-int set_host_functions ( string         nodetype_str, 
-                         unsigned int * nodetype_bits_ptr, 
-                         unsigned int * nodetype_function_ptr, 
+int set_host_functions ( string         nodetype_str,
+                         unsigned int * nodetype_bits_ptr,
+                         unsigned int * nodetype_function_ptr,
                          unsigned int * nodetype_subfunction_ptr )
 {
     int rc = PASS ;

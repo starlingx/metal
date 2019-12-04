@@ -75,8 +75,6 @@ int hwmonJson_load_inv ( char * json_str_ptr, node_inv_type & info )
     node_inv_init ( info );
 
     /* Get all required fields */
-    //info.mac   = _get_key_value_string ( node_obj, MTC_JSON_INV_HOSTMAC);
-    //info.ip    = _get_key_value_string ( node_obj, MTC_JSON_INV_HOSTIP );
     info.name    = _get_key_value_string ( node_obj, MTC_JSON_INV_NAME  );
 
     cluster_host_ip = _get_key_value_string ( node_obj, MTC_JSON_INV_CLSTRIP );
@@ -85,11 +83,12 @@ int hwmonJson_load_inv ( char * json_str_ptr, node_inv_type & info )
         dlog ("%s inventory has cluster_host_ip=%s\n", info.name.c_str(), cluster_host_ip.c_str());
         info.clstr_ip = cluster_host_ip;
     }
-    info.type    = _get_key_value_string ( node_obj, MTC_JSON_INV_TYPE  );
+//    info.type    = _get_key_value_string ( node_obj, MTC_JSON_INV_TYPE  );
     info.uuid    = _get_key_value_string ( node_obj, MTC_JSON_INV_UUID  );
     info.bm_ip   = _get_key_value_string ( node_obj, MTC_JSON_INV_BMIP  );
     info.bm_un   = _get_key_value_string ( node_obj, MTC_JSON_INV_BMUN  );
-    info.bm_type = _get_key_value_string ( node_obj, MTC_JSON_INV_BMTYPE);
+    info.bm_proto= _get_key_value_string ( node_obj, MTCE_INFO_KEY__BMC_PROTOCOL);
+    info.bm_http = _get_key_value_string ( node_obj, MTC_JSON_INV_BMHTTP);
 
     /* print the parsed info if debug level is 3 - mlog2 */
     if ( daemon_get_cfg_ptr()->debug_msg == DEBUG_LEVEL3 )

@@ -69,11 +69,11 @@ static struct json_object * _json_verify_object ( struct json_object * obj,
     status = json_object_object_get_ex (obj, "error", &req_obj );
     if (( status == TRUE ) && ( req_obj ))
     {
-        elog ("Found 'error' label instead\n");
+        jlog ("Found 'error' label instead\n");
     }
     else
     {
-        elog ("Neither specified nor error label found in object\n");
+        jlog ("Neither specified nor error label found in object\n");
     }
     return ((struct json_object *)(NULL)) ;
 }
@@ -211,16 +211,16 @@ int jsonUtil_get_key_val ( char   * json_str_ptr,
     /* init to null to avoid trap on early cleanup call with
      * bad non-null default pointer value */
     struct json_object *raw_obj  = (struct json_object *)(NULL);
-    
+
     if ((json_str_ptr == NULL) || ( *json_str_ptr == '\0' ) || ( ! strncmp ( json_str_ptr, "(null)" , 6 )))
     {
         elog ("Cannot tokenize a null json string\n");
         elog ("... json string: %s\n", json_str_ptr );
         return (FAIL);
     }
-    
+
     size_t len_before = strlen (json_str_ptr);
-    
+
     jlog2 ("String: %s\n", json_str_ptr );
 
     raw_obj = json_tokener_parse( json_str_ptr );
@@ -315,7 +315,6 @@ int jsonUtil_inv_load ( char * json_str_ptr,
     struct json_object *node_obj = (struct json_object *)(NULL);
     struct json_object *next_obj = (struct json_object *)(NULL);
 
-    // printf ("String: <%s>\n", json_str_ptr );
     if (( json_str_ptr == NULL ) || ( *json_str_ptr == '\0' ) ||
         ( ! strncmp ( json_str_ptr, "(null)" , 6 )))
     {
@@ -389,6 +388,7 @@ int jsonUtil_inv_load ( char * json_str_ptr,
         info.host[i].oper_subf  = _json_get_key_value_string ( node_obj, MTC_JSON_INV_OPER_SUBF );
         info.host[i].avail_subf = _json_get_key_value_string ( node_obj, MTC_JSON_INV_AVAIL_SUBF);
         info.host[i].clstr_ip = _json_get_key_value_string   ( node_obj, MTC_JSON_INV_CLSTRIP );
+        info.host[i].mtce_info = _json_get_key_value_string  ( node_obj, MTC_JSON_INV_MTCE_INFO );
 
         if ( info.host[i].uuid.length() != UUID_LEN )
         {
@@ -446,7 +446,7 @@ int jsonUtil_patch_load ( char * json_str_ptr,
     info.oper_subf  = _json_get_key_value_string ( node_obj, MTC_JSON_INV_OPER_SUBF );
     info.avail_subf = _json_get_key_value_string ( node_obj, MTC_JSON_INV_AVAIL_SUBF);
     info.clstr_ip    = _json_get_key_value_string ( node_obj, MTC_JSON_INV_CLSTRIP );
-
+    info.mtce_info = _json_get_key_value_string   ( node_obj, MTC_JSON_INV_MTCE_INFO );
     if (node_obj) json_object_put(node_obj);
 
     return (PASS);
@@ -504,7 +504,8 @@ int jsonUtil_load_host ( char * json_str_ptr, node_inv_type & info )
         info.id    = _json_get_key_value_string ( node_obj, "id" );
         info.oper_subf  = _json_get_key_value_string ( node_obj, MTC_JSON_INV_OPER_SUBF );
         info.avail_subf = _json_get_key_value_string ( node_obj, MTC_JSON_INV_AVAIL_SUBF);
-        info.clstr_ip    = _json_get_key_value_string ( node_obj, MTC_JSON_INV_CLSTRIP );
+        info.clstr_ip   = _json_get_key_value_string ( node_obj, MTC_JSON_INV_CLSTRIP );
+        info.mtce_info  = _json_get_key_value_string ( node_obj, MTC_JSON_INV_MTCE_INFO );
 
         if ( info.uuid.length() != UUID_LEN )
         {
@@ -1017,7 +1018,7 @@ int jsonUtil_get_list ( char * json_str_ptr, string label, list<string> & key_li
     label_obj = _json_verify_object (raw_obj, label.data());
     if ( !label_obj )
     {
-        elog ("unable to find label '%s'\n", label.c_str());
+        jlog ("unable to find label '%s'\n", label.c_str());
         rc = FAIL_JSON_OBJECT ;
         goto get_list_cleanup ;
     }

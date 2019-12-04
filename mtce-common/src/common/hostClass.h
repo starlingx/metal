@@ -1,7 +1,7 @@
 #ifndef __INCLUDE_HOSTCLASS_H__
 #define __INCLUDE_HOSTCLASS_H__
 /*
- * Copyright (c) 2015 Wind River Systems, Inc.
+ * Copyright (c) 2015, 2019 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -11,7 +11,7 @@
  * @file
  * Wind River CGTS Platform Host Maintenance "Host Manager"
  * class, support structs and enums.
- */ 
+ */
 
 #include <sys/types.h>
 #include <iostream>
@@ -34,7 +34,7 @@ class hostBaseClass
 {
     private:
 
-    /** 
+    /**
      *  A single host entity within the hostBaseClass.
      *  Used to build a linked list of added/provisioned hosts.
      */
@@ -42,21 +42,12 @@ class hostBaseClass
 
         /** The name of the host */
         std::string hostname ;
-        
+
         /** The name of the host */
-        std::string uuid ; 
+        std::string uuid ;
 
-        /** The IP address of the host */    
+        /** The IP address of the host */
         std::string ip ;
-
-        /** The Mac address of the host node */    
-        std::string mac ;
-
-        /** A string indicating the host type as 'compute' , 'storage' or 'controller' */
-        std::string type ;
-
-        /** The Type ; host specific service refinement */
-        int  nodetype ;  
 
         /** general retry counter */
         int  retries  ;
@@ -66,7 +57,7 @@ class hostBaseClass
 
         /** Pointer to the previous host in the list */
         struct host * prev;
-		
+
         /** Pointer to the next host in the list */
         struct host * next;
     } ;
@@ -79,35 +70,35 @@ class hostBaseClass
     * Preserves the host address in the host_ptr list and increments
     * the memory_allocs counter used by the inservice test audit.
     *
-    * @return 
-    * a pointer to the memory of the newly allocated host */    
+    * @return
+    * a pointer to the memory of the newly allocated host */
     struct hostBaseClass::host * newHost ( void );
 
    /** Start heartbeating a new host.
-    * 
+    *
     * host is added to the end of the host linked list.
     *
     * @param host_info_ptr
     *  is a pointer containing pertinent info about the physical host
-    * @return 
+    * @return
     *  a pointer to the newly added host
     */
     struct hostBaseClass::host* addHost ( string hostname );
 
    /** Get pointer to "hostname" host.
-    * 
+    *
     * Host list lookup by pointer from hostname.
     *
-    * @param host_info_ptr 
+    * @param host_info_ptr
     *  is a pointer containing info required to find the host in the host list
-    * @return 
+    * @return
     *  a pointer to the hostname's host
     */
     struct hostBaseClass::host* getHost ( string hostname );
 
    /** Free the memory of a previously allocated host.
     *
-    * The memory to be removed is found in the host_ptr list, cleared and 
+    * The memory to be removed is found in the host_ptr list, cleared and
     * the memory_allocs counter is decremented.
     * If the memory cannot be found then an error is returned.
     *
@@ -117,24 +108,24 @@ class hostBaseClass
     *  a signed integer of PASS or -EINVAL
     */
     int delHost ( struct hostBaseClass::host * host_ptr );
-    
+
 
    /** Remove a host from the linked list.
     *
     * Node is spliced out of the host linked list.
     *
-    * @param node_info_ptr 
+    * @param node_info_ptr
     *  is a pointer containing info required to find the host in the host list
-    * @return 
+    * @return
     *  an integer of PASS or  -EINVAL  */
     int remHost ( string hostname );
 
   /** List of allocated host memory.
     *
     * An array of host pointers.
-    */ 
+    */
     hostBaseClass::host * host_ptrs[MAX_HOSTS] ;
-        
+
    /** A memory allocation counter.
     *
     * Should represent the number of hosts in the linked list.
@@ -142,19 +133,19 @@ class hostBaseClass
     int memory_allocs ;
 
     /** A memory used counter
-    *  
+    *
     * A variable storing the accumulated host memory
-    */  
+    */
     int memory_used ;
 
     void mem_log_host ( struct hostBaseClass::host * host_ptr );
 
-/** Public Interfaces that allow hosts to be 
+/** Public Interfaces that allow hosts to be
  *  added or removed from maintenance.
  */
 public:
-    
-     hostBaseClass();	/**< constructor */	
+
+     hostBaseClass();	/**< constructor */
     ~hostBaseClass();   /**< destructor  */
 
     /**< The service this list is associated with */
@@ -171,7 +162,7 @@ public:
 
     /** Add a host to the linked list using public API */
     int add_host ( node_inv_type & inv );
-    
+
     /** Mod a host to the linked list using public API */
     int mod_host ( node_inv_type & inv );
 
@@ -193,7 +184,7 @@ public:
     void memDumpAllState  ( void );
     void print_node_info  ( void );              /**< Print node info banner */
 
-    /** This is a list of host names. */ 
+    /** This is a list of host names. */
     std::list<string>           hostlist ;
     std::list<string>::iterator hostlist_iter_ptr ;
 

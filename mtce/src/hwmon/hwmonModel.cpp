@@ -58,9 +58,10 @@
 int hwmonHostClass::bmc_create_sensor_model ( struct hwmonHostClass::hwmon_host * host_ptr )
 {
     int rc = PASS ;
-    ilog ("%s creating sensor model using %s\n",
+    ilog ("%s creating sensor model using %s:%s\n",
               host_ptr->hostname.c_str(),
-              bmcUtil_getProtocol_str(host_ptr->protocol).c_str());
+              bmcUtil_getProtocol_str(host_ptr->protocol).c_str(),
+              host_ptr->bm_ip.c_str());
 
     host_ptr->groups = 0 ;
 
@@ -300,7 +301,7 @@ int hwmonHostClass::bmc_delete_sensor_model ( struct hwmonHostClass::hwmon_host 
                   host_ptr->hostname.c_str());
         this->clear_bm_assertions ( host_ptr );
 
-        ilog ("%s ... deleting sensor model\n",
+        blog ("%s ... deleting sensor model\n",
                   host_ptr->hostname.c_str());
     }
 
