@@ -7,3 +7,4 @@ installer/pxe-network-installer
 kickstart
 inventory
 python-inventoryclient
+tools/rvmc

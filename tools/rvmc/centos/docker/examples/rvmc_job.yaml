@@ -1,0 +1,24 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: rvmc-subcloud1
+spec:
+  ttlSecondsAfterFinished: 60
+  activeDeadlineSeconds: 600
+  backoffLimit: 1
+  template:
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: controller-0
+      containers:
+        - name: rvmc
+          image: rvmc:dev-centos-stable-build
+          volumeMounts:
+            - mountPath: /etc/rvmc.yaml
+              name: rvmc-config
+      volumes:
+        - name: rvmc-config
+          hostPath:
+            path: /etc/rvmc_subcloud1.yaml
+      restartPolicy: Never
