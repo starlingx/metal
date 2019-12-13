@@ -118,7 +118,9 @@ def main():
 
     # Get the pkglist
     cmd = "sed 's/#.*//' %s" % ' '.join(pkglist)
-    rpmlist = subprocess.check_output(cmd, shell=True).split()
+    rpmlist = subprocess.check_output(cmd,
+                                      shell=True,
+                                      universal_newlines=True).split()
 
     tree = ElementTree.parse(groups_file)
     comps = tree.getroot()
