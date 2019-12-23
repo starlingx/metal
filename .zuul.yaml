@@ -8,10 +8,12 @@
       jobs:
         - openstack-tox-linters
         - openstack-tox-pep8
+        - openstack-tox-pylint
     gate:
       jobs:
         - openstack-tox-linters
         - openstack-tox-pep8
+        - openstack-tox-pylint
 
 - job:
     name: flock-devstack-metal
