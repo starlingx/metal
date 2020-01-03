@@ -85,6 +85,9 @@ void hwmonHostClass::bmc_data_init ( struct hwmonHostClass::hwmon_host * host_pt
     host_ptr->accessible = false;
     host_ptr->degraded   = false ;
 
+    host_ptr->ping_info.ip       = host_ptr->bm_ip ;
+    host_ptr->ping_info.hostname = host_ptr->hostname ;
+
     hwmon_del_groups ( host_ptr );
     hwmon_del_sensors ( host_ptr );
 

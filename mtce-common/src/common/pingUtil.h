@@ -2,7 +2,7 @@
 #define __INCLUDE_PINGUTIL_H__
 
 /*
- * Copyright (c) 2015-2017 Wind River Systems, Inc.
+ * Copyright (c) 2015-2017,2020 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -47,8 +47,8 @@ using namespace std;
 #define PING_WAIT_TIMER_MSEC     (200)
 #define PING_RETRY_DELAY_MSECS   (200)
 #define PING_MONITOR_INTERVAL     (60)
-#define PING_MISS_RETRY_DELAY     (5)
-
+#define PING_FAIL_RETRY_DELAY     (30)
+#define PING_FAIL_DEBOUNCE_THLD   (3)
 #define PING_MESSAGE_LEN         (80)
 
 typedef enum
@@ -73,6 +73,7 @@ typedef struct
     unsigned short sequence ;
     int    send_retries     ;
     int    recv_retries     ;
+    int    fail_debounce    ;
     bool   ipv6_mode        ;
     bool   received         ;
     bool   requested        ;

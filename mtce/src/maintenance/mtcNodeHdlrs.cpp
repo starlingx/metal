@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2018 Wind River Systems, Inc.
+ * Copyright (c) 2013-2020 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -3901,7 +3901,7 @@ int nodeLinkClass::reset_handler ( struct nodeLinkClass::node * node_ptr )
 
             if ( node_ptr->bmc_accessible == false )
             {
-                wlog ("%s Power Off request rejected ; BMC not accessible ; retry in %d seconds \n",
+                wlog ("%s Reset request rejected ; BMC not accessible ; retry in %d seconds \n",
                           node_ptr->hostname.c_str(),
                           MTC_POWER_ACTION_RETRY_DELAY);
 
@@ -6186,28 +6186,9 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
         }
 
         /*****************************************************************
-         * Manage bmc creds refresh
-         ****************************************************************/
-        if ( node_ptr->bm_ping_info.ok == false )
-        {
-            /* Auto correct key ping information ;
-             * should never occur but if it does ... */
-            if (( node_ptr->bm_ping_info.hostname.empty()) ||
-                ( node_ptr->bm_ping_info.ip.empty()))
-            {
-                 node_ptr->bm_ping_info.hostname = node_ptr->hostname ;
-                 node_ptr->bm_ping_info.ip       = node_ptr->bm_ip    ;
-            }
-            if ( ! node_ptr->bm_pw.empty() )
-            {
-                node_ptr->bm_pw.clear();
-            }
-        }
-
-        /*****************************************************************
          * Manage getting the bm password but only when ping is ok
          ****************************************************************/
-        else if ( node_ptr->bm_pw.empty() )
+        if ( node_ptr->bm_pw.empty() )
         {
             barbicanSecret_type * secret = secretUtil_manage_secret( node_ptr->secretEvent,
                                                                      node_ptr->hostname,
