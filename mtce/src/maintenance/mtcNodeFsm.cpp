@@ -41,8 +41,8 @@ int nodeLinkClass::fsm ( struct nodeLinkClass::node * node_ptr )
         return FAIL ;
     }
 
-    /* if the multi-Node-Failure Avoidance timer rang then run its ecovery handler */
-    if ( mtcTimer_mnfa.ring == true )
+    /* if the multi-Node-Failure Avoidance timer rang then run its recovery handler */
+    if (( this->mnfa_timeout != 0 ) && ( mtcTimer_mnfa.ring == true ))
     {
         mtcTimer_mnfa.ring = false ;
         mnfa_exit ( true );
