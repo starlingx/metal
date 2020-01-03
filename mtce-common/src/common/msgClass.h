@@ -207,7 +207,7 @@ private:
 class msgClassTx : public msgClassSock
 {
 public:
-    msgClassTx(const char* address, int port, int proto, const char* interface=NULL);
+    msgClassTx(const char* address, int port, int proto, const char* interface=NULL, bool quiet=false);
     msgClassTx(const msgClassAddr& addr, const char* interface=NULL);
 private:
     int initSocket();

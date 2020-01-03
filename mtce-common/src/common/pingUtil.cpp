@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2017 Wind River Systems, Inc.
+ * Copyright (c) 2015-2017,2020 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -89,6 +89,7 @@ int pingUtil_init ( string hostname, ping_info_type & ping_info, const char * ip
     ping_info.sequence = getpid()   ;
     ping_info.recv_retries  = 0     ;
     ping_info.send_retries  = 0     ;
+    ping_info.fail_debounce = 0     ;
     ping_info.requested= false      ;
     ping_info.received = false      ;
     ping_info.recv_flush_highwater=2;
@@ -97,7 +98,7 @@ int pingUtil_init ( string hostname, ping_info_type & ping_info, const char * ip
     ping_info.monitoring = false    ;
     ping_info.stage = PINGUTIL_MONITOR_STAGE__OPEN ;
 
-    ping_info.sock = new msgClassTx(ip_address, 0, IPPROTO_RAW, NULL );
+    ping_info.sock = new msgClassTx(ip_address, 0, IPPROTO_RAW, NULL, true);
 
     /* Validate the socket setup */
     if ( ping_info.sock == NULL )
@@ -194,7 +195,6 @@ int pingUtil_send ( ping_info_type & ping_info )
     }
 
     ping_info.sequence++ ;
-    ping_info.recv_retries = 0;
 
     if ( ping_info.ipv6_mode == false )
     {
@@ -237,8 +237,6 @@ int pingUtil_send ( ping_info_type & ping_info )
 
         bytes = ping_info.sock->write( (const char*)&ping6_tx, sizeof(ping6_tx_message_type));
     }
-
-    ping_info.recv_retries = 0;
 
     if ( bytes <= 0 )
     {
@@ -508,10 +506,19 @@ int pingUtil_recv ( ping_info_type & ping_info,
                     if ( ping_info.monitoring == false )
                     {
                         /* ... only want the log when we are first connecting */
-                        ilog ("%s ping to %s ok ; (try %d)",
+                        if ( ping_info.recv_retries )
+                        {
+                            ilog ("%s ping %s ok ; (try %d)",
+                                      ping_info.hostname.c_str(),
+                                      ping_info.ip.c_str(),
+                                      ping_info.recv_retries+1);
+                        }
+                        else
+                        {
+                            ilog ("%s ping %s ok",
                                   ping_info.hostname.c_str(),
-                                  ping_info.ip.c_str(),
-                                  ping_info.recv_retries+1);
+                                  ping_info.ip.c_str());
+                        }
                     }
                     else
                     {
@@ -575,6 +582,7 @@ void pingUtil_fini ( ping_info_type & ping_info )
 
     ping_info.recv_retries = 0;
     ping_info.send_retries = 0;
+    ping_info.fail_debounce = 0;
     ping_info.sequence = 0;
     ping_info.identity = 0;
 
@@ -585,10 +593,7 @@ void pingUtil_fini ( ping_info_type & ping_info )
 
 void pingUtil_restart ( ping_info_type & ping_info )
 {
-    ilog ("%s ping monitor restart", ping_info.hostname.c_str());
-    ping_info.ok = false ;
-    ping_info.send_retries = 0 ;
-    ping_info.monitoring = false ;
+    dlog ("%s ping monitor restart", ping_info.hostname.c_str());
     pingUtil_fini (ping_info);
     pingUtil_init (ping_info.hostname, ping_info, ping_info.ip.data());
 
@@ -668,7 +673,7 @@ int pingUtil_acc_monitor ( ping_info_type & ping_info )
 
             if ( ++ping_info.send_retries > PING_MAX_SEND_RETRIES )
             {
-                elog ("%s ping to %s failed\n",
+                dlog ("%s ping %s failed ; max send retries\n",
                           ping_info.hostname.c_str(),
                           ping_info.ip.c_str());
 
@@ -676,7 +681,9 @@ int pingUtil_acc_monitor ( ping_info_type & ping_info )
             }
             else if ( pingUtil_send ( ping_info ) )
             {
-                elog ("%s failed to send bmc ping\n", ping_info.hostname.c_str());
+                wlog ("%s ping %s send failed\n",
+                          ping_info.hostname.c_str(),
+                          ping_info.ip.c_str());
                 ping_info.stage = PINGUTIL_MONITOR_STAGE__FAIL ;
             }
             else
@@ -694,6 +701,10 @@ int pingUtil_acc_monitor ( ping_info_type & ping_info )
                         mtcTimer_reset ( ping_info.timer );
                     }
                     mtcTimer_start_msec ( ping_info.timer, ping_info.timer_handler, PING_WAIT_TIMER_MSEC );
+
+                    /* send was ok so clear its retry counter */
+                    ping_info.send_retries = 0 ;
+
                     ping_info.stage = PINGUTIL_MONITOR_STAGE__RECV ;
                 }
             }
@@ -711,25 +722,17 @@ int pingUtil_acc_monitor ( ping_info_type & ping_info )
                 {
                     if ( ++ping_info.recv_retries > (PING_MAX_RECV_RETRIES) )
                     {
-                        /* only print this log once on the resend attempt */
-                        if ( ping_info.send_retries >= PING_MAX_SEND_RETRIES )
-                        {
-                            mlog ("%s ping recv from %s missed ; identity:%04x sequence:%04x (try %d of %d)\n",
-                                      ping_info.hostname.c_str(),
-                                      ping_info.ip.c_str(),
-                                      ping_info.identity,
-                                      ping_info.sequence,
-                                      ping_info.recv_retries-1,
-                                      PING_MAX_RECV_RETRIES);
-                        }
-                        ping_info.stage = PINGUTIL_MONITOR_STAGE__SEND ;
-                        break ;
+                        ping_info.recv_retries = 0;
+                        dlog ("%s ping %s failed ; max recv retries\n",
+                               ping_info.hostname.c_str(),
+                               ping_info.ip.c_str());
+                        ping_info.stage = PINGUTIL_MONITOR_STAGE__FAIL ;
                     }
                     else
                     {
-                       blog1 ("%s retrying ping\n", ping_info.hostname.c_str());
+                        blog1 ("%s retrying ping\n", ping_info.hostname.c_str());
+                        mtcTimer_start_msec ( ping_info.timer, ping_info.timer_handler, PING_RETRY_DELAY_MSECS );
                     }
-                    mtcTimer_start_msec ( ping_info.timer, ping_info.timer_handler, PING_RETRY_DELAY_MSECS );
                 }
                 else
                 {
@@ -746,13 +749,7 @@ int pingUtil_acc_monitor ( ping_info_type & ping_info )
 
                     ping_info.send_retries = 0 ;
                     ping_info.recv_retries = 0 ;
-
-#ifdef WANT_FIT_TESTING
-                    if ( daemon_want_fit ( FIT_CODE__FAST_PING_AUDIT_HOST, ping_info.hostname   ) == true )
-                        interval = 3 ;
-                    if ( daemon_want_fit ( FIT_CODE__FAST_PING_AUDIT_ALL ) == true )
-                        interval = 3 ;
-#endif
+                    ping_info.fail_debounce = 0 ;
                     mtcTimer_start ( ping_info.timer, ping_info.timer_handler, interval );
                     ping_info.stage = PINGUTIL_MONITOR_STAGE__WAIT ;
                 }
@@ -766,14 +763,30 @@ int pingUtil_acc_monitor ( ping_info_type & ping_info )
         }
         case PINGUTIL_MONITOR_STAGE__FAIL:
         {
-            ping_info.ok = false ;
-            ping_info.send_retries = 0 ;
-            ping_info.monitoring = false ;
-            pingUtil_fini (ping_info);
-            pingUtil_init (ping_info.hostname, ping_info, ping_info.ip.data());
+            // Assume socket reinit unless thresholding */
+            bool reinit = true ;
+            if ( ping_info.ok  == true )
+            {
+                if ( ++ping_info.fail_debounce < PING_FAIL_DEBOUNCE_THLD )
+                {
+                    reinit = false ;
+                    wlog("%s ping %s miss (%d of %d)",
+                             ping_info.hostname.c_str(),
+                             ping_info.ip.c_str(),
+                             ping_info.fail_debounce,
+                             PING_FAIL_DEBOUNCE_THLD );
+                }
+            }
+            if ( reinit == true )
+            {
+                elog("%s ping %s fail", ping_info.hostname.c_str(),
+                                        ping_info.ip.c_str());
 
+                pingUtil_fini (ping_info);
+                pingUtil_init (ping_info.hostname, ping_info, ping_info.ip.data());
+            }
             mtcTimer_reset ( ping_info.timer );
-            mtcTimer_start ( ping_info.timer, ping_info.timer_handler, PING_MONITOR_INTERVAL );
+            mtcTimer_start ( ping_info.timer, ping_info.timer_handler, PING_FAIL_RETRY_DELAY );
             ping_info.stage = PINGUTIL_MONITOR_STAGE__WAIT;
             break ;
         }
