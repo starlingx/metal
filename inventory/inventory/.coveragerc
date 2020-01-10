@@ -1,6 +1,0 @@
-[run]
-branch = True
-source = inventory
-
-[report]
-ignore_errors = True
