@@ -96,25 +96,9 @@ void hwmonHostClass::hwmon_fsm ( void )
 
                     pingUtil_acc_monitor ( host_ptr->ping_info );
 
-                    if ( host_ptr->ping_info.ok == false )
-                    {
-                        /* Auto correct key ping information ; should never occur but if it does ... */
-                        if (( host_ptr->ping_info.hostname.empty()) ||
-                            ( hostUtil_is_valid_ip_addr(host_ptr->ping_info.ip ) == false ))
-                        {
-                            slog ("%s host ping info missing ; (%d:%d)\n",
-                                      host_ptr->hostname.c_str(),
-                                      host_ptr->ping_info.hostname.empty(),
-                                      host_ptr->ping_info.ip.empty());
-
-                            host_ptr->ping_info.hostname = host_ptr->hostname ;
-                            host_ptr->ping_info.ip       = host_ptr->bm_ip    ;
-                        }
-                    }
-
                     /* Check to see if sensor monitoring for this host is
                      * disabled or the bm password has not yet been learned */
-                    else if (( host_ptr->monitor == false ) || ( host_ptr->bm_pw.empty()))
+                    if (( host_ptr->monitor == false ) || ( host_ptr->bm_pw.empty()))
                     {
                         /* ... make sure the thread sits in the
                          *     idle state while disabled or there

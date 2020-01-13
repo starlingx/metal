@@ -1041,19 +1041,25 @@ int msgClassRx::initSocket(bool allow_any, bool is_multicast)
  * @param IP protocol
  * @param name of interface to bind to, or null otherwise
  */
-msgClassTx::msgClassTx(const char* address, int port, int proto, const char* interface)
+msgClassTx::msgClassTx(const char* address, int port, int proto, const char* interface, bool quiet)
 {
     this->dst_addr = new msgClassAddr(address, port, proto);
     this->src_addr = new msgClassAddr(address, port, proto);
     if(interface)
     {
-        ilog ("Creating %s socket on port %d with address: %s\n", interface, port, address);
+        if ( !quiet)
+        {
+            ilog ("Creating %s socket on port %d with address: %s\n", interface, port, address);
+        }
         this->interface = new char[strlen(interface)+1];
         snprintf(this->interface, strlen(interface)+1, "%s", interface);
     }
     else
     {
-        ilog ("Creating socket on port %d with address: %s\n", port, address);
+        if ( !quiet)
+        {
+            ilog ("Creating socket on port %d with address: %s\n", port, address);
+        }
         this->interface = NULL;
     }
     this->return_status = initSocket();
