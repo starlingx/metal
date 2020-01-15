@@ -47,7 +47,7 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = 'stx-metal'
+project = u'StarlingX Metal'
 
 # Release notes are version independent, no need to set version and release
 release = ''
