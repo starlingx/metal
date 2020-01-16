@@ -5,4 +5,3 @@ mtce-control
 mtce-storage
 installer/pxe-network-installer
 kickstart
-tools/rvmc
