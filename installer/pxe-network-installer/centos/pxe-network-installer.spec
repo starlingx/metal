@@ -16,7 +16,6 @@ Source003: squashfs.img
 Source010: pxeboot-update.sh
 Source011: grub.cfg
 Source012: efiboot.img
-Source013: post_clone_iso_ks.cfg
 
 Source030: default
 Source031: default.static
@@ -70,9 +69,6 @@ install -v -D -m 644 %{_sourcedir}/squashfs.img \
 install -v -d -m 755 %{buildroot}%{_sbindir}
 
 install -v -m 755 %{_sourcedir}/pxeboot-update.sh %{buildroot}%{_sbindir}/pxeboot-update-%{platform_release}.sh
-
-install -v -m 644 %{_sourcedir}/post_clone_iso_ks.cfg \
-    %{buildroot}/pxeboot/post_clone_iso_ks.cfg
 
 install -v -m 644 %{_sourcedir}/default \
     %{buildroot}/pxeboot/pxelinux.cfg.files/default
