@@ -13,17 +13,19 @@
 #include "lmon.h"
 #include <linux/rtnetlink.h> /* for ... RTMGRP_LINK                         */
 #include "nodeMacro.h"       /* for ... CREATE_REUSABLE_INET_UDP_TX_SOCKET  */
+#include <vector>
 
 #define HTTP_SERVER_NAME ((const char *)"link status query")
 
 
 static lmon_ctrl_type lmon_ctrl ;
 
-static interface_ctrl_type interfaces[INTERFACES_MAX];
+static vector<interface_ctrl_type> interfaces;
 
 static const char * iface_list[INTERFACES_MAX] = { MGMT_INTERFACE_NAME,
                                                    CLUSTER_HOST_INTERFACE_NAME,
-                                                   OAM_INTERFACE_NAME };
+                                                   OAM_INTERFACE_NAME,
+                                                   DATA_NETWORK_INTERFACE_NAME };
 
 /* httpUtil needs a mtclog socket pointer */
 msgSock_type * get_mtclogd_sockPtr ( void )
@@ -168,7 +170,7 @@ void lmonHdlr_http_handler (struct evhttp_request *req, void *arg)
 
         /* loop over the interfaces and build a response string for each
          * of those that are used */
-        for ( int i = 0 ; i < INTERFACES_MAX ; i++ )
+        for ( unsigned int i = 0 ; i < interfaces.size() ; i++ )
         {
             if ((interfaces[i].used == true) && (interfaces[i].name[0] != '\0'))
             {
@@ -347,51 +349,37 @@ void lmon_learn_interfaces ( int ioctl_socket )
     /* initialize interface monitoring */
     for ( int iface = 0 ; iface < INTERFACES_MAX ; iface++ )
     {
-        interfaces[iface].name = iface_list[iface];
-        lmon_interfaces_init ( &interfaces[iface] );
+        string physical_interface = "";
+        string iface_fullname = get_interface_fullname(iface_list[iface]);
 
-        if ( interfaces[iface].used == false )
-            continue ;
+        if ( iface_fullname.empty() )
+            continue;
 
-        /* set the link state for all the primary physical interfaces */
-        if ( lmon_get_link_state ( ioctl_socket,
-                                   interfaces[iface].interface_one,
-                                   interfaces[iface].interface_one_link_up ) )
+        int rc = read_the_lmon_config(iface_fullname, physical_interface);
+        if( rc != PASS)
+            continue;
+
+        char * physical_iface_name = strtok(const_cast<char*>(physical_interface.c_str()), ",");
+        while (physical_iface_name != NULL)
         {
-            interfaces[iface].interface_one_event_time = lmon_fm_timestamp();
-            interfaces[iface].interface_one_link_up = false ;
-            wlog ("%s interface state query failed ; defaulting to Down\n",
-                      interfaces[iface].interface_one) ;
-        }
-        else
-        {
-            interfaces[iface].interface_one_event_time = lmon_fm_timestamp();
-            ilog ("%s is %s\n",
-                      interfaces[iface].interface_one,
-                      interfaces[iface].interface_one_link_up ?
-                      "Up" : "Down" );
+            interface_ctrl_type iface_item;
+            memset (&iface_item, 0, sizeof(iface_item));
 
-            if ( interfaces[iface].lagged == true )
+            iface_item.name = iface_list[iface];
+
+            // Map an interface name to a physical port.
+            // interface type: ethernet, bonded or vlan
+            lmon_interfaces_init ( &iface_item, physical_iface_name );
+
+            if ( iface_item.used == true )
             {
-                /* set the link state for all the lagged physical interfaces */
-                if ( lmon_get_link_state ( ioctl_socket,
-                                           interfaces[iface].interface_two,
-                                           interfaces[iface].interface_two_link_up ) )
-                {
-                    interfaces[iface].interface_two_event_time = lmon_fm_timestamp();
-                    interfaces[iface].interface_two_link_up = false ;
-                    wlog ("%s lag interface state query failed ; defaulting to Down\n",
-                              interfaces[iface].interface_two) ;
-                }
-                else
-                {
-                    interfaces[iface].interface_two_event_time = lmon_fm_timestamp();
-                    ilog ("%s is %s (lag)\n",
-                              interfaces[iface].interface_two,
-                              interfaces[iface].interface_two_link_up ?
-                              "Up" : "Down" );
-                }
+                // initial up/down state
+                set_the_link_state(ioctl_socket, &iface_item);
+
+                interfaces.push_back(iface_item);
             }
+
+            physical_iface_name = strtok(NULL, ",");
         }
     }
 }
@@ -423,7 +411,7 @@ int service_interface_events ( void )
         return RETRY ;
     }
 
-    for ( int i = 0 ; i < INTERFACES_MAX ; i++ )
+    for ( unsigned int i = 0 ; i < interfaces.size() ; i++ )
     {
         if ( interfaces[i].used == true )
         {
@@ -622,7 +610,7 @@ void lmon_query_all_links( void )
 {
     dlog1 ("audit timer fired");
 
-    for ( int i = 0 ; i < INTERFACES_MAX ; i++ )
+    for ( unsigned int i = 0 ; i < interfaces.size() ; i++ )
     {
         if ( interfaces[i].used )
         {
@@ -703,7 +691,6 @@ void daemon_service_run ( void )
     lmon_ctrl.ioctl_socket = 0 ;
     lmon_ctrl.netlink_socket = 0 ;
     memset (&lmon_ctrl.mtclogd, 0, sizeof(lmon_ctrl.mtclogd));
-    memset (&interfaces, 0, sizeof(interfaces));
 
     get_hostname (&lmon_ctrl.my_hostname[0], MAX_HOST_NAME_SIZE );
     mtcTimer_init ( lmon_ctrl.audit_timer, lmon_ctrl.my_hostname, "audit");

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2016 Wind River Systems, Inc.
+ * Copyright (c) 2013-2020 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -4322,7 +4322,9 @@ void nodeLinkClass::bmc_access_data_init ( struct nodeLinkClass::node * node_ptr
         node_ptr->bm_ping_info.stage = PINGUTIL_MONITOR_STAGE__OPEN ;
         mtcTimer_reset ( node_ptr->bm_ping_info.timer );
         node_ptr->bm_ping_info.timer_handler = &mtcTimer_handler ;
+
         node_ptr->bm_ping_info.ip = node_ptr->bm_ip ;
+        node_ptr->bm_ping_info.hostname = node_ptr->hostname ;
 
         node_ptr->bmc_protocol_learning = false ;
 

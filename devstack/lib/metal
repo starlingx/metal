@@ -103,22 +103,6 @@ function build_mtce_common {
     popd
 }
 
-function build_inventory {
-    pushd ${STX_METAL_DIR}/inventory/inventory
-
-    python setup.py build
-
-    popd
-}
-
-function build_inventory_client {
-    pushd ${STX_METAL_DIR}/python-inventoryclient/inventoryclient
-
-    python setup.py build
-
-    popd
-}
-
 function install_metal {
     install_mtce_common
     # components could be seperately installed if
@@ -133,13 +117,6 @@ function install_metal {
     fi
     if is_service_enabled mtce-storage; then
         install_mtce_storage
-    fi
-
-    if is_service_enabled inventory-api || is_service_enabled inventory-conductor || is_service_enabled inventory-agent; then
-        install_inventory
-    fi
-    if is_service_enabled inventory-client; then
-        install_inventory_client
     fi
 }
 
@@ -252,64 +229,6 @@ function install_mtce_control {
     sudo install -m 644 -p -D scripts/hbsAgent.service ${unit_dir}/devstack@hbsAgent.service
     # Controller-Only Go Enabled Test
     sudo install -m 755 -d ${local_etc_goenabledd}
-    popd
-}
-
-function install_inventory {
-    local lib_dir=${PREFIX}/lib
-    local unit_dir=${PREFIX}/lib/systemd/system
-    local lib64_dir=${PREFIX}/lib64
-    local pythonroot=${lib64_dir}/python2.7/site-packages
-
-    local sysconf_dir=${SYSCONFDIR}
-    local local_etc_goenabledd=${SYSCONFDIR}/goenabled.d
-    local local_etc_inventory=${SYSCONFDIR}/inventory
-    local local_etc_motdd=${SYSCONFDIR}/motd.d
-
-    build_inventory
-
-    pushd ${STX_METAL_DIR}/inventory/inventory
-
-    sudo python setup.py install \
-        --root=/ \
-        --install-lib=$PYTHON_SITE_DIR \
-        --prefix=/usr \
-        --install-data=/usr/share \
-        --single-version-externally-managed
-
-    sudo install -d -m 755 ${local_etc_goenabledd}
-    sudo install -p -D -m 755 etc/inventory/inventory_goenabled_check.sh ${local_etc_goenabledd}/inventory_goenabled_check.sh
-
-    sudo install -d -m 755 ${local_etc_inventory}
-    sudo install -p -D -m 755 etc/inventory/policy.json ${local_etc_inventory}/policy.json
-
-    sudo install -d -m 755 ${local_etc_motdd}
-    sudo install -p -D -m 755 etc/inventory/motd-system ${local_etc_motdd}/10-system-config
-
-    sudo install -m 755 -p -D scripts/inventory-api  ${lib_dir}/ocf/resource.d/platform/inventory-api
-    sudo install -m 755 -p -D scripts/inventory-conductor  ${lib_dir}/ocf/resource.d/platform/inventory-conductor
-
-    sudo install -m 644 -p -D scripts/inventory-api.service ${unit_dir}/inventory-api.service
-    sudo install -m 644 -p -D scripts/inventory-conductor.service ${unit_dir}/inventory-conductor.service
-
-    popd
-}
-
-function install_inventory_client {
-    pushd ${STX_METAL_DIR}/python-inventoryclient/inventoryclient
-
-    build_inventory_client
-
-    sudo python setup.py install \
-        --root=/ \
-        --install-lib=$PYTHON_SITE_DIR \
-        --prefix=/usr \
-        --install-data=/usr/share \
-        --single-version-externally-managed
-
-    sudo install -d -m 755 /etc/bash_completion.d/
-    sudo install -p -D -m 664 tools/inventory.bash_completion /etc/bash_completion.d/inventory.bash_completion
-
     popd
 }
 
@@ -972,40 +891,6 @@ function cleanup_metal {
         sudo rm -rf ${sysconf_dir}/init.d/goenabledStorage
     fi
 
-    if is_service_enabled inventory-api || is_service_enabled inventory-conductor || is_service_enabled inventory-agent; then
-        cleanup_inventory
-    fi
-    if is_service_enabled inventory-client; then
-        cleanup_inventory_client
-    fi
-}
-
-function cleanup_inventory {
-    local lib_dir=${PREFIX}/lib
-    local unit_dir=${PREFIX}/lib/systemd/system
-    local lib64_dir=${PREFIX}/lib64
-    local pythonroot=${lib64_dir}/python2.7/site-packages
-
-    local sysconf_dir=${SYSCONFDIR}
-    local local_etc_goenabledd=${SYSCONFDIR}/goenabled.d
-    local local_etc_inventory=${SYSCONFDIR}/inventory
-    local local_etc_motdd=${SYSCONFDIR}/motd.d
-
-    sudo pip uninstall -y inventory
-
-    sudo rm -rf  ${local_etc_goenabledd}/inventory_goenabled_check.sh
-    sudo rm -rf  ${local_etc_inventory}/policy.json
-    sudo rm -rf  ${local_etc_motdd}/10-system-config
-    sudo rm -rf  ${lib_dir}/ocf/resource.d/platform/inventory-api
-    sudo rm -rf  ${lib_dir}/ocf/resource.d/platform/inventory-conductor
-    sudo rm -rf  ${unit_dir}/inventory-api.service
-    sudo rm -rf  ${unit_dir}/inventory-conductor.service
-}
-
-function cleanup_inventory_client {
-    sudo pip uninstall -y inventoryclient
-
-    sudo rm -rf /etc/bash_completion.d/inventory.bash_completion
 }
 
 function uninstall_files {

@@ -1,0 +1,19 @@
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: rvmc
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: controller-0
+  containers:
+    - name: rvmc
+      image: rvmc:dev-centos-stable-build
+      volumeMounts:
+        - mountPath: /etc/rvmc.yaml
+          name: rvmc-config
+  volumes:
+    - name: rvmc-config
+      hostPath:
+        path: /etc/rvmc.yaml
+  restartPolicy: Never

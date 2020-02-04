@@ -1165,12 +1165,12 @@ int hwmonHostClass::bmc_sensor_monitor ( struct hwmonHostClass::hwmon_host * hos
                         {
                             if ( host_ptr->bmc_thread_info.status == FAIL_SYSTEM_CALL )
                             {
-                                elog ("%s '%s' system call failed (retry %d of %d) (%s)",
+                                elog ("%s '%s' system call failed (retry %d of %d)",
                                           host_ptr->bmc_thread_info.log_prefix,
                                           bmcUtil_getCmd_str(
                                           host_ptr->bmc_thread_info.command).c_str(),
                                           host_ptr->bmc_thread_ctrl.retries,
-                                          MAX_THREAD_RETRIES, host_ptr->thread_extra_info.bm_pw.c_str());
+                                          MAX_THREAD_RETRIES);
                             }
                             else if (( host_ptr->bmc_thread_ctrl.retries == (MAX_THREAD_RETRIES-1)) ||
                                      (  host_ptr->bmc_thread_ctrl.retries == 1 ))

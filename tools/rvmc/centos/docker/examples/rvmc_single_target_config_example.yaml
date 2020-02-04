@@ -1,0 +1,5 @@
+---
+bmc_address: <bmc ip address>
+bmc_username: <bmc username>
+bmc_password: <bmc password - base64 encoded>
+image: <url address, port and path to image>
