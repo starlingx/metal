@@ -245,9 +245,11 @@ typedef enum
 #define MTC_TASK_REINSTALL_FAIL_OL "Reinstall Failed ; timeout waiting for offline"
 #define MTC_TASK_REINSTALL_FAIL_TO "Reinstall Failed ; timeout waiting for online"
 #define MTC_TASK_REINSTALL_FAIL_BA "Reinstall Failed ; timeout waiting BMC access"
-#define MTC_TASK_REINSTALL_FAIL_PO "Reinstall Failed ; could not power on host"
+#define MTC_TASK_REINSTALL_FAIL_PO "Reinstall Failed ; could not power off host"
+#define MTC_TASK_REINSTALL_FAIL_PU "Reinstall Failed ; could not power on host"
 #define MTC_TASK_REINSTALL_FAIL_NB "Reinstall Failed ; netboot request"
 #define MTC_TASK_REINSTALL_FAIL_PR "Reinstall Failed ; power reset request"
+#define MTC_TASK_REINSTALL_FAIL_PQ "Reinstall Failed ; could not query power state"
 
 #define MTC_TASK_REINSTALL_FAIL    "Reinstall Failed"
 #define MTC_TASK_REINSTALL_SUCCESS "Reinstall Succeeded"
@@ -1046,7 +1048,7 @@ typedef enum
     MTC_RESETPROG__REBOOT,
     MTC_RESETPROG__WAIT,
     MTC_RESETPROG__FAIL,
-    MTC_RESETPROG__STAGES   
+    MTC_RESETPROG__STAGES
 } mtc_resetProgStages_enum ;
 
 /** Return the string representing the specified 'reset' stage */
@@ -1059,10 +1061,14 @@ typedef enum
     MTC_REINSTALL__START_WAIT,
     MTC_REINSTALL__RESTART,
     MTC_REINSTALL__RESTART_WAIT,
-    MTC_REINSTALL__POWERON,
-    MTC_REINSTALL__POWERON_WAIT,
+    MTC_REINSTALL__POWERQRY,
+    MTC_REINSTALL__POWERQRY_WAIT,
+    MTC_REINSTALL__POWEROFF,
+    MTC_REINSTALL__POWEROFF_WAIT,
     MTC_REINSTALL__NETBOOT,
     MTC_REINSTALL__NETBOOT_WAIT,
+    MTC_REINSTALL__POWERON,
+    MTC_REINSTALL__POWERON_WAIT,
     MTC_REINSTALL__RESET,
     MTC_REINSTALL__RESET_WAIT,
     MTC_REINSTALL__WIPEDISK,
