@@ -42,7 +42,7 @@ master_doc = 'index'
 
 # General information about the project.
 repository_name = 'openstack/stx-metal'
-project = u'stx-metal'
+project = u'StarlingX Metal'
 bug_project = 'starlingx'
 bug_tag = 'stx.metal'
 
