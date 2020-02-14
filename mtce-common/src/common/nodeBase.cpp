@@ -326,19 +326,19 @@ void print_mtc_message ( string hostname,
 }
 
 /* Graceful recovery stages strings and string get'er */
-static std::string   recoveryStages_str [MTC_RECOVERY__STAGES   +1] ; 
-static std::string    disableStages_str [MTC_DISABLE__STAGES    +1] ; 
-static std::string     enableStages_str [MTC_ENABLE__STAGES     +1] ; 
-static std::string     sensorStages_str [MTC_SENSOR__STAGES     +1] ; 
-static std::string      powerStages_str [MTC_POWER__STAGES      +1] ; 
-static std::string powercycleStages_str [MTC_POWERCYCLE__STAGES +1] ; 
+static std::string   recoveryStages_str [MTC_RECOVERY__STAGES   +1] ;
+static std::string    disableStages_str [MTC_DISABLE__STAGES    +1] ;
+static std::string     enableStages_str [MTC_ENABLE__STAGES     +1] ;
+static std::string     sensorStages_str [MTC_SENSOR__STAGES     +1] ;
+static std::string      powerStages_str [MTC_POWER__STAGES      +1] ;
+static std::string powercycleStages_str [MTC_POWERCYCLE__STAGES +1] ;
 static std::string      resetStages_str [MTC_RESET__STAGES      +1] ;
 static std::string  reinstallStages_str [MTC_REINSTALL__STAGES  +1] ;
-static std::string    oosTestStages_str [MTC_OOS_TEST__STAGES   +1] ; 
-static std::string   insvTestStages_str [MTC_INSV_TEST__STAGES  +1] ; 
-static std::string     configStages_str [MTC_CONFIG__STAGES     +1] ; 
-static std::string        addStages_str [MTC_ADD__STAGES        +1] ; 
-static std::string        delStages_str [MTC_DEL__STAGES        +1] ; 
+static std::string    oosTestStages_str [MTC_OOS_TEST__STAGES   +1] ;
+static std::string   insvTestStages_str [MTC_INSV_TEST__STAGES  +1] ;
+static std::string     configStages_str [MTC_CONFIG__STAGES     +1] ;
+static std::string        addStages_str [MTC_ADD__STAGES        +1] ;
+static std::string        delStages_str [MTC_DEL__STAGES        +1] ;
 static std::string        subStages_str [MTC_SUBSTAGE__STAGES   +1] ;
 
 void mtc_stages_init ( void )
@@ -461,12 +461,16 @@ void mtc_stages_init ( void )
 
    reinstallStages_str   [MTC_REINSTALL__START         ] = "Reinstall-Start";
    reinstallStages_str   [MTC_REINSTALL__START_WAIT    ] = "Reinstall-Start-Wait";
+   reinstallStages_str   [MTC_REINSTALL__POWERQRY      ] = "Reinstall-Power-State-Query";
+   reinstallStages_str   [MTC_REINSTALL__POWERQRY_WAIT ] = "Reinstall-Power-State-Query-Wait";
    reinstallStages_str   [MTC_REINSTALL__RESTART       ] = "Reinstall-ReStart";
    reinstallStages_str   [MTC_REINSTALL__RESTART_WAIT  ] = "Reinstall-ReStart-Wait";
-   reinstallStages_str   [MTC_REINSTALL__POWERON       ] = "Reinstall-PowerOn";
-   reinstallStages_str   [MTC_REINSTALL__POWERON_WAIT  ] = "Reinstall-PowerOn-Wait";
+   reinstallStages_str   [MTC_REINSTALL__POWEROFF      ] = "Reinstall-PowerOff";
+   reinstallStages_str   [MTC_REINSTALL__POWEROFF_WAIT ] = "Reinstall-PowerOff-Wait";
    reinstallStages_str   [MTC_REINSTALL__NETBOOT       ] = "Reinstall-Netboot";
    reinstallStages_str   [MTC_REINSTALL__NETBOOT_WAIT  ] = "Reinstall-Netboot-Wait";
+   reinstallStages_str   [MTC_REINSTALL__POWERON       ] = "Reinstall-PowerOn";
+   reinstallStages_str   [MTC_REINSTALL__POWERON_WAIT  ] = "Reinstall-PowerOn-Wait";
    reinstallStages_str   [MTC_REINSTALL__RESET         ] = "Reinstall-Reset";
    reinstallStages_str   [MTC_REINSTALL__RESET_WAIT    ] = "Reinstall-Reset-Wait";
    reinstallStages_str   [MTC_REINSTALL__WIPEDISK      ] = "Reinstall-Wipedisk";
