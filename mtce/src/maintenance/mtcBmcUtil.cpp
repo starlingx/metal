@@ -193,18 +193,11 @@ int nodeLinkClass::bmc_command_recv ( struct nodeLinkClass::node * node_ptr )
             {
                 /* handle the redfishtool root query as a special case because
                  * it is likely to fail and we don't want un-necessary error logs */
-                if (( node_ptr->bmc_thread_info.command == BMC_THREAD_CMD__BMC_QUERY ) &&
+                if ((( node_ptr->bmc_thread_info.command == BMC_THREAD_CMD__BMC_QUERY ) ||
+                     ( node_ptr->bmc_thread_info.command == BMC_THREAD_CMD__BMC_INFO )) &&
                     (( rc == FAIL_SYSTEM_CALL ) || ( rc == FAIL_NOT_ACTIVE )))
                 {
                     blog ("%s bmc redfish %s failed",
-                              node_ptr->hostname.c_str(),
-                              bmcUtil_getCmd_str(
-                              node_ptr->bmc_thread_info.command).c_str());
-                }
-                else if (( node_ptr->bmc_thread_info.command == BMC_THREAD_CMD__BMC_INFO ) &&
-                         (( rc == FAIL_SYSTEM_CALL ) || ( rc == FAIL_NOT_ACTIVE )))
-                {
-                    wlog ("%s bmc redfish %s failed",
                               node_ptr->hostname.c_str(),
                               bmcUtil_getCmd_str(
                               node_ptr->bmc_thread_info.command).c_str());
@@ -220,6 +213,7 @@ int nodeLinkClass::bmc_command_recv ( struct nodeLinkClass::node * node_ptr )
                               node_ptr->bmc_thread_info.status,
                               node_ptr->bmc_thread_info.status_string.c_str());
                 }
+                goto bmc_command_recv_cleanup;
             }
             else
             {
@@ -381,6 +375,8 @@ int nodeLinkClass::bmc_command_recv ( struct nodeLinkClass::node * node_ptr )
             rc = RETRY ;
         }
     }
+
+bmc_command_recv_cleanup:
 
     if ( rc != RETRY )
     {

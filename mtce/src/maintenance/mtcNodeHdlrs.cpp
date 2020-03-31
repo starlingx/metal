@@ -4036,14 +4036,15 @@ int nodeLinkClass::reset_handler ( struct nodeLinkClass::node * node_ptr )
  * Description: This FSM handles node (re)install with and without
  *              a provisioned Board Management Controller (BMC).
  *
- *              BMC provisioned case: using IPMI commands to BMC ...
+ *              BMC provisioned case: board management commands to BMC ...
  *
- *                  - ensure host power is on
+ *                  - power off host
  *                  - force network boot on next reset
- *                  - issue node reset
+ *                  - power on host
  *
- *              BMC not provisioned case: using mtce messaging to node ...
+ *              BMC not provisioned case: mtce messaging to node ...
  *
+ *                  - host must be online
  *                  - send mtcClient wipedisk command
  *                       fail reinstall if no ACK
  *                  - send mtcClient reboot command
@@ -4120,17 +4121,9 @@ int nodeLinkClass::reinstall_handler ( struct nodeLinkClass::node * node_ptr )
                     mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_REINSTALL_TIMEOUT_BMC_ACC );
                     reinstallStageChange ( node_ptr, MTC_REINSTALL__START_WAIT );
                 }
-                else if ( node_ptr->power_on == false )
-                {
-                    /* need to power on node */
-                    wlog ("%s Reinstall power-on required", node_ptr->hostname.c_str());
-                    reinstallStageChange ( node_ptr, MTC_REINSTALL__POWERON );
-                }
                 else
                 {
-                    /* power is on so issue net boot command */
-                    ilog ("%s Reinstall power is on", node_ptr->hostname.c_str());
-                    reinstallStageChange ( node_ptr , MTC_REINSTALL__NETBOOT );
+                    reinstallStageChange ( node_ptr , MTC_REINSTALL__POWERQRY );
                 }
             }
             else
@@ -4211,18 +4204,107 @@ int nodeLinkClass::reinstall_handler ( struct nodeLinkClass::node * node_ptr )
             }
             break ;
         }
-        case MTC_REINSTALL__POWERON:
+        case MTC_REINSTALL__POWERQRY:
         {
-            powerStageChange ( node_ptr , MTC_POWERON__REQ_SEND );
-            reinstallStageChange ( node_ptr , MTC_REINSTALL__POWERON_WAIT );
+            if ( node_ptr->bmc_thread_ctrl.done )
+            {
+                /* Query Host Power Status */
+                if ( bmc_command_send ( node_ptr, BMC_THREAD_CMD__POWER_STATUS ) != PASS )
+                {
+                    elog ("%s '%s' send failed\n",
+                              node_ptr->hostname.c_str(),
+                              bmcUtil_getCmd_str(
+                              node_ptr->bmc_thread_info.command).c_str());
+                    pingUtil_restart ( node_ptr->bm_ping_info );
+                }
+                else
+                {
+                    reinstallStageChange ( node_ptr , MTC_REINSTALL__POWERQRY_WAIT );
+                    mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_RETRY_WAIT );
+                }
+            }
+            else
+            {
+                thread_kill ( node_ptr->bmc_thread_ctrl , node_ptr->bmc_thread_info ) ;
+            }
             break ;
         }
-        case MTC_REINSTALL__POWERON_WAIT:
+        case MTC_REINSTALL__POWERQRY_WAIT:
+        {
+            if ( mtcTimer_expired ( node_ptr->mtcTimer ) )
+            {
+                int rc = bmc_command_recv ( node_ptr ) ;
+                if ( rc == RETRY )
+                {
+                    mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_RETRY_WAIT );
+                    break ;
+                }
+                else if ( rc != PASS )
+                {
+                    wlog ("%s '%s' failed receive (rc:%d)",
+                              node_ptr->hostname.c_str(),
+                              bmcUtil_getCmd_str(
+                              node_ptr->bmc_thread_info.command).c_str(),
+                              rc );
+                }
+                else if ( node_ptr->bmc_thread_info.data.empty() )
+                {
+                    wlog ("%s '%s' request yielded no response data",
+                              node_ptr->hostname.c_str(),
+                              bmcUtil_getCmd_str(
+                              node_ptr->bmc_thread_info.command).c_str());
+                }
+                else
+                {
+                    int rc =
+                    bmcUtil_is_power_on ( node_ptr->hostname,
+                                          node_ptr->bmc_protocol,
+                                          node_ptr->bmc_thread_info.data,
+                                          node_ptr->power_on);
+                    if ( rc == PASS )
+                    {
+                        if ( node_ptr->power_on == true )
+                        {
+                            ilog ("%s Reinstall power-off required",
+                                      node_ptr->hostname.c_str());
+                            reinstallStageChange ( node_ptr , MTC_REINSTALL__POWEROFF );
+                        }
+                        else
+                        {
+                            ilog ("%s Reinstall power-off already",
+                                      node_ptr->hostname.c_str());
+                            reinstallStageChange ( node_ptr , MTC_REINSTALL__NETBOOT );
+                        }
+                        break ;
+                    }
+                    else
+                    {
+                        elog ("%s Reinstall power query failed (rc:%d)",
+                                  node_ptr->hostname.c_str(), rc );
+                    }
+                }
+                mtcInvApi_update_task ( node_ptr, MTC_TASK_REINSTALL_FAIL_PQ );
+                reinstallStageChange  ( node_ptr, MTC_REINSTALL__FAIL );
+            }
+            else
+            {
+                ; /* wait longer */
+            }
+            break ;
+        }
+
+        case MTC_REINSTALL__POWEROFF:
+        {
+            powerStageChange ( node_ptr , MTC_POWEROFF__REQ_SEND );
+            reinstallStageChange ( node_ptr , MTC_REINSTALL__POWEROFF_WAIT );
+            break ;
+        }
+        case MTC_REINSTALL__POWEROFF_WAIT:
         {
             /* The power handler manages timeout */
             if ( node_ptr->powerStage == MTC_POWER__DONE )
             {
-                if ( node_ptr->power_on == true )
+                if ( node_ptr->power_on == false )
                 {
                     if ( node_ptr->task != MTC_TASK_REINSTALL )
                         mtcInvApi_update_task ( node_ptr, MTC_TASK_REINSTALL );
@@ -4276,7 +4358,7 @@ int nodeLinkClass::reinstall_handler ( struct nodeLinkClass::node * node_ptr )
                 if ( rc == PASS )
                 {
                     ilog ("%s Reinstall netboot request completed", node_ptr->hostname.c_str());
-                    reinstallStageChange ( node_ptr, MTC_REINSTALL__RESET);
+                    reinstallStageChange ( node_ptr, MTC_REINSTALL__POWERON);
                 }
                 else if ( rc == RETRY )
                 {
@@ -4290,6 +4372,41 @@ int nodeLinkClass::reinstall_handler ( struct nodeLinkClass::node * node_ptr )
                     mtcInvApi_update_task ( node_ptr, MTC_TASK_REINSTALL_FAIL_NB );
                     reinstallStageChange ( node_ptr, MTC_REINSTALL__FAIL );
                 }
+            }
+            break ;
+        }
+        case MTC_REINSTALL__POWERON:
+        {
+            powerStageChange ( node_ptr , MTC_POWERON__REQ_SEND );
+            reinstallStageChange ( node_ptr , MTC_REINSTALL__POWERON_WAIT );
+            break ;
+        }
+        case MTC_REINSTALL__POWERON_WAIT:
+        {
+            /* The power handler manages timeout */
+            if ( node_ptr->powerStage == MTC_POWER__DONE )
+            {
+                if ( node_ptr->power_on == true )
+                {
+                    if ( node_ptr->task != MTC_TASK_REINSTALL )
+                        mtcInvApi_update_task ( node_ptr, MTC_TASK_REINSTALL );
+
+                    mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_SECS_5 );
+                    reinstallStageChange ( node_ptr , MTC_REINSTALL__OFFLINE_WAIT );
+                }
+                else
+                {
+                    elog ("%s %s", node_ptr->hostname.c_str(), MTC_TASK_REINSTALL_FAIL_PU);
+
+                    mtcInvApi_update_task ( node_ptr, MTC_TASK_REINSTALL_FAIL_PU );
+                    reinstallStageChange ( node_ptr , MTC_REINSTALL__FAIL );
+                }
+            }
+            else
+            {
+                /* run the power handler till the host's power is on or
+                 * the power-on handler times out */
+                power_handler ( node_ptr );
             }
             break ;
         }
@@ -4736,7 +4853,7 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
 
             else
             {
-                    rc = bmc_command_send ( node_ptr, BMC_THREAD_CMD__POWER_OFF );
+                rc = bmc_command_send ( node_ptr, BMC_THREAD_CMD__POWER_OFF );
                 if ( rc )
                 {
                     wlog ("%s Power-Off request failed (%d)\n", node_ptr->hostname.c_str(), rc );
@@ -4744,7 +4861,7 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
                 }
                 else
                 {
-                    blog ("%s Power-Off requested\n", node_ptr->hostname.c_str());
+                    ilog ("%s Power-Off requested\n", node_ptr->hostname.c_str());
                     powerStageChange ( node_ptr , MTC_POWEROFF__RESP_WAIT );
                 }
                 mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_POWER_ACTION_RETRY_DELAY );
@@ -4756,14 +4873,13 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
         {
             if ( mtcTimer_expired ( node_ptr->mtcTimer ) )
             {
-                    rc = bmc_command_recv ( node_ptr );
-                    if ( rc == RETRY )
-                    {
-                        mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_RETRY_WAIT );
-                        break ;
-                    }
-
-                if ( rc )
+                rc = bmc_command_recv ( node_ptr );
+                if ( rc == RETRY )
+                {
+                    mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_RETRY_WAIT );
+                    break ;
+                }
+                else if ( rc )
                 {
                     elog ("%s Power-Off command failed\n", node_ptr->hostname.c_str());
                     mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_POWER_ACTION_RETRY_DELAY );
@@ -4772,10 +4888,12 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
                 else
                 {
                     ilog ("%s is Powering Off\n", node_ptr->hostname.c_str() );
-                    mtcInvApi_update_task ( node_ptr, "Powering Off" );
+                    if ( node_ptr->adminAction != MTC_ADMIN_ACTION__REINSTALL )
+                    {
+                        mtcInvApi_update_task ( node_ptr, "Powering Off" );
+                    }
                     mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_TASK_UPDATE_DELAY );
                     powerStageChange ( node_ptr , MTC_POWEROFF__DONE );
-                    node_ptr->power_on = false ;
                 }
             }
             break ;
@@ -4822,6 +4940,7 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
                 availStatusChange ( node_ptr, MTC_AVAIL_STATUS__POWERED_OFF );
 
                 powerStageChange ( node_ptr , MTC_POWER__DONE );
+                node_ptr->power_on = false ;
             }
             break ;
         }
@@ -5021,10 +5140,12 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
                 else
                 {
                     ilog ("%s is Powering On\n", node_ptr->hostname.c_str() );
-                    mtcInvApi_update_task ( node_ptr, "Powering On" );
+                    if ( node_ptr->adminAction != MTC_ADMIN_ACTION__REINSTALL )
+                    {
+                        mtcInvApi_update_task ( node_ptr, "Powering On" );
+                    }
                     mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_TASK_UPDATE_DELAY );
                     powerStageChange ( node_ptr , MTC_POWERON__DONE );
-                    node_ptr->power_on = true ;
                 }
             }
             break ;
@@ -5067,6 +5188,7 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
                 availStatusChange ( node_ptr, MTC_AVAIL_STATUS__OFFLINE );
 
                 powerStageChange ( node_ptr , MTC_POWER__DONE );
+                node_ptr->power_on = true ;
             }
             break ;
         }
@@ -5083,7 +5205,10 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
 
             ar_enable ( node_ptr );
 
-            mtcInvApi_force_task ( node_ptr, "" );
+            if ( node_ptr->adminAction != MTC_ADMIN_ACTION__REINSTALL )
+            {
+                mtcInvApi_force_task ( node_ptr, "" );
+            }
             break ;
         }
     }

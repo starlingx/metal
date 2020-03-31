@@ -20,7 +20,7 @@
 
 # -- Project information -----------------------------------------------------
 
-project = u'stx-metal'
+project = u'StarlingX Metal'
 copyright = u'2018, StarlingX'
 author = u'StarlingX'
 
