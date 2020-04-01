@@ -130,6 +130,8 @@
 #define FIT_CODE__START_HOST_SERVICES                (70)
 #define FIT_CODE__STOP_HOST_SERVICES                 (71)
 
+#define FIT_CODE__SOCKET_SETUP                       (72)
+
 /*****************      Process Fit Codes     ********************************/
 
 /* Hardware Monitor FIT Codes */
