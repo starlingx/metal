@@ -106,7 +106,7 @@ Requires: dpkg
 Requires: ipmitool
 
 %description -n mtce-hostw
-Titanium Cloud Host Maintenance services. A suite of daemons that provide
+StarlingX Host Maintenance services. A suite of daemons that provide
 host maintainability and a high level of fault detection with automatic
 notification and recovery.The Maintenance Service (mtcAgent/mtcClient)
 manages hosts according to an abbreviated version of the CCITT X.731 ITU

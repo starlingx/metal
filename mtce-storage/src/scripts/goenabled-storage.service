@@ -1,5 +1,5 @@
 [Unit]
-Description=Titanium Cloud Maintenance Storage Goenable Ready
+Description=StarlingX Maintenance Storage Goenable Ready
 After=config.service
 Before=pmon.service
 

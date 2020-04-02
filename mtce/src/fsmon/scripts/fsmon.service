@@ -1,5 +1,5 @@
 [Unit]
-Description=Titanium Cloud Maintenance Filesystem Monitor
+Description=StarlingX Maintenance Filesystem Monitor
 After=network.target syslog.service config.service
 Before=pmon.service
 

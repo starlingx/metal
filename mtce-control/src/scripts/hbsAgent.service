@@ -1,5 +1,5 @@
 [Unit]
-Description=Titanium Cloud Maintenance Heartbeat Agent
+Description=StarlingX Maintenance Heartbeat Agent
 After=network.target syslog.service config.service
 Before=pmon.service
 

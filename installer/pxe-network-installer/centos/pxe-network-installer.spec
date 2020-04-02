@@ -126,7 +126,7 @@ install -v -m 0644 \
     %{_datadir}/syslinux/gpxelinux.0 \
     %{buildroot}/pxeboot
 
-# Copy Titanium grub.cfg. It will be used to create ISO on the Controller.
+# Copy StarlingX grub.cfg. It will be used to create ISO on the Controller.
 install -v -m 0644 %{_sourcedir}/grub.cfg \
     %{buildroot}/pxeboot/EFI/
 
