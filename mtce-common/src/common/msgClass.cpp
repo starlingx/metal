@@ -330,12 +330,17 @@ int msgClassAddr::getAddressFromInterface(const char* interface, char* address, 
     // is the intf hostname
     char iface_hostname[MAX_CHARS_HOSTNAME];
     memset(iface_hostname, 0, sizeof(iface_hostname));
-    snprintf(iface_hostname, sizeof(iface_hostname),
-             "%s%s", hostname,
-             (((interface_type == CLSTR_IFACE)) ? CLUSTER_HOST_SUFFIX : ""));
+    int ret = snprintf(iface_hostname, sizeof(iface_hostname),
+                       "%s%s", hostname,
+                       (((interface_type == CLSTR_IFACE)) ? CLUSTER_HOST_SUFFIX : ""));
+    if (ret >= (int)sizeof(iface_hostname))
+    {
+        elog("%s hostname is too long ; truncated. interface_type: %d",
+             hostname, interface_type);
+    }
 
     struct addrinfo *res = NULL;
-    int ret = getaddrinfo(iface_hostname, NULL, NULL, &res);
+    ret = getaddrinfo(iface_hostname, NULL, NULL, &res);
     if(ret)
     {
         elog("%s ip address resolution failed (err: %s)",
