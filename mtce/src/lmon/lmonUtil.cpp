@@ -332,7 +332,7 @@ int lmon_interfaces_init ( interface_ctrl_type * ptr, string physical_interface 
             string line;
             while ( getline( finTwo, line ) )
             {
-                strncpy(line_buf, line.c_str(), MAX_CHARS_ON_LINE);
+                snprintf(line_buf, sizeof(line_buf), "%s", line.c_str());
 
                 // the slave interfaces are listed as enXYYY enXYYY...
                 // starting with the primary. Read all other slaves
