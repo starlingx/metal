@@ -1,5 +1,5 @@
 [Unit]
-Description=Titanium Cloud Maintenance Heartbeat Client
+Description=StarlingX Maintenance Heartbeat Client
 After=network.target syslog.service config.service
 Before=pmon.service mtcClient.service
 

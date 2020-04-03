@@ -3,7 +3,7 @@
 Name: mtce-control
 Version: 1.0
 Release: %{tis_patch_ver}%{?_tis_dist}
-Summary: Titanium Cloud Platform Controller Node Maintenance Package
+Summary: StarlingX Platform Controller Node Maintenance Package
 
 Group: base
 License: Apache-2.0

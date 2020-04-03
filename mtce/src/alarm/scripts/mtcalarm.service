@@ -1,5 +1,5 @@
 [Unit]
-Description=Titanium Cloud Maintenance Alarm Handler Client
+Description=StarlingX Maintenance Alarm Handler Client
 After=network.target syslog.service config.service
 Before=pmon.service
 

@@ -1,5 +1,5 @@
 [Unit]
-Description=Titanium Cloud Maintenance Worker Goenable Ready
+Description=StarlingX Maintenance Worker Goenable Ready
 After=config.service worker-config-gate.service
 
 [Service]

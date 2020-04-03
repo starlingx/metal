@@ -1,7 +1,7 @@
 [Unit]
-Description=Titanium Cloud Maintenance Process Monitor
+Description=StarlingX Maintenance Process Monitor
 After=config.service
-# The following thirdparty service files are not modified by Titanium Cloud,
+# The following thirdparty service files are not modified by StarlingX,
 # so add "After" clauses here rather than "Before=pmon.service" to those
 After=sshd.service acpid.service syslog-ng.service
 After=ntpd.service ptp4l.service phc2sys.service

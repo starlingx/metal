@@ -1,5 +1,5 @@
 [Unit]
-Description=Titanium Cloud Run Host Services
+Description=StarlingX Run Host Services
 After=network.target syslog.service
 
 [Service]
