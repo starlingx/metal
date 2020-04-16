@@ -293,4 +293,6 @@ openstack-swift-account
 openstack-swift-container
 openstack-swift-proxy
 Redfishtool
-
+dex-helm
+oidcauthtools
+stx-oidc-auth-helm
