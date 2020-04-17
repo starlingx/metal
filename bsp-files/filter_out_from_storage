@@ -339,3 +339,5 @@ kvm-timer-advance
 dex-helm
 oidcauthtools
 stx-oidc-auth-helm
+stx-cert-manager-helm
+stx-nginx-ingress-controller-helm
