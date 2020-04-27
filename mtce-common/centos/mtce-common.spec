@@ -8,7 +8,6 @@ Packager: Wind River <info@windriver.com>
 URL: unknown
 Source0: %{name}-%{version}.tar.gz
 BuildRequires: libssh2
-BuildRequires: libssh2-devel
 BuildRequires: json-c
 BuildRequires: json-c-devel
 BuildRequires: fm-common
