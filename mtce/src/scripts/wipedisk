@@ -123,12 +123,21 @@ do
                 echo "Wiping partition $part..."
                 wipefs -f -a $part
 
-                # Clearing previous GPT tables or LVM data
                 # Delete the first few bytes at the start and end of the partition. This is required with
                 # GPT partitions, they save partition info at the start and the end of the block.
-                dd if=/dev/zero of=$part bs=512 count=34
-                dd if=/dev/zero of=$part bs=512 count=34 seek=$((`blockdev --getsz $part` - 34))
+                # Skip / or we will lose access to the tools on the system.
+                if [[ $part != $rootfs_part ]]
+                then
+                    dd if=/dev/zero of=$part bs=512 count=34
+                    dd if=/dev/zero of=$part bs=512 count=34 seek=$((`blockdev --getsz $part` - 34))
+                fi
+
+                echo "Removing partition $part..."
+                sgdisk $dev --delete $part_number
             done
+
+            # Wipe bootloader signature to allow reboot from secondary boot devices (e.g. PXE)
+            dd if=/dev/zero of=$dev bs=440 count=1
         else
             echo "Wiping $dev..."
             wipefs -f -a $dev
