@@ -70,6 +70,22 @@ done
 
 WIPE_HDD="$pvs_to_delete $WIPE_HDD"
 
+# During host reinstalls ceph journals also require wiping, so we also gather information on
+# journal partitions. Even if this script is also called during upgrades, there was no issue
+# observed during that operation, so we skip wiping the journals during upgrades.
+JOURNAL_DISKS=""
+HOST_IN_UPGRADE=$(curl -sf http://pxecontroller:6385/v1/upgrade/$(hostname)/in_upgrade 2>/dev/null)
+# The "ceph-disk list" command works even if the ceph cluster is not operational (for example if
+# too many monitors are down) so we can grab journal info from the node, even in such scenarios.
+# As a safety measure, we also wrap the command in a timeout command; it should never take long
+# for the command to return, but if it does it's safer to just time it out after 15 seconds.
+CEPH_DISK_OUTPUT=$(timeout 15 ceph-disk list 2>/dev/null)
+if [[ $? == 0  && "$HOST_IN_UPGRADE" != "true" ]]; then
+    JOURNAL_DISKS=$(echo "$CEPH_DISK_OUTPUT" | grep "ceph journal" | awk '{print $1}')
+fi
+
+WIPE_HDD="$JOURNAL_DISKS $WIPE_HDD"
+
 if [ ! $FORCE ]
 then
     echo "This will result in the loss of all data on the hard drives and"
@@ -142,11 +158,21 @@ do
             echo "Wiping $dev..."
             wipefs -f -a $dev
 
-            # Clearing previous GPT tables or LVM data
-            # Delete the first few bytes at the start and end of the partition. This is required with
-            # GPT partitions, they save partition info at the start and the end of the block.
-            dd if=/dev/zero of=$dev bs=512 count=34
-            dd if=/dev/zero of=$dev bs=512 count=34 seek=$((`blockdev --getsz $dev` - 34))
+            echo "$JOURNAL_DISKS" | grep -qw "$dev"
+            if [[ $? == 0 ]]; then
+                # Journal partitions require additional wiping. Based on the ceph-manage-journal.py
+                # script in the integ repo (at the ceph/ceph/files/ceph-manage-journal.py location)
+                # wiping 100MB of data at the beginning of the partition should be enough. We also
+                # wipe 100MB at the end, just to be safe.
+                dd if=/dev/zero of=$dev bs=1M count=100
+                dd if=/dev/zero of=$dev bs=1M count=100 seek=$((`blockdev --getsz $dev` - 204800))
+            else
+                # Clearing previous GPT tables or LVM data
+                # Delete the first few bytes at the start and end of the partition. This is required with
+                # GPT partitions, they save partition info at the start and the end of the block.
+                dd if=/dev/zero of=$dev bs=512 count=34
+                dd if=/dev/zero of=$dev bs=512 count=34 seek=$((`blockdev --getsz $dev` - 34))
+            fi
         fi
     fi
 done
