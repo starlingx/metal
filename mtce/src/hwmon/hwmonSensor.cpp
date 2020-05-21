@@ -20,7 +20,7 @@
 #include "hwmonGroup.h"   /* for ... bmc_get_grouptype               */
 #include "hwmonAlarm.h"   /* for ... hwmonAlarm                       */
 
-#define DELIMITER ((const char)',')
+#define DELIMITER ((char)',')
 
 /****************************************************************************
  *

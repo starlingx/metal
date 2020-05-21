@@ -94,18 +94,60 @@ then
     fi
 fi
 
+# Note that the BA5EBA11-0000-1111-2222- is the prefix used by STX and it's defined in sysinv constants.py.
+# Since the 000000000001 suffix is used by custom stx LVM partitions,
+# the next suffix is used for the persistent backup partition (000000000002)
+BACKUP_PART_GUID="BA5EBA11-0000-1111-2222-000000000002"
+part_type_guid_str="Partition GUID code"
+
 for dev in $WIPE_HDD
 do
     if [[ -e $dev ]]
     then
-        echo "Wiping $dev..."
-        wipefs -f -a $dev
+        if [ "$dev" == "$rootfs" ]
+        then
+            part_numbers=( $(parted -s $dev print | awk '$1 == "Number" {i=1; next}; i {print $1}') )
+            for part_number in "${part_numbers[@]}"; do
+                part=$dev$part_number
+                case $part in
+                    *"nvme"*)
+                        part=${dev}p${part_number}
+                    ;;
+                esac
+                sgdisk_part_info=$(flock $dev sgdisk -i $part_number $dev)
+                part_type_guid=$(echo "$sgdisk_part_info" | grep "$part_type_guid_str" | awk '{print $4;}')
+                if [ "$part_type_guid" == $BACKUP_PART_GUID ]; then
+                    echo "Skipping wipe backup partition $part..."
+                    continue
+                fi
+                echo "Wiping partition $part..."
+                wipefs -f -a $part
 
-        # Clearing previous GPT tables or LVM data
-        # Delete the first few bytes at the start and end of the partition. This is required with
-        # GPT partitions, they save partition info at the start and the end of the block.
-        dd if=/dev/zero of=$dev bs=512 count=34
-        dd if=/dev/zero of=$dev bs=512 count=34 seek=$((`blockdev --getsz $dev` - 34))
+                # Delete the first few bytes at the start and end of the partition. This is required with
+                # GPT partitions, they save partition info at the start and the end of the block.
+                # Skip / or we will lose access to the tools on the system.
+                if [[ $part != $rootfs_part ]]
+                then
+                    dd if=/dev/zero of=$part bs=512 count=34
+                    dd if=/dev/zero of=$part bs=512 count=34 seek=$((`blockdev --getsz $part` - 34))
+                fi
+
+                echo "Removing partition $part..."
+                sgdisk $dev --delete $part_number
+            done
+
+            # Wipe bootloader signature to allow reboot from secondary boot devices (e.g. PXE)
+            dd if=/dev/zero of=$dev bs=440 count=1
+        else
+            echo "Wiping $dev..."
+            wipefs -f -a $dev
+
+            # Clearing previous GPT tables or LVM data
+            # Delete the first few bytes at the start and end of the partition. This is required with
+            # GPT partitions, they save partition info at the start and the end of the block.
+            dd if=/dev/zero of=$dev bs=512 count=34
+            dd if=/dev/zero of=$dev bs=512 count=34 seek=$((`blockdev --getsz $dev` - 34))
+        fi
     fi
 done
 

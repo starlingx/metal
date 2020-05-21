@@ -1,4 +1,4 @@
-Summary: TIS Network Installation
+Summary: StarlingX Network Installation
 Name: pxe-network-installer
 Version: 1.0
 Release: %{tis_patch_ver}%{?_tis_dist}
@@ -43,7 +43,7 @@ BuildRequires: grub2-efi-x64-pxeboot
 Requires: grub2-efi-x64-pxeboot
 
 %description
-TIS Network Installation
+StarlingX Network Installation
 
 %files
 %defattr(-,root,root,-)
@@ -126,7 +126,7 @@ install -v -m 0644 \
     %{_datadir}/syslinux/gpxelinux.0 \
     %{buildroot}/pxeboot
 
-# Copy Titanium grub.cfg. It will be used to create ISO on the Controller.
+# Copy StarlingX grub.cfg. It will be used to create ISO on the Controller.
 install -v -m 0644 %{_sourcedir}/grub.cfg \
     %{buildroot}/pxeboot/EFI/
 

@@ -336,3 +336,8 @@ openstack-swift-proxy
 pci-irq-affinity-agent
 Redfishtool
 kvm-timer-advance
+dex-helm
+oidcauthtools
+stx-oidc-auth-helm
+stx-cert-manager-helm
+stx-nginx-ingress-controller-helm

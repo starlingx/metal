@@ -1,5 +1,5 @@
 [Unit]
-Description=Titanium Cloud Maintenance Host Watchdog
+Description=StarlingX Maintenance Host Watchdog
 After=syslog.service network.target hbsClient.service mtcClient.service sm.service fsmon.service
 
 

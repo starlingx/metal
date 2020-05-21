@@ -68,7 +68,7 @@ Requires: /usr/bin/ipmitool
 Requires: /usr/bin/redfishtool
 
 %description
-Titanium Cloud Host Maintenance services. A suite of daemons that provide
+StarlingX Host Maintenance services. A suite of daemons that provide
 host maintainability and a high level of fault detection with automatic
 notification and recovery.The Maintenance Service (mtcAgent/mtcClient)
 manages hosts according to an abbreviated version of the CCITT X.731 ITU
@@ -130,7 +130,7 @@ Requires: libpthread.so.0()(64bit)
 Provides: libamon.so.1()(64bit)
 
 %description -n mtce-pmon
-Titanium Cloud Maintenance Process Monitor service (pmond) with
+StarlingX Maintenance Process Monitor service (pmond) with
 passive (pid), active (msg) and status (qry) process monitoring with
 automatic recovery and failure reporting of registered failed processes.
 
@@ -170,7 +170,7 @@ Requires: libpthread.so.0()(64bit)
 Requires: /usr/bin/redfishtool
 
 %description -n mtce-hwmon
-Titanium Cloud Host Maintenance Hardware Monitor Service (hwmond) adds
+StarlingX Host Maintenance Hardware Monitor Service (hwmond) adds
 in and out of service hardware sensor monitoring, alarming and recovery
 handling.
 
@@ -200,7 +200,7 @@ Requires: libstdc++.so.6(GLIBCXX_3.4.15)(64bit)
 Requires: libpthread.so.0()(64bit)
 
 %description -n mtce-hostw
-Titanium Cloud Host Maintenance services. A suite of daemons that provide
+StarlingX Host Maintenance services. A suite of daemons that provide
 host maintainability and a high level of fault detection with automatic
 notification and recovery.The Maintenance Service (mtcAgent/mtcClient)
 manages hosts according to an abbreviated version of the CCITT X.731 ITU
@@ -249,7 +249,7 @@ Requires: libstdc++.so.6(GLIBCXX_3.4)(64bit)
 Requires: libstdc++.so.6(GLIBCXX_3.4.15)(64bit)
 
 %description -n mtce-lmon
-Titanium Cloud Maintenance Link Monitor service (lmond) provides
+StarlingX Maintenance Link Monitor service (lmond) provides
 netlink monitoring for provisioned oam, mgmt and cluster-host interfaces.
 
 %define local_dir /usr/local

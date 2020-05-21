@@ -3,7 +3,7 @@
 Name: mtce-storage
 Version: 1.0
 Release: %{tis_patch_ver}%{?_tis_dist}
-Summary: Titanium Cloud Platform Storage Node Maintenance Package
+Summary: StarlingX Platform Storage Node Maintenance Package
 
 Group: base
 License: Apache-2.0

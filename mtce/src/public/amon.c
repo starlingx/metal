@@ -237,8 +237,9 @@ int  active_monitor_dispatch ( void )
             char str[AMON_MAX_LEN] ;
             unsigned int magic = 0 ;
             int seq ;
+            int ret ;
 
-            memset (str, 0, AMON_MAX_LEN );
+            memset ( str, 0, sizeof(str) );
             sscanf ( amon.rx_buf, "%s %8x %d", str, &magic, &seq );
         
             /* Fault Insertion Controls */
@@ -256,8 +257,12 @@ int  active_monitor_dispatch ( void )
                 magic = magic ^ -1 ;
             }
 
-            memset ( amon.tx_buf, 0 , AMON_MAX_LEN );
-            sprintf( amon.tx_buf, "%s %8x %d%c", str, magic, seq, '\0' );
+            memset ( amon.tx_buf, 0, sizeof(amon.tx_buf) );
+            ret = snprintf( amon.tx_buf, sizeof(amon.tx_buf), "%s %8x %d", str, magic, seq );
+            if ( ret >= (int)sizeof(amon.tx_buf) )
+            {
+                 syslog ( LOG_ERR, "amon.tx_buf is truncated\n");
+            }
             
             if ( strcmp ( str, amon.name ) )
             {

@@ -121,11 +121,10 @@ daemon_config_type * daemon_get_cfg_ptr ( void ) { return &mtc_config ; }
 
 
 /**
- * Heartbeat Daemon Messaging Socket Control Struct - The allocated struct
- * @see bhs.h for mtc_socket_type struct format.
+ * Daemon Messaging Socket Control Struct - The allocated struct
+ * @see mtcNodeMsg.h for mtc_socket_type struct format.
  */
 static mtc_socket_type mtc_sock   ;
-static mtc_socket_type * sock_ptr ;
 mtc_socket_type * get_sockPtr ( void )
 { return ( &mtc_sock ) ; }
 
@@ -134,52 +133,139 @@ msgSock_type * get_mtclogd_sockPtr ( void )
     return (&mtc_sock.mtclogd);
 }
 
-void daemon_exit ( void )
+/******************************************************/
+/* Socket Close functions                             */
+/******************************************************/
+static void mtc_agent_tx_socket_close ( void )
 {
-    /* Cancel the uptime timer */
-    if (  mtcInv.mtcTimer_uptime.tid )
-    {
-        mtcTimer_stop ( mtcInv.mtcTimer_uptime );
-    }
-
-    daemon_dump_info  ();
-    daemon_files_fini ();
-
-    /* Close the watch over the /etc/shadow file */
-    set_inotify_close ( mtcInv.inotify_shadow_file_fd,
-                        mtcInv.inotify_shadow_file_wd);
-
-    /* Close open sockets */
-    if (mtc_sock.mtc_agent_rx_socket)
-        delete (mtc_sock.mtc_agent_rx_socket);
-
     if (mtc_sock.mtc_agent_tx_socket)
-        delete (mtc_sock.mtc_agent_tx_socket);
-
-    if (mtc_sock.mtc_event_rx_sock)
-        delete (mtc_sock.mtc_event_rx_sock);
-
-    if (mtc_sock.mtc_to_hbs_sock)
-       delete (mtc_sock.mtc_to_hbs_sock);
-
-    if ( mtc_sock.mtclogd.sock > 0 )
-       close (mtc_sock.mtclogd.sock);
-
-    if ( mtc_sock.netlink_sock > 0 )
-       close (mtc_sock.netlink_sock);
-
-    if ( mtc_sock.ioctl_sock > 0 )
-       close (mtc_sock.ioctl_sock);
-
-    mtcHttpSvr_fini ( mtce_event );
-
-        threadUtil_fini () ;
-
-    exit (0) ;
+    {
+        delete mtc_sock.mtc_agent_tx_socket;
+        mtc_sock.mtc_agent_tx_socket = NULL;
+    }
 }
 
+static void mtc_agent_rx_socket_close ( void )
+{
+    if (mtc_sock.mtc_agent_rx_socket)
+    {
+        delete (mtc_sock.mtc_agent_rx_socket);
+        mtc_sock.mtc_agent_rx_socket = NULL;
+    }
+}
 
-/** Control Config Mask */
+static void mtc_agent_clstr_tx_socket_close ( void )
+{
+    if (mtc_sock.mtc_agent_clstr_tx_socket)
+    {
+        delete mtc_sock.mtc_agent_clstr_tx_socket;
+        mtc_sock.mtc_agent_clstr_tx_socket = NULL;
+    }
+}
+
+static void mtc_agent_clstr_rx_socket_close ( void )
+{
+    if (mtc_sock.mtc_agent_clstr_rx_socket)
+    {
+        delete mtc_sock.mtc_agent_clstr_rx_socket;
+        mtc_sock.mtc_agent_clstr_rx_socket = NULL;
+    }
+}
+
+static void mtc_event_rx_sock_close ( void )
+{
+    if (mtc_sock.mtc_event_rx_sock)
+    {
+        delete mtc_sock.mtc_event_rx_sock;
+        mtc_sock.mtc_event_rx_sock = NULL;
+    }
+}
+
+static void hwmon_cmd_sock_close ( void )
+{
+    if (mtc_sock.hwmon_cmd_sock)
+    {
+        delete mtc_sock.hwmon_cmd_sock;
+        mtc_sock.hwmon_cmd_sock = NULL;
+    }
+}
+
+static void mtc_to_hbs_sock_close ( void )
+{
+    if (mtc_sock.mtc_to_hbs_sock)
+    {
+        delete mtc_sock.mtc_to_hbs_sock;
+        mtc_sock.mtc_to_hbs_sock = NULL;
+    }
+}
+
+static void mtclogd_socket_close ( void )
+{
+    if (mtc_sock.mtclogd.sock)
+    {
+        close(mtc_sock.mtclogd.sock);
+        mtc_sock.mtclogd.sock = 0;
+    }
+}
+
+static void netlink_sock_close ( void )
+{
+    if (mtc_sock.netlink_sock)
+    {
+        close(mtc_sock.netlink_sock);
+        mtc_sock.netlink_sock = 0;
+    }
+}
+
+static void ioctl_sock_close ( void )
+{
+    if (mtc_sock.ioctl_sock)
+    {
+        close(mtc_sock.ioctl_sock);
+        mtc_sock.ioctl_sock = 0;
+    }
+}
+
+/* close all the sockets */
+static void mtc_socket_fini(void)
+{
+    /* Close the watch over the /etc/shadow file */
+    set_inotify_close(mtcInv.inotify_shadow_file_fd,
+                      mtcInv.inotify_shadow_file_wd);
+
+    mtc_agent_clstr_tx_socket_close();
+    mtc_agent_clstr_rx_socket_close();
+    mtc_agent_tx_socket_close();
+    mtc_agent_rx_socket_close();
+    mtc_event_rx_sock_close();
+    mtc_to_hbs_sock_close();
+    hwmon_cmd_sock_close();
+    mtclogd_socket_close();
+    mtcHttpSvr_fini(mtce_event);
+}
+
+void daemon_exit(void)
+{
+    /* Cancel the uptime timer */
+    if (mtcInv.mtcTimer_uptime.tid)
+    {
+        mtcTimer_stop(mtcInv.mtcTimer_uptime);
+    }
+
+    daemon_dump_info();
+    daemon_files_fini();
+
+    /* Close open sockets */
+    mtc_socket_fini();
+
+    netlink_sock_close();
+    ioctl_sock_close();
+
+    threadUtil_fini();
+
+    exit(0);
+}
+
 #define CONFIG_AGENT_MASK    (CONFIG_AGENT_MTC_MGMNT_PORT  |\
                               CONFIG_CLIENT_MTC_CLSTR_PORT |\
                               CONFIG_MTC_TO_HBS_CMD_PORT   |\
@@ -688,40 +774,55 @@ int mtc_socket_init ( void )
     int socket_size = 0 ;
     char ip_address[INET6_ADDRSTRLEN];
 
-   /***********************************************************/
-   /* Setup UDP Maintenance Command Transmit Socket Mgmnt I/F */
-   /***********************************************************/
-
-    /* Read the port config strings into the socket struct */
-    mtc_sock.mtc_agent_port  = mtc_config.mtc_agent_port;
+    /***********************************************************/
+    /* Setup UDP Maintenance Command Transmit Socket Mgmnt I/F */
+    /***********************************************************/
     mtc_sock.mtc_mgmnt_cmd_port = mtc_config.cmd_port;
-
-    /* create transmit socket */
     msgClassAddr::getAddressFromInterface(mtc_config.mgmnt_iface, ip_address, INET6_ADDRSTRLEN);
-    sock_ptr->mtc_agent_tx_socket = new msgClassTx(ip_address, mtc_sock.mtc_mgmnt_cmd_port, IPPROTO_UDP, mtc_config.mgmnt_iface);
-    rc = sock_ptr->mtc_agent_tx_socket->return_status;
-    if(rc != PASS)
+    mtc_sock.mtc_agent_tx_socket =
+    new msgClassTx(ip_address, mtc_sock.mtc_mgmnt_cmd_port, IPPROTO_UDP, mtc_config.mgmnt_iface);
+
+#ifdef WANT_FIT_TESTING
+    if ( daemon_want_fit ( FIT_CODE__SOCKET_SETUP, mtcInv.my_hostname, "mtc_agent_tx_socket"))
+        mtc_sock.mtc_agent_tx_socket->return_status = FAIL ;
+#endif
+
+    if ((mtc_sock.mtc_agent_tx_socket == NULL) ||
+        (mtc_sock.mtc_agent_tx_socket->return_status))
     {
-        delete sock_ptr->mtc_agent_tx_socket;
-        return rc;
+        elog("Failed to create mtcClient command socket on port %d for %s (%d:%s)\n",
+             mtc_sock.mtc_mgmnt_cmd_port,
+             mtc_config.mgmnt_iface,
+             errno,
+             strerror(errno));
+        mtc_agent_tx_socket_close();
+        return (FAIL_SOCKET_CREATE) ;
     }
 
-   /***********************************************************/
-   /* Setup UDP Maintenance Command Transmit Socket Clstr I/F */
-   /***********************************************************/
-    if ( strlen( mtc_config.clstr_iface ) )
+    /***********************************************************/
+    /* Setup UDP Maintenance Command Transmit Socket Clstr I/F */
+    /***********************************************************/
+    if (strlen(mtc_config.clstr_iface))
     {
-        sock_ptr->mtc_clstr_cmd_port = mtc_config.mtc_rx_clstr_port;
-
-        /* create clstr transmit socket only if the interface is provisioned */
+        mtc_sock.mtc_clstr_cmd_port = mtc_config.mtc_rx_clstr_port;
         msgClassAddr::getAddressFromInterface(mtc_config.clstr_iface, ip_address, INET6_ADDRSTRLEN);
-        sock_ptr->mtc_agent_clstr_tx_socket = new msgClassTx(ip_address, mtc_sock.mtc_clstr_cmd_port, IPPROTO_UDP, mtc_config.clstr_iface);
+        mtc_sock.mtc_agent_clstr_tx_socket =
+        new msgClassTx(ip_address, mtc_sock.mtc_clstr_cmd_port, IPPROTO_UDP, mtc_config.clstr_iface);
 
-        rc = sock_ptr->mtc_agent_clstr_tx_socket->return_status;
-        if(rc != PASS)
+#ifdef WANT_FIT_TESTING
+        if ( daemon_want_fit ( FIT_CODE__SOCKET_SETUP, mtcInv.my_hostname, "mtc_agent_clstr_tx_socket"))
+            mtc_sock.mtc_agent_clstr_tx_socket->return_status = FAIL ;
+#endif
+
+        if ((mtc_sock.mtc_agent_clstr_tx_socket == NULL) ||
+            (mtc_sock.mtc_agent_clstr_tx_socket->return_status))
         {
-            delete sock_ptr->mtc_agent_clstr_tx_socket;
-            return rc;
+            elog("Failed to create mtcClient command socket on port %d for %s (%d:%m)\n",
+                 mtc_sock.mtc_clstr_cmd_port,
+                 mtc_config.clstr_iface,
+                 errno);
+            mtc_agent_clstr_tx_socket_close();
+            return (FAIL_SOCKET_CREATE);
         }
     }
 
@@ -733,170 +834,175 @@ int mtc_socket_init ( void )
      * interface and asynchronous events from the mtcClient and other
      * maintenance service daemons.
      *********************************************************************/
-    sock_ptr->mtc_agent_rx_socket =
-    new msgClassRx(CONTROLLER, sock_ptr->mtc_agent_port, IPPROTO_UDP );
-    if (( sock_ptr->mtc_agent_rx_socket == NULL ) ||
-        ( sock_ptr->mtc_agent_rx_socket->return_status ))
-    {
-        elog("failed to create mtcClient receive socket on port %d for %s\n",
-              sock_ptr->mtc_agent_port,
-              mtc_config.mgmnt_iface );
+    mtc_sock.mtc_agent_port = mtc_config.mtc_agent_port;
+    mtc_sock.mtc_agent_rx_socket =
+    new msgClassRx(CONTROLLER, mtc_sock.mtc_agent_port, IPPROTO_UDP);
 
-        if ( sock_ptr->mtc_agent_rx_socket )
-        {
-            delete (sock_ptr->mtc_agent_rx_socket);
-            sock_ptr->mtc_agent_rx_socket = NULL ;
-        }
-        return (FAIL_SOCKET_CREATE);
+#ifdef WANT_FIT_TESTING
+    if ( daemon_want_fit ( FIT_CODE__SOCKET_SETUP, mtcInv.my_hostname, "mtc_agent_rx_socket"))
+        mtc_sock.mtc_agent_rx_socket = NULL ;
+#endif
+
+    if ((mtc_sock.mtc_agent_rx_socket == NULL) ||
+        (mtc_sock.mtc_agent_rx_socket->return_status))
+    {
+        elog("Failed to create mtcClient receive socket on port %d for %s (%d:%m)\n",
+             mtc_sock.mtc_agent_port,
+             mtc_config.mgmnt_iface,
+             errno);
+        mtc_agent_rx_socket_close();
+        return (FAIL_SOCKET_CREATE );
     }
 
     /* Set messaging buffer size */
     /* if we need a bigger then default we can use a sysctl to raise the max */
-    socket_size = MTC_AGENT_RX_BUFF_SIZE ;
-    if (( rc = sock_ptr->mtc_agent_rx_socket->setSocketMemory ( mtc_config.mgmnt_iface, "mtce command and event receiver (Mgmnt network)", socket_size )) != PASS )
+    socket_size = MTC_AGENT_RX_BUFF_SIZE;
+    if ((rc = mtc_sock.mtc_agent_rx_socket->setSocketMemory(mtc_config.mgmnt_iface, "mtce command and event receiver (Mgmnt network)", socket_size)) != PASS)
     {
-        elog ("setsockopt failed for SO_RCVBUF (%d:%m)\n", errno );
-        delete (sock_ptr->mtc_agent_rx_socket);
-        sock_ptr->mtc_agent_rx_socket = NULL ;
+        elog("setsockopt failed for SO_RCVBUF (%d:%m)\n", errno);
+        mtc_agent_rx_socket_close();
         return (FAIL_SOCKET_OPTION);
     }
-    socklen_t optlen = sizeof(sock_ptr->mtc_agent_rx_socket_size);
-    getsockopt (   sock_ptr->mtc_agent_rx_socket->getFD(), SOL_SOCKET, SO_RCVBUF,
-                  &sock_ptr->mtc_agent_rx_socket_size, &optlen );
+    socklen_t optlen = sizeof(mtc_sock.mtc_agent_rx_socket_size);
+    getsockopt(mtc_sock.mtc_agent_rx_socket->getFD(), SOL_SOCKET, SO_RCVBUF,
+               &mtc_sock.mtc_agent_rx_socket_size, &optlen);
 
-    ilog ("Listening On: 'mtc client receive' socket %d (%d rx bytes - req:%d) (%s)\n",
-              sock_ptr->mtc_agent_port,
-              sock_ptr->mtc_agent_rx_socket_size, MTC_AGENT_RX_BUFF_SIZE,
-              mtc_config.mgmnt_iface);
-
+    ilog("Listening On: 'mtc client receive' socket %d (%d rx bytes - req:%d) (%s)\n",
+         mtc_sock.mtc_agent_port,
+         mtc_sock.mtc_agent_rx_socket_size, MTC_AGENT_RX_BUFF_SIZE,
+         mtc_config.mgmnt_iface);
 
     /*********************************************************************
      * Setup Maintenance message receiver on the cluster-host network
      * if it is provisioned
      *
      *********************************************************************/
-
-    if ( mtcInv.clstr_network_provisioned == true )
+    if (mtcInv.clstr_network_provisioned == true)
     {
-        if ( mtcInv.my_hostname == CONTROLLER_0 )
+        if (mtcInv.my_hostname == CONTROLLER_0)
         {
-            sock_ptr->mtc_agent_clstr_rx_socket =
-            new msgClassRx(CONTROLLER_0_CLUSTER_HOST, sock_ptr->mtc_agent_port, IPPROTO_UDP );
+            mtc_sock.mtc_agent_clstr_rx_socket =
+            new msgClassRx(CONTROLLER_0_CLUSTER_HOST, mtc_sock.mtc_agent_port, IPPROTO_UDP);
         }
         else
         {
-            sock_ptr->mtc_agent_clstr_rx_socket =
-            new msgClassRx(CONTROLLER_1_CLUSTER_HOST, sock_ptr->mtc_agent_port, IPPROTO_UDP );
+            mtc_sock.mtc_agent_clstr_rx_socket =
+            new msgClassRx(CONTROLLER_1_CLUSTER_HOST, mtc_sock.mtc_agent_port, IPPROTO_UDP);
         }
 
-        if (( sock_ptr->mtc_agent_clstr_rx_socket == NULL ) ||
-            ( sock_ptr->mtc_agent_clstr_rx_socket->return_status ))
+        if ((mtc_sock.mtc_agent_clstr_rx_socket == NULL) ||
+            (mtc_sock.mtc_agent_clstr_rx_socket->return_status))
         {
-            elog("failed to create mtcClient receive socket on port %d for %s\n",
-                  sock_ptr->mtc_agent_port,
-                  mtc_config.clstr_iface );
-
-            if ( sock_ptr->mtc_agent_clstr_rx_socket )
-            {
-                delete (sock_ptr->mtc_agent_clstr_rx_socket);
-                sock_ptr->mtc_agent_clstr_rx_socket = NULL ;
-            }
-            return (FAIL_SOCKET_CREATE);
+            elog("Failed to create mtcClient receive socket on port %d for %s (%d:%m)",
+                 mtc_sock.mtc_agent_port,
+                 mtc_config.clstr_iface,
+                 errno);
+            mtc_agent_clstr_rx_socket_close();
+            return ( FAIL_SOCKET_CREATE );
         }
 
         /* Set messaging buffer size */
         /* if we need a bigger then default we can use a sysctl to raise the max */
-        socket_size = MTC_AGENT_RX_BUFF_SIZE ;
-        if (( rc = sock_ptr->mtc_agent_clstr_rx_socket->setSocketMemory ( mtc_config.clstr_iface, "mtce command and event receiver (cluster-host network)", socket_size )) != PASS )
+        socket_size = MTC_AGENT_RX_BUFF_SIZE;
+        if ((rc = mtc_sock.mtc_agent_clstr_rx_socket->setSocketMemory(mtc_config.clstr_iface, "mtce command and event receiver (cluster-host network)", socket_size)) != PASS)
         {
-            elog ("setsockopt failed for SO_RCVBUF (%d:%m)\n", errno );
-            delete (sock_ptr->mtc_agent_clstr_rx_socket);
-            sock_ptr->mtc_agent_clstr_rx_socket = NULL ;
+            elog("setsockopt failed for SO_RCVBUF (%d:%m)\n", errno);
+            mtc_agent_clstr_rx_socket_close();
             return (FAIL_SOCKET_OPTION);
         }
-        socklen_t optlen = sizeof(sock_ptr->mtc_agent_clstr_rx_socket_size);
-        getsockopt (   sock_ptr->mtc_agent_clstr_rx_socket->getFD(), SOL_SOCKET, SO_RCVBUF,
-                      &sock_ptr->mtc_agent_clstr_rx_socket_size, &optlen );
+        socklen_t optlen = sizeof(mtc_sock.mtc_agent_clstr_rx_socket_size);
+        getsockopt(mtc_sock.mtc_agent_clstr_rx_socket->getFD(), SOL_SOCKET, SO_RCVBUF,
+                   &mtc_sock.mtc_agent_clstr_rx_socket_size, &optlen);
 
-        ilog ("Listening On: 'mtc client receive' socket %d (%d rx bytes - req:%d) (%s)\n",
-                  sock_ptr->mtc_agent_port,
-                  sock_ptr->mtc_agent_clstr_rx_socket_size, MTC_AGENT_RX_BUFF_SIZE,
-                  mtc_config.clstr_iface);
+        ilog("Listening On: 'mtc client receive' socket %d (%d rx bytes - req:%d) (%s)\n",
+             mtc_sock.mtc_agent_port,
+             mtc_sock.mtc_agent_clstr_rx_socket_size, MTC_AGENT_RX_BUFF_SIZE,
+             mtc_config.clstr_iface);
     }
 
-
-   /***********************************************************/
-   /* Setup UDP Hardware Monitor Command Transmit socket      */
-   /***********************************************************/
-
-    /* Read the port config strings into the socket struct */
-    mtc_sock.hwmon_cmd_port    = mtc_config.hwmon_cmd_port;
-
-    /* create transmit socket */
+    /***********************************************************/
+    /* Setup UDP Hardware Monitor Command Transmit socket      */
+    /***********************************************************/
+    mtc_sock.hwmon_cmd_port = mtc_config.hwmon_cmd_port;
     msgClassAddr::getAddressFromInterface(mtc_config.mgmnt_iface, ip_address, INET6_ADDRSTRLEN);
-    sock_ptr->hwmon_cmd_sock = new msgClassTx(ip_address, mtc_config.hwmon_cmd_port, IPPROTO_UDP, mtc_config.mgmnt_iface);
-    rc = sock_ptr->hwmon_cmd_sock->return_status;
-    if ( rc!=PASS )
+    mtc_sock.hwmon_cmd_sock =
+    new msgClassTx(ip_address, mtc_config.hwmon_cmd_port, IPPROTO_UDP, mtc_config.mgmnt_iface);
+    if ((mtc_sock.hwmon_cmd_sock == NULL) ||
+        (mtc_sock.hwmon_cmd_sock->return_status))
     {
-        elog("Failed create socket (%d:%s)\n", errno, strerror(errno));
-        return (rc);
+        elog("Failed to create hwmon command socket on port %d for %s (%d:%m)\n",
+             mtc_sock.hwmon_cmd_port,
+             mtc_config.mgmnt_iface,
+             errno);
+        hwmon_cmd_sock_close();
+        return ( FAIL_SOCKET_CREATE );
     }
 
     /***********************************************************/
     /* Heartbeat Event Receiver Interface - (UDP over 'lo')    */
     /***********************************************************/
-
-    int port = daemon_get_cfg_ptr()->hbs_to_mtc_event_port ;
-
-    /* listen to this port on any interface so that the hbsAgent running
-     * locally or on peer controller can get events into mtcAgent */
     mtc_sock.mtc_event_rx_sock =
-    new msgClassRx(mtcInv.my_float_ip.data(), port, IPPROTO_UDP);
-    rc = mtc_sock.mtc_event_rx_sock->return_status;
-    if ( rc )
+    new msgClassRx(mtcInv.my_float_ip.data(), mtc_config.hbs_to_mtc_event_port, IPPROTO_UDP);
+    if ((mtc_sock.mtc_event_rx_sock == NULL) ||
+        (mtc_sock.mtc_event_rx_sock->return_status))
     {
-        elog ("Failed to setup mtce event receive port %d\n", port );
-        return (rc) ;
+        elog("Failed to create heartbeat event socket on port %d for %s (%d:%m)\n",
+             mtc_config.hbs_to_mtc_event_port,
+             mtc_config.mgmnt_iface,
+             errno);
+        mtc_event_rx_sock_close();
+        return ( FAIL_SOCKET_CREATE );
     }
 
-    /* Setup the maintenance event receiver for sysinv and vim requests */
-    memset ( &mtce_event, 0, sizeof(event_type));
-    mtce_event.port = mtc_config.inv_event_port ;
-    rc = mtcHttpSvr_init ( mtce_event );
+    /***********************************************************/
+    /* Setup Sysinv and Vim Reveive Socket Interface           */
+    /***********************************************************/
+    memset(&mtce_event, 0, sizeof(event_type));
+    mtce_event.port = mtc_config.inv_event_port;
+    if ( mtcHttpSvr_init (mtce_event) )
+    {
+        elog("Failed to create http server socket on port %d for %s (%d:%m)\n",
+             mtce_event.port,
+             mtc_config.mgmnt_iface,
+             errno);
+        mtcHttpSvr_fini(mtce_event);
+        return ( FAIL_SOCKET_CREATE );
+    }
 
     /***********************************************************/
     /* UDP Transmit Socket for Sending Heartbeat Commands      */
     /***********************************************************/
-
-    port = daemon_get_cfg_ptr()->mtc_to_hbs_cmd_port ;
-    sock_ptr->mtc_to_hbs_sock = new msgClassTx(CONTROLLER, port, IPPROTO_UDP, mtc_config.mgmnt_iface);
-    rc = sock_ptr->mtc_to_hbs_sock->return_status;
-    if ( rc )
+    mtc_sock.mtc_to_hbs_sock =
+    new msgClassTx(CONTROLLER, mtc_config.mtc_to_hbs_cmd_port, IPPROTO_UDP, mtc_config.mgmnt_iface);
+    if ((mtc_sock.mtc_to_hbs_sock == NULL) ||
+        (mtc_sock.mtc_to_hbs_sock->return_status))
     {
-        elog ("Failed to setup mtce to hbs transmit command port %d\n", port );
-        return (rc) ;
+        elog("Failed to create heartbeat transmit command socket on port %d for %s (%d:%m)\n",
+             mtc_config.mtc_to_hbs_cmd_port,
+             mtc_config.mgmnt_iface,
+             errno);
+        mtc_to_hbs_sock_close();
+        return ( FAIL_SOCKET_CREATE );
     }
 
-    sock_ptr->mtclogd.port = port = daemon_get_cfg_ptr()->daemon_log_port ;
-    CREATE_REUSABLE_INET_UDP_TX_SOCKET ( LOOPBACK_IP,
-                                         port,
-                                         sock_ptr->mtclogd.sock,
-                                         sock_ptr->mtclogd.addr,
-                                         sock_ptr->mtclogd.port,
-                                         sock_ptr->mtclogd.len,
-                                         "mtc logger message",
-                                         rc );
-    if ( rc )
+    /*************************************************************/
+    /* UDP Maintenance log transmit socket                       */
+    /*************************************************************/
+    int port = mtc_sock.mtclogd.port = mtc_config.daemon_log_port;
+    CREATE_REUSABLE_INET_UDP_TX_SOCKET(LOOPBACK_IP,
+                                       port,
+                                       mtc_sock.mtclogd.sock,
+                                       mtc_sock.mtclogd.addr,
+                                       mtc_sock.mtclogd.port,
+                                       mtc_sock.mtclogd.len,
+                                       "mtc logger message",
+                                       rc);
+    if (rc)
     {
-        elog ("Failed to setup mtce logger port %d\n", port );
-        return (rc) ;
+        elog("Failed to setup mtce logger port %d\n", port);
+        mtclogd_socket_close();
+        return (rc);
     }
-
-    /* Use the base timer to delay for a time to give
-     * the heartbeat service time to init */
-    // ilog ("Delay 3 secs allowing Inventory & Heartbeat daemons to be ready\n");
-    // mtcWait_secs (3);
-
     return (rc);
 }
 
@@ -943,7 +1049,6 @@ int daemon_init ( string iface, string nodetype )
 
     /* Initialize socket construct and pointer to it */
     memset ( &mtc_sock,   0, sizeof(mtc_sock));
-    sock_ptr = &mtc_sock ;
 
     /* Assign interface to config */
     mtc_config.mgmnt_iface = (char*)iface.data() ;
@@ -1147,14 +1252,35 @@ int _self_provision ( void )
     mtcInv.set_adminAction ( my_identity.name, MTC_ADMIN_ACTION__ADD );
     mtcInv.ctl_mtcAlive_gate ( my_identity.name, true );
 
-    /* Setup the heartbeat service messaging sockets */
-    rc = mtc_socket_init  ( ) ;
-    if ( rc != PASS )
+    /* Setup messaging sockets */
+    #define SOCKET_INIT_MAX_RETRIES (5)
+    #define SOCKET_INIT_RETRY_WAIT (MTC_SECS_10)
+    int retries = 0;
+    do
     {
-        elog ("Socket initialization failed (rc:%d)\n", rc );
-        return (FAIL_SOCKET_INIT) ;
-    }
+        rc = mtc_socket_init();
+        if (rc)
+        {
+            retries++;
+            wlog("Socket setup failed (rc=%d) ; %d of %d ; retrying in %d secs",
+                 rc,
+                 retries,
+                 SOCKET_INIT_MAX_RETRIES,
+                 SOCKET_INIT_RETRY_WAIT);
+            mtc_socket_fini();
+            mtcWait_secs(SOCKET_INIT_RETRY_WAIT);
+        }
+        daemon_signal_hdlr();
+    } while ((rc != PASS) && (retries < SOCKET_INIT_MAX_RETRIES));
 
+    if (rc != PASS)
+    {
+        elog("Socket setup failed (rc:%d) ; overriding to pass", rc);
+    }
+    else if (retries)
+    {
+        ilog("Socket setup succeeded after %d retries", retries);
+    }
     return(rc);
 }
 
@@ -1498,7 +1624,7 @@ void daemon_service_run ( void )
                 }
             }
 
-            if (FD_ISSET(sock_ptr->mtc_event_rx_sock->getFD(), &mtc_sock.readfds))
+            if (FD_ISSET(mtc_sock.mtc_event_rx_sock->getFD(), &mtc_sock.readfds))
             {
                 if ( (rc = service_events ( &mtcInv, &mtc_sock )) != PASS )
                 {
@@ -1506,7 +1632,7 @@ void daemon_service_run ( void )
                 }
             }
 
-            if ( FD_ISSET(sock_ptr->mtc_agent_rx_socket->getFD(), &mtc_sock.readfds))
+            if ( FD_ISSET(mtc_sock.mtc_agent_rx_socket->getFD(), &mtc_sock.readfds))
             {
                 int cnt = 0 ;
                 /* Service up to MAX_RX_MSG_BATCH of messages at once */
@@ -1528,8 +1654,8 @@ void daemon_service_run ( void )
             }
 
             if (( mtcInv.clstr_network_provisioned == true ) &&
-                ( sock_ptr->mtc_agent_clstr_rx_socket != NULL ) &&
-                ( FD_ISSET(sock_ptr->mtc_agent_clstr_rx_socket->getFD(), &mtc_sock.readfds)))
+                ( mtc_sock.mtc_agent_clstr_rx_socket != NULL ) &&
+                ( FD_ISSET(mtc_sock.mtc_agent_clstr_rx_socket->getFD(), &mtc_sock.readfds)))
             {
                 int cnt = 0 ;
                 /* Service up to MAX_RX_MSG_BATCH of messages at once */
