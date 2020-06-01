@@ -1,4 +1,4 @@
-Summary: Titanuim Server Common Maintenance Package
+Summary: StarlingX Common Maintenance Package
 Name: mtce
 Version: 1.0
 Release: %{tis_patch_ver}%{?_tis_dist}
@@ -30,9 +30,7 @@ Requires: /bin/bash
 Requires: /bin/systemctl
 Requires: dpkg
 Requires: time
-Requires: libevent-2.0.so.5()(64bit)
 Requires: expect
-Requires: libfmcommon.so.1()(64bit)
 Requires: libstdc++.so.6(GLIBCXX_3.4.14)(64bit)
 Requires: libstdc++.so.6(GLIBCXX_3.4.9)(64bit)
 Requires: fm-common >= 1.0
@@ -44,12 +42,12 @@ Requires: mtce-pmon >= 1.0
 Requires: librt.so.1()(64bit)
 Requires: libc.so.6(GLIBC_2.3)(64bit)
 Requires: libc.so.6(GLIBC_2.14)(64bit)
-Requires: libjson-c.so.2()(64bit)
+Requires: libjson-c.so.4()(64bit)
 Requires: libpthread.so.0(GLIBC_2.2.5)(64bit)
 Requires: librt.so.1(GLIBC_2.3.3)(64bit)
 Requires: libgcc_s.so.1(GCC_3.0)(64bit)
 Requires: libstdc++.so.6(CXXABI_1.3)(64bit)
-Requires: libevent >= 2.0.21
+Requires: libevent >= 2.1.8-5
 Requires: librt.so.1(GLIBC_2.2.5)(64bit)
 Requires: libuuid.so.1()(64bit)
 Requires: libm.so.6()(64bit)
@@ -63,7 +61,7 @@ Requires: libstdc++.so.6(GLIBCXX_3.4)(64bit)
 Requires: libstdc++.so.6(GLIBCXX_3.4.15)(64bit)
 Requires: libpthread.so.0()(64bit)
 Requires: /usr/bin/expect
-Requires: python-rtslib
+Requires: python3-rtslib
 Requires: /usr/bin/ipmitool
 Requires: /usr/bin/redfishtool
 
@@ -87,7 +85,7 @@ notification and recovery thereby improving overall platform availability
 for the customer.
 
 %package -n mtce-dev
-Summary: Titanuim Server Maintenance Software Development Package
+Summary: StarlingX Maintenance Software Development Package
 Group: base
 Provides: mtce-dev = %{version}-%{release}
 
@@ -96,7 +94,7 @@ Titanuim Cloud Maintenance. This package contains header files,
 and related items necessary for software development.
 
 %package -n mtce-pmon
-Summary: Titanuim Server Maintenance Process Monitor Package
+Summary: StarlingX Maintenance Process Monitor Package
 Group: base
 BuildRequires: cppcheck
 Requires: util-linux
@@ -105,7 +103,6 @@ Requires: /bin/systemctl
 Requires: dpkg
 Requires: time
 Requires: libstdc++.so.6(CXXABI_1.3)(64bit)
-Requires: libfmcommon.so.1()(64bit)
 Requires: libc.so.6(GLIBC_2.7)(64bit)
 Requires: fm-common >= 1.0
 Requires: libc.so.6(GLIBC_2.2.5)(64bit)
@@ -135,15 +132,14 @@ passive (pid), active (msg) and status (qry) process monitoring with
 automatic recovery and failure reporting of registered failed processes.
 
 %package -n mtce-hwmon
-Summary: Titanuim Server Maintenance Hardware Monitor Package
+Summary: StarlingX Maintenance Hardware Monitor Package
 Group: base
 Requires: dpkg
 Requires: time
 Requires: /bin/bash
-Requires: libjson-c.so.2()(64bit)
+Requires: libjson-c.so.4()(64bit)
 Requires: libstdc++.so.6(CXXABI_1.3)(64bit)
 Requires: librt.so.1(GLIBC_2.2.5)(64bit)
-Requires: libfmcommon.so.1()(64bit)
 Requires: libstdc++.so.6(GLIBCXX_3.4.14)(64bit)
 Requires: libstdc++.so.6(GLIBCXX_3.4.9)(64bit)
 Requires: fm-common >= 1.0
@@ -156,8 +152,7 @@ Requires: libc.so.6(GLIBC_2.14)(64bit)
 Requires: libpthread.so.0(GLIBC_2.2.5)(64bit)
 Requires: librt.so.1(GLIBC_2.3.3)(64bit)
 Requires: libgcc_s.so.1(GCC_3.0)(64bit)
-Requires: libevent >= 2.0.21
-Requires: libevent-2.0.so.5()(64bit)
+Requires: libevent >= 2.1.8-5
 Requires: libm.so.6()(64bit)
 Requires: rtld(GNU_HASH)
 Requires: libstdc++.so.6()(64bit)
@@ -175,7 +170,7 @@ in and out of service hardware sensor monitoring, alarming and recovery
 handling.
 
 %package -n mtce-hostw
-Summary: Titanuim Server Common Maintenance Package
+Summary: StarlingX Common Maintenance Package
 Group: base
 Requires: util-linux
 Requires: /bin/bash
@@ -220,7 +215,7 @@ notification and recovery thereby improving overall platform availability
 for the customer.
 
 %package -n mtce-lmon
-Summary: Titanuim Server Maintenance Link Monitor Package
+Summary: StarlingX Maintenance Link Monitor Package
 Group: base
 BuildRequires: cppcheck
 Requires: util-linux
