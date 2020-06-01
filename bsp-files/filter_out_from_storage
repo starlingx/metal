@@ -341,3 +341,4 @@ oidcauthtools
 stx-oidc-auth-helm
 stx-cert-manager-helm
 stx-nginx-ingress-controller-helm
+sysinv-fpga-agent

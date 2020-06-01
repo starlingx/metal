@@ -54,3 +54,4 @@ openvswitch
 openvswitch-config
 pci-irq-affinity-agent
 kvm-timer-advance
+sysinv-fpga-agent
