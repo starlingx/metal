@@ -41,10 +41,12 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-repository_name = 'openstack/stx-metal'
 project = u'StarlingX Metal'
-bug_project = 'starlingx'
-bug_tag = 'stx.metal'
+
+# openstackdocstheme options
+openstackdocs_repo_name = 'starlingx/metal'
+openstackdocs_use_storyboard = True
+openstackdocs_auto_name = False
 
 # If true, the current module name will be prepended to all description
 # unit titles (such as .. function::).
@@ -55,7 +57,7 @@ add_module_names = False
 show_authors = False
 
 # The name of the Pygments (syntax highlighting) style to use.
-pygments_style = 'sphinx'
+pygments_style = 'native'
 
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, documentclass
