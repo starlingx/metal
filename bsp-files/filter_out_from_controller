@@ -25,6 +25,7 @@ mtce-guestServer
 nfscheck
 radvd
 config-gate-worker
+isolcpus-device-plugin
 kernel-rt
 kernel-module-igb-uio
 kernel-module-igb-uio-rt
