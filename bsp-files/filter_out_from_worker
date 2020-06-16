@@ -259,6 +259,7 @@ kmod-i40e-rt
 kmod-iavf-rt
 kmod-ixgbe-rt
 kmod-ixgbevf-rt
+kmod-igb_uio-rt
 kmod-tpm-rt
 kmod-integrity-rt
 kmod-opae-fpga-driver-rt
