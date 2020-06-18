@@ -1807,7 +1807,7 @@ void pmon_service ( pmon_ctrl_type * ctrl_ptr )
     ilog ("Starting 'Degrade Audit' timer (%d secs)\n", degrade_period );
     mtcTimer_start ( pmonTimer_degrade, pmon_timer_handler, degrade_period );
 
-    ilog ("Starting 'Pulse' timer (%d secs)\n", pulse_period );
+    ilog ("Starting 'Pulse' timer (%d msecs)\n", pulse_period );
     mtcTimer_start_msec ( pmonTimer_pulse, pmon_timer_handler, pulse_period );
 
     ilog ("Starting 'Host Watchdog' timer (%d secs)\n", hostwd_period );
@@ -1886,17 +1886,6 @@ void pmon_service ( pmon_ctrl_type * ctrl_ptr )
                 pmon_send_pulse ( );
             }
         }
-
-        /* Avoid pmond thrashing trying to recover processes during
-         * system shutdown. */
-        if ( _pmon_ctrl_ptr->system_state == MTC_SYSTEM_STATE__STOPPING )
-        {
-            wlog_throttled ( shutdown_log_throttle, 500,
-                             "process monitoring disabled during system shutdown\n");
-            usleep (500);
-            continue ;
-        }
-        if ( shutdown_log_throttle ) shutdown_log_throttle = 0 ;
 
         if ( inotify_fault == false )
         {
@@ -1992,9 +1981,48 @@ void pmon_service ( pmon_ctrl_type * ctrl_ptr )
             _get_events ( );
         }
 
+        /* Check system state before managing processes.
+         *
+         * Prevent process recoverty while not in the
+         * running or degraded state. */
+        if (( _pmon_ctrl_ptr->system_state != MTC_SYSTEM_STATE__RUNNING ) &&
+            ( _pmon_ctrl_ptr->system_state != MTC_SYSTEM_STATE__DEGRADED ))
+        {
+            system_state_enum system_state = get_system_state(false);
+            if ( system_state != _pmon_ctrl_ptr->system_state )
+            {
+                _pmon_ctrl_ptr->system_state = system_state ;
+                if (( system_state != MTC_SYSTEM_STATE__RUNNING ) &&
+                    ( system_state != MTC_SYSTEM_STATE__DEGRADED ))
+                {
+                    /* log every state change that is not running / degraded */
+                    wlog ("process monitoring disabled while in '%s' state",
+                           get_system_state_str(system_state));
+                }
+                else
+                {
+                    /* log every state change that is not running / degraded */
+                    wlog ("process monitoring re-enabled while in '%s' state",
+                           get_system_state_str(system_state));
+                }
+            }
+
+            /* throttle the disabled state during shutdown log */
+            if ( _pmon_ctrl_ptr->system_state == MTC_SYSTEM_STATE__STOPPING )
+            {
+                wlog_throttled ( shutdown_log_throttle, 60,
+                    "process monitoring disabled during system shutdown\n");
+            }
+            sleep (1);
+            continue ;
+        }
+        else if ( shutdown_log_throttle )
+            shutdown_log_throttle = 0 ;
+
         /* Monitor Processes */
         for ( int i = 0 ; i < ctrl_ptr->processes ; i++ )
         {
+
             /* Allow a process to be ignored */
             if ( process_config[i].ignore == true )
             {

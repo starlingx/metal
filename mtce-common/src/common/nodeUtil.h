@@ -127,6 +127,7 @@ typedef enum
    MTC_SYSTEM_STATE__UNKNOWN
 } system_state_enum ;
 
-system_state_enum get_system_state ( void );
+system_state_enum get_system_state ( bool verbose=true );
+const char * get_system_state_str ( system_state_enum system_state );
 
 #endif
