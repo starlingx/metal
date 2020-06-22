@@ -74,7 +74,7 @@ WIPE_HDD="$pvs_to_delete $WIPE_HDD"
 # journal partitions. Even if this script is also called during upgrades, there was no issue
 # observed during that operation, so we skip wiping the journals during upgrades.
 JOURNAL_DISKS=""
-HOST_IN_UPGRADE=$(curl -sf http://pxecontroller:6385/v1/upgrade/$(hostname)/in_upgrade 2>/dev/null)
+HOST_IN_UPGRADE=$(curl -sf http://controller:6385/v1/upgrade/$(hostname)/in_upgrade 2>/dev/null)
 # The "ceph-disk list" command works even if the ceph cluster is not operational (for example if
 # too many monitors are down) so we can grab journal info from the node, even in such scenarios.
 # As a safety measure, we also wrap the command in a timeout command; it should never take long
