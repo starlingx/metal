@@ -85,8 +85,6 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
                         mtc_socket_type * sock_ptr,
                         int              interface );
 
-string my_hostname = "" ;
-
 /** Instanciate the NodeLinkClass and pointer to it */
 nodeLinkClass       mtcInv ;
 nodeLinkClass *     mtcInv_ptr ;
@@ -1543,6 +1541,12 @@ void daemon_service_run ( void )
         ilog ("%-12s ---------- ; DOR Recovery ---------------------- -------------------\n", mtcInv.my_hostname.c_str());
         mtcTimer_start ( mtcInv.mtcTimer_dor, mtcTimer_handler, timeout );
     }
+
+    /* If mtcAgent is starting up tell the heartbeat service to heartbeat
+     * at its configured rate.
+     * This is done in case the mtcAgent was restarted while in MNFA mode
+     * where it had commanded the hbsAgent to heartbeat at a reduced rate. */
+    send_hbs_command ( mtcInv.my_hostname, MTC_RECOVER_HBS );
 
     /* Run Maintenance service forever */
     for ( ; ; )
