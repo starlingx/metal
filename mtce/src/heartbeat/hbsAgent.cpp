@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016 Wind River Systems, Inc.
+ * Copyright (c) 2013-2020 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -74,6 +74,10 @@ static string unexpected_pulse_list[MAX_IFACES] = { "" , "" } ;
 static string arrival_histogram[MAX_IFACES]     = { "" , "" } ;
 static string mtcAgent_ip = "" ;
 static std::list<string> hostname_inventory ;
+
+/* Used to throttle warning messages that report
+ * an error transmitting the pulse request */
+static int pulse_request_fail_log_counter[MAX_IFACES] ;
 
 /** This heartbeat service inventory is tracked by
   * the same nodeLinkClass that maintenance uses.
@@ -449,7 +453,15 @@ int daemon_configure ( void )
             ilog ("Clstr Addr  : %s\n", hbsInv.my_clstr_ip.c_str());
         }
 
-        if (!strcmp(hbs_config.clstr_iface, hbs_config.mgmnt_iface))
+        /* The cluster host network is considered unprovisioned
+         * for heartbeat while ...
+         * ... its interface is 'lo' ... */
+        if (!strcmp(hbs_config.clstr_iface, LOOPBACK_IF))
+        {
+            hbsInv.clstr_network_provisioned = false ;
+        }
+        /* ... or it and the management interface are the same. */
+        else if (!strcmp(hbs_config.clstr_iface, hbs_config.mgmnt_iface))
         {
             hbsInv.clstr_network_provisioned = false ;
         }
@@ -551,20 +563,7 @@ int _setup_pulse_messaging ( iface_enum i, int rmem_max )
     int rc  = PASS ;
     char * iface = NULL ;
 
-    /* Load up the interface name */
-    if ( i == MGMNT_IFACE )
-    {
-        iface = hbs_config.mgmnt_iface ;
-    }
-    else if (( i == CLSTR_IFACE ) && ( hbs_config.clstr_iface != NULL ))
-    {
-        iface = hbs_config.clstr_iface ;
-    }
-    else
-    {
-        wlog ("No Cluster-host Interface\n");
-        return (RETRY);
-    }
+    pulse_request_fail_log_counter[i] = 0 ;
 
     /* Start by closing existing sockets just in case this is a (re)initialization */
     if ( hbs_sock.rx_sock[i] )
@@ -579,13 +578,60 @@ int _setup_pulse_messaging ( iface_enum i, int rmem_max )
         hbs_sock.tx_sock[i] = 0 ;
     }
 
+    /* Load up the interface name */
+    if ( i == MGMNT_IFACE )
+    {
+        if ( hbsInv.mgmnt_link_up_and_running == false )
+        {
+            wlog("Cannot setup Mgmnt pulse messaging when '%s' interface is down", hbs_config.clstr_iface );
+            return(FAIL_BAD_STATE);
+        }
+        else
+        {
+            iface = hbs_config.mgmnt_iface ;
+            if (strcmp(iface, LOOPBACK_IF))
+            {
+                hbs_sock.tx_sock[i] =
+                new msgClassTx(hbs_config.multicast,hbs_sock.tx_port[i],IPPROTO_UDP,iface);
+            }
+            else
+            {
+                hbs_sock.tx_sock[i] =
+                new msgClassTx(hbsInv.my_local_ip.data(), hbs_sock.tx_port[i],IPPROTO_UDP,iface);
+            }
+        }
+    }
+    else if (( i == CLSTR_IFACE ) &&
+             ( hbsInv.clstr_network_provisioned == true ) &&
+             ( hbs_config.clstr_iface != NULL ))
+    {
+        if ( hbsInv.clstr_link_up_and_running == false )
+        {
+            wlog("Cannot setup Clstr pulse messaging when '%s' interface is down", hbs_config.clstr_iface);
+            return(FAIL_BAD_STATE);
+        }
+        else
+        {
+            iface = hbs_config.clstr_iface ;
+            hbs_sock.tx_sock[i] =
+                new msgClassTx(hbs_config.multicast,hbs_sock.tx_port[i],IPPROTO_UDP,iface);
+        }
+    }
+    else
+    {
+        ilog("no heartbeat on %s network", get_iface_name_str(i) );
+        return (PASS);
+    }
+
     /* Create transmit socket */
-    hbs_sock.tx_sock[i] = new msgClassTx(hbs_config.multicast,hbs_sock.tx_port[i],IPPROTO_UDP,iface);
     if ( hbs_sock.tx_sock[i] )
     {
         if ( hbs_sock.tx_sock[i]->return_status != PASS )
         {
-            elog("Cannot open multicast transmit socket - rc:%d (%d:%m)\n", hbs_sock.tx_sock[i]->return_status, errno );
+            elog("Failed to create %s pulse transmit socket (%d:%d:%m)\n",
+                  get_iface_name_str(i),
+                  hbs_sock.tx_sock[i]->return_status,
+                  errno );
             delete (hbs_sock.tx_sock[i]);
             hbs_sock.tx_sock[i] = 0 ;
             return (FAIL_SOCKET_CREATE);
@@ -597,10 +643,10 @@ int _setup_pulse_messaging ( iface_enum i, int rmem_max )
     }
     else
     {
-        elog("Cannot open multicast transmit socket - null object (%d:%m)\n", errno );
+        elog("Failed to create %s pulse transmit socket (%d:%m)\n",
+              get_iface_name_str(i), errno );
         return (FAIL_SOCKET_CREATE);
     }
-    dlog("Opened multicast transmit socket\n" );
 
     /* In order to avoid multicast packets being routed wrong, force sending from that socket */
     hbs_sock.tx_sock[i]->interfaceBind();
@@ -614,8 +660,10 @@ int _setup_pulse_messaging ( iface_enum i, int rmem_max )
     hbs_sock.rx_sock[i] = new msgClassRx(hbs_config.multicast,hbs_sock.rx_port[i],IPPROTO_UDP,iface,true);
     if (( hbs_sock.rx_sock[i] == NULL ) || (hbs_sock.rx_sock[i]->return_status != PASS ))
     {
-        elog("Failed opening pulse receive socket (%d:%s)\n",
-              errno, strerror (errno));
+        elog("Failed to create %s pulse receive socket (%d:%d:%m)\n",
+              get_iface_name_str(i),
+              hbs_sock.rx_sock[i]->return_status,
+              errno );
         rc = FAIL_SOCKET_CREATE ;
     }
     else
@@ -948,7 +996,11 @@ int hbs_pulse_request ( iface_enum iface,
 
         if ( (bytes = hbs_sock.tx_sock[iface]->write((char*)&hbs_sock.tx_mesg[iface], bytes)) < 0 )
         {
-            elog("Failed to send Pulse request: %d:%s to %s.%d (rc:%i ; %d:%s)\n",
+            /* Throttle this error log. */
+            elog_throttled( pulse_request_fail_log_counter[iface], 100,
+                    "Failed to send %s Pulse request: " \
+                    "%d:%s to %s.%d (rc:%i ; %d:%s)\n",
+                         get_iface_name_str(iface),
                          hbs_sock.tx_mesg[iface].s,
                          &hbs_sock.tx_mesg[iface].m[0],
                          hbs_sock.tx_sock[iface]->get_dst_addr()->toString(),
@@ -959,7 +1011,9 @@ int hbs_pulse_request ( iface_enum iface,
     }
     else
     {
-        wlog("Unable to send pulse request - null tx object - auto re-init pending\n");
+        elog_throttled( pulse_request_fail_log_counter[iface], 100,
+                "Unable to send %s pulse request on null socket",
+                get_iface_name_str(iface));
         return (FAIL_SOCKET_SENDTO);
     }
 
@@ -1448,10 +1502,6 @@ void daemon_service_run ( void )
      * ultimately triggers an exit if that retry count gets too big */
     int socket_init_fail_count = 0 ;
 
-    /* Used to throttle warning messages that report
-     * an error transmitting the pulse request */
-    int pulse_request_fail_log_counter[MAX_IFACES] ;
-
     /* throttle initialization wait logs */
     int  wait_log_throttle = 0 ;
 
@@ -1561,18 +1611,46 @@ void daemon_service_run ( void )
                     daemon_exit();
                 }
 
+                if ( get_link_state ( hbs_sock.ioctl_sock, hbs_config.mgmnt_iface, &hbsInv.mgmnt_link_up_and_running ) )
+                {
+                    hbsInv.mgmnt_link_up_and_running = false ;
+                    wlog ("Failed to query %s operational state ; defaulting to down\n", hbs_config.mgmnt_iface );
+                }
+                else
+                {
+                    ilog ("Mgmnt %s link is %s\n", hbs_config.mgmnt_iface, hbsInv.mgmnt_link_up_and_running ? "Up" : "Down" );
+                }
+
+                if ( hbsInv.clstr_network_provisioned == true )
+                {
+                    if ( get_link_state ( hbs_sock.ioctl_sock, hbs_config.clstr_iface, &hbsInv.clstr_link_up_and_running ) )
+                    {
+                        hbsInv.clstr_link_up_and_running = false ;
+                        wlog ("Failed to query %s operational state ; defaulting to down\n", hbs_config.clstr_iface );
+                    }
+                    else
+                    {
+                        ilog ("Cluster-host %s link is %s\n", hbs_config.clstr_iface, hbsInv.clstr_link_up_and_running ? "Up" : "Down" );
+                    }
+                }
+
                 /* Setup the heartbeat sockets */
                 if ( (rc = hbs_socket_init ()) != PASS )
                 {
-                    if ( socket_init_fail_count++ == 10 )
+                    #define HBS_SOCKET_INIT_RETRY_THRESHOLD (3)
+                    #define HBS_SOCKET_INIT_RETRY_INTERVAL  (2)
+                    if ( socket_init_fail_count++ == HBS_SOCKET_INIT_RETRY_THRESHOLD )
                     {
-                        elog ("Failed socket initialization (rc:%d) max retries ; exiting ...\n", rc );
+                        elog ("Failed socket initialization (rc:%d) "
+                              "max retries ; exiting ...", rc );
                         daemon_exit ();
                     }
                     else
                     {
-                        elog ("Failed socket initialization (rc:%d) ; will retry in 5 secs ...\n", rc );
-                        sleep (5);
+                        elog ("Failed socket initialization (rc:%d) ; "
+                              "will retry in %d secs ...\n",
+                              rc, HBS_SOCKET_INIT_RETRY_INTERVAL);
+                        sleep (HBS_SOCKET_INIT_RETRY_INTERVAL);
                     }
                 }
                 else
@@ -1584,6 +1662,8 @@ void daemon_service_run ( void )
                         rc = send_event ( hbsInv.my_hostname, MTC_EVENT_HEARTBEAT_READY, MGMNT_IFACE ) ;
                         if ( rc == RETRY )
                         {
+                            // TODO: Threshold this loop and exit or this
+                            //       could be a silent process failure loop.
                             mtcWait_secs ( 3 );
                         }
                     } while ( rc == RETRY ) ;
@@ -1591,29 +1671,6 @@ void daemon_service_run ( void )
                     {
                         elog ("Unrecoverable heartbeat startup error (rc=%d)\n", rc );
                         daemon_exit ();
-                    }
-
-                    if ( get_link_state ( hbs_sock.ioctl_sock, hbs_config.mgmnt_iface, &hbsInv.mgmnt_link_up_and_running ) )
-                    {
-                        hbsInv.mgmnt_link_up_and_running = false ;
-                        wlog ("Failed to query %s operational state ; defaulting to down\n", hbs_config.mgmnt_iface );
-                    }
-                    else
-                    {
-                        ilog ("Mgmnt %s link is %s\n", hbs_config.mgmnt_iface, hbsInv.mgmnt_link_up_and_running ? "Up" : "Down" );
-                    }
-
-                    if ( hbsInv.clstr_network_provisioned == true )
-                    {
-                        if ( get_link_state ( hbs_sock.ioctl_sock, hbs_config.clstr_iface, &hbsInv.clstr_link_up_and_running ) )
-                        {
-                            hbsInv.clstr_link_up_and_running = false ;
-                            wlog ("Failed to query %s operational state ; defaulting to down\n", hbs_config.clstr_iface );
-                        }
-                        else
-                        {
-                            ilog ("Cluster-host %s link is %s\n", hbs_config.clstr_iface, hbsInv.clstr_link_up_and_running ? "Up" : "Down" );
-                        }
                     }
 
                     /* Make the main loop schedule in real-time */
@@ -1720,7 +1777,8 @@ void daemon_service_run ( void )
                     counter = 1 ;
                 }
             }
-            else if ( hbsInv.hbs_disabled == true )
+            else if (( hbsInv.hbs_disabled == true ) &&
+                     ( hbsInv.mgmnt_link_up_and_running == true ))
             {
                 hbs_ctrl.locked = false ;
                 hbsInv.hbs_disabled = false;
@@ -2191,12 +2249,11 @@ void daemon_service_run ( void )
                     if ( rc != 0 )
                     {
                         /* TODO: Fix this with an alarm */
-                        wlog_throttled ( pulse_request_fail_log_counter[iface], 100,
-                                         "%s hbs_pulse_request failed - rc:%d\n", get_iface_name_str(iface), rc);
-
-                        if ( pulse_request_fail_log_counter[iface] == INTERFACE_ERRORS_FOR_REINIT )
+                        if ( pulse_request_fail_log_counter[iface] > INTERFACE_ERRORS_FOR_REINIT )
                         {
-                            _setup_pulse_messaging ( (iface_enum)iface , daemon_get_rmem_max ()) ;
+                            rc = _setup_pulse_messaging ( (iface_enum)iface , daemon_get_rmem_max ()) ;
+                            if ( rc )
+                                continue ;
                         }
                     }
                     else

@@ -1,7 +1,7 @@
 #ifndef __INCLUDE_NODEBASE_HH__
 #define __INCLUDE_NODEBASE_HH__
 /*
- * Copyright (c) 2013-2016 Wind River Systems, Inc.
+ * Copyright (c) 2013-2020 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -161,10 +161,10 @@ typedef enum
 
 
 /** 'lo' interface IP address - TODO: get it from the interface */
-#define LOOPBACK_IP "127.0.0.1"
+#define LOCALHOST     "localhost"
+#define LOOPBACK_IP   "127.0.0.1"
 #define LOOPBACK_IPV6 "::1"
-#define LOCALHOST   "localhost"
-
+#define LOOPBACK_IF   "lo"
 
 #define CLUSTER_HOST_SUFFIX    ((const char*)("-cluster-host"))
 
