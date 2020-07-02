@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015 Wind River Systems, Inc.
+ * Copyright (c) 2013-2020 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -187,6 +187,7 @@ void log_link_events ( int netlink_sock,
                   iter_curr_ptr != links_gone_down.end() ;
                   iter_curr_ptr++ )
             {
+                bool care = false ;
                 dlog3 ( "downed link: %s (running:%d:%d)\n",
                         iter_curr_ptr->c_str(),
                         mgmnt_link_up_and_running,
@@ -194,6 +195,7 @@ void log_link_events ( int netlink_sock,
 
                 if ( !strcmp (mgmnt_iface_ptr, iter_curr_ptr->data()))
                 {
+                    care = true ;
                     if ( mgmnt_link_up_and_running == true )
                     {
                         mgmnt_link_up_and_running = false ;
@@ -202,6 +204,7 @@ void log_link_events ( int netlink_sock,
                 }
                 if ( !strcmp (clstr_iface_ptr, iter_curr_ptr->data()))
                 {
+                    care = true ;
                     if ( clstr_link_up_and_running == true )
                     {
                         clstr_link_up_and_running = false ;
@@ -209,18 +212,21 @@ void log_link_events ( int netlink_sock,
                     }
                 }
 
-                if ( get_link_state ( ioctl_sock, iter_curr_ptr->data(), &running ) == PASS )
+                if ( care == true )
                 {
-                   wlog ("%s is down (oper:%s) (%ld)\n",
-                             iter_curr_ptr->c_str(),
-                             running ? "up" : "down",
-                             iter_curr_ptr->length() );
-                }
-                else
-                {
-                    wlog ("%s is down (driver query failed) (len:%ld)\n",
-                            iter_curr_ptr->c_str(),
-                            iter_curr_ptr->length() );
+                    if ( get_link_state ( ioctl_sock, iter_curr_ptr->data(), &running ) == PASS )
+                    {
+                        wlog ("%s is down (oper:%s) (%ld)\n",
+                                 iter_curr_ptr->c_str(),
+                                 running ? "up" : "down",
+                                 iter_curr_ptr->length());
+                    }
+                    else
+                    {
+                        wlog ("%s is down (driver query failed) (len:%ld)\n",
+                                  iter_curr_ptr->c_str(),
+                                  iter_curr_ptr->length());
+                    }
                 }
             }
         }
@@ -233,6 +239,7 @@ void log_link_events ( int netlink_sock,
                   iter_curr_ptr != links_gone_up.end() ;
                   iter_curr_ptr++ )
             {
+                bool care = false ;
                 dlog3 ( "recovered link: %s (running:%d:%d)\n",
                         iter_curr_ptr->c_str(),
                         mgmnt_link_up_and_running,
@@ -240,27 +247,32 @@ void log_link_events ( int netlink_sock,
 
                 if ( !strcmp (mgmnt_iface_ptr, iter_curr_ptr->data()))
                 {
+                    care = true ;
                     mgmnt_link_up_and_running = true ;
                     wlog ("Mgmnt link %s is up\n", mgmnt_iface_ptr );
                 }
                 if ( !strcmp (clstr_iface_ptr, iter_curr_ptr->data()))
                 {
+                    care = true ;
                     clstr_link_up_and_running = true ;
                     wlog ("Cluster-host link %s is up\n", clstr_iface_ptr );
                 }
 
-                if ( get_link_state ( ioctl_sock, iter_curr_ptr->data(), &running ) == PASS )
+                if ( care == true )
                 {
-                    wlog ("%s is up (oper:%s) (len:%ld)\n",
-                              iter_curr_ptr->c_str(),
-                              running ? "up" : "down",
-                              iter_curr_ptr->length() );
-                }
-                else
-                {
-                    wlog ("%s is up (driver query failed) (len:%ld)\n",
-                              iter_curr_ptr->c_str(),
-                              iter_curr_ptr->length() );
+                    if ( get_link_state ( ioctl_sock, iter_curr_ptr->data(), &running ) == PASS )
+                    {
+                        wlog ("%s is up (oper:%s) (len:%ld)\n",
+                                  iter_curr_ptr->c_str(),
+                                  running ? "up" : "down",
+                                  iter_curr_ptr->length() );
+                    }
+                    else
+                    {
+                        wlog ("%s is up (driver query failed) (len:%ld)\n",
+                                  iter_curr_ptr->c_str(),
+                                  iter_curr_ptr->length() );
+                    }
                 }
             }
         }

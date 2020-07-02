@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016 Wind River Systems, Inc.
+ * Copyright (c) 2013-2020 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -437,8 +437,11 @@ int daemon_configure ( void )
         {
             if (strcmp(hbs_config.clstr_iface, hbs_config.mgmnt_iface))
             {
-                clstr_network_provisioned = true ;
-                ilog ("Cluster-host Name  : %s\n", hbs_config.clstr_iface );
+                if (strcmp(hbs_config.clstr_iface, LOOPBACK_IF))
+                {
+                    clstr_network_provisioned = true ;
+                    ilog ("Cluster-host Name  : %s\n", hbs_config.clstr_iface );
+                }
             }
         }
         if ( clstr_network_provisioned == true )
@@ -476,44 +479,80 @@ int _setup_pulse_messaging ( iface_enum i, int rmem )
     /* client sockets are not modified */
     UNUSED(rmem);
 
-    /* Load up the interface name */
-    if ( i == MGMNT_IFACE )
-    {
-        iface = hbs_config.mgmnt_iface ;
-    }
-    else if (( i == CLSTR_IFACE ) && ( hbs_config.clstr_iface != NULL ))
-    {
-        iface = hbs_config.clstr_iface ;
-    }
-    else
-    {
-        wlog ("No Cluster-host Interface\n");
-        return (RETRY);
-    }
-
     _close_pulse_rx_sock (i);
     _close_pulse_tx_sock (i);
 
     /********************************************************************/
     /* Setup multicast Pulse Request Receive Socket                     */
     /********************************************************************/
-
-    hbs_sock.rx_sock[i] =
-    new msgClassRx(hbs_config.multicast,hbs_sock.rx_port[i],IPPROTO_UDP,iface,true,true);
-    if (hbs_sock.rx_sock[i]->return_status != PASS)
+    /* Load up the interface name */
+    if ( i == MGMNT_IFACE )
     {
-        elog("Cannot create socket (%d) (%d:%m)\n", i, errno );
-        _close_pulse_rx_sock (i);
+        iface = hbs_config.mgmnt_iface ;
+        if (strcmp(iface, LOOPBACK_IF))
+        {
+            hbs_sock.rx_sock[i] =
+                new msgClassRx(hbs_config.multicast,hbs_sock.rx_port[i],IPPROTO_UDP,iface,true,true);
+        }
+        else
+        {
+            // Default to unicast heartbeat on management 'lo' interface
+            hbs_sock.rx_sock[i] =
+                new msgClassRx(my_address.data(),hbs_sock.rx_port[i],IPPROTO_UDP,iface,false, false);
+        }
+
+    }
+    else if (( i == CLSTR_IFACE ) &&
+             ( clstr_network_provisioned == true ) &&
+             ( hbs_config.clstr_iface != NULL ))
+    {
+        iface = hbs_config.clstr_iface ;
+        hbs_sock.rx_sock[i] =
+            new msgClassRx(hbs_config.multicast,hbs_sock.rx_port[i],IPPROTO_UDP,iface,true,true);
+    }
+    else
+    {
+        ilog("Cluster host interface not used.");
+        return (PASS);
+    }
+
+    if ( hbs_sock.rx_sock[i] )
+    {
+        if (hbs_sock.rx_sock[i]->return_status != PASS)
+        {
+            elog("Failed to create %s pulse receiver socket (%d:%d:%m)\n",
+                  get_iface_name_str(i),
+                  hbs_sock.rx_sock[i]->return_status,
+                  errno );
+            _close_pulse_rx_sock (i);
+            return (FAIL_SOCKET_CREATE);
+        }
+        hbs_sock.rx_sock[i]->sock_ok(true);
+    }
+    else
+    {
+        elog("Failed to create %s pulse receiver socket (%d:%m)\n",
+              get_iface_name_str(i), errno );
         return (FAIL_SOCKET_CREATE);
     }
-    hbs_sock.rx_sock[i]->sock_ok(true);
 
+    /********************************************************************/
     /* Setup unicast transmit (reply) socket */
+    /********************************************************************/
     hbs_sock.tx_sock[i] =
     new msgClassTx(hbs_config.multicast,hbs_sock.tx_port[i],IPPROTO_UDP, iface);
+    if ( hbs_sock.tx_sock[i] == NULL )
+    {
+        elog("Failed to create %s pulse reply socket (%d:%m)\n",
+              get_iface_name_str(i), errno );
+        return (FAIL_SOCKET_CREATE);
+    }
     if (hbs_sock.tx_sock[i]->return_status != PASS)
     {
-        elog("Cannot create unicast transmit socket (%d) (%d:%m)\n", i, errno );
+        elog("Failed to create %s pulse reply socket (%d:%d:%m)\n",
+              get_iface_name_str(i),
+              hbs_sock.tx_sock[i]->return_status,
+              errno );
         _close_pulse_tx_sock(i);
         return (FAIL_SOCKET_CREATE);
     }
@@ -1234,7 +1273,7 @@ int daemon_init ( string iface, string nodeType_str )
     }
 
     /* Setup the heartbeat service messaging sockets */
-    else if ( hbs_socket_init () != PASS )
+    else if (( rc = hbs_socket_init ()) != PASS )
     {
         elog ("socket initialization failed (rc:%d)\n", rc );
         rc = FAIL_SOCKET_INIT;
