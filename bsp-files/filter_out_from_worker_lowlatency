@@ -299,4 +299,5 @@ dex-helm
 oidcauthtools
 stx-oidc-auth-helm
 stx-cert-manager-helm
+stx-vault-helm
 stx-nginx-ingress-controller-helm
