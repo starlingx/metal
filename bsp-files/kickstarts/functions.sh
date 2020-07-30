@@ -9,13 +9,9 @@ cat <<END_FUNCTIONS >/tmp/ks-functions.sh
 # SPDX-License-Identifier: Apache-2.0
 #
 
-# Get the FD used by subshells to log output
-if [ -z "\$stdout" ]; then
-    exec {stdout}>&1
-fi
-
 function wlog()
 {
+    [ -z "\$stdout" ] && stdout=1
     local dt="\$(date "+%Y-%m-%d %H:%M:%S.%3N")"
     echo "\$dt - \$1" >&\${stdout}
 }
