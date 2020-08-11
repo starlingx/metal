@@ -55,6 +55,51 @@ extern char *program_invocation_short_name;
 int mtcAlive_mgmnt_sequence = 0 ;
 int mtcAlive_clstr_sequence = 0 ;
 
+
+/************************************************************************
+ *
+ * Name        : stop pmon
+ *
+ * Purpose     : Used before issuing the self reboot so that pmond
+ *               does not try and recover any processes,
+ *               most importantly this one which would
+ *               cancel the sysreq failsafe thread.
+ *
+ ************************************************************************/
+void stop_pmon( void )
+{
+    /* max pipe command response length */
+    #define PIPE_COMMAND_RESPON_LEN (100)
+    ilog("Stopping pmon to prevent process recovery during shutdown");
+    for ( int retry = 0 ; retry < 5 ; retry++ )
+    {
+        char pipe_cmd_output [PIPE_COMMAND_RESPON_LEN] ;
+        int rc = system("/usr/bin/systemctl stop pmon");
+        sleep(2);
+
+        /* confirm pmon is no longer active */
+        execute_pipe_cmd ( "/usr/bin/systemctl is-active pmon", &pipe_cmd_output[0], PIPE_COMMAND_RESPON_LEN );
+        if ( strnlen ( pipe_cmd_output, PIPE_COMMAND_RESPON_LEN ) > 0 )
+        {
+            string temp = pipe_cmd_output ;
+            if ( temp.find ("inactive") != string::npos )
+            {
+                ilog("pmon is now inactive (%d:%d)", retry, rc);
+                break ;
+            }
+            else
+            {
+                ilog("pmon is not inactive (%s) ; retrying (%d:%d)",
+                      temp.c_str(), retry, rc);
+            }
+        }
+        else
+        {
+            elog("pmon status query failed ; retrying (%d:%d)", retry, rc);
+        }
+    }
+}
+
 /* Receive and process commands from controller maintenance */
 int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
 {
@@ -470,6 +515,7 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
                 ilog ("Reboot - fit bypass (%s)\n", interface_name.c_str());
                 return (PASS);
             }
+            stop_pmon();
             ilog ("Reboot (%s)\n", interface_name.c_str());
             daemon_log ( NODE_RESET_FILE, "reboot command" );
             fork_sysreq_reboot ( delay );
@@ -500,6 +546,10 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
             {
                 ilog ("Lazy Reboot (%s) ; now\n", interface_name.c_str() );
             }
+
+            /* stop pmon before issuing the self reboot so that it does not
+             * try and recover any processes, most importantly this one */
+            stop_pmon();
             fork_sysreq_reboot ( delay );
             rc = system("/usr/bin/systemctl reboot");
         }
@@ -510,6 +560,7 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
                 ilog ("Reset - fit bypass (%s)\n", interface_name.c_str());
                 return (PASS);
             }
+            stop_pmon();
             ilog ("Reset 'reboot -f' (%s)\n", interface_name.c_str());
             daemon_log ( NODE_RESET_FILE, "reset command" );
             fork_sysreq_reboot ( delay/2 );
@@ -527,6 +578,7 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
             /* We fork a reboot as a fail safe.
              * If something goes wrong we should reboot anyway
              */
+            stop_pmon();
             fork_sysreq_reboot ( delay/2 );
 
             /* We fork the wipedisk command as it may take upwards of 30s
