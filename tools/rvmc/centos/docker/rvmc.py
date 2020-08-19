@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 ###############################################################################
 #
-# Copyright (c) 2019 Wind River Systems, Inc.
+# Copyright (c) 2019-2020 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -19,9 +19,10 @@
 #     Step 2: Root Query     ... Learn Redfish Services offered by the BMC
 #     Step 3: Find CD/DVD    ... Locate the virtual media CD/DVD device
 #     Step 4: Power Off Host ... Host power needs to be off
-#     Step 5: Inject Iso     ... Inject the URL based ISO image into CD/DVD
-#     Step 6: Force DVD Boot ... Set Net boot device to be CD/DVD
-#     Step 7: Power On Host  ... Host will boot and install from DVD
+#     Step 5: Eject Iso      ... Eject iso if needed
+#     Step 6: Inject Iso     ... Inject the URL based ISO image into CD/DVD
+#     Step 7: Force DVD Boot ... Set Net boot device to be CD/DVD
+#     Step 8: Power On Host  ... Host will boot and install from DVD
 #
 # Note: All server starting state conditions such as the server running or
 #       being stuck in POST, say at the grub prompt due to previous host boot
@@ -129,7 +130,7 @@ import redfish
 
 FEATURE_NAME = 'Redfish Virtual Media Controller'
 VERSION_MAJOR = 2
-VERSION_MINOR = 0
+VERSION_MINOR = 1
 
 POWER_ON = 'On'
 POWER_OFF = "Off"
@@ -168,15 +169,12 @@ def t():
     return datetime.datetime.now().replace(microsecond=0)
 
 
-def ilog(string, cr=True):
+def ilog(string):
     """
     Info Log Utility
     """
 
-    if cr is True or debug:
-        sys.stdout.write("\n%s Info  : %s" % (t(), string))
-    else:
-        sys.stdout.write("%s, " % string)
+    sys.stdout.write("\n%s Info  : %s" % (t(), string))
 
 
 def elog(string):
@@ -231,7 +229,7 @@ def dlog4(string):
 def slog(stage):
     """Execution Stage Log"""
 
-    dlog1("Stage       : %s" % stage)
+    sys.stdout.write("\n%s Stage : %s" % (t(), stage))
 
 
 def rvmc_exit(code):
@@ -269,6 +267,13 @@ POST = 'POST'
 GET = 'GET'
 PATCH = 'PATCH'
 
+# max number of polling retries while waiting for some long task to complete
+MAX_POLL_COUNT = 200
+# some servers timeout on inter comm gaps longer than 10 secs
+RETRY_DELAY_SECS = 10
+# 2 second delay constant
+DELAY_2_SECS = 2
+
 
 def is_ipv6_address(address):
     """
@@ -281,9 +286,9 @@ def is_ipv6_address(address):
 
     try:
         socket.inet_pton(socket.AF_INET6, address)
-        dlog3("Address    : %s is IPv6" % address)
+        dlog3("Address     : %s is IPv6" % address)
     except socket.error:
-        dlog3("Address    : %s is IPv4" % address)
+        dlog3("Address     : %s is IPv4" % address)
         return False
     return True
 
@@ -351,7 +356,10 @@ def parse_target(target_name, target_dict):
     #
     ######################################################################
     if is_ipv6_address(address) is True:
+        bmc_ipv6 = True
         address = '[' + address + ']'
+    else:
+        bmc_ipv6 = False
 
     # Create object and add it to the target object list
     try:
@@ -362,6 +370,7 @@ def parse_target(target_name, target_dict):
                             str(pw_dec),
                             target_dict.get('image'))
         if vmc_obj:
+            vmc_obj.ipv6 = bmc_ipv6
             target_object_list.append(vmc_obj)
         else:
             elog("Unable to create control object for target:%s ; "
@@ -397,7 +406,7 @@ class VmcObject(object):
         self.pw_encoded = password.rstrip()
         self.pw = password_decoded
         self.img = image.rstrip()
-
+        self.ipv6 = False
         self.redfish_obj = None     # redfish client connection object
         self.session = False        # True when session for this BMC is created
 
@@ -414,6 +423,7 @@ class VmcObject(object):
 
         # Virtual Media Info
         self.vm_url = None
+        self.vm_eject_url = None
         self.vm_group_url = None
         self.vm_group = None
         self.vm_label = None
@@ -457,7 +467,7 @@ class VmcObject(object):
         :type path: str
         :param payload: POST or PATCH payload data
         :type payload: dictionary
-        :returns True if request succeeded (200) otherwise False
+        :returns True if request succeeded (200,202(accepted),204(no content)
         """
 
         self.response = None
@@ -466,6 +476,7 @@ class VmcObject(object):
         else:
             url = self.url
 
+        before_request_time = datetime.datetime.now().replace(microsecond=0)
         try:
             dlog3("Request     : %s %s" % (operation, url))
             if operation == GET:
@@ -483,7 +494,7 @@ class VmcObject(object):
                 dlog3("Payload     : %s" % payload)
                 self.response = self.redfish_obj.patch(url,
                                                        body=payload,
-                                                       headers=POST_HEADERS)
+                                                       headers=PATCH_HEADERS)
             else:
                 elog("Unsupported operation: %s" % operation)
                 return False
@@ -492,12 +503,16 @@ class VmcObject(object):
             elog("Failed operation on '%s' (%s)" % (url, ex))
 
         if self.response is not None:
-
+            after_request_time = datetime.datetime.now().replace(microsecond=0)
+            delta = after_request_time - before_request_time
             # if we got a response, check its status
-            if self.check_ok_status(url, operation) is False:
+            if self.check_ok_status(url, operation, delta.seconds) is False:
                 self._exit(1)
 
-            # format response
+            # handle 204 success with no content ; clear last response
+            if self.response.status == 204:
+                self.response = ""
+                return True
             try:
                 if self.resp_dict() is True:
                     if self.format() is True:
@@ -569,7 +584,7 @@ class VmcObject(object):
             return value1
         return value1.get(key2)
 
-    def check_ok_status(self, function, operation):
+    def check_ok_status(self, function, operation, seconds):
         """
         Status
 
@@ -580,16 +595,26 @@ class VmcObject(object):
         :returns True if response status is OK. Otherwise False.
         """
 
+        # Accept applicable 400 series error from an Eject Request POST.
+        # This error is dealt with by the eject handler.
+        if self.response.status in [400, 403, 404] and \
+                function == self.vm_eject_url and \
+                operation == POST:
+            return True
+
         if self.response.status not in [200, 202, 204]:
+            try:
+                elog("HTTP Status : %d ; %s %s failed after %i seconds\n%s\n" %
+                     (self.response.status,
+                      operation, function, seconds,
+                      json.dumps(self.response.dict,
+                                 indent=4, sort_keys=True)))
+                return False
+            except Exception as ex:
+                elog("check status exception ; %s" % ex)
 
-            elog("HTTP Status : %d ; %s %s failed\n%s\n" %
-                 (self.response.status,
-                  operation, function,
-                  json.dumps(self.response.dict, indent=4, sort_keys=True)))
-            return False
-
-        dlog2("HTTP Status : %s %s Ok (%d)" %
-              (operation, function, self.response.status))
+        dlog2("HTTP Status : %s %s Ok (%d) (took %i seconds)" %
+              (operation, function, self.response.status, seconds))
         return True
 
     def _exit(self, code):
@@ -619,8 +644,11 @@ class VmcObject(object):
             # the redfish query data that was learned up to that point
             elog("Code : %s" % code)
 
+            # Other info
+            ilog("IPv6      : %s" % self.ipv6)
+
             # Root Query Info
-            ilog("Root Query:\n%s\n" % self.root_query_info)
+            ilog("Root Query: %s" % self.root_query_info)
 
             # Managers Info
             ilog("Manager URL: %s" % self.managers_group_url)
@@ -644,10 +672,10 @@ class VmcObject(object):
             ilog("VM Label: %s" % self.vm_label)
             ilog("VM Version: %s" % self.vm_version)
             ilog("VM Actions: %s" % self.vm_actions)
-            ilog("VM Media Types: %s\n" % self.vm_media_types)
+            ilog("VM Media Types: %s" % self.vm_media_types)
 
-            ilog("Last Response raw: %s\n" % self.response)
-            ilog("Last Response json: %s\n" % self.response_json)
+            ilog("Last Response raw: %s" % self.response)
+            ilog("Last Response json: %s" % self.response_json)
 
         rvmc_exit(code)
 
@@ -668,6 +696,35 @@ class VmcObject(object):
         stage = 'Redfish Client Connection'
         slog(stage)
 
+        # Verify ping response
+        ping_ok = False
+        ping_count = 0
+        MAX_PING_COUNT = 10
+        while ping_count < MAX_PING_COUNT and ping_ok is False:
+            response = 0
+            if self.ipv6 is True:
+                response = os.system("ping -6 -c 1 " +
+                                     self.ip[1:-1] + " > /dev/null 2>&1")
+            else:
+                response = os.system("ping -c 1 " +
+                                     self.ip + " > /dev/null 2>&1")
+
+            if response == 0:
+                ping_ok = True
+            else:
+                ping_count = ping_count + 1
+                ilog("BMC Ping     : retry (%i of %i)" %
+                     (ping_count, MAX_PING_COUNT))
+                time.sleep(2)
+
+        if ping_ok is False:
+            elog("Unable to ping '%s' (%i)" % (self.ip, ping_count))
+            alog("Check BMC ip address is pingable")
+            self._exit(1)
+        else:
+            ilog("BMC Ping Ok : %s (%i)" % (self.ip, ping_count))
+
+        # try to connect
         connect_error = False
         try:
             # One time Redfish Client Object Create
@@ -699,8 +756,6 @@ class VmcObject(object):
 
         stage = 'Root Query'
         slog(stage)
-
-        ilog("Progress    : %s, " % stage)
 
         if self.make_request(operation=GET, path=None) is False:
             elog("Failed %s GET request")
@@ -884,7 +939,6 @@ class VmcObject(object):
                         # in the same state will error out.
                         # So don't do it.
                         return
-                    ilog("Power %s" % state, False)
                 break
 
         info = 'Systems Reset Action Dictionary'
@@ -953,15 +1007,12 @@ class VmcObject(object):
         dlog3("ResetActions: %s" % reset_command_list)
 
         # load the appropriate acceptable command list
-        acceptable_reset_commands = ['ForceRestart', 'GracefulRestart']
-        acceptable_poweron_commands = ['ForceOn', 'On']
-        acceptable_poweroff_commands = ['ForceOff', 'GracefulShutdown']
         if state == POWER_OFF:
-            acceptable_commands = acceptable_poweroff_commands
+            acceptable_commands = ['ForceOff', 'GracefulShutdown']
         elif state == POWER_ON:
-            acceptable_commands = acceptable_poweron_commands
+            acceptable_commands = ['ForceOn', 'On']
         else:
-            acceptable_commands = acceptable_reset_commands
+            acceptable_commands = ['ForceRestart', 'GracefulRestart']
 
         # Look for the best command for the power state requested.
         command = None
@@ -993,20 +1044,30 @@ class VmcObject(object):
             # this was not a power command
             return
 
-        dlog2("Verify      : %s" % stage)
+        # poll for requested power state.
+        poll_count = 0
+        MAX_STATE_POLL_COUNT = 60  # some servers take longer than 10 seconds
+        while poll_count < MAX_STATE_POLL_COUNT and self.power_state != state:
+            time.sleep(1)
+            poll_count = poll_count + 1
 
-        # delay and refresh self.power_state
-        time.sleep(10)
-
-        # get systems info
-        if self.make_request(operation=GET,
-                             path=self.systems_member_url) is False:
-            elog("Failed to Get System State URL:%s" %
-                 self.systems_member_url)
+            # get systems info
+            if self.make_request(operation=GET,
+                                 path=self.systems_member_url) is False:
+                elog("Failed to Get System State (%i of %i)" %
+                     (poll_count, MAX_STATE_POLL_COUNT))
+            else:
+                # get powerState
+                self.power_state = self.get_key_value('PowerState')
+                if self.power_state != state:
+                    dlog1("waiting for power %s (%s) (%d)" %
+                          (state, self.power_state, poll_count))
+        if self.power_state != state:
+            elog("Failed to Set System Power State to %s (%s)" %
+                 (self.power_state, self.systems_member_url))
             self._exit(1)
-
-        # get powerState
-        self.power_state = self.get_key_value('PowerState')
+        else:
+            ilog("%s verified (%d)" % (stage, poll_count))
 
     ######################################################################
     # Get CD/DVD Virtual Media URL
@@ -1018,8 +1079,6 @@ class VmcObject(object):
 
         stage = 'Get CD/DVD Virtual Media'
         slog(stage)
-
-        ilog("Get VM Info", False)
 
         if self.manager_members_list is None:
             elog("Unable to index Managers Members from %s" %
@@ -1209,18 +1268,68 @@ class VmcObject(object):
         stage = 'Eject Current Image'
         slog(stage)
 
-        current_image = self.get_key_value('Image')
-        if current_image:
-            vm_eject = self.vm_actions.get('#VirtualMedia.EjectMedia')
-            if vm_eject:
-                vm_eject_url = vm_eject.get('target')
-                if vm_eject_url:
-                    ilog("Eject CD/DVD", False)
-                    if self.make_request(operation=POST,
-                                         payload={},
-                                         path=vm_eject_url) is False:
-                        elog("Failed to GET Virtual Media Eject URL from %s" %
-                             vm_eject_url)
+        if self.make_request(operation=GET, path=self.vm_url) is False:
+            elog("Virtual media status query failed (%s)" % self.vm_url)
+            self._exit(1)
+
+        if self.get_key_value('Inserted') is False:
+            return
+
+        # Ensure there is no image inserted and handle the case where
+        # one might be in the process of loading.
+        MAX_EJECT_RETRY_COUNT = 10
+        eject_retry_count = 0
+        ejecting = True
+        eject_media_label = '#VirtualMedia.EjectMedia'
+        while eject_retry_count < MAX_EJECT_RETRY_COUNT and ejecting:
+            eject_retry_count = eject_retry_count + 1
+            vm_eject = self.vm_actions.get(eject_media_label)
+            if not vm_eject:
+                elog("Failed to get eject target (%s)" % eject_media_label)
+                self._exit(1)
+
+            self.vm_eject_url = vm_eject.get('target')
+            if self.vm_eject_url:
+                if self.get_key_value('Image'):
+                    ilog("Eject Request Image %s" %
+                         (self.get_key_value('Image')))
+                else:
+                    dlog1("Eject Request")
+
+                if self.make_request(operation=POST,
+                                     payload={},
+                                     path=self.vm_eject_url) is False:
+                    elog("Eject request failed (%s)" % self.vm_eject_url)
+                    # accept this and continue to poll
+
+                time.sleep(DELAY_2_SECS)
+                poll_count = 0
+                while poll_count < MAX_POLL_COUNT and ejecting:
+                    # verify the image is not in inserted
+                    poll_count = poll_count + 1
+                    vm_eject = self.vm_actions.get(eject_media_label)
+                    if self.make_request(operation=GET,
+                                         path=self.vm_url) is True:
+                        if self.get_key_value('Inserted') is False:
+                            ilog("Ejected")
+                            ejecting = False
+                        elif self.get_key_value('Image'):
+                            # if image is present then its ready to
+                            # retry the eject, break out of poll loop
+                            dlog1("Image Present  ; %s" %
+                                  self.get_key_value('Image'))
+                            break
+                        else:
+                            dlog1("Eject Wait     ; Image: %s" %
+                                  self.get_key_value('Image'))
+                            time.sleep(RETRY_DELAY_SECS)
+                    else:
+                        elog("Failed to query vm state (%s)" % self.vm_url)
+                        self._exit(1)
+
+        if ejecting is True:
+            elog("%s wait timeout" % stage)
+            self._exit(1)
 
     ######################################################################
     # Insert Image into Virtual Media CD/DVD
@@ -1232,8 +1341,6 @@ class VmcObject(object):
 
         stage = 'Insert Image into Virtual Media CD/DVD'
         slog(stage)
-
-        ilog("Insert Image", False)
 
         vm_insert_url = None
         vm_insert_act = self.vm_actions.get('#VirtualMedia.InsertMedia')
@@ -1254,11 +1361,33 @@ class VmcObject(object):
             elog("Failed to Insert Media")
             self._exit(1)
 
-        dlog2("Verify      : %s" % stage)
+        # Handle case where the BMC loads the iso image during the insertion.
+        # In that case the 'Inserted' is True but the Image is not immediately
+        # mounted.
+        poll_count = 0
+        ImageInserting = True
+        while poll_count < MAX_POLL_COUNT and ImageInserting:
+            if self.make_request(operation=GET, path=self.vm_url) is False:
+                elog("Unable to verify Image insertion (%s)" % self.vm_url)
+                self._exit(1)
 
-        if self.make_request(operation=GET, path=self.vm_url) is False:
-            elog("Unable to verify Image insertion" % self.vm_url)
+            if self.get_key_value('Image') == self.img:
+                ilog("Image Insertion (took %i seconds)" %
+                     (poll_count * RETRY_DELAY_SECS))
+                ImageInserting = False
+            else:
+                time.sleep(RETRY_DELAY_SECS)
+                poll_count = poll_count + 1
+                dlog1("Image Insertion Wait ; %3d secs (%3d of %3d)" %
+                      (poll_count * RETRY_DELAY_SECS,
+                       poll_count, MAX_POLL_COUNT))
+
+        if ImageInserting is True:
+            elog("Image insertion timeout")
             self._exit(1)
+        else:
+            ilog("%s verified (took %i seconds)" %
+                 (stage, poll_count * RETRY_DELAY_SECS))
 
         if self.get_key_value('Image') != self.img:
             elog("Insertion verification failed.")
@@ -1283,10 +1412,8 @@ class VmcObject(object):
         Set Next Boot Override to CD/DVD
         """
 
-        stage = 'Set Next Boot Override to CD/DVD"'
+        stage = 'Set Next Boot Override to CD/DVD'
         slog(stage)
-
-        ilog("Set CD/DVD Boot", False)
 
         # Walk the Systems Members list looking for Boot support.
         #
@@ -1319,21 +1446,53 @@ class VmcObject(object):
         if self.boot_control_dict is None:
             elog("Unable to get %s from %s" % (info, self.systems_member_url))
             self._exit(1)
+        else:
+            allowable_label = 'BootSourceOverrideMode@Redfish.AllowableValues'
+            mode_list = self.get_key_value('Boot', allowable_label)
+            if mode_list is None:
+                payload = {"Boot": {"BootSourceOverrideEnabled": "Once",
+                                    "BootSourceOverrideTarget": "Cd"}}
+            else:
+                dlog1("Boot Override Modes: %s" % mode_list)
 
-        payload = {"Boot": {"BootSourceOverrideEnabled": "Once",
-                            "BootSourceOverrideTarget": "Cd"}}
+                # Prioritize UEFI over Legacy
+                if "UEFI" in mode_list:
+                    payload = {"Boot": {"BootSourceOverrideEnabled": "Once",
+                                        "BootSourceOverrideMode": "UEFI",
+                                        "BootSourceOverrideTarget": "Cd"}}
+                elif "Legacy" in mode_list:
+                    payload = {"Boot": {"BootSourceOverrideEnabled": "Once",
+                                        "BootSourceOverrideMode": "Legacy",
+                                        "BootSourceOverrideTarget": "Cd"}}
+                else:
+                    elog("BootSourceOverrideModes %s not supported" %
+                         mode_list)
+                    self._exit(0)
+
+                dlog2("Boot Override Payload: %s" % payload)
+
         if self.make_request(operation=PATCH,
                              path=self.systems_member_url,
                              payload=payload) is False:
-            elog("Unable to verify Image insertion" % self.vm_url)
+            elog("Unable to Set Boot Override (%s)" % self.vm_url)
             self._exit(1)
-
-        dlog2("Verify      : %s" % stage)
 
         if self.make_request(operation=GET,
                              path=self.systems_member_url) is False:
-            elog("Unable to verify Boot Override insertion" % self.vm_url)
+            elog("Unable to verify Set Boot Override (%s)" % self.vm_url)
             self._exit(1)
+        else:
+            enabled = self.get_key_value('Boot', 'BootSourceOverrideEnabled')
+            device = self.get_key_value('Boot', 'BootSourceOverrideTarget')
+            mode = self.get_key_value('Boot', 'BootSourceOverrideMode')
+            if enabled == "Once" and \
+                    supported_device(self.vm_media_types) is True:
+                ilog("%s verified [%s:%s:%s]" %
+                     (stage, enabled, device, mode))
+            else:
+                elog("Unable to verify Set Boot Override [%s:%s:%s]" %
+                     (enabled, device, mode))
+                self._exit(1)
 
     ######################################################################
     # Power On Host
@@ -1362,7 +1521,7 @@ class VmcObject(object):
         self._redfish_set_boot_override()
         self._redfish_poweron_host()
 
-        ilog("Done", False)
+        ilog("Done")
 
         if self.redfish_obj is not None and self.session is True:
             self.redfish_obj.logout()
@@ -1388,7 +1547,7 @@ try:
     with open(CONFIG_FILE, 'r') as yaml_config:
         dlog1("Config File : %s" % CONFIG_FILE)
         cfg = yaml.safe_load(yaml_config)
-        dlog3("Config Data: %s" % cfg)
+        dlog3("Config Data : %s" % cfg)
 except Exception as ex:
     elog("Unable to open specified config file: %s (%s)" %
          (CONFIG_FILE, ex))
@@ -1407,12 +1566,12 @@ for section in cfg:
         dlog2("VM Iso Label: %s" % cfg[section])
         found = True
         if targets:
-            dlog1("Using specified target(s): %s" % targets)
+            dlog2("Using specified target(s): %s" % targets)
         else:
             for target in cfg[section]:
                 targets.append(target)
 
-        dlog1("Targets  : %s" % targets)
+        dlog1("Targets     : %s" % targets)
         for target in targets:
             try:
                 parse_target(target, cfg[section][target])
