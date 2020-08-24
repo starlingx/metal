@@ -707,66 +707,89 @@ int mtce_send_event ( mtc_socket_type * sock_ptr, int cmd , const char * mtce_na
  ****************************************************************************/
 int create_mtcAlive_msg ( mtc_message_type & msg, int cmd, string identity, int interface )
 {
-        struct timespec ts ;
-        clock_gettime (CLOCK_MONOTONIC, &ts );
+    static int _sm_unhealthy_debounce_counter [MAX_IFACES] = {0,0} ;
 
-        /* Get health state of the host - presently limited to the following
-         *
-         * during boot           = NODE_HEALTH_UNKNOWN
-         * /var/run/.config_pass = NODE_HEALTHY
-         * /var/run/.config_fail = NODE_UNHEALTHY
-         *
-         * */
+    struct timespec ts ;
+    clock_gettime (CLOCK_MONOTONIC, &ts );
 
-        /* Init the message buffer */
-        MEMSET_ZERO (msg);
-        snprintf ( &msg.hdr[0], MSG_HEADER_SIZE, "%s", get_worker_msg_header());
-        msg.cmd = cmd ;
-        msg.num = MTC_PARM_MAX_IDX ;
+    /* Get health state of the host - presently limited to the following
+     *
+     * during boot           = NODE_HEALTH_UNKNOWN
+     * /var/run/.config_pass = NODE_HEALTHY
+     * /var/run/.config_fail = NODE_UNHEALTHY
+     *
+     * */
 
-        /* Insert the host uptime */
-        msg.parm[MTC_PARM_UPTIME_IDX] = ts.tv_sec ;
+    /* Init the message buffer */
+    MEMSET_ZERO (msg);
+    snprintf ( &msg.hdr[0], MSG_HEADER_SIZE, "%s", get_worker_msg_header());
+    msg.cmd = cmd ;
+    msg.num = MTC_PARM_MAX_IDX ;
 
-        /* Insert the host health - TO BE OBSOLTETED */
-        msg.parm[MTC_PARM_HEALTH_IDX] = get_node_health( get_hostname() ) ;
+    /* Insert the host uptime */
+    msg.parm[MTC_PARM_UPTIME_IDX] = ts.tv_sec ;
 
-        /* Insert the mtce flags */
-        msg.parm[MTC_PARM_FLAGS_IDX] = 0 ;
-        if ( daemon_is_file_present ( CONFIG_COMPLETE_FILE ) )
-            msg.parm[MTC_PARM_FLAGS_IDX] |= MTC_FLAG__I_AM_CONFIGURED ;
-        if ( daemon_is_file_present ( CONFIG_FAIL_FILE ) )
-            msg.parm[MTC_PARM_FLAGS_IDX] |= MTC_FLAG__I_AM_NOT_HEALTHY ;
-        if ( daemon_is_file_present ( CONFIG_PASS_FILE ) )
-            msg.parm[MTC_PARM_FLAGS_IDX] |= MTC_FLAG__I_AM_HEALTHY ;
-        if ( daemon_is_file_present ( NODE_LOCKED_FILE ) )
-            msg.parm[MTC_PARM_FLAGS_IDX] |= MTC_FLAG__I_AM_LOCKED ;
-        if ( daemon_is_file_present ( GOENABLED_MAIN_PASS ) )
-            msg.parm[MTC_PARM_FLAGS_IDX] |= MTC_FLAG__MAIN_GOENABLED ;
-        if ( daemon_is_file_present ( PATCHING_IN_PROG_FILE ) )
-            msg.parm[MTC_PARM_FLAGS_IDX] |= MTC_FLAG__PATCHING ;
-        if ( daemon_is_file_present ( NODE_IS_PATCHED_FILE ) )
-            msg.parm[MTC_PARM_FLAGS_IDX] |= MTC_FLAG__PATCHED ;
+    /* Insert the host health - TO BE OBSOLTETED */
+    msg.parm[MTC_PARM_HEALTH_IDX] = get_node_health( get_hostname() ) ;
 
-        /* manage the worker subfunction flag */
-        if ( is_subfunction_worker () == true )
+    /* Insert the mtce flags */
+    msg.parm[MTC_PARM_FLAGS_IDX] = 0 ;
+    if ( daemon_is_file_present ( CONFIG_COMPLETE_FILE ) )
+        msg.parm[MTC_PARM_FLAGS_IDX] |= MTC_FLAG__I_AM_CONFIGURED ;
+    if ( daemon_is_file_present ( CONFIG_FAIL_FILE ) )
+        msg.parm[MTC_PARM_FLAGS_IDX] |= MTC_FLAG__I_AM_NOT_HEALTHY ;
+    if ( daemon_is_file_present ( CONFIG_PASS_FILE ) )
+        msg.parm[MTC_PARM_FLAGS_IDX] |= MTC_FLAG__I_AM_HEALTHY ;
+    if ( daemon_is_file_present ( NODE_LOCKED_FILE ) )
+        msg.parm[MTC_PARM_FLAGS_IDX] |= MTC_FLAG__I_AM_LOCKED ;
+    if ( daemon_is_file_present ( GOENABLED_MAIN_PASS ) )
+        msg.parm[MTC_PARM_FLAGS_IDX] |= MTC_FLAG__MAIN_GOENABLED ;
+    if ( daemon_is_file_present ( PATCHING_IN_PROG_FILE ) )
+        msg.parm[MTC_PARM_FLAGS_IDX] |= MTC_FLAG__PATCHING ;
+    if ( daemon_is_file_present ( NODE_IS_PATCHED_FILE ) )
+        msg.parm[MTC_PARM_FLAGS_IDX] |= MTC_FLAG__PATCHED ;
+
+    /* manage the worker subfunction flag */
+    if ( is_subfunction_worker () == true )
+    {
+        if ( daemon_is_file_present ( CONFIG_COMPLETE_WORKER ) )
         {
-            if ( daemon_is_file_present ( CONFIG_COMPLETE_WORKER ) )
-            {
-                msg.parm[MTC_PARM_FLAGS_IDX] |= MTC_FLAG__SUBF_CONFIGURED ;
+            msg.parm[MTC_PARM_FLAGS_IDX] |= MTC_FLAG__SUBF_CONFIGURED ;
 
-                /* Only set the go enabled subfunction flag if the pass file only exists */
-                if (( daemon_is_file_present ( GOENABLED_SUBF_PASS ) == true ) &&
-                    ( daemon_is_file_present ( GOENABLED_SUBF_FAIL ) == false ))
-                {
-                    msg.parm[MTC_PARM_FLAGS_IDX] |= MTC_FLAG__SUBF_GOENABLED ;
-                }
+            /* Only set the go enabled subfunction flag if the pass file only exists */
+            if (( daemon_is_file_present ( GOENABLED_SUBF_PASS ) == true ) &&
+                ( daemon_is_file_present ( GOENABLED_SUBF_FAIL ) == false ))
+            {
+                msg.parm[MTC_PARM_FLAGS_IDX] |= MTC_FLAG__SUBF_GOENABLED ;
             }
         }
+    }
 
-        if ( daemon_is_file_present ( SMGMT_DEGRADED_FILE ) )
-            msg.parm[MTC_PARM_FLAGS_IDX] |= MTC_FLAG__SM_DEGRADED ;
-        if ( daemon_is_file_present ( SMGMT_UNHEALTHY_FILE ) )
+    if ( daemon_is_file_present ( SMGMT_DEGRADED_FILE ) )
+        msg.parm[MTC_PARM_FLAGS_IDX] |= MTC_FLAG__SM_DEGRADED ;
+
+    if ( daemon_is_file_present ( SMGMT_UNHEALTHY_FILE ) )
+    {
+        /* debounce 6 mtcAlive messages = ~25-30 second debounce */
+        #define MAX_SM_UNHEALTHY_DEBOUNCE (6)
+        if ( ++_sm_unhealthy_debounce_counter[interface] > MAX_SM_UNHEALTHY_DEBOUNCE )
+        {
+            wlog("SM Unhealthy flag set (%s)",
+                  get_iface_name_str(interface));
             msg.parm[MTC_PARM_FLAGS_IDX] |= MTC_FLAG__SM_UNHEALTHY ;
+        }
+        else
+        {
+            wlog("SM Unhealthy debounce %d of %d (%s)",
+                  _sm_unhealthy_debounce_counter[interface],
+                  MAX_SM_UNHEALTHY_DEBOUNCE,
+                  get_iface_name_str(interface));
+        }
+    }
+    else
+    {
+        _sm_unhealthy_debounce_counter[interface] = 0 ;
+    }
 
     /* add the interface and sequence number to the mtcAlice message */
     identity.append ( ",\"interface\":\"");
