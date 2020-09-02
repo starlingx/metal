@@ -302,3 +302,4 @@ stx-cert-manager-helm
 stx-nginx-ingress-controller-helm
 stx-portieris-helm
 stx-vault-helm
+k8s-pod-recovery

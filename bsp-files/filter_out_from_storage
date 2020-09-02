@@ -345,3 +345,4 @@ stx-nginx-ingress-controller-helm
 stx-portieris-helm
 stx-vault-helm
 sysinv-fpga-agent
+k8s-pod-recovery
