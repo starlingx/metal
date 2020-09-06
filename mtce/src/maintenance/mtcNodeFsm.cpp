@@ -41,13 +41,6 @@ int nodeLinkClass::fsm ( struct nodeLinkClass::node * node_ptr )
         return FAIL ;
     }
 
-    /* if the multi-Node-Failure Avoidance timer rang then run its recovery handler */
-    if (( this->mnfa_timeout != 0 ) && ( mtcTimer_mnfa.ring == true ))
-    {
-        mtcTimer_mnfa.ring = false ;
-        mnfa_exit ( true );
-    }
-
     /* handle clear task request */
     if ( node_ptr->clear_task == true )
     {
@@ -57,7 +50,7 @@ int nodeLinkClass::fsm ( struct nodeLinkClass::node * node_ptr )
 
     /* Service the libEvent work queue */
     workQueue_process ( node_ptr ) ;
-    
+
     /* Service the maintenance command queue if there are commands waiting */
     if ( node_ptr->mtcCmd_work_fifo.size())
     {

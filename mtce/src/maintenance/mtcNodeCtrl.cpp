@@ -1569,6 +1569,9 @@ void daemon_service_run ( void )
             continue ;
         }
 
+        /* Handle recovery from MNFA */
+        mtcInv.mnfa_recovery_handler ( mtcInv.my_hostname );
+
         mtcInv.fsm ( );
 
         /* Initialize the master fd_set */

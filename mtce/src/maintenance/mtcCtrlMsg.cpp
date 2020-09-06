@@ -1226,6 +1226,12 @@ int service_events ( nodeLinkClass * obj_ptr, mtc_socket_type * sock_ptr )
         ilog ("%s %s inventory push ... done",
                   controller.c_str(),
                   MTC_SERVICE_HBSAGENT_NAME);
+
+        /* Ensure that the hbsAgent heartbeat period is correct */
+        if ( obj_ptr->mnfa_backoff == true )
+            send_hbs_command ( obj_ptr->my_hostname, MTC_BACKOFF_HBS, CONTROLLER );
+        else
+            send_hbs_command ( obj_ptr->my_hostname, MTC_RECOVER_HBS, CONTROLLER );
     }
     else
     {
