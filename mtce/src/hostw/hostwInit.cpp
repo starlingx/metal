@@ -104,31 +104,56 @@ int hostw_process_config ( void * user,
     {
         config_ptr->hostwd_failure_threshold = atoi(value);
         config_ptr->mask |= CONFIG_HOSTWD_FAILURE_THRESHOLD ;
+        ilog("Quorum Thld : %d", config_ptr->hostwd_failure_threshold);
     }
     else if (MATCH("config", "hostwd_reboot_on_err"))
     {
         config_ptr->hostwd_reboot_on_err = atoi(value);
         config_ptr->mask |= CONFIG_HOSTWD_REBOOT ;
+        ilog("Quorum Loss : %s",
+              config_ptr->hostwd_reboot_on_err ? "Reboot & Log" : "Log Only");
     }
     else if (MATCH("config", "hostwd_use_kern_wd"))
     {
         config_ptr->hostwd_use_kern_wd = atoi(value);
         config_ptr->mask |= CONFIG_HOSTWD_USE_KERN_WD ;
+        ilog("Use Kern Wd : %s", config_ptr->hostwd_use_kern_wd ? "Yes":"No");
     }
     else if (MATCH("config", "hostwd_console_path"))
     {
         config_ptr->hostwd_console_path = strdup(value);
         config_ptr->mask |= CONFIG_HOSTWD_CONSOLE_PATH ;
-    }
-    else if (MATCH("timeouts", "kernwd_update_period"))
-    {
-        config_ptr->kernwd_update_period = atoi(value);
-        config_ptr->mask |= CONFIG_KERNWD_UPDATE_PERIOD ;
+        ilog("WD Console  : %s", config_ptr->hostwd_console_path);
     }
     else if (MATCH("config", "hostwd_update_period")) /* in pmond.conf file */
     {
         config_ptr->hostwd_update_period = atoi(value);
         config_ptr->mask |= CONFIG_HOSTWD_UPDATE_PERIOD ;
+        ilog("Quorum Rate : %d secs", config_ptr->hostwd_update_period);
+    }
+
+    /* Timeout config options */
+
+    /* kernwd_update_period is how many seconds the watchdog can run without
+     * petting it before timeout and kernel reboot.
+     * The timeout for controller nodes is loaded with the stall detection
+     * value compared to other nodes with the legacy value.
+     */
+    else if (hostw_ctrl.nodetype & CONTROLLER_TYPE)
+    {
+        if (MATCH("timeouts", "kernwd_update_period_stall_detect"))
+        {
+            hostw_ctrl.kernwd_update_period = atoi(value);
+            config_ptr->mask |= CONFIG_KERNWD_UPDATE_PERIOD ;
+        }
+    }
+    else
+    {
+        if (MATCH("timeouts", "kernwd_update_period"))
+        {
+            hostw_ctrl.kernwd_update_period = atoi(value);
+            config_ptr->mask |= CONFIG_KERNWD_UPDATE_PERIOD ;
+        }
     }
     return (PASS);
 }
@@ -186,12 +211,10 @@ int socket_init ( void )
 int daemon_init ( string iface, string nodetype_str )
 {
     int rc = PASS ;
-    hostw_ctrl_type* ctrl_ptr = get_ctrl_ptr();
     UNUSED(iface);
-    UNUSED(nodetype_str);
 
     /* init the control struct */
-    memset(ctrl_ptr, 0, sizeof(hostw_ctrl_type));
+    memset(&hostw_ctrl, 0, sizeof(hostw_ctrl_type));
 
     if (daemon_files_init() != PASS)
     {
@@ -205,6 +228,12 @@ int daemon_init ( string iface, string nodetype_str )
         elog ("daemon_signal_init failed\n");
         return ( FAIL_SIGNAL_INIT );
     }
+
+    /* convert node type to bit field integer */
+    hostw_ctrl.nodetype = get_host_function_mask ( nodetype_str ) ;
+    ilog ("Node Type   : %s (0x%x)\n",
+           nodetype_str.c_str(),
+           hostw_ctrl.nodetype);
 
    /************************************************************************
     * There is no point continuing with init ; i.e. running daemon_configure,
@@ -262,39 +291,37 @@ void daemon_service_run ( void )
  */
 static int kernel_watchdog_init ( void )
 {
-    hostw_ctrl_type * ctrl_ptr = get_ctrl_ptr();
     daemon_config_type * config_ptr = daemon_get_cfg_ptr();
 
     /* open the watchdog */
 
     if ( (config_ptr->hostwd_use_kern_wd == 0) ||
-         (config_ptr->kernwd_update_period < HOSTW_MIN_KERN_UPDATE_PERIOD))
+         (hostw_ctrl.kernwd_update_period < HOSTW_MIN_KERN_UPDATE_PERIOD))
     {
         /* config file says don't use watchdog, or used too small a period */
+        wlog("Watchdog NOT enabled ; %s",
+              config_ptr->hostwd_use_kern_wd ?
+              "kernwd_update_period too small":
+              "hostwd_use_kern_wd=0");
         return PASS;
     }
 
-    ilog ("Opening kernel watchdog device\n");
-    ctrl_ptr->watchdog = open("/dev/watchdog", O_WRONLY);
-    if (0 >= ctrl_ptr->watchdog)
+    hostw_ctrl.watchdog = open("/dev/watchdog", O_WRONLY);
+    if (0 >= hostw_ctrl.watchdog)
     {
         elog("Could not open kernel watchdog\n");
         return FAIL;
     }
 
     /* set watchdog timeout (in seconds) */
-    ilog ("Setting kernel watchdog options - kernel timeout after %d seconds\n",
-        config_ptr->kernwd_update_period);
-    if (ioctl(ctrl_ptr->watchdog, WDIOC_SETTIMEOUT, &config_ptr->kernwd_update_period))
+    if (ioctl(hostw_ctrl.watchdog, WDIOC_SETTIMEOUT, &hostw_ctrl.kernwd_update_period))
     {
-        elog ("Error setting watchdog options -- closing watchdog\n")
+        elog ("Failed to enable watchdog")
         kernel_watchdog_close();
         return FAIL;
     }
-
-    /* do initial keep alive */
-    ilog ("Watchdog options set\n");
-    kernel_watchdog_pet();
+    ilog ("Kernel watchdog enabled with %d second timeout",
+           hostw_ctrl.kernwd_update_period);
     return PASS;
 }
 

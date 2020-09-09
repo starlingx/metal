@@ -60,7 +60,7 @@ using namespace std;
 #define HOSTWD_CONFIG_FILE   ((const char *)"/etc/mtc/hostwd.conf")
 #define PMOND_CONFIG_FILE    ((const char *)"/etc/mtc/pmond.conf")
 
-#define HOSTW_MIN_KERN_UPDATE_PERIOD  60 /* user can set how long until kernel
+#define HOSTW_MIN_KERN_UPDATE_PERIOD  5  /* user can set how long until kernel
                                           * watchdog panics, down to this
                                           * minimum (seconds) */
 
@@ -93,9 +93,12 @@ using namespace std;
 /* Context control structure */
 typedef struct
 {
+    int nodetype ;
+
     /* Watchdog interface                                                    */
     /* ------------------                                                    */
-    int watchdog           ; /** The opened /dev/watchdog file               */
+    int watchdog            ; /** The opened /dev/watchdog file              */
+    int kernwd_update_period; /** period in seconds the watchdog is serviced */
 
     /* Loop counters                                                         */
     /* ------------------                                                    */

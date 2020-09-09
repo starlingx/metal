@@ -39,6 +39,7 @@
 int hostw_service_command ( hostw_socket_type * hostw_socket );
 
 static void fork_hostwd_logger ( void );
+char   my_hostname [MAX_HOST_NAME_SIZE+1];
 
 /* Push daemon state to log file */
 void daemon_dump_info ( void )
@@ -47,6 +48,25 @@ void daemon_dump_info ( void )
 
 void daemon_sigchld_hdlr ( void )
 {
+}
+
+static struct mtc_timer pmonTimer ;
+
+void hostwTimer_handler ( int sig, siginfo_t *si, void *uc)
+{
+    timer_t * tid_ptr = (void**)si->si_value.sival_ptr ;
+
+    /* Avoid compiler errors/warnings for parms we must
+     * have but currently do nothing with */
+    UNUSED(sig);
+    UNUSED(uc);
+
+    if ( !(*tid_ptr) )
+        return ;
+    else if (( *tid_ptr == pmonTimer.tid ) )
+        pmonTimer.ring = true ;
+    else
+        mtcTimer_stop_tid_int_safe ( tid_ptr );
 }
 
 /**
@@ -73,6 +93,10 @@ void hostw_service ( void )
     hostw_ctrl_type *ctrl = get_ctrl_ptr ();
     daemon_config_type *config = daemon_get_cfg_ptr ();
 
+    get_hostname  (&my_hostname[0], MAX_HOST_NAME_SIZE );
+    mtcTimer_init ( pmonTimer, my_hostname, "pmon" );
+    mtcTimer_start( pmonTimer, hostwTimer_handler, config->hostwd_update_period);
+
     ctrl->pmon_grace_loops = config->hostwd_failure_threshold;
 
     socks.clear();
@@ -84,12 +108,11 @@ void hostw_service ( void )
     socks.sort();
 
     ilog("Host Watchdog Service running\n");
-    for ( ; ; )
+    for ( int quorum_failed = 0 ; ; )
     {
-        timeout.tv_sec = config->hostwd_update_period;
+        timeout.tv_sec =1; /* 1 second select ; pet watchdog every second */
         timeout.tv_usec=0;
 
-        /* pet the watchdog */
         kernel_watchdog_pet();
 
         /* set the master fd_set */
@@ -107,56 +130,75 @@ void hostw_service ( void )
             if ( errno != EINTR  )
             {
                 elog ("Select Failed (rc:%d) %s \n", errno, strerror(errno));
-                ctrl->pmon_grace_loops--;
+                if ( ctrl->pmon_grace_loops > 0 )
+                    ctrl->pmon_grace_loops--;
             }
         }
         else if ( rc == 0 )
         {
-            if (daemon_is_file_present(NODE_LOCKED_FILE))
+            if ( pmonTimer.ring == true )
             {
-                wlog( "Did not receive message from PMON, however node is"
-                      " locked -- refusing to take reset action while locked\n" );
-            }
-            else
-            {
-                ctrl->pmon_grace_loops--;
-
-                if ( ctrl->pmon_grace_loops )
+                if (daemon_is_file_present(NODE_LOCKED_FILE))
                 {
-                    ilog ("Did not receive expected message from PMON - %d more missed messages allowed\n",
-                          ctrl->pmon_grace_loops-1);
+                    wlog("Process Quorum Health not receive from PMON ; "
+                         "no action while node is locked");
                 }
+                else
+                {
+                    if ( ctrl->pmon_grace_loops )
+                        ctrl->pmon_grace_loops--;
+
+                    if ( ctrl->pmon_grace_loops > 0 )
+                    {
+                        wlog ("Process Quorum Health not received from PMON ; "
+                              "%d more misses allowed before self-reboot",
+                               ctrl->pmon_grace_loops-1);
+                    }
+                }
+                pmonTimer.ring = false ;
             }
         }
-        else
+        else if ( quorum_failed == 0 )
         {
             if (FD_ISSET(hostw_socket->status_sock, &(hostw_socket->readfds)))
             {
                 rc = hostw_service_command ( hostw_socket);
                 if ( rc == PASS ) /* got "all is well" message */
                 {
-                    ctrl->pmon_grace_loops = config->hostwd_failure_threshold;
+                    /* reset the pmon quorum health timer */
+                    mtcTimer_reset(pmonTimer);
+                    mtcTimer_start(pmonTimer, hostwTimer_handler, config->hostwd_update_period);
+
+                    /* reload pmon grace loops count down */
+                    if ( ctrl->pmon_grace_loops != config->hostwd_failure_threshold )
+                    {
+                        ilog("Process Quorum Health messaging restored");
+                        ctrl->pmon_grace_loops = config->hostwd_failure_threshold;
+                    }
+                }
+                else if ( rc != RETRY )
+                    quorum_failed++ ;
+            }
+        }
+        if ( 0 >= ctrl->pmon_grace_loops )
+        {
+            if ( quorum_failed++ == 0 )
+            {
+                if (daemon_is_file_present(NODE_LOCKED_FILE))
+                {
+                    wlog( "Host watchdog (hostwd) not receiving messages from PMON"
+                          " however host is locked - refusing to take reset action"
+                          " while locked\n" );
+                }
+                else
+                {
+                    emergency_log( "*** Host watchdog (hostwd) not receiving messages "
+                               "from PMON ***\n");
+                    hostw_log_and_reboot();
                 }
             }
         }
-        if (0 >= ctrl->pmon_grace_loops)
-        {
-            if (daemon_is_file_present(NODE_LOCKED_FILE))
-            {
-                wlog( "Host watchdog (hostwd) not receiving messages from PMON"
-                      " however host is locked - refusing to take reset action"
-                      " while locked\n" );
-            }
-            else
-            {
-                emergency_log( "*** Host watchdog (hostwd) not receiving messages "
-                               "from PMON ***\n");
-                hostw_log_and_reboot();
-            }
-        }
-
         daemon_signal_hdlr ();
-
     }
 }
 
@@ -187,21 +229,22 @@ int hostw_service_command ( hostw_socket_type * hostw_socket)
         {
             case MTC_CMD_NONE:
                 /* All is well */
+                dlog ("pmon is happy");
                 return PASS;
 
             case MTC_EVENT_PMON_CRIT:
                 if (daemon_is_file_present(NODE_LOCKED_FILE))
                 {
-                    ilog( "PMON reports unrecoverable system, however node is"
-                          " locked - considering this an OK message\n" );
+                    wlog("PMON reports unrecoverable system - message '%s'", msg[0].buf );
+                    ilog("... no action while node is locked");
                     return PASS;
                 }
                 else
                 {
                     emergency_log( "*** PMON reports unrecoverable system - message '%s' ***\n", msg[0].buf);
                     hostw_log_and_reboot();
+                    return FAIL;
                 }
-                return FAIL;
 
             default:
                 elog("Unknown status reported\n");
@@ -213,7 +256,7 @@ int hostw_service_command ( hostw_socket_type * hostw_socket)
         /* bad message size */
         elog("Host Watchdog received bad or corrupted message (length = %d)\n", len);
     }
-    return FAIL;
+    return RETRY;
 }
 
 /**

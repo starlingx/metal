@@ -160,7 +160,6 @@ typedef struct
     int   oos_test_period              ; /**< oos test period in secs         */
     int   failsafe_shutdown_delay      ; /**< seconds before failsafe reboot  */
     int   hostwd_update_period         ; /**< expect hostwd to be updated     */
-    int   kernwd_update_period         ; /**< expect kernel watchdog to be updated */
     int   autorecovery_threshold       ; /**< AIO stop autorecovery threshold */
 
     /**< Auto Recovery Thresholds                                             */
