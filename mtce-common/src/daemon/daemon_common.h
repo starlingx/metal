@@ -245,6 +245,7 @@ typedef struct
     long msecs ;
 } time_delta_type ;
 
+int timedelta ( struct timespec & before , struct timespec & after, time_delta_type & delta );
 int timedelta ( time_debug_type & before , time_debug_type & after, time_delta_type & delta );
 int gettime   ( time_debug_type & nowtime ) ;
 unsigned long long  gettime_monotonic_nsec ( void );

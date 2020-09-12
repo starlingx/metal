@@ -328,17 +328,19 @@ void hbs_cluster_dump ( mtce_hbs_cluster_history_type & history, bool storage0_e
     }
     if ( storage0_enabled )
     {
-        syslog ( LOG_INFO, "Cluster Vault : C%d %s S:%s %s",
+        syslog ( LOG_INFO, "Cluster Vault : C%d %s S:%s SM:%s %s",
                  history.controller,
                  hbs_cluster_network_name((mtce_hbs_network_enum)history.network).c_str(),
                  history.storage0_responding ? "y" : "n",
+                 history.sm_heartbeat_fail ? "miss":" ok",
                  str);
     }
     else
     {
-        syslog ( LOG_INFO, "Cluster Vault : C%d %s %s",
+        syslog ( LOG_INFO, "Cluster Vault : C%d %s SM:%s %s",
                  history.controller,
                  hbs_cluster_network_name((mtce_hbs_network_enum)history.network).c_str(),
+                 history.sm_heartbeat_fail ? "miss":" ok ",
                  str);
     }
 }

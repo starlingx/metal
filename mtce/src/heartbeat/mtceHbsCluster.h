@@ -71,7 +71,10 @@ typedef struct
 {
     unsigned short controller         :4 ; /* value 0 or 1 (and 2 in future) */
     unsigned short network            :4 ; /* see mtce_hbs_network_enum      */
-    unsigned short reserved_bits      :7 ; /* future - initted to 0          */
+    unsigned short reserved_bits      :6 ; /* future - initted to 0          */
+    unsigned short sm_heartbeat_fail  :1 ; /* SM Health
+                                              0 = SM Heartbeat OK,
+                                              1 = SM Heartbeat Failure       */
     unsigned short storage0_responding:1 ; /* 1 = storage-0 is hb healthy    */
     unsigned short entries               ; /* # of valid values in .entry    */
     unsigned short entries_max           ; /* max size of the enry array     */

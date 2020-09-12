@@ -69,6 +69,19 @@ using namespace std;
 
 #define MAX_LEN 1000
 
+/* Stores the MONOTONIC time the last SM heartbeat was received
+ * Heartbeat metrics
+ * SM heartbeat period definition */
+static struct timespec sm_heartbeat_timestamp_last = { 0 , 0 } ;
+static struct timespec sm_heartbeat_timestamp_restart = { 0 , 0 } ;
+static int sm_heartbeat_count_b2b_misses = 0 ;
+static int sm_heartbeat_count            = 0 ;
+const int SM_HEARTBEAT_PULSE_INTERVAL_MSEC = 100;
+const int SM_HEARTBEAT_PULSE_PERIOD_MSECS  = 800;
+const int SM_HEARTBEAT_PULSE_RECOVER_DURATION_MSEC = SM_HEARTBEAT_PULSE_PERIOD_MSECS * 2;
+const int SM_HEARTBEAT_PULSE_CONTINUE_BEEP_TO_RECOVER =
+    SM_HEARTBEAT_PULSE_RECOVER_DURATION_MSEC / SM_HEARTBEAT_PULSE_INTERVAL_MSEC;
+
 /* Historical String data for mem_logs */
 static string unexpected_pulse_list[MAX_IFACES] = { "" , "" } ;
 static string arrival_histogram[MAX_IFACES]     = { "" , "" } ;
@@ -1398,6 +1411,7 @@ int daemon_init ( string iface, string nodetype )
  *
  ****************************************************************************/
 static int _hbs_sm_handler_log_throttle = 0 ;
+static int _hbs_sm_heartbeat_log_throttle = 0 ;
 void hbs_sm_handler ( void )
 {
     #define _MAX_MSG_LEN           (80)
@@ -1438,9 +1452,26 @@ void hbs_sm_handler ( void )
                 if (( service == SUPPERTED_SERVICE ) &&
                     ( request == SUPPORTED_REQUEST ))
                 {
-                    /* success path ... */
-                    hbs_cluster_send( hbs_sock.sm_client_sock, reqid, "query" );
-
+                    /* SM heartbeat pulses have a reqid = 0 and do not require a response */
+                    if ( reqid == 0 )
+                    {
+                        time_delta_type delta ;
+                        struct timespec ts = sm_heartbeat_timestamp_last ;
+                        clock_gettime (CLOCK_MONOTONIC, &sm_heartbeat_timestamp_last );
+                        if(sm_heartbeat_count_b2b_misses && sm_heartbeat_timestamp_restart.tv_sec == 0)
+                        {
+                            sm_heartbeat_timestamp_restart = sm_heartbeat_timestamp_last;
+                        }
+                        timedelta (ts, sm_heartbeat_timestamp_last, delta );
+                        sm_heartbeat_count++ ;
+                        ilog_throttled(_hbs_sm_heartbeat_log_throttle, 100, "SM Heartbeat %d (%ld.%03ld secs)",
+                              sm_heartbeat_count, delta.secs, delta.msecs);
+                    }
+                    else
+                    {
+                        /* success path ... */
+                        hbs_cluster_send( hbs_sock.sm_client_sock, reqid, "query" );
+                    }
                     /* reset log throttle */
                    _hbs_sm_handler_log_throttle = 0 ;
                 }
@@ -1474,6 +1505,92 @@ void hbs_sm_handler ( void )
                          "unknown error Error (rc:%d)", bytes );
     }
     dlog ("... %s", sm_mesg );
+}
+
+/****************************************************************************
+ *
+ * Name       ; manage_sm_heartbeat
+ *
+ * Purpose    : Determine if we received an SM heartbeat message within
+ *              the last SM_HEARTBEAT_PULSE_PERIOD_MSECS
+ *
+ * Description: Compare the monotonic now time to the monotonic time
+ *              of the last received  SM heartbeat pulse.
+ *
+ * Returns    : True if time dela is less than SM_HEARTBEAT_PULSE_PERIOD_MSECS
+ *              False if time delta is greater
+ *
+ ***************************************************************************/
+bool manage_sm_heartbeat ( void )
+{
+    struct timespec ts ;
+    time_delta_type delta ;
+    clock_gettime (CLOCK_MONOTONIC, &ts );
+    timedelta (sm_heartbeat_timestamp_last, ts, delta );
+    int64_t delta_in_ms = delta.secs * 1000 + delta.msecs;
+    bool heartbeat_ok;
+    if ( delta_in_ms > SM_HEARTBEAT_PULSE_PERIOD_MSECS )
+    {
+        sm_heartbeat_count = 0;
+        if (( ++sm_heartbeat_count_b2b_misses < 20 )||
+            (!( sm_heartbeat_count_b2b_misses % 100 )))
+        {
+            wlog("SM Heartbeat missing since %ld.%03ld secs ago ; HBS Period Misses:%3d ; Running HB Count:%4d",
+                  delta.secs, delta.msecs,
+                  sm_heartbeat_count_b2b_misses,
+                  sm_heartbeat_count);
+        }
+        heartbeat_ok = false;
+    }
+    else
+    {
+        if(sm_heartbeat_count_b2b_misses)
+        {
+            int expected_beeps = delta_in_ms / SM_HEARTBEAT_PULSE_INTERVAL_MSEC - 1;
+
+            if(sm_heartbeat_count >= expected_beeps)
+            {
+                if(sm_heartbeat_count >= SM_HEARTBEAT_PULSE_CONTINUE_BEEP_TO_RECOVER)
+                {
+                    ilog("SM Heartbeat recovered (%d:%dbeeps/%ldms) after %d missing",
+                          sm_heartbeat_count, SM_HEARTBEAT_PULSE_CONTINUE_BEEP_TO_RECOVER,
+                          delta_in_ms,
+                          sm_heartbeat_count_b2b_misses);
+
+                    sm_heartbeat_count_b2b_misses = 0;
+                    sm_heartbeat_count = 0;
+                    sm_heartbeat_timestamp_restart.tv_sec = 0;
+                    sm_heartbeat_timestamp_restart.tv_nsec = 0;
+                    heartbeat_ok = true;
+                }else
+                {
+                    ilog("SM Heartbeat recover continue (%d:%dbeeps/%ldms) after %d missing",
+                          sm_heartbeat_count, SM_HEARTBEAT_PULSE_CONTINUE_BEEP_TO_RECOVER,
+                          delta_in_ms,
+                          sm_heartbeat_count_b2b_misses);
+                    heartbeat_ok = false; // not good enough to declare recovered yet
+                }
+            }else
+            {
+                ilog("SM Heartbeat recover is interrupted after %ldms, missing %d beeps. "
+                     "Counting will restart.",
+                    delta_in_ms, expected_beeps - sm_heartbeat_count);
+                sm_heartbeat_timestamp_restart = ts;
+                sm_heartbeat_count = 1;
+                heartbeat_ok = false; // recover is interrupted by further missing beep
+            }
+        }else
+        {
+            if(delta_in_ms >= SM_HEARTBEAT_PULSE_INTERVAL_MSEC * 2)
+            {
+                ilog("SM Heartbeat missing for %ldms:%dms. Not yet declare stall.",
+                    delta_in_ms, SM_HEARTBEAT_PULSE_PERIOD_MSECS
+                );
+            }
+            heartbeat_ok = true; // not bad enough to declare heartbeat failed yet
+        }
+    }
+    return heartbeat_ok;
 }
 
 /****************************************************************************
@@ -1552,7 +1669,8 @@ void daemon_service_run ( void )
                 hbs_state_audit ();
             }
 
-            /* run the first audit in 30 seconds */
+            /* The first audit was run after 30 seconds but then the
+             * continuous rate is every hour */
             mtcTimer_start ( hbsTimer_audit, hbsTimer_handler, MTC_HRS_1 );
         }
 
@@ -1718,6 +1836,9 @@ void daemon_service_run ( void )
                     wait_log_throttle = 0 ;
                     sockets_init = true ;
                     monitor_scheduling ( this_time, prev_time, 0, NODEUTIL_LATENCY_MON_START );
+
+                    /* Update Sm heartbeat time to now time */
+                    clock_gettime (CLOCK_MONOTONIC, &sm_heartbeat_timestamp_last );
 
                     /* no need for the heartbeat audit in a simplex system */
                     if ( hbsInv.system_type != SYSTEM_TYPE__CPE_MODE__SIMPLEX )
@@ -2363,6 +2484,8 @@ void daemon_service_run ( void )
          */
         else
         {
+            bool heartbeat_ok = manage_sm_heartbeat();
+
             /* manage vault wrt peer controller */
             hbs_cluster_peer();
 
@@ -2396,8 +2519,13 @@ void daemon_service_run ( void )
                 int lost = hbsInv.lost_pulses ((iface_enum)iface, storage_0_responding);
                 if ( !hbs_ctrl.locked && !hbsInv.hbs_disabled )
                 {
-                    hbs_cluster_update ((iface_enum)iface, lost, storage_0_responding);
+                    hbs_cluster_update ((iface_enum)iface, lost, storage_0_responding, heartbeat_ok );
                 }
+            }
+            /* log cluster throttled */
+            if (( heartbeat_ok == false ) && ( !( sm_heartbeat_count_b2b_misses % 100 )))
+            {
+                hbs_state_audit ( );
             }
             hbsTimer.ring = false ;
             heartbeat_request = true ;
