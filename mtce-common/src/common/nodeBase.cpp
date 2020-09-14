@@ -149,6 +149,8 @@ const char * get_mtcNodeCommand_str ( int cmd )
         case MTC_REQ_MTCALIVE:    return ("mtcAlive req");
         case MTC_MSG_LOCKED:      return ("locked msg");
         case MTC_CMD_LAZY_REBOOT: return ("lazy reboot");
+        case MTC_MSG_INFO:        return ("info msg");
+        case MTC_CMD_SYNC:        return ("sync");
 
         /* goenabled commands and messages */
         case MTC_MSG_MAIN_GOENABLED:         return ("goEnabled main msg");
@@ -199,7 +201,8 @@ const char * get_mtcNodeCommand_str ( int cmd )
         case MTC_EVENT_PMON_MAJOR: return("pmon major event");
         case MTC_EVENT_PMON_MINOR: return("pmon minor event");
         case MTC_EVENT_PMON_LOG:   return("pmon log");
-        case MTC_EVENT_PMOND_RAISE: return("pmon raise");
+        case MTC_EVENT_PMOND_RAISE: return("pmond raise");
+        case MTC_EVENT_PMOND_CLEAR: return("pmond clear");
 
         /* data port events */
         case MTC_EVENT_AVS_CLEAR:    return("AVS clear");

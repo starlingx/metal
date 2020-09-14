@@ -130,6 +130,14 @@ bool hostUtil_is_valid_username ( string un )
     return (false);
 }
 
+bool hostUtil_is_valid_pw ( string pw )
+{
+    if ( !pw.empty() )
+        if ( pw.compare(NONE) )
+            return (true);
+    return (false);
+}
+
 bool hostUtil_is_valid_mac_addr ( string mac )
 {
     if ( !mac.empty() )

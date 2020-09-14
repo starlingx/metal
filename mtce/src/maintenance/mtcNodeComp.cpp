@@ -43,9 +43,9 @@
 #include <signal.h>
 #include <fcntl.h>
 #include <errno.h>
-//#include <syslog.h>    /* for ... syslog                  */
 #include <sys/stat.h>
 #include <list>
+#include <json-c/json.h> /* for ... json_tokener_parse                    */
 
 using namespace std;
 
@@ -56,6 +56,10 @@ using namespace std;
 #include "nodeBase.h"       /* for ... Common Definitions                 */
 #include "nodeTimers.h"     /* fpr ... Timer Service                      */
 #include "nodeUtil.h"       /* for ... Common Utilities                   */
+#include "hostUtil.h"       /* for ... hostUtil_is_valid_...              */
+#include "jsonUtil.h"       /* for ... jsonUtil_get_key_value_string      */
+#include "bmcUtil.h"        /* for ... bmcUtil_accessInfo_type            */
+#include "ipmiUtil.h"       /* for ... ipmiUtil_reset_host_now            */
 #include "nodeMacro.h"      /* for ... CREATE_NONBLOCK_INET_UDP_RX_SOCKET */
 #include "mtcNodeMsg.h"     /* for ... common maintenance messaging       */
 #include "mtcNodeComp.h"    /* for ... this module header                 */
@@ -96,7 +100,7 @@ string get_hostname ( void )
  * Daemon Configuration Structure - The allocated struct
  * @see daemon_common.h for daemon_config_type struct format.
  */
-static daemon_config_type mtc_config ; 
+static daemon_config_type mtc_config ;
 daemon_config_type * daemon_get_cfg_ptr () { return &mtc_config ; }
 
 /**
@@ -106,6 +110,8 @@ daemon_config_type * daemon_get_cfg_ptr () { return &mtc_config ; }
 static mtc_socket_type mtc_sock   ;
 static mtc_socket_type * sock_ptr ;
 
+static bmcUtil_accessInfo_type peer_controller = {"none","none","none","none","none"};
+static bmcUtil_accessInfo_type this_controller = {"none","none","none","none","none"};
 
 int run_goenabled_scripts ( string type );
 
@@ -137,6 +143,16 @@ void timer_handler ( int sig, siginfo_t *si, void *uc)
     {
         mtcTimer_stop_int_safe ( ctrl.hostservices.timer );
         ctrl.hostservices.timer.ring = true ;
+    }
+    else if ( *tid_ptr == ctrl.peer_ctrlr_reset.sync_timer.tid )
+    {
+        ctrl.peer_ctrlr_reset.sync_timer.ring = true ;
+        mtcTimer_stop_int_safe ( ctrl.peer_ctrlr_reset.sync_timer );
+    }
+    else if ( *tid_ptr == ctrl.peer_ctrlr_reset.audit_timer.tid )
+    {
+        /* use auto restart */
+        ctrl.peer_ctrlr_reset.audit_timer.ring = true ;
     }
     else
     {
@@ -207,9 +223,8 @@ void daemon_exit ( void )
     exit (0) ;
 }
 
-                                 
 /* Startup config read */
-static int mtc_config_handler ( void * user, 
+static int mtc_config_handler ( void * user,
                           const char * section,
                           const char * name,
                           const char * value)
@@ -236,11 +251,14 @@ static int mtc_config_handler ( void * user,
         config_ptr->failsafe_shutdown_delay = atoi(value);
         ilog ("Shutdown TO : %d secs\n", config_ptr->failsafe_shutdown_delay );
     }
-    else
+    if (( ctrl.nodetype & CONTROLLER_TYPE ) &&
+        (MATCH("client", "sync_b4_peer_ctrlr_reset")))
     {
-        return (PASS);
+        ctrl.peer_ctrlr_reset.sync = atoi(value);
+        ilog("SyncB4 Reset: %s",
+              ctrl.peer_ctrlr_reset.sync ? "Yes" : "No" );
     }
-    return (FAIL);
+    return (PASS);
 }
 
 /* Read the mtc.ini file and load control    */
@@ -946,6 +964,65 @@ void _manage_goenabled_tests ( void )
     _scripts_cleanup (ctrl.active_script_set) ;
 }
 
+int issue_reset_and_cleanup ( void )
+{
+    int rc = FAIL ;
+    const char peer_ctrlr [] = "Peer controller reset" ;
+
+    ilog("SM %s request", peer_ctrlr );
+    /* check creds */
+    if (( hostUtil_is_valid_ip_addr  ( peer_controller.bm_ip ) == false ) ||
+        ( hostUtil_is_valid_username ( peer_controller.bm_un ) == false ) ||
+        ( hostUtil_is_valid_pw       ( peer_controller.bm_pw ) == false ))
+    {
+        elog("%s cannot reset peer BMC host at %s due to invalid credentials",
+                 ctrl.hostname, peer_controller.bm_ip.c_str());
+        return (rc);
+    }
+
+    /* create output filename - no need to delete after operation */
+    string output_filename = bmcUtil_create_data_fn ( ctrl.hostname,
+                             BMC_RESET_CMD_FILE_SUFFIX,
+                             BMC_PROTOCOL__IPMITOOL );
+    if ( output_filename.empty() )
+    {
+        elog("%s ; failed to create output filename", peer_ctrlr);
+        rc = FAIL_STRING_EMPTY ;
+    }
+    else if ( ipmiUtil_reset_host_now ( ctrl.hostname,
+                                        peer_controller,
+                                        output_filename ) == PASS )
+    {
+        string result = daemon_get_file_str ( output_filename.data() );
+        ilog("%s succeeded", peer_ctrlr);
+
+        /* don't fail the operation if the result is unexpected ; but log it */
+        if ( result.compare( IPMITOOL_POWER_RESET_RESP ) )
+        {
+            dlog("... but reset command output was unexpected ; %s",
+                      result.c_str());
+        }
+        rc = PASS ;
+    }
+    else
+    {
+        elog("%s failed", peer_ctrlr);
+        rc = FAIL_OPERATION ;
+    }
+
+    if ( rc == PASS )
+    {
+        /* give the host a chance to reset before
+         * telling SM the reset is done */
+        sleep (2) ;
+
+        /* Don't want to remove the file if the reset was not successful */
+        dlog("removing %s", RESET_PEER_NOW );
+        daemon_remove_file ( RESET_PEER_NOW );
+    }
+    return (rc);
+}
+
 
 /* The main service loop */
 int daemon_init ( string iface, string nodetype_str )
@@ -963,6 +1040,7 @@ int daemon_init ( string iface, string nodetype_str )
     ctrl.subfunction = 0 ;
     ctrl.system_type = daemon_system_type ();
     ctrl.clstr_iface_provisioned = false ;
+    ctrl.peer_ctrlr_reset.sync = false ;
 
     /* convert node type to integer */
     ctrl.nodetype = get_host_function_mask ( nodetype_str ) ;
@@ -1018,6 +1096,13 @@ int daemon_init ( string iface, string nodetype_str )
     mtcTimer_init ( ctrl.goenabled.timer, &ctrl.hostname[0], "goenable timer" );
     mtcTimer_init ( ctrl.hostservices.timer, &ctrl.hostname[0], "host services timer" );
 
+    /* initialize peer controller reset feature */
+    mtcTimer_init ( ctrl.peer_ctrlr_reset.audit_timer, &ctrl.hostname[0], "peer ctrlr reset audit timer" ),
+    mtcTimer_init ( ctrl.peer_ctrlr_reset.sync_timer, &ctrl.hostname[0], "peer ctrlr reset sync timer" ),
+    ctrl.peer_ctrlr_reset.sync_timer.ring = false ;
+    ctrl.peer_ctrlr_reset.audit_timer.ring = false ;
+    ctrl.peer_ctrlr_reset.audit_period = PEER_CTRLR_AUDIT_PERIOD ;
+
     /* initialize the script group control structures */
     script_ctrl_init ( &ctrl.goenabled    );
     script_ctrl_init ( &ctrl.hostservices );
@@ -1072,6 +1157,17 @@ void daemon_service_run ( void )
     /* Start mtcAlive message timer */
     /* Send first mtcAlive ASAP */
     mtcTimer_start ( ctrl.timer, timer_handler, 1 );
+
+    /* Monitor for peer controller reset requests when this
+     * daemon runs on a controller */
+    if ( ctrl.nodetype & CONTROLLER_TYPE )
+    {
+        mtcTimer_start ( ctrl.peer_ctrlr_reset.audit_timer,
+                         timer_handler,
+                         ctrl.peer_ctrlr_reset.audit_period );
+    }
+
+    mtce_send_event ( sock_ptr, MTC_EVENT_MONITOR_READY, NULL );
 
     /* lets go select so that the sock does not go crazy */
     dlog ("%s running main loop with %d msecs socket timeout\n",
@@ -1384,7 +1480,51 @@ void daemon_service_run ( void )
                 }
             }
         }
-
+        /* service controller specific audits */
+        if ( ctrl.nodetype & CONTROLLER_TYPE )
+        {
+            /* peer controller reset service audit */
+            if ( ctrl.peer_ctrlr_reset.audit_timer.ring )
+            {
+                if ( daemon_is_file_present ( RESET_PEER_NOW ) )
+                {
+                    if ( ctrl.peer_ctrlr_reset.sync )
+                    {
+                        if ( ctrl.peer_ctrlr_reset.sync_timer.ring )
+                        {
+                            issue_reset_and_cleanup ();
+                            ctrl.peer_ctrlr_reset.sync_timer.ring = false ;
+                        }
+                        else if ( ctrl.peer_ctrlr_reset.sync_timer.tid == NULL )
+                        {
+                            if ( send_mtcClient_cmd ( &mtc_sock,
+                                                       MTC_CMD_SYNC,
+                                                       peer_controller.hostname,
+                                                       peer_controller.host_ip,
+                                                       mtc_config.mtc_rx_mgmnt_port) == PASS )
+                            {
+                                mtcTimer_start ( ctrl.peer_ctrlr_reset.sync_timer, timer_handler, MTC_SECS_10 );
+                                ilog("... waiting for peer controller to sync - %d secs", MTC_SECS_10);
+                            }
+                            else
+                            {
+                                elog("failed to send 'sync' command to peer controller mtcClient");
+                                ctrl.peer_ctrlr_reset.sync_timer.ring = true ;
+                            }
+                        }
+                        else
+                        {
+                            ; /* wait longer */
+                        }
+                    }
+                    else
+                    {
+                        issue_reset_and_cleanup ();
+                    }
+                }
+                ctrl.peer_ctrlr_reset.audit_timer.ring = false ;
+            }
+        }
         daemon_signal_hdlr ();
     }
     daemon_exit();
@@ -1750,7 +1890,6 @@ void daemon_sigchld_hdlr ( void )
         }
         default:
         {
-            wlog ("child handler running with no active script set (%d)\n", ctrl.active_script_set );
             return ;
         }
     }
@@ -1820,6 +1959,84 @@ void daemon_sigchld_hdlr ( void )
     }
 }
 
+/***************************************************************************
+ *
+ * Name       : load_mtcInfo_msg
+ *
+ * Description: Extract the mtc info from the MTC_MSG_INFO message.
+ *
+ * Assumptions: So far only the peer controller reset feature uses this.
+ *
+ * Returns    : Nothing
+ *
+ ***************************************************************************/
+
+void load_mtcInfo_msg ( mtc_message_type & msg )
+{
+    if ( ctrl.nodetype & CONTROLLER_TYPE )
+    {
+        mlog1("%s", &msg.buf[0]);
+        struct json_object *_obj = json_tokener_parse( &msg.buf[0] );
+        if ( _obj )
+        {
+            if ( strcmp(&ctrl.hostname[0], CONTROLLER_0 ))
+                peer_controller.hostname = CONTROLLER_0 ;
+            else
+                peer_controller.hostname = CONTROLLER_1 ;
+
+            struct json_object *info_obj = (struct json_object *)(NULL);
+            json_bool json_rc = json_object_object_get_ex( _obj,
+                                                          "mtcInfo",
+                                                          &info_obj );
+            if ( ( json_rc == TRUE ) && ( info_obj ))
+            {
+                struct json_object *ctrl_obj = (struct json_object *)(NULL);
+                json_bool json_rc =
+                json_object_object_get_ex( info_obj,
+                                           peer_controller.hostname.data(),
+                                          &ctrl_obj );
+
+                if (( json_rc == TRUE ) && ( ctrl_obj ))
+                {
+                    peer_controller.host_ip = jsonUtil_get_key_value_string(ctrl_obj, MTC_JSON_INV_HOSTIP) ;
+                    peer_controller.bm_ip = jsonUtil_get_key_value_string(ctrl_obj, MTC_JSON_INV_BMIP) ;
+                    peer_controller.bm_un = jsonUtil_get_key_value_string(ctrl_obj, "bm_un");
+                    peer_controller.bm_pw = jsonUtil_get_key_value_string(ctrl_obj, "bm_pw");
+
+                    /* log the mc info but not the bmc password ; only
+                     * indicate that it looks 'ok' or 'is 'none' */
+                    ilog ("%s is my peer [host:%s bmc:%s:%s:%s]",
+                           peer_controller.hostname.c_str(),
+                           peer_controller.host_ip.c_str(),
+                           peer_controller.bm_ip.c_str(),
+                           peer_controller.bm_un.c_str(),
+                           hostUtil_is_valid_pw(peer_controller.bm_pw) ? "ok":"none");
+                }
+                else
+                {
+                    wlog("peer mtcInfo missing (rc:%d) ; %s",
+                          json_rc, &msg.buf[0]);
+                }
+            }
+            else
+            {
+                wlog("mtcInfo label parse error (rc:%d) ; %s",
+                      json_rc, &msg.buf[0]);
+            }
+            json_object_put(_obj);
+        }
+        else
+        {
+            wlog("message buffer tokenize error ; %s", &msg.buf[0]);
+        }
+    }
+    else
+    {
+        slog("%s got mtcInfo ; unexpected for this nodetype", ctrl.hostname);
+    }
+}
+
+
 /* Push daemon state to log file */
 void daemon_dump_info ( void )
 {
@@ -1853,13 +2070,13 @@ int daemon_run_testhead ( void )
     * STAGE 1: some test
     ************************************************/
     printf ( "| Test  %d : Maintenance Service Test ............. ", stage );
-    if ( rc != PASS )    
+    if ( rc != PASS )
     {
        FAILED_STR ;
        rc = FAIL ;
     }
     else
-       PASSED ; 
+       PASSED ;
 
     printf  ("+---------------------------------------------------------+\n");
     return PASS ;

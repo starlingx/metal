@@ -274,9 +274,9 @@ void bmcUtil_create_pw_file ( thread_info_type * info_ptr,
  *
  *************************************************************************/
 
-string bmcUtil_create_data_fn ( string & hostname,
-                                string   file_suffix,
-                     bmc_protocol_enum   protocol )
+string bmcUtil_create_data_fn ( const string & hostname,
+                                string file_suffix,
+                     bmc_protocol_enum protocol )
 {
     /* create the output filename */
     string datafile ;

@@ -1326,6 +1326,7 @@ void nodeLinkClass::fsm ( void )
             daemon_signal_hdlr ();
             mtcHttpSvr_look ( mtce_event );
         }
+        mtcInv.mtcInfo_handler();
     }
 }
 

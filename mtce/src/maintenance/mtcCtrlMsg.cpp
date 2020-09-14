@@ -443,6 +443,34 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
                     obj_ptr->declare_service_ready ( hostname, MTC_SERVICE_HEARTBEAT );
                     return (PASS);
                 }
+                else if ( service == MTC_SERVICE_MTCCLIENT_NAME )
+                {
+                    ilog ("%s %s ready", hostname.c_str(), MTC_SERVICE_MTCCLIENT_NAME);
+
+                    /* if this ready event is from the mtcClient of a
+                     * controller that has valid bmc access info then
+                     * build the 'peer controller kill' mtcInfo and
+                     * send it to that mtcClient */
+                    if ( obj_ptr->get_nodetype ( hostname ) & CONTROLLER_TYPE )
+                    {
+                        string bm_pw = obj_ptr->get_bm_pw ( hostname ) ;
+                        if ( !bm_pw.empty() && ( bm_pw != NONE ))
+                        {
+                            string bm_un = obj_ptr->get_bm_un ( hostname ) ;
+                            string bm_ip = obj_ptr->get_bm_ip ( hostname ) ;
+                            if (( hostUtil_is_valid_username  ( bm_un )) &&
+                                ( hostUtil_is_valid_ip_addr   ( bm_ip )))
+                            {
+                                send_mtc_cmd ( hostname,
+                                               MTC_MSG_INFO,
+                                               MGMNT_INTERFACE,
+                                               obj_ptr->build_mtcInfo_dict (
+                                MTC_INFO_CODE__PEER_CONTROLLER_KILL_INFO));
+                            }
+                        }
+                    }
+                    return (PASS);
+                }
                 if (  service == MTC_SERVICE_HWMOND_NAME )
                 {
                     std::list<string>::iterator temp ;
@@ -578,11 +606,12 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
     return (rc);
 }
 
-int send_mtc_cmd ( string & hostname, int cmd , int interface )
+int send_mtc_cmd ( string & hostname, int cmd , int interface, string json_dict )
 {
     int rc = FAIL ;
     bool force = false ;
     mtc_message_type mtc_cmd ;
+    string data = "" ;
     mtc_socket_type * sock_ptr = get_sockPtr ();
     memset (&mtc_cmd,0,sizeof(mtc_message_type));
 
@@ -592,6 +621,16 @@ int send_mtc_cmd ( string & hostname, int cmd , int interface )
 
     switch ( cmd )
     {
+        case MTC_MSG_INFO:
+        {
+            snprintf ( &mtc_cmd.hdr[0], MSG_HEADER_SIZE, "%s" , get_cmd_req_msg_header() );
+            mtc_cmd.cmd = cmd ;
+            mtc_cmd.num = 0 ;
+            data = "{\"mtcInfo\":" + json_dict + "}";
+            ilog("%s mtc info update", hostname.c_str());
+            rc = PASS ;
+            break ;
+        }
         case MTC_REQ_MTCALIVE:
         {
             snprintf ( &mtc_cmd.hdr[0], MSG_HEADER_SIZE, "%s" , get_cmd_req_msg_header() );
@@ -689,11 +728,20 @@ int send_mtc_cmd ( string & hostname, int cmd , int interface )
          * Note: the minus 1 is to overwrite the null */
         snprintf ( &mtc_cmd.hdr[MSG_HEADER_SIZE-1], MSG_HEADER_SIZE, "%s", obj_ptr->get_hostIfaceMac(hostname, MGMNT_IFACE).data());
 
-        string data = "{\"address\":\"";
-        data.append(obj_ptr->my_float_ip) ;
-        data.append("\",\"interface\":\"");
-        data.append(get_iface_name_str(interface));
-        data.append("\"}");
+        /* If data is empty then at least add where the message came from */
+        if ( data.empty() )
+        {
+            data = "{\"address\":\"";
+            data.append(obj_ptr->my_float_ip) ;
+            data.append("\",\"interface\":\"");
+            data.append(get_iface_name_str(interface));
+            data.append("\"}");
+        }
+        else
+        {
+            ; /* data is already pre loaded by the command case above */
+        }
+        /* copy data into message buffer */
         snprintf ( &mtc_cmd.buf[0], data.length()+1, "%s", data.data());
         bytes = (sizeof(mtc_message_type)-(BUF_SIZE-(data.length()+1)));
 

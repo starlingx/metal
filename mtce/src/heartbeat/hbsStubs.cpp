@@ -279,8 +279,14 @@ void nodeLinkClass::mnfa_enter ( void )
 void nodeLinkClass::mnfa_exit  ( bool force )
 { force = force ; }
 
-int send_mtc_cmd ( string & hostname, int cmd, int interface )
-{ UNUSED(hostname); UNUSED(cmd); UNUSED(interface); return PASS ; }
+int send_mtc_cmd ( string & hostname, int cmd, int interface, string json_dict)
+{
+    UNUSED(hostname);
+    UNUSED(cmd);
+    UNUSED(interface);
+    UNUSED(json_dict);
+    return PASS ;
+}
 
 int nodeLinkClass::mtcInvApi_subf_states ( string hostname,
                                            string oper_subf,
