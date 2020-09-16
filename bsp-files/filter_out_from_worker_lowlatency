@@ -271,6 +271,7 @@ mlnx-ofa_kernel-modules
 qat17
 kernel-tools
 kernel-tools-libs
+kernel-modules-extra
 NaviCLI-Linux-64-x86-en_US
 kmod-drbd-rt
 snmp-audittrail
