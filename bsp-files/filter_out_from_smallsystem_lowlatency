@@ -22,3 +22,4 @@ qat17
 kernel-tools
 kernel-tools-libs
 kmod-drbd
+kernel-modules-extra
