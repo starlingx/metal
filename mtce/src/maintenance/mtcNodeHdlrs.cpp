@@ -3562,10 +3562,8 @@ int nodeLinkClass::swact_handler  ( struct nodeLinkClass::node * node_ptr )
             nodeLinkClass::smgrEvent.payload = "" ;
             nodeLinkClass::smgrEvent.response = "" ;
 
-            /* Post a user message 'Swact: Request' and
-             * then delay to allow it to be displayed */
+            /* Post a user message 'Swact: Request' */
             mtcInvApi_force_task ( node_ptr, MTC_TASK_SWACT_REQUEST );
-            mtcTimer_start ( node_ptr->mtcSwact_timer, mtcTimer_handler, (MTC_TASK_UPDATE_DELAY/2) );
             node_ptr->swactStage = MTC_SWACT__QUERY ;
             break ;
         }
