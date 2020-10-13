@@ -1,0 +1,59 @@
+template t_mtc {
+  template("${R_YEAR}-${R_MONTH}-${R_DAY}T${R_HOUR}:${R_MIN}:${R_SEC}.${R_MSEC} ${MSG}\n");
+  template-escape(no);
+};
+
+# Maintenance Log Filters
+filter f_pmon        { facility(local5) and program(pmond); };
+filter f_lmon        { facility(local5) and program(lmond); };
+filter f_hostw       { facility(local5) and program(hostwd); };
+filter f_fsmon       { facility(local5) and program(fsmond); };
+filter f_hwmon       { facility(local5) and program(hwmond); };
+filter f_mtclogd     { facility(local5) and program(mtclogd); };
+filter f_mtcalarmd   { facility(local5) and program(mtcalarmd); };
+filter f_mtcclient   { facility(local5) and program(mtcClient); };
+filter f_mtcagent    { facility(local5) and program(mtcAgent); };
+filter f_hbsclient   { facility(local5) and program(hbsClient); };
+filter f_hbsagent    { facility(local5) and program(hbsAgent); };
+filter f_guestagent  { facility(local5) and program(guestAgent); };
+filter f_guestserver { facility(local5) and program(guestServer); };
+filter f_mtcagentalarm { facility(local5) and program(/var/log/mtcAgent_alarm.log); };
+filter f_mtcagentapi   { facility(local5) and program(/var/log/mtcAgent_api.log); };
+filter f_mtcagentevent { facility(local5) and program(/var/log/mtcAgent_event.log); };
+
+# Maintenance Log destinations
+destination d_pmon        { file("/var/log/pmond.log" template(t_mtc) perm(0640)); };
+destination d_lmon        { file("/var/log/lmond.log" template(t_mtc)); };
+destination d_hostwd      { file("/var/log/hostwd.log" template(t_mtc) perm(0640)); };
+destination d_fsmon       { file("/var/log/fsmond.log" template(t_mtc)); };
+destination d_hwmon       { file("/var/log/hwmond.log" template(t_mtc)); };
+destination d_mtclogd     { file("/var/log/mtclogd.log" template(t_mtc)); };
+destination d_mtcalarmd   { file("/var/log/mtcalarmd.log" template(t_mtc)); };
+destination d_mtcclient   { file("/var/log/mtcClient.log" template(t_mtc)); };
+destination d_mtcagent    { file("/var/log/mtcAgent.log" template(t_mtc)); };
+destination d_hbsclient   { file("/var/log/hbsClient.log" template(t_mtc)); };
+destination d_hbsagent    { file("/var/log/hbsAgent.log" template(t_mtc)); };
+destination d_guestagent  { file("/var/log/guestAgent.log" template(t_mtc)); };
+destination d_guestserver { file("/var/log/guestServer.log" template(t_mtc)); };
+destination d_mtcagentalarm { file("/var/log/mtcAgent_alarm.log" template(t_mtc)); };
+destination d_mtcagentapi   { file("/var/log/mtcAgent_api.log" template(t_mtc) perm(0640)); };
+destination d_mtcagentevent { file("/var/log/mtcAgent_event.log" template(t_mtc)); };
+
+# Maintenance Log Paths
+log { source(s_src); filter(f_pmon);        destination(d_pmon); };
+log { source(s_src); filter(f_lmon);        destination(d_lmon); };
+log { source(s_src); filter(f_hostw);       destination(d_hostwd); };
+log { source(s_src); filter(f_fsmon);       destination(d_fsmon); };
+log { source(s_src); filter(f_hwmon);       destination(d_hwmon); };
+log { source(s_src); filter(f_mtclogd);     destination(d_mtclogd); };
+log { source(s_src); filter(f_mtcalarmd);   destination(d_mtcalarmd); };
+log { source(s_src); filter(f_mtcclient);   destination(d_mtcclient); };
+log { source(s_src); filter(f_mtcagent);    destination(d_mtcagent); };
+log { source(s_src); filter(f_hbsclient);   destination(d_hbsclient); };
+log { source(s_src); filter(f_hbsagent);    destination(d_hbsagent); };
+log { source(s_src); filter(f_guestagent);  destination(d_guestagent); };
+log { source(s_src); filter(f_guestserver); destination(d_guestserver); };
+log { source(s_src); filter(f_mtcagentalarm); destination(d_mtcagentalarm); };
+log { source(s_src); filter(f_mtcagentapi);   destination(d_mtcagentapi); };
+log { source(s_src); filter(f_mtcagentevent); destination(d_mtcagentevent); };
+

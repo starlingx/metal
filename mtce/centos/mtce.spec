@@ -408,6 +408,9 @@ install -m 644 -p -D %{_buildsubdir}/alarm/scripts/mtcalarm.logrotate %{buildroo
 install -m 755 -d %{buildroot}%{local_etc_collectd}
 install -m 755 -p -D %{_buildsubdir}/scripts/collect_bmc.sh %{buildroot}%{local_etc_collectd}/collect_bmc
 
+# syslog configuration
+install -m 644 -p -D %{_buildsubdir}/scripts/mtce.syslog %{buildroot}%{_sysconfdir}/syslog-ng/conf.d/mtce.conf
+
 # software development files
 install -m 644 -p -D %{_buildsubdir}/heartbeat/mtceHbsCluster.h %{buildroot}/%{_includedir}/mtceHbsCluster.h
 
@@ -478,6 +481,9 @@ install -m 755 -d %{buildroot}/var/run
 
 # Maintenance collect files
 %{local_etc_collectd}/collect_bmc
+
+# Maintenance syslog config
+%{_sysconfdir}/syslog-ng/conf.d/mtce.conf
 
 # Maintenance start/stop services scripts
 %{local_etc_servicesd}/controller/mtcTest
