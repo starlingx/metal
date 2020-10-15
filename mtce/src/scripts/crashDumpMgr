@@ -1,0 +1,131 @@
+#!/bin/bash
+#
+# Copyright (c) 2020 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+# chkconfig: 2345 98 2
+#
+### BEGIN INIT INFO
+# Provides: crashDumpMgr
+# Required-Start: $null
+# Required-Stop: $null
+# Default-Start:     3 5
+# Default-Stop:      0 1 2 6
+# Short-Description: Maintenance 'Crash Dump' Manager script
+### END INIT INFO
+
+CRASHDUMPMGR_TAG=${CRASHDUMPMGR_TAG:-"crashDumpMgr"}
+
+RETVAL=0
+
+#############################################################################
+# Log message to syslog
+#############################################################################
+
+function log()
+{
+    logger -t ${CRASHDUMPMGR_TAG} $@
+}
+
+#############################################################################
+#
+# Name   : manage_crash_dumps
+#
+# Purpose: Prevent crash dumps from filling up the root fs
+#
+# The kernel directs new crash dump bundles to
+# /var/crash/<dated vmcore bundle>. Crash dump
+# bundles are quite large and, if too many occur,
+# can fill up its target filesystem.
+#
+# This function nicely tars a crash bundle found in /var/crash
+# to /var/log/crash.
+#
+# The first bundle is tar'ed as vmcore_first.tar and preserved.
+# Subsequent crash bundles are nicely tar'ed as vmcore.tar
+#
+# Save the crash dump vmcore summary for all crash dumps.
+#
+# Assumptions: logration is used to compress these bundles in the background
+#
+############################################################################
+
+function manage_crash_dumps()
+{
+    CRASH_DIR="/var/crash"
+    CRASH_BUNDLE_DIR="/var/log/crash"
+    OTHER_BUNDLE="${CRASH_BUNDLE_DIR}/vmcore.tar"
+    FIRST_BUNDLE="${CRASH_BUNDLE_DIR}/vmcore_first.tar"
+    FIRST_BUNDLE_ROTATED="${CRASH_BUNDLE_DIR}/vmcore_first.tar.1.gz"
+    CRASH_BUNDLE_SUMMARY="vmcore-dmesg.txt"
+
+    # tar command and nice levels
+    TAR_CMD="tar -cf"
+    NICE_CMD="/usr/bin/nice -n19"
+    IONICE_CMD="/usr/bin/ionice -c2 -n7"
+
+    log "managing ${CRASH_DIR}"
+    cleanup=false
+
+    # create dir if it does not exist
+    if [ ! -d ${CRASH_BUNDLE_DIR} ] ; then
+        mkdir ${CRASH_BUNDLE_DIR}
+    fi
+
+    for entry in ${CRASH_DIR}/*
+    do
+        if [ -d ${entry} ] ; then
+            if [ -e ${entry}/vmcore ] ; then
+
+                # save the crash dump vmcore summary for all crash dumps
+                cp -a ${entry}/${CRASH_BUNDLE_SUMMARY} ${CRASH_DIR}/$(basename ${entry})_${CRASH_BUNDLE_SUMMARY}
+
+                if [ "${cleanup}" != true ] ; then
+                    if [ -e ${FIRST_BUNDLE} -o -e ${FIRST_BUNDLE_ROTATED} ] ; then
+                        if [ ! -e ${OTHER_BUNDLE} ] ; then
+                            log "creating bundle from ${entry}"
+                            ${IONICE_CMD} ${NICE_CMD} ${TAR_CMD} ${OTHER_BUNDLE} -C ${CRASH_DIR} $(basename ${entry})
+                            cleanup=true
+                        fi
+                    else
+                        log "creating first bundle from ${entry}"
+                        ${IONICE_CMD} ${NICE_CMD} ${TAR_CMD} ${FIRST_BUNDLE} -C ${CRASH_DIR} $(basename ${entry})
+                        cleanup=true
+                    fi
+                fi
+                log "removing ${entry}"
+                rm -rf "${entry}"
+            fi
+        fi
+    done
+}
+
+# service case
+case "$1" in
+    start)
+        manage_crash_dumps
+        ;;
+
+    stop)
+        log "stop"
+        ;;
+
+    restart)
+        log "restart"
+        stop
+        start
+        ;;
+
+    status)
+        log "status"
+        ;;
+
+    *)
+        log "usage: $0 { start | stop | status | restart }"
+        RETVAL=1
+        ;;
+esac
+
+exit $RETVAL

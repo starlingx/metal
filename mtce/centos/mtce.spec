@@ -349,6 +349,8 @@ install -m 700 -p -D %{_buildsubdir}/alarm/scripts/mtcalarm.init %{buildroot}%{_
 # TODO: Init hack. Should move to proper module
 install -m 755 -p -D %{_buildsubdir}/scripts/hwclock.sh %{buildroot}%{_sysconfdir}/init.d/hwclock.sh
 install -m 644 -p -D %{_buildsubdir}/scripts/hwclock.service %{buildroot}%{_unitdir}/hwclock.service
+install -m 755 -p -D %{_buildsubdir}/scripts/crashDumpMgr %{buildroot}%{_sysconfdir}/init.d/crashDumpMgr
+install -m 644 -p -D %{_buildsubdir}/scripts/crashDumpMgr.service %{buildroot}%{_unitdir}/crashDumpMgr.service
 
 # systemd service files
 install -m 644 -p -D %{_buildsubdir}/fsmon/scripts/fsmon.service %{buildroot}%{_unitdir}/fsmon.service
@@ -395,6 +397,7 @@ install -m 644 -p -D %{_buildsubdir}/lmon/scripts/lmon.pmon.conf %{buildroot}%{l
 
 # log rotation
 install -m 755 -d %{buildroot}%{_sysconfdir}/logrotate.d
+install -m 644 -p -D %{_buildsubdir}/scripts/crashdump.logrotate %{buildroot}%{local_etc_logrotated}/crashdump.logrotate
 install -m 644 -p -D %{_buildsubdir}/scripts/mtce.logrotate %{buildroot}%{local_etc_logrotated}/mtce.logrotate
 install -m 644 -p -D %{_buildsubdir}/hostw/scripts/hostw.logrotate %{buildroot}%{local_etc_logrotated}/hostw.logrotate
 install -m 644 -p -D %{_buildsubdir}/pmon/scripts/pmon.logrotate %{buildroot}%{local_etc_logrotated}/pmon.logrotate
@@ -424,6 +427,7 @@ install -m 755 -d %{buildroot}/var/run
 /bin/systemctl enable rsyncd.service
 /bin/systemctl enable goenabled.service
 /bin/systemctl enable mtcalarm.service
+/bin/systemctl enable crashDumpMgr.service
 
 %post -n mtce-hostw
 /bin/systemctl enable hostw.service
@@ -470,6 +474,7 @@ install -m 755 -d %{buildroot}/var/run
 %{local_etc_logrotated}/fsmon.logrotate
 %{local_etc_logrotated}/mtce.logrotate
 %{local_etc_logrotated}/mtcalarm.logrotate
+%{local_etc_logrotated}/crashdump.logrotate
 
 # Maintenance start/stop services scripts
 %{local_etc_servicesd}/controller/mtcTest
@@ -490,6 +495,7 @@ install -m 755 -d %{buildroot}/var/run
 %{_sysconfdir}/init.d/mtcClient
 %{_sysconfdir}/init.d/mtcalarm
 %{_sysconfdir}/init.d/hwclock.sh
+%{_sysconfdir}/init.d/crashDumpMgr
 
 %{_unitdir}/runservices.service
 %{_unitdir}/goenabled.service
@@ -499,6 +505,7 @@ install -m 755 -d %{buildroot}/var/run
 %{_unitdir}/mtcClient.service
 %{_unitdir}/hbsClient.service
 %{_unitdir}/hwclock.service
+%{_unitdir}/crashDumpMgr.service
 
 # Binaries
 %{local_bindir}/mtcAgent

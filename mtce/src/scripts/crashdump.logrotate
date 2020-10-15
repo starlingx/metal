@@ -1,0 +1,14 @@
+/var/log/crash/vmcore.tar
+/var/log/crash/vmcore_first.tar
+{
+    nodateext
+    size 1K
+    start 1
+    rotate 1
+    missingok
+    notifempty
+    compress
+    postrotate
+      rm -f $1
+    endscript
+}
