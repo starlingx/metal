@@ -258,6 +258,7 @@ netlink monitoring for provisioned oam, mgmt and cluster-host interfaces.
 %define local_sbindir %{local_dir}/sbin
 %define local_etc_pmond      %{_sysconfdir}/pmon.d
 %define local_etc_goenabledd %{_sysconfdir}/goenabled.d
+%define local_etc_collectd   %{_sysconfdir}/collect.d
 %define local_etc_servicesd  %{_sysconfdir}/services.d
 %define local_etc_logrotated %{_sysconfdir}/logrotate.d
 %define bmc_profilesd        %{_sysconfdir}/bmc/server_profiles.d
@@ -403,6 +404,10 @@ install -m 644 -p -D %{_buildsubdir}/fsmon/scripts/fsmon.logrotate %{buildroot}%
 install -m 644 -p -D %{_buildsubdir}/hwmon/scripts/hwmon.logrotate %{buildroot}%{local_etc_logrotated}/hwmon.logrotate
 install -m 644 -p -D %{_buildsubdir}/alarm/scripts/mtcalarm.logrotate %{buildroot}%{local_etc_logrotated}/mtcalarm.logrotate
 
+# collect scripts
+install -m 755 -d %{buildroot}%{local_etc_collectd}
+install -m 755 -p -D %{_buildsubdir}/scripts/collect_bmc.sh %{buildroot}%{local_etc_collectd}/collect_bmc
+
 # software development files
 install -m 644 -p -D %{_buildsubdir}/heartbeat/mtceHbsCluster.h %{buildroot}/%{_includedir}/mtceHbsCluster.h
 
@@ -470,6 +475,9 @@ install -m 755 -d %{buildroot}/var/run
 %{local_etc_logrotated}/fsmon.logrotate
 %{local_etc_logrotated}/mtce.logrotate
 %{local_etc_logrotated}/mtcalarm.logrotate
+
+# Maintenance collect files
+%{local_etc_collectd}/collect_bmc
 
 # Maintenance start/stop services scripts
 %{local_etc_servicesd}/controller/mtcTest
