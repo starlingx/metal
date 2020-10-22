@@ -523,12 +523,12 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
         }
         if ( msg.cmd == MTC_CMD_LAZY_REBOOT )
         {
-            if ( daemon_is_file_present ( MTC_CMD_FIT__NO_REBOOT ) )
-            {
-                ilog ("Lazy Reboot - fit bypass (%s)\n", interface_name.c_str());
-                return (PASS);
-            }
             daemon_log ( NODE_RESET_FILE, "lazy reboot command" );
+
+            /* stop pmon before issuing the lazy reboot so that it does not
+             * try and recover any processes, most importantly this one */
+            stop_pmon();
+
             if ( msg.num >= 1 )
             {
                 do
@@ -547,9 +547,6 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
                 ilog ("Lazy Reboot (%s) ; now\n", interface_name.c_str() );
             }
 
-            /* stop pmon before issuing the self reboot so that it does not
-             * try and recover any processes, most importantly this one */
-            stop_pmon();
             fork_sysreq_reboot ( delay );
             rc = system("/usr/bin/systemctl reboot");
         }

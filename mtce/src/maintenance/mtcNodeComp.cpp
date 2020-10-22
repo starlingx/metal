@@ -1053,6 +1053,22 @@ void daemon_service_run ( void )
     int rc = PASS ;
     int file_not_present_count = 0 ;
 
+    if ( daemon_is_file_present ( NODE_RESET_FILE ) )
+    {
+        wlog ("mtce reboot required");
+        fork_sysreq_reboot ( daemon_get_cfg_ptr()->failsafe_shutdown_delay );
+        for ( ; ; )
+        {
+            wlog ("issuing reboot");
+            system("/usr/bin/systemctl reboot");
+
+            // wait up to 30 seconds before the reboot is retried.
+            for ( int i = 0 ; i < 10 ; i++ )
+                sleep (3) ;
+        }
+    }
+
+
     /* Start mtcAlive message timer */
     /* Send first mtcAlive ASAP */
     mtcTimer_start ( ctrl.timer, timer_handler, 1 );
