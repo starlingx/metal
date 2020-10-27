@@ -6,8 +6,7 @@ Before=sshd.service
 [Service]
 Type=oneshot
 RemainAfterExit=no
-ExecStart=/etc/init.d/crashDumpMgr start
-ExecStop=/etc/init.d/crashDumpMgr stop
+ExecStart=/etc/init.d/crashDumpMgr --max-size 3Gi
 
 [Install]
 WantedBy=multi-user.target
