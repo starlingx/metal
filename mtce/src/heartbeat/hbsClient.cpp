@@ -527,6 +527,12 @@ int _setup_pulse_messaging ( iface_enum i, int rmem )
             _close_pulse_rx_sock (i);
             return (FAIL_SOCKET_CREATE);
         }
+        if ( hbs_sock.rx_sock[i]->setSocketNonBlocking () != PASS )
+        {
+            wlog("Failed to set %s pulse receiver socket to non-blocking",
+                  get_iface_name_str(i));
+            return(FAIL_SOCKET_NOBLOCK);
+        }
         hbs_sock.rx_sock[i]->sock_ok(true);
     }
     else
@@ -556,10 +562,12 @@ int _setup_pulse_messaging ( iface_enum i, int rmem )
         _close_pulse_tx_sock(i);
         return (FAIL_SOCKET_CREATE);
     }
-    hbs_sock.tx_sock[i]->sock_ok(true);
 
     /* set this tx socket interface with priority class messaging */
-    hbs_sock.tx_sock[i]->setPriortyMessaging( iface );
+    rc = hbs_sock.tx_sock[i]->setPriortyMessaging( iface );
+
+    if ( rc == PASS )
+        hbs_sock.tx_sock[i]->sock_ok(true);
 
     return (rc);
 }
@@ -635,6 +643,12 @@ int hbs_socket_init ( void )
 
     hbs_sock.pmon_pulse_sock = new msgClassRx(LOOPBACK_IP,hbs_config.pmon_pulse_port,IPPROTO_UDP);
     if ( rc ) return (rc) ;
+    if ( hbs_sock.pmon_pulse_sock->setSocketNonBlocking () != PASS )
+    {
+        wlog("Failed to set pmon im-alive receiver socket to non-blocking");
+        return (FAIL_SOCKET_NOBLOCK);
+    }
+
     hbs_sock.pmon_pulse_sock->sock_ok(true);
 
     /***************************************************
@@ -1281,24 +1295,10 @@ int daemon_init ( string iface, string nodeType_str )
     return (rc);
 }
 
-#define SPACE ' '
-#define ARROW '<'
-
 int stall_threshold_log = 0 ;
 int stall_times_threshold_log = 0 ;
 void daemon_service_run ( void )
 {
-#ifdef WANT_DAEMON_DEBUG
-    time_debug_type before ;
-    time_debug_type after  ;
-    time_delta_type delta  ;
-    time_delta_type select_delta ;
-    char arrow = SPACE ;
-    char str [MAX_LEN] ;
-    int  num        = 0 ;
-    int  flush_thld = 0 ;
-#endif
-
     bool stall_monitor_ready       = false ;
 
     unsigned int flags  = 0 ;
@@ -1370,22 +1370,6 @@ void daemon_service_run ( void )
         hbs_sock.waitd.tv_sec = 0;
         hbs_sock.waitd.tv_usec = SOCKET_WAIT;
 
-#ifdef WANT_DAEMON_DEBUG
-        if ( hbs_config.flush_thld != 0 )
-        {
-            if ( debug_level ( DEBUG_MEM_LOG ) )
-            {
-                gettime (before);
-            }
-        }
-
-        /* Initialize the timeval struct  */
-        if ( hbs_config.flush_thld == 0 )
-        {
-            hbs_sock.waitd.tv_usec = hbs_config.testmask ;
-        }
-#endif
-
         /* Initialize the master fd_set */
         FD_ZERO(&hbs_sock.readfds);
         for ( int i = 0 ; i < MAX_IFACES ; i++ )
@@ -1410,12 +1394,6 @@ void daemon_service_run ( void )
         {
             FD_SET(hbs_sock.netlink_sock, &hbs_sock.readfds);
         }
-#ifdef WANT_CLUSTER_DEBUG
-        if ( hbs_sock.sm_client_sock && hbs_sock.sm_client_sock->getFD() )
-        {
-            FD_SET(hbs_sock.sm_client_sock->getFD(), &hbs_sock.readfds);
-        }
-#endif
         rc = select( socks.back()+1,
                      &hbs_sock.readfds, NULL, NULL,
                      &hbs_sock.waitd);
@@ -1438,19 +1416,6 @@ void daemon_service_run ( void )
         /* Only service sockets for the rc > 0 case */
         else if ( rc )
         {
-#ifdef WANT_CLUSTER_DEBUG
-            if ( hbs_sock.sm_client_sock && FD_ISSET(hbs_sock.sm_client_sock->getFD(), &hbs_sock.readfds ) )
-            {
-                mtce_hbs_cluster_type msg ;
-                /* Receive event messages */
-                memset ( &msg , 0, sizeof(mtce_hbs_cluster_type));
-                int bytes = hbs_sock.sm_client_sock->read((char*)&msg, sizeof(mtce_hbs_cluster_type));
-                if ( bytes )
-                {
-                    hbs_cluster_dump (msg );
-                }
-            }
-#endif
             if (hbs_sock.rx_sock[MGMNT_IFACE]&&FD_ISSET(hbs_sock.rx_sock[MGMNT_IFACE]->getFD(), &hbs_sock.readfds))
             {
                 /* Receive pulse request and send a response */
@@ -1686,21 +1651,7 @@ void daemon_service_run ( void )
             hbs_send_event ( MTC_EVENT_MONITOR_READY );
             readyEvent_timer.ring = false ;
         }
-
         daemon_signal_hdlr ();
-
-#ifdef WANT_DAEMON_DEBUG
-        /* Support the log flush config option */
-        if ( hbs_config.flush )
-        {
-            if ( ++flush_thld > hbs_config.flush_thld )
-            {
-                flush_thld = 0 ;
-                fflush (stdout);
-                fflush (stderr);
-            }
-        }
-#endif
     }
     daemon_exit ();
 }
