@@ -162,6 +162,7 @@ typedef struct
     int   failsafe_shutdown_delay      ; /**< seconds before failsafe reboot  */
     int   hostwd_update_period         ; /**< expect hostwd to be updated     */
     int   autorecovery_threshold       ; /**< AIO stop autorecovery threshold */
+    int   bmc_audit_period             ; /**< bmc audit period cadence        */
 
     /**< Auto Recovery Thresholds                                             */
     int   ar_config_threshold          ; /**< Configuration Failure Threshold */

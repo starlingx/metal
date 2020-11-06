@@ -21,11 +21,40 @@ using namespace std;
 #include "jsonUtil.h"      /* for ...      */
 #include "redfishUtil.h"   /* for ... this module header               */
 
-/* static prioritized list of redfish <named> actions.
- * Higher priority action first. */
-static std::list<string> reset_actions ;
-static std::list<string> poweron_actions ;
-static std::list<string> poweroff_actions ;
+/*************************************************************************
+ *
+ * Name:      : POWER_CTRL_ACTIONS__RESET
+ *              POWER_CTRL_ACTIONS__POWERON
+ *              POWER_CTRL_ACTIONS__POWEROFF
+ *
+ * Description: Power control actions/severity levels
+ *
+ *************************************************************************/
+
+typedef enum
+{
+    POWER_CTRL_ACTION__GRACEFUL,
+    POWER_CTRL_ACTION__IMMEDIATE,
+    POWER_CTRL_ACTION__MAX
+} power_ctrl_severity_enum ;
+
+static std::string _reset_actions[POWER_CTRL_ACTION__MAX] =
+{
+    REDFISHTOOL_RESET__GRACEFUL_RESTART,
+    REDFISHTOOL_RESET__FORCE_RESTART
+};
+
+static std::string _poweron_actions[POWER_CTRL_ACTION__MAX] =
+{
+    REDFISHTOOL_POWER_ON__ON,
+    REDFISHTOOL_POWER_ON__FORCE_ON
+};
+
+static std::string _poweroff_actions[POWER_CTRL_ACTION__MAX] =
+{
+    REDFISHTOOL_POWER_OFF__GRACEFUL_SHUTDOWN,
+    REDFISHTOOL_POWER_OFF__FORCE_OFF
+};
 
 /*************************************************************************
  *
@@ -43,16 +72,6 @@ int redfishUtil_init ( void )
 {
     daemon_make_dir(REDFISHTOOL_OUTPUT_DIR) ;
 
-    /* Stock reset actions in order of priority */
-    reset_actions.push_front(REDFISHTOOL_RESET__GRACEFUL_RESTART); /* P1 */
-    reset_actions.push_back (REDFISHTOOL_RESET__FORCE_RESTART);    /* P2 */
-
-    poweron_actions.push_front(REDFISHTOOL_POWER_ON__ON);
-    poweron_actions.push_back (REDFISHTOOL_POWER_ON__FORCE_ON);
-
-    poweroff_actions.push_front(REDFISHTOOL_POWER_OFF__GRACEFUL_SHUTDOWN);
-    poweroff_actions.push_back (REDFISHTOOL_POWER_OFF__FORCE_OFF);
-
     return (PASS);
 }
 
@@ -62,12 +81,13 @@ int redfishUtil_init ( void )
  *
  * Purpose    : Load supported host actions.
  *
- * Description: Filter stock actions through host actions.
+ * Description: Set host supported graceful and immediate power control
+ *              commands into the node's power control action strings.
  *
- * Parameters : hostname         - this host amer
- *              host_action_list - what actions this host reports support for.
- *
- * Updates:     bmc_info         - reference that includes host action lists
+ * Parameters : hostname         - pointer to the node object
+ *              host_action_list - what actions this host reports support for
+ * Updates:     bmc_info         - updated supported graceful and immediate
+ *                                 power control commands.
  *
  *************************************************************************/
 
@@ -75,10 +95,6 @@ void _load_action_lists (        string & hostname,
                           bmc_info_type & bmc_info,
                       std::list<string> & host_action_list)
 {
-    bmc_info.reset_action_list.clear();
-    bmc_info.power_on_action_list.clear();
-    bmc_info.power_off_action_list.clear();
-
     /* Walk through the host action list looking for and updating
      * this host's bmc_info supported actions lists */
     std::list<string>::iterator _host_action_list_ptr ;
@@ -86,158 +102,113 @@ void _load_action_lists (        string & hostname,
           _host_action_list_ptr != host_action_list.end() ;
           _host_action_list_ptr++ )
     {
-        std::list<string>::iterator _action_list_ptr ;
-        for ( _action_list_ptr  = poweroff_actions.begin();
-              _action_list_ptr != poweroff_actions.end() ;
-              _action_list_ptr++ )
-        {
-            if ( (*_host_action_list_ptr) == (*_action_list_ptr) )
-            {
-                bmc_info.power_off_action_list.push_back(*_action_list_ptr) ;
-                break ;
-            }
-        }
-        for ( _action_list_ptr  = poweron_actions.begin();
-              _action_list_ptr != poweron_actions.end() ;
-              _action_list_ptr++ )
-        {
-            if ( (*_host_action_list_ptr) == (*_action_list_ptr) )
-            {
-                bmc_info.power_on_action_list.push_back(*_action_list_ptr) ;
-                break ;
-            }
-        }
-        for ( _action_list_ptr  = reset_actions.begin();
-              _action_list_ptr != reset_actions.end() ;
-              _action_list_ptr++ )
-        {
-            if ( (*_host_action_list_ptr) == (*_action_list_ptr) )
-            {
-                bmc_info.reset_action_list.push_back(*_action_list_ptr) ;
-                break ;
-            }
-        }
+        /* Warning log for hosts that don't provide one of graceful or
+         *    immediate action commands.
+         *
+         * Error log for hosts that don't provide either graceful and
+         *    immediate action commands.
+         */
+         if ( (*_host_action_list_ptr) == REDFISHTOOL_RESET__GRACEFUL_RESTART )
+             bmc_info.power_ctrl.reset.graceful = *_host_action_list_ptr ;
+         else if ( (*_host_action_list_ptr) == REDFISHTOOL_RESET__FORCE_RESTART )
+             bmc_info.power_ctrl.reset.immediate = *_host_action_list_ptr ;
+
+         else if ( (*_host_action_list_ptr) == REDFISHTOOL_POWER_ON__ON )
+             bmc_info.power_ctrl.poweron.graceful = *_host_action_list_ptr ;
+         else if ( (*_host_action_list_ptr) == REDFISHTOOL_POWER_ON__FORCE_ON )
+             bmc_info.power_ctrl.poweron.immediate = *_host_action_list_ptr ;
+
+         else if ( (*_host_action_list_ptr) == REDFISHTOOL_POWER_OFF__GRACEFUL_SHUTDOWN )
+             bmc_info.power_ctrl.poweroff.graceful = *_host_action_list_ptr ;
+         else if ( (*_host_action_list_ptr) == REDFISHTOOL_POWER_OFF__FORCE_OFF )
+             bmc_info.power_ctrl.poweroff.immediate = *_host_action_list_ptr ;
     }
-    string reset_tmp = "" ;
-    string poweron_tmp = "" ;
-    string poweroff_tmp = "" ;
-    std::list<string>::iterator _ptr ;
-    for ( _ptr  = bmc_info.reset_action_list.begin();
-          _ptr != bmc_info.reset_action_list.end() ;
-          _ptr++ )
+
+    if (( bmc_info.power_ctrl.reset.graceful.empty() ) ||
+        ( bmc_info.power_ctrl.reset.immediate.empty() ))
     {
-        if ( !reset_tmp.empty() )
-            reset_tmp.append(",");
-        reset_tmp.append(*_ptr);
+        if (( bmc_info.power_ctrl.reset.graceful.empty() ) &&
+            ( bmc_info.power_ctrl.reset.immediate.empty() ))
+        {
+            elog("%s bmc offers no 'Reset' commands (%s:%s)",
+                     hostname.c_str(),
+                     REDFISHTOOL_RESET__GRACEFUL_RESTART,
+                     REDFISHTOOL_RESET__FORCE_RESTART);
+        }
+        else if ( bmc_info.power_ctrl.reset.graceful.empty() )
+        {
+            wlog("%s bmc offers no 'Graceful Reset' command (%s)",
+                     hostname.c_str(),
+                     REDFISHTOOL_RESET__GRACEFUL_RESTART);
+        }
+        else
+        {
+            wlog("%s bmc offers no 'Immediate Reset' command (%s)",
+                     hostname.c_str(),
+                     REDFISHTOOL_RESET__FORCE_RESTART);
+        }
     }
-    for ( _ptr  = bmc_info.power_on_action_list.begin();
-          _ptr != bmc_info.power_on_action_list.end() ;
-          _ptr++ )
+
+    if (( bmc_info.power_ctrl.poweron.graceful.empty() ) ||
+        ( bmc_info.power_ctrl.poweron.immediate.empty() ))
     {
-        if ( !poweron_tmp.empty() )
-            poweron_tmp.append(",");
-        poweron_tmp.append(*_ptr);
+        if (( bmc_info.power_ctrl.poweron.graceful.empty() ) &&
+            ( bmc_info.power_ctrl.poweron.immediate.empty() ))
+        {
+            elog("%s bmc offers no 'Power-On' commands (%s:%s)",
+                     hostname.c_str(),
+                     REDFISHTOOL_POWER_ON__ON,
+                     REDFISHTOOL_POWER_ON__FORCE_ON);
+        }
+        else if ( bmc_info.power_ctrl.poweron.graceful.empty() )
+        {
+            wlog("%s bmc offers no 'Graceful Power-On' command (%s)",
+                     hostname.c_str(),
+                     REDFISHTOOL_POWER_ON__ON);
+        }
+        else
+        {
+            wlog("%s bmc offers no 'Immediate Power-On' command (%s)",
+                    hostname.c_str(),
+                    REDFISHTOOL_POWER_ON__FORCE_ON);
+        }
     }
-    for ( _ptr  = bmc_info.power_off_action_list.begin();
-          _ptr != bmc_info.power_off_action_list.end() ;
-          _ptr++ )
+
+    if (( bmc_info.power_ctrl.poweroff.graceful.empty() ) ||
+        ( bmc_info.power_ctrl.poweroff.immediate.empty() ))
     {
-        if ( !poweroff_tmp.empty() )
-            poweroff_tmp.append(",");
-        poweroff_tmp.append(*_ptr);
+        if (( bmc_info.power_ctrl.poweroff.graceful.empty() ) &&
+            ( bmc_info.power_ctrl.poweroff.immediate.empty() ))
+        {
+            elog("%s bmc offers no 'Power-Off' commands (%s:%s)",
+                     hostname.c_str(),
+                     REDFISHTOOL_POWER_OFF__GRACEFUL_SHUTDOWN,
+                     REDFISHTOOL_POWER_OFF__FORCE_OFF);
+
+        }
+        else if ( bmc_info.power_ctrl.poweroff.graceful.empty() )
+        {
+            wlog("%s bmc offers no 'Graceful Power-Off' command (%s)",
+                     hostname.c_str(),
+                     REDFISHTOOL_POWER_OFF__GRACEFUL_SHUTDOWN);
+        }
+        else
+        {
+            wlog("%s bmc offers no 'Immediate Power-Off' command %s)",
+                     hostname.c_str(),
+                     REDFISHTOOL_POWER_OFF__FORCE_OFF);
+        }
     }
-    ilog ("%s bmc actions ; reset:%s  power-on:%s  power-off:%s",
+
+    ilog ("%s bmc power ctrl actions ; reset:%s:%s  power-on:%s:%s  power-off:%s:%s",
               hostname.c_str(),
-              reset_tmp.empty() ? "none" : reset_tmp.c_str(),
-              poweron_tmp.empty() ? "none" : poweron_tmp.c_str(),
-              poweroff_tmp.empty() ? "none" : poweroff_tmp.c_str());
+              bmc_info.power_ctrl.reset.graceful.empty() ? "none" : bmc_info.power_ctrl.reset.graceful.c_str(),
+              bmc_info.power_ctrl.reset.immediate.empty() ? "none" : bmc_info.power_ctrl.reset.immediate.c_str(),
+              bmc_info.power_ctrl.poweron.graceful.empty() ? "none" : bmc_info.power_ctrl.poweron.graceful.c_str(),
+              bmc_info.power_ctrl.poweron.immediate.empty() ? "none" : bmc_info.power_ctrl.poweron.immediate.c_str(),
+              bmc_info.power_ctrl.poweroff.graceful.empty() ? "none" : bmc_info.power_ctrl.poweroff.graceful.c_str(),
+              bmc_info.power_ctrl.poweroff.immediate.empty() ? "none" : bmc_info.power_ctrl.poweroff.immediate.c_str());
 }
-
-#ifdef SAVE_IMP
-int _get_action_list (              string   hostname,
-                       redfish_action_enum   action,
-                       std::list<string>     host_action_list,
-                       std::list<string>   & supp_action_list)
-{
-    int status = PASS ;
-    std::list<string> * action_ptr = NULL ;
-    string action_str = "" ;
-    supp_action_list.clear();
-    switch ( action )
-    {
-        case REDFISH_ACTION__RESET:
-        {
-            action_ptr = &reset_actions ;
-            action_str = "reset" ;
-            break ;
-        }
-        case REDFISH_ACTION__POWER_ON:
-        {
-            action_ptr = &poweron_actions ;
-            action_str = "power-on" ;
-            break ;
-        }
-        case REDFISH_ACTION__POWER_OFF:
-        {
-            action_ptr = &poweroff_actions ;
-            action_str = "power-off" ;
-            break ;
-        }
-        default:
-        {
-            status = FAIL_BAD_CASE ;
-        }
-    }
-
-    /* Filter */
-    if (( status == PASS ) && (action_ptr))
-    {
-        /* get the best supported action command
-         * for the specified action group. */
-        std::list<string>::iterator _action_list_ptr ;
-        std::list<string>::iterator _host_action_list_ptr ;
-        for ( _action_list_ptr  = action_ptr->begin();
-              _action_list_ptr != action_ptr->end() ;
-              _action_list_ptr++ )
-        {
-            for ( _host_action_list_ptr  = host_action_list.begin();
-                  _host_action_list_ptr != host_action_list.end() ;
-                  _host_action_list_ptr++ )
-            {
-                if ( (*_host_action_list_ptr) == (*_action_list_ptr) )
-                {
-                    supp_action_list.push_back(*_action_list_ptr) ;
-                    break ;
-                }
-            }
-        }
-    }
-    if ( supp_action_list.empty() )
-    {
-        elog ("%s has no %s actions", hostname.c_str(), action_str.c_str());
-        if ( status == PASS )
-            status = FAIL_STRING_EMPTY ;
-    }
-    else
-    {
-        string tmp = "" ;
-        std::list<string>::iterator _ptr ;
-        for ( _ptr  = supp_action_list.begin();
-              _ptr != supp_action_list.end() ;
-              _ptr++ )
-        {
-            if ( !tmp.empty() )
-                tmp.append(", ");
-            tmp.append(*_ptr);
-        }
-        ilog ("%s redfish %s actions: %s",
-                  hostname.c_str(),
-                  action_str.c_str(),
-                  tmp.c_str());
-    }
-    return (status);
-}
-#endif
 
 /*************************************************************************
  *
