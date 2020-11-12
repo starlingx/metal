@@ -48,16 +48,10 @@ daemon_config_type * daemon_get_cfg_ptr ( void )
 /* Cleanup exit handler */
 void daemon_exit ( void )
 {
-    int rc ;
     char pipe_cmd_output [PIPE_COMMAND_RESPON_LEN] ;
     hostw_socket_type   * hostw_socket = hostw_getSock_ptr();
 
-    rc = execute_pipe_cmd ( "systemctl is-system-running", &pipe_cmd_output[0], PIPE_COMMAND_RESPON_LEN );
-
-    if ( rc != 0 )
-    {
-        elog ("call to 'systemctl is-system-running' failed (%d:%d:%m)\n", rc, errno );
-    }
+    execute_pipe_cmd ( "systemctl is-system-running", &pipe_cmd_output[0], PIPE_COMMAND_RESPON_LEN );
     if ( strnlen ( pipe_cmd_output, PIPE_COMMAND_RESPON_LEN ) > 0 )
     {
         ilog ("systemctl is-system-running result: <%s>\n", pipe_cmd_output );
@@ -102,9 +96,12 @@ int hostw_process_config ( void * user,
 
     if (MATCH("config", "hostwd_failure_threshold"))
     {
+        int previous = config_ptr->hostwd_failure_threshold ;
         config_ptr->hostwd_failure_threshold = atoi(value);
         config_ptr->mask |= CONFIG_HOSTWD_FAILURE_THRESHOLD ;
         ilog("Quorum Thld : %d", config_ptr->hostwd_failure_threshold);
+        if ( config_ptr->hostwd_failure_threshold != previous )
+            hostw_ctrl.pmon_grace_loops = config_ptr->hostwd_failure_threshold;
     }
     else if (MATCH("config", "hostwd_reboot_on_err"))
     {
@@ -112,6 +109,14 @@ int hostw_process_config ( void * user,
         config_ptr->mask |= CONFIG_HOSTWD_REBOOT ;
         ilog("Quorum Loss : %s",
               config_ptr->hostwd_reboot_on_err ? "Reboot & Log" : "Log Only");
+    }
+    else if (MATCH("config", "hostwd_kdump_on_stall"))
+    {
+        config_ptr->hostwd_kdump_on_stall = atoi(value);
+        string state = "enabled" ;
+        if ( config_ptr->hostwd_kdump_on_stall == 0 )
+            state = "disabled" ;
+        ilog("Crash Dump  : %s (%d)", state.c_str(), config_ptr->hostwd_kdump_on_stall );
     }
     else if (MATCH("config", "hostwd_use_kern_wd"))
     {

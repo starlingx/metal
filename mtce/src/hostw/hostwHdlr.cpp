@@ -38,7 +38,7 @@
 
 int hostw_service_command ( hostw_socket_type * hostw_socket );
 
-static void fork_hostwd_logger ( void );
+void fork_hostwd_logger ( void );
 char   my_hostname [MAX_HOST_NAME_SIZE+1];
 
 /* Push daemon state to log file */
@@ -69,6 +69,130 @@ void hostwTimer_handler ( int sig, siginfo_t *si, void *uc)
         mtcTimer_stop_tid_int_safe ( tid_ptr );
 }
 
+/***************************************************************************
+ *
+ * Name      : get_kdump_support
+ *
+ * Purpose   : Query the state of the kdump service
+ *
+ * Updates   : kdump_supported default of false is updated to true if
+ *             the kdump service query indicates that kdump is active.
+ *
+ **************************************************************************/
+
+void get_kdump_support ( void )
+{
+    char pipe_cmd_output [PIPE_COMMAND_RESPON_LEN] ;
+    execute_pipe_cmd ( "/usr/bin/systemctl is-active kdump",
+                       &pipe_cmd_output[0],
+                       PIPE_COMMAND_RESPON_LEN );
+    if ( strnlen ( pipe_cmd_output, PIPE_COMMAND_RESPON_LEN ) > 0 )
+    {
+        if ( ! strncmp (&pipe_cmd_output[0], "active", strlen("active")))
+        {
+            hostw_ctrl_type * ctrl_ptr = get_ctrl_ptr() ;
+            ctrl_ptr->fd_sysrq_enable = open(SYSRQ_CONTROL_INTERFACE,O_WRONLY);
+            ctrl_ptr->fd_sysrq_command= open(SYSRQ_COMMAND_INTERFACE,O_WRONLY);
+            if ( ctrl_ptr->fd_sysrq_enable && ctrl_ptr->fd_sysrq_command )
+            {
+                ilog("kdump is active");
+                ctrl_ptr->kdump_supported = true ;
+                return ;
+            }
+            ilog("kdump service setup failed ; %d:%d:%s",
+                  ctrl_ptr->fd_sysrq_enable,
+                  ctrl_ptr->fd_sysrq_command,
+                  pipe_cmd_output);
+        }
+        else
+        {
+            ilog("kdump is inactive (%s)", pipe_cmd_output);
+        }
+    }
+    else
+    {
+        elog("kdump status query failed ; assuming kdump is inactive");
+    }
+}
+
+/***************************************************************************
+ *
+ * Name      : force_crashdump
+ *
+ * Purpose   : Force a crash dump via SysRq command 'c'
+ *
+ * Warning   : Host will reset immediately, without graceful shutdown.
+ *
+ **************************************************************************/
+void force_crashdump ( void )
+{
+    hostw_ctrl_type * ctrl_ptr = get_ctrl_ptr() ;
+    if (( daemon_get_cfg_ptr()->hostwd_kdump_on_stall == 0 ) ||
+        ( ctrl_ptr->kdump_supported == false ))
+    {
+        /* crash dump is disabled or not supported */
+        return ;
+    }
+
+    /* Go for the crash dump */
+
+    /* Enable all functions of sysrq */
+    static char sysrq_enable_cmd = '1' ;
+
+    /* Crash Dump by NULL pointer dereference */
+    static char sysrq_crash_dump_cmd = 'c' ;
+
+    int bytes = write(ctrl_ptr->fd_sysrq_enable, &sysrq_enable_cmd, 1 );
+    if ( bytes <= 0 )
+    {
+        elog("SysRq Enable failed (%d:%d:%s)", bytes, errno, strerror(errno) );
+    }
+    else
+    {
+        /*************** force crash dump *****************/
+        bytes = write(ctrl_ptr->fd_sysrq_command, &sysrq_crash_dump_cmd, 1);
+        if ( bytes <= 0 )
+        {
+            elog("SysRq command failed (%d:%d:%s)",
+                  bytes, errno, strerror(errno) );
+        }
+        else
+        {
+            ; /* should not get here */
+        }
+    }
+}
+
+/***************************************************************************
+ *
+ * Name       : manage_quorum_failed
+ *
+ * Purpose    : permit recovery
+ *
+ * Description: If called while none of the reboot or sysRq reset failure
+ *              recovery options are enabled then we are not going for a
+ *              reboot or reset so allow recovery.
+ *
+ **************************************************************************/
+
+void manage_quorum_failed ( void )
+{
+    hostw_ctrl_type * ctrl_ptr = get_ctrl_ptr() ;
+    daemon_config_type* config_ptr = daemon_get_cfg_ptr() ;
+
+    if ((( config_ptr->hostwd_kdump_on_stall == 0 ) ||
+         ( ctrl_ptr->kdump_supported == false )) &&
+        ( config_ptr->hostwd_reboot_on_err == 0 ))
+    {
+        /* If we are not going for a reboot or reset then allow recovery
+         * by clearing the control boolean that prevents recovery. */
+        ilog ("Quorum failed but all reboot/reset recovery options disabled");
+        ilog ("... allowing auto recovery");
+        ctrl_ptr->quorum_failed = 0 ;
+        ctrl_ptr->pmon_grace_loops = config_ptr->hostwd_failure_threshold ;
+    }
+}
+
 /**
  * This is the main loop of the program
  *
@@ -94,6 +218,9 @@ void hostw_service ( void )
     daemon_config_type *config = daemon_get_cfg_ptr ();
 
     get_hostname  (&my_hostname[0], MAX_HOST_NAME_SIZE );
+
+    get_kdump_support(); /* query for kdump support */
+
     mtcTimer_init ( pmonTimer, my_hostname, "pmon" );
     mtcTimer_start( pmonTimer, hostwTimer_handler, config->hostwd_update_period);
 
@@ -108,7 +235,7 @@ void hostw_service ( void )
     socks.sort();
 
     ilog("Host Watchdog Service running\n");
-    for ( int quorum_failed = 0 ; ; )
+    for ( ; ; )
     {
         timeout.tv_sec =1; /* 1 second select ; pet watchdog every second */
         timeout.tv_usec=0;
@@ -158,7 +285,7 @@ void hostw_service ( void )
                 pmonTimer.ring = false ;
             }
         }
-        else if ( quorum_failed == 0 )
+        else if ( ctrl->quorum_failed == 0 )
         {
             if (FD_ISSET(hostw_socket->status_sock, &(hostw_socket->readfds)))
             {
@@ -177,12 +304,12 @@ void hostw_service ( void )
                     }
                 }
                 else if ( rc != RETRY )
-                    quorum_failed++ ;
+                    ctrl->quorum_failed++ ;
             }
         }
         if ( 0 >= ctrl->pmon_grace_loops )
         {
-            if ( quorum_failed++ == 0 )
+            if ( ctrl->quorum_failed++ == 0 )
             {
                 if (daemon_is_file_present(NODE_LOCKED_FILE))
                 {
@@ -192,12 +319,19 @@ void hostw_service ( void )
                 }
                 else
                 {
+                    /* force a crash dump if that feature is enabled */
+                    force_crashdump();
+
                     emergency_log( "*** Host watchdog (hostwd) not receiving messages "
-                               "from PMON ***\n");
+                                   "from PMON ***\n");
+
                     hostw_log_and_reboot();
                 }
             }
         }
+        if ( ctrl->quorum_failed )
+            manage_quorum_failed();
+
         daemon_signal_hdlr ();
     }
 }
@@ -269,8 +403,11 @@ void hostw_log_and_reboot()
 
     emergency_log ("*** Host Watchdog declaring system unhealthy ***\n");
 
-    /* start the process to log as much data as possible */
-    fork_hostwd_logger ();
+    /* Start the process to log as much data as possible */
+
+    /* NOTE: This function currently does not do anything so its commented
+     * out for now. Uncomment when actual value add logging is implemented.
+    fork_hostwd_logger (); */
 
     if (config->hostwd_reboot_on_err) {
         emergency_log ("*** Initiating reboot ***\n");
@@ -288,7 +425,7 @@ void hostw_log_and_reboot()
  * Initiate the thread which logs as much information about the system
  * as possible.
  */
-static void fork_hostwd_logger ( void )
+void fork_hostwd_logger ( void )
 {
     int parent = double_fork ();
     if (0 > parent) /* problem forking */

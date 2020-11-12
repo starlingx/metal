@@ -117,6 +117,7 @@ typedef struct
     int   api_retries           ; /**< api retries before failure             */
     int   hostwd_failure_threshold ; /**< allowed # of missed pmon/hostwd messages */
     bool  hostwd_reboot_on_err  ; /**< should hostwd reboot on fault detected */
+    bool  hostwd_kdump_on_stall ; /**< sysrq crash dump on quorum msg'ing stall */
     bool  hostwd_use_kern_wd    ; /**< use the kernel watchdog for extra safety */
     bool  need_clstr_poll_audit ; /**< true if we need to poll for clstr      */
     char *hostwd_console_path   ; /**< console on which to log extreme events */

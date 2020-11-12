@@ -49,6 +49,8 @@ void daemon_config_default ( daemon_config_type* config_ptr )
     config_ptr->multicast             = strdup("none");
     config_ptr->barbican_api_host     = strdup("none");
 
+    config_ptr->hostwd_kdump_on_stall = 0 ;
+
     config_ptr->debug_all    = 0 ;
     config_ptr->debug_json   = 0 ;
     config_ptr->debug_timer  = 0 ;
