@@ -376,6 +376,10 @@ int hostw_service_command ( hostw_socket_type * hostw_socket)
                 else
                 {
                     emergency_log( "*** PMON reports unrecoverable system - message '%s' ***\n", msg[0].buf);
+
+                    /* force a crash dump if that feature is enabled */
+                    force_crashdump();
+
                     hostw_log_and_reboot();
                     return FAIL;
                 }
