@@ -425,6 +425,10 @@ void mtc_stages_init ( void )
    powerStages_str   [MTC_POWEROFF__START              ] = "Power-Off-Start";
    powerStages_str   [MTC_POWEROFF__REQ_SEND           ] = "Power-Off-Req-Send";
    powerStages_str   [MTC_POWEROFF__RESP_WAIT          ] = "Power-Off-Resp-Wait";
+   powerStages_str   [MTC_POWEROFF__OFFLINE_WAIT       ] = "Power-Off-Offline-Wait";
+   powerStages_str   [MTC_POWEROFF__POWERQRY           ] = "Power-Off-Power-Query";
+   powerStages_str   [MTC_POWEROFF__POWERQRY_WAIT      ] = "Power-Off-Power-Query-Wait";
+   powerStages_str   [MTC_POWEROFF__QUEUE              ] = "Power-Off-Queue";
    powerStages_str   [MTC_POWEROFF__DONE               ] = "Power-Off-Done";
    powerStages_str   [MTC_POWEROFF__FAIL               ] = "Power-Off-Fail";
    powerStages_str   [MTC_POWEROFF__FAIL_WAIT          ] = "Power-Off-Fail-Wait";

@@ -1102,9 +1102,11 @@ typedef enum
     MTC_POWEROFF__FAIL,
     MTC_POWEROFF__FAIL_WAIT,
     MTC_POWEROFF__QUEUE,
-
+    MTC_POWEROFF__OFFLINE_WAIT,
+    MTC_POWEROFF__POWERQRY,
+    MTC_POWEROFF__POWERQRY_WAIT,
     MTC_POWER__DONE, /* clear power action */
-    MTC_POWER__STAGES       
+    MTC_POWER__STAGES
 }   mtc_powerStages_enum ;
 
 /** Return the string representing the specified 'power' stage */
