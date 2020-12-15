@@ -47,10 +47,6 @@ kernel-rt-tools
 kernel-rt-tools-libs
 kmod-drbd-rt
 libtpms
-swtpm
-swtpm-tools
-swtpm-cuse
-swtpm-libs
 OVMF
 openvswitch
 openvswitch-config
