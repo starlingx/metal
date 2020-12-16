@@ -217,7 +217,7 @@ void cluster_list ( void )
 
 void cluster_storage0_state ( bool enabled )
 {
-    if ( ctrl.cluster.storage0_enabled != enabled )
+    if ( (bool)ctrl.cluster.storage0_enabled != enabled )
     {
         ctrl.cluster.storage0_enabled = enabled ;
         ilog ("storage-0 heartbeat state changed to %s",
@@ -305,35 +305,39 @@ void hbs_cluster_add ( string & hostname )
 void hbs_cluster_del ( string & hostname )
 {
     std::list<string>::iterator hostname_ptr ;
+    bool found = false ;
     for ( hostname_ptr  = ctrl.monitored_hostname_list.begin();
           hostname_ptr != ctrl.monitored_hostname_list.end() ;
           hostname_ptr++ )
     {
         if ( hostname_ptr->compare(hostname) == 0 )
         {
-            ctrl.monitored_hostname_list.remove(hostname) ;
-            ctrl.monitored_hosts = (unsigned short)ctrl.monitored_hostname_list.size();
-
-            /* Manage storage-0 state. */
-            if ( hostname.compare(STORAGE_0) == 0 )
-            {
-                cluster_storage0_state ( false );
-            }
-
-            /* If we get down to 0 monitored hosts then just start fresh */
-            if (( ctrl.monitored_hosts ) == 0 )
-            {
-                hbs_cluster_init ( ctrl.cluster.period_msec, NULL );
-            }
-
-            ilog ("%s deleted from cluster", hostname.c_str());
-
-            cluster_list ();
-
-            hbs_cluster_change ( hostname + " deleted" );
-
+            found = true ;
             break ;
         }
+    }
+    if ( found == true )
+    {
+        ctrl.monitored_hostname_list.remove(hostname) ;
+        ctrl.monitored_hosts = (unsigned short)ctrl.monitored_hostname_list.size();
+
+        /* Manage storage-0 state. */
+        if ( hostname.compare(STORAGE_0) == 0 )
+                cluster_storage0_state ( false );
+
+        /* If we get down to 0 monitored hosts then just start fresh */
+        if (( ctrl.monitored_hosts ) == 0 )
+                hbs_cluster_init ( ctrl.cluster.period_msec, NULL );
+
+        ilog ("%s deleted from cluster", hostname.c_str());
+
+        cluster_list ();
+
+        hbs_cluster_change ( hostname + " deleted" );
+    }
+    else
+    {
+        slog("%s not found in cluster list", hostname.c_str());
     }
 }
 
@@ -371,7 +375,7 @@ void hbs_cluster_period_start ( void )
  *               4. Maintain a back to back non-responding count for storage-0.
  *                  Once the count reaches the minimum threshold of
  *                  STORAGE_0_NR_THRESHOLD then the specific network history
- *                  is updated to indicate storgae-0 is not responding. Once
+ *                  is updated to indicate storage-0 is not responding. Once
  *                  storage-0 starts responding again with a single response
  *                  then that network history is updated to indicate storage-0
  *                  is responding.
@@ -389,7 +393,8 @@ void hbs_cluster_period_start ( void )
 
 void hbs_cluster_update ( iface_enum iface,
                       unsigned short not_responding_hosts,
-                                bool storage_0_responding )
+                                bool storage_0_responding,
+                                bool sm_heartbeat_ok)
 {
     if ( ctrl.monitored_hosts == 0 )
         return ;
@@ -406,6 +411,11 @@ void hbs_cluster_update ( iface_enum iface,
 #endif
     else
         return ;
+
+    if ( ctrl.monitored_hosts < not_responding_hosts )
+    {
+        slog("Monitored Hosts of %d is less than the number of Not Responding hosts %d" , ctrl.monitored_hosts, not_responding_hosts );
+    }
 
     if ( not_responding_hosts )
     {
@@ -454,13 +464,23 @@ void hbs_cluster_update ( iface_enum iface,
         }
     }
 
+    /* update sm heartbeat status */
+    if ( sm_heartbeat_ok == true )
+    {
+        history_ptr->sm_heartbeat_fail = false ;
+    }
+    else
+    {
+        history_ptr->sm_heartbeat_fail = true ;
+    }
+
     /* Manage storage-0 status. */
     if ( ctrl.cluster.storage0_enabled )
     {
         /* Handle storage-0 status change from not responding to responding. */
         if ( storage_0_responding == true )
         {
-            if (history_ptr->storage0_responding == false)
+            if ((bool)history_ptr->storage0_responding == false)
             {
                 history_ptr->storage0_responding = true ;
                 ilog ("controller-%d %s heartbeat ; storage-0 is ok",
@@ -483,7 +503,7 @@ void hbs_cluster_update ( iface_enum iface,
         }
 
         /* Handle storage-0 status change from responding to not responding. */
-        if (( history_ptr->storage0_responding == true ) &&
+        if (( (bool)history_ptr->storage0_responding == true ) &&
             ( ctrl.storage_0_not_responding_count[n] >= STORAGE_0_NR_THRESHOLD ))
         {
             history_ptr->storage0_responding = false ;
@@ -495,7 +515,7 @@ void hbs_cluster_update ( iface_enum iface,
     else
     {
         /* Typical path for storage-0 disabled or normal non-storage system case */
-        if ( history_ptr->storage0_responding == true )
+        if ( (bool)history_ptr->storage0_responding == true )
             history_ptr->storage0_responding = false ;
 
         /* Handle clearing threshold count when storage-0 is not enabled. */
@@ -507,6 +527,10 @@ void hbs_cluster_update ( iface_enum iface,
     if ( history_ptr->entries < MTCE_HBS_HISTORY_ENTRIES )
         history_ptr->entries++ ;
 
+    if ( ctrl.monitored_hosts < not_responding_hosts )
+    {
+        slog("Monitored Hosts of %d is less than the number of Not Responding hosts %d" , ctrl.monitored_hosts, not_responding_hosts );
+    }
     /* Update the history with this data. */
     history_ptr->entry[history_ptr->oldest_entry_index].hosts_enabled = ctrl.monitored_hosts ;
     history_ptr->entry[history_ptr->oldest_entry_index].hosts_responding = ctrl.monitored_hosts - not_responding_hosts ;

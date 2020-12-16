@@ -26,20 +26,20 @@ unsigned long long  gettime_monotonic_nsec ( void )
 {
     struct timespec ts;
     clock_gettime (CLOCK_MONOTONIC, &ts);
-    return ((unsigned long long) ts.tv_sec) * 1000000000ULL + ts.tv_nsec; 
+    return ((unsigned long long) ts.tv_sec) * 1000000000ULL + ts.tv_nsec;
 }
-    
+
 int timedelta ( time_debug_type & before , time_debug_type & after, time_delta_type & delta )
-{ 
+{
     /* Subtract before from after */
 
     if ((after.ts.tv_sec < before.ts.tv_sec) ||
         ((after.ts.tv_sec == before.ts.tv_sec) &&
-         (after.ts.tv_nsec <= before.ts.tv_nsec))) 
+         (after.ts.tv_nsec <= before.ts.tv_nsec)))
     {
         delta.secs = delta.msecs = 1 ;
-    } 
-    else 
+    }
+    else
     {
         delta.secs = after.ts.tv_sec - before.ts.tv_sec ;
         if (after.ts.tv_nsec < before.ts.tv_nsec)
@@ -51,7 +51,34 @@ int timedelta ( time_debug_type & before , time_debug_type & after, time_delta_t
         {
             delta.msecs = after.ts.tv_nsec - before.ts.tv_nsec ;
         }
-        delta.msecs = (delta.msecs/1000);
+        /* convert nsec time to msec time */
+        delta.msecs = (delta.msecs/1000000);
+    }
+    return (PASS) ;
+}
+
+int timedelta ( struct timespec & before , struct timespec & after, time_delta_type & delta )
+{
+    /* Subtract before from after */
+
+    if ((after.tv_sec < before.tv_sec) || ((after.tv_sec == before.tv_sec) && (after.tv_nsec <= before.tv_nsec)))
+    {
+        delta.secs = delta.msecs = 0 ;
+    }
+    else
+    {
+        delta.secs = after.tv_sec - before.tv_sec ;
+        if (after.tv_nsec < before.tv_nsec)
+        {
+            delta.msecs = after.tv_nsec + 1000000000L - before.tv_nsec ;
+            delta.secs-- ;
+        }
+        else
+        {
+            delta.msecs = after.tv_nsec - before.tv_nsec ;
+        }
+        /* convert nsec time to msec time */
+        delta.msecs = (delta.msecs/1000000);
     }
     return (PASS) ;
 }
