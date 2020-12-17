@@ -56,21 +56,72 @@ int nodeLinkClass::bmc_command_send ( struct nodeLinkClass::node * node_ptr,
 
     if ( node_ptr->bmc_thread_info.proto == BMC_PROTOCOL__REDFISHTOOL )
     {
+        node_ptr->bm_cmd = REDFISHTOOL_POWER_RESET_CMD ;
+
         /* build the reset/power control command */
         switch (command)
         {
             case BMC_THREAD_CMD__POWER_RESET:
-                node_ptr->bm_cmd = REDFISHTOOL_POWER_RESET_CMD ;
-                node_ptr->bm_cmd.append(node_ptr->bmc_info.reset_action_list.front());
+            {
+                /* use immediate for all retries if server supports an immediate command */
+                if ( ( node_ptr->power_action_retries < MTC_RESET_ACTION_RETRY_COUNT ) && ( ! node_ptr->bmc_info.power_ctrl.reset.immediate.empty() ))
+                    node_ptr->bm_cmd.append(node_ptr->bmc_info.power_ctrl.reset.immediate);
+
+                /* unfaulted graceful if it exists */
+                else if ( ! node_ptr->bmc_info.power_ctrl.reset.graceful.empty() )
+                    node_ptr->bm_cmd.append(node_ptr->bmc_info.power_ctrl.reset.graceful);
+
+                /* unfaulted immediate if graceful does not exist */
+                else if ( ! node_ptr->bmc_info.power_ctrl.reset.immediate.empty())
+                    node_ptr->bm_cmd.append(node_ptr->bmc_info.power_ctrl.reset.immediate);
+                else
+                {
+                    elog("%s offers no supported reset commands", node_ptr->hostname.c_str());
+                    return(FAIL_NOT_SUPPORTED);
+                }
                 break ;
+            }
             case BMC_THREAD_CMD__POWER_ON:
-                node_ptr->bm_cmd = REDFISHTOOL_POWER_RESET_CMD ;
-                node_ptr->bm_cmd.append(node_ptr->bmc_info.power_on_action_list.front());
+            {
+                /* use immediate for all retries if server supports an immediate command */
+                if ( ( node_ptr->power_action_retries < MTC_RESET_ACTION_RETRY_COUNT) && ( ! node_ptr->bmc_info.power_ctrl.poweron.immediate.empty() ))
+                    node_ptr->bm_cmd.append(node_ptr->bmc_info.power_ctrl.poweron.immediate);
+
+                /* unfaulted graceful if it exists */
+                else if ( ! node_ptr->bmc_info.power_ctrl.poweron.graceful.empty() )
+                    node_ptr->bm_cmd.append(node_ptr->bmc_info.power_ctrl.poweron.graceful);
+
+                /* unfaulted immediate if graceful does not exist */
+                else if ( ! node_ptr->bmc_info.power_ctrl.poweron.immediate.empty())
+                    node_ptr->bm_cmd.append(node_ptr->bmc_info.power_ctrl.poweron.immediate);
+
+                else
+                {
+                    elog("%s offers no supported poweron commands", node_ptr->hostname.c_str());
+                    return(FAIL_NOT_SUPPORTED);
+                }
                 break ;
+            }
             case BMC_THREAD_CMD__POWER_OFF:
-                node_ptr->bm_cmd = REDFISHTOOL_POWER_RESET_CMD ;
-                node_ptr->bm_cmd.append(node_ptr->bmc_info.power_off_action_list.front());
+            {
+                /* use immediate for all retries if server supports an immediate command */
+                if ( ( node_ptr->power_action_retries < MTC_RESET_ACTION_RETRY_COUNT ) && ( ! node_ptr->bmc_info.power_ctrl.poweroff.immediate.empty() ))
+                    node_ptr->bm_cmd.append(node_ptr->bmc_info.power_ctrl.poweroff.immediate);
+
+                /* unfaulted graceful if it exists */
+                else if ( ! node_ptr->bmc_info.power_ctrl.poweroff.graceful.empty() )
+                    node_ptr->bm_cmd.append(node_ptr->bmc_info.power_ctrl.poweroff.graceful);
+
+                /* unfaulted immediate if graceful does not exist */
+                else if ( ! node_ptr->bmc_info.power_ctrl.poweroff.immediate.empty())
+                    node_ptr->bm_cmd.append(node_ptr->bmc_info.power_ctrl.poweroff.immediate);
+                else
+                {
+                    elog("%s offers no supported poweroff commands", node_ptr->hostname.c_str());
+                    return(FAIL_NOT_SUPPORTED);
+                }
                 break ;
+            }
         }
         node_ptr->thread_extra_info.bm_cmd  = node_ptr->bm_cmd  ;
     }
@@ -145,10 +196,11 @@ int nodeLinkClass::bmc_command_send ( struct nodeLinkClass::node * node_ptr,
         }
         else
         {
-            blog ("%s %s thread launched with the '%s' command\n",
+            ilog ("%s %s send '%s' command (%s)",
                       node_ptr->hostname.c_str(),
                       node_ptr->bmc_thread_ctrl.name.c_str(),
-                      bmcUtil_getCmd_str(node_ptr->bmc_thread_info.command).c_str());
+                      bmcUtil_getCmd_str(node_ptr->bmc_thread_info.command).c_str(),
+                      bmcUtil_getProtocol_str(node_ptr->bmc_protocol).c_str());
         }
         node_ptr->bmc_thread_ctrl.retries = 0 ;
     }
@@ -319,6 +371,16 @@ int nodeLinkClass::bmc_command_recv ( struct nodeLinkClass::node * node_ptr )
             {
                 want_fit = true ;
             }
+            else if (( node_ptr->bmc_thread_info.command == BMC_THREAD_CMD__POWER_STATUS ) &&
+                     ( daemon_want_fit ( fit, node_ptr->hostname, "power_status" ) == true ))
+            {
+                want_fit = true ;
+            }
+            else if (( node_ptr->bmc_thread_info.command == BMC_THREAD_CMD__BOOTDEV_PXE ) &&
+                     ( daemon_want_fit ( fit, node_ptr->hostname, "netboot_pxe" ) == true ))
+            {
+                want_fit = true ;
+            }
 
             if ( want_fit == true )
             {
@@ -350,20 +412,15 @@ int nodeLinkClass::bmc_command_recv ( struct nodeLinkClass::node * node_ptr )
     {
         if ( node_ptr->bmc_thread_ctrl.id == 0 )
         {
-            /* don't log a warning for redfish query failures. */
-            if (( node_ptr->bmc_thread_info.command != BMC_THREAD_CMD__BMC_QUERY ) &&
-                ( node_ptr->bmc_thread_info.command != BMC_THREAD_CMD__BMC_INFO ))
-            {
-                wlog ("%s %s command not-running\n",
-                          node_ptr->hostname.c_str(),
-                          bmcUtil_getCmd_str(node_ptr->bmc_thread_info.command).c_str());
-            }
+            wlog ("%s %s command not-running\n",
+                      node_ptr->hostname.c_str(),
+                      bmcUtil_getCmd_str(node_ptr->bmc_thread_info.command).c_str());
             rc = FAIL_NOT_ACTIVE ;
         }
         else
         {
             /* The BMC is sometimes slow,
-             * No need to log till we reach lalf of the retry threshold */
+             * No need to log till we reach half of the retry threshold */
             if ( node_ptr->bmc_thread_ctrl.retries > (BMC__MAX_RECV_RETRIES/2) )
             {
                 ilog ("%s %s command in-progress (polling %d of %d)\n",

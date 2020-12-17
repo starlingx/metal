@@ -263,6 +263,7 @@ kmod-i40e
 kmod-iavf
 kmod-ixgbe
 kmod-ixgbevf
+kmod-igb_uio
 kmod-tpm
 kmod-integrity
 kmod-opae-fpga-driver
@@ -270,6 +271,7 @@ mlnx-ofa_kernel-modules
 qat17
 kernel-tools
 kernel-tools-libs
+kernel-modules-extra
 NaviCLI-Linux-64-x86-en_US
 kmod-drbd-rt
 snmp-audittrail
@@ -299,3 +301,6 @@ oidcauthtools
 stx-oidc-auth-helm
 stx-cert-manager-helm
 stx-nginx-ingress-controller-helm
+stx-portieris-helm
+stx-vault-helm
+k8s-pod-recovery

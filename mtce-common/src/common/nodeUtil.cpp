@@ -1835,33 +1835,69 @@ int execute_pipe_cmd(const char *command, char *result, unsigned int result_size
 #define PIPE_COMMAND_RESPON_LEN (100)
 #endif
 
-system_state_enum get_system_state ( void )
+const char * get_system_state_str ( system_state_enum system_state )
 {
-    char pipe_cmd_output [PIPE_COMMAND_RESPON_LEN] ;
-    execute_pipe_cmd ( "systemctl is-system-running", &pipe_cmd_output[0], PIPE_COMMAND_RESPON_LEN );
-    if ( strnlen ( pipe_cmd_output, PIPE_COMMAND_RESPON_LEN ) > 0 )
+    switch(system_state)
     {
-        ilog ("systemctl reports host as '%s'\n", pipe_cmd_output );
-        string temp = pipe_cmd_output ;
-        if ( temp.find ("stopping") != string::npos )
-            return MTC_SYSTEM_STATE__STOPPING;
-        if ( temp.find ("running") != string::npos )
-            return MTC_SYSTEM_STATE__RUNNING;
-        if ( temp.find ("degraded") != string::npos )
-            return MTC_SYSTEM_STATE__DEGRADED;
-        if ( temp.find ("starting") != string::npos )
-            return MTC_SYSTEM_STATE__STARTING;
-        if ( temp.find ("initializing") != string::npos )
-            return MTC_SYSTEM_STATE__INITIALIZING;
-        if ( temp.find ("offline") != string::npos )
-            return MTC_SYSTEM_STATE__OFFLINE;
-        if ( temp.find ("maintenance") != string::npos )
-            return MTC_SYSTEM_STATE__MAINTENANCE;
-        slog ("unexpected response: <%s>\n", temp.c_str());
+        case MTC_SYSTEM_STATE__RUNNING:      return("running");
+        case MTC_SYSTEM_STATE__STOPPING:     return("stopping");
+        case MTC_SYSTEM_STATE__STARTING:     return("starting");
+        case MTC_SYSTEM_STATE__DEGRADED:     return("degraded");
+        case MTC_SYSTEM_STATE__INITIALIZING: return("initializing");
+        case MTC_SYSTEM_STATE__OFFLINE:      return("offline");
+        case MTC_SYSTEM_STATE__MAINTENANCE:  return("maintenance");
+        default:                             return("unknown");
     }
-    else
+}
+
+system_state_enum get_system_state ( bool verbose )
+{
+
+    int retry = 0 ;
+    bool unexpected_response = false ;
+    string temp = "" ;
+    system_state_enum system_state = MTC_SYSTEM_STATE__UNKNOWN ;
+    for ( ; retry < 3 ; retry++ )
     {
-        wlog ("systemctl is-system-running yielded no response\n");
+        char pipe_cmd_output [PIPE_COMMAND_RESPON_LEN] ;
+        execute_pipe_cmd ( "systemctl is-system-running",
+               &pipe_cmd_output[0], PIPE_COMMAND_RESPON_LEN );
+        if ( strnlen ( pipe_cmd_output, PIPE_COMMAND_RESPON_LEN ) > 0 )
+        {
+            temp = pipe_cmd_output ;
+            if ( temp.find ("stopping") != string::npos )
+                system_state = MTC_SYSTEM_STATE__STOPPING;
+            else if ( temp.find ("running") != string::npos )
+                system_state = MTC_SYSTEM_STATE__RUNNING;
+            else if ( temp.find ("degraded") != string::npos )
+                system_state = MTC_SYSTEM_STATE__DEGRADED;
+            else if ( temp.find ("starting") != string::npos )
+                system_state = MTC_SYSTEM_STATE__STARTING;
+            else if ( temp.find ("initializing") != string::npos )
+                system_state = MTC_SYSTEM_STATE__INITIALIZING;
+            else if ( temp.find ("offline") != string::npos )
+                system_state = MTC_SYSTEM_STATE__OFFLINE;
+            else if ( temp.find ("maintenance") != string::npos )
+                system_state = MTC_SYSTEM_STATE__MAINTENANCE;
+            else
+                unexpected_response = true ;
+        }
+
+        if ( system_state != MTC_SYSTEM_STATE__UNKNOWN )
+            break ;
     }
-    return MTC_SYSTEM_STATE__UNKNOWN ;
+
+    if ( verbose || unexpected_response )
+    {
+        if ( unexpected_response )
+        {
+            ilog ("systemctl provided unexpected response:'%s'", temp.c_str());
+        }
+        else
+        {
+            ilog ("systemctl reports host in '%s' state (%d)",
+                   get_system_state_str(system_state), retry);
+        }
+    }
+    return system_state ;
 }

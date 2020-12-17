@@ -29,6 +29,19 @@ using namespace std;
 #define BMC_PROTOCOL__IPMITOOL_STR    ((const char *)("ipmitool"))
 #define BMC_PROTOCOL__REDFISHTOOL_STR ((const char *)("redfishtool"))
 
+/* learned graceful and immediate power control command strings */
+typedef struct
+{
+    string graceful   ;
+    string immediate  ;
+} bmc_power_ctrl_type ;
+
+typedef struct
+{
+    bmc_power_ctrl_type reset    ;
+    bmc_power_ctrl_type poweron  ;
+    bmc_power_ctrl_type poweroff ;
+} bmc_power_ctrl_cmds_type ;
 
 /* important BMC query info to log and track */
 typedef struct
@@ -57,10 +70,8 @@ typedef struct
     std::string mn       ;
     std::string sn       ;
 
-    /* actions */
-    std::list<string> reset_action_list ;
-    std::list<string> power_on_action_list ;
-    std::list<string> power_off_action_list ;
+    /* Used to store bmc power commands and severity levels */
+    bmc_power_ctrl_cmds_type power_ctrl ;
 
     /* state info */
     std::string  restart_cause     ;

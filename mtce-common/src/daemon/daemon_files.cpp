@@ -183,32 +183,27 @@ int daemon_get_file_int ( const char * filename )
 /* reads the first line of a file and returns it as a string */
 string daemon_get_file_str ( const char * filename )
 {
-    string  value = "null" ;
+    string  value = "" ;
     FILE * __stream = fopen ( filename, "r" );
     if ( __stream != NULL )
     {
-        int rc ;
-
         char   buffer     [MAX_CHARS_ON_LINE];
-        char   data       [MAX_CHARS_ON_LINE];
         memset(buffer, 0 , MAX_CHARS_ON_LINE);
-        memset(data, 0 ,   MAX_CHARS_ON_LINE);
         if ( fgets (buffer,MAX_CHARS_ON_LINE, __stream) != NULL )
         {
-            rc = sscanf ( &buffer[0], "%s", &data[0] );
-            if ( rc >= 1 )
+            int len = strlen(buffer) ;
+            if ( len )
             {
-                value = data ;
-                dlog ("%s contains '%s'\n", filename, value.c_str());
+                /* strip of a newline if that's the last character */
+                if ( buffer[len-1] == '\n' )
+                    buffer[len-1] = '\0' ;
+                value = buffer ;
+                dlog("'%s' read from %s", value.c_str(), filename);
             }
             else
             {
-                wlog ("failed to sscanf string from file:%s\n", filename );
+                wlog("no string data in %s", filename);
             }
-        }
-        else
-        {
-            wlog ("failed to read string from file:%s\n", filename );
         }
         fclose(__stream);
     }

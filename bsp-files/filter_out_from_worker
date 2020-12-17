@@ -254,11 +254,13 @@ python-django-horizon
 kernel-rt
 kernel-module-igb-uio-rt
 kernel-rt-kvm
+kernel-rt-modules-extra
 kmod-e1000e-rt
 kmod-i40e-rt
 kmod-iavf-rt
 kmod-ixgbe-rt
 kmod-ixgbevf-rt
+kmod-igb_uio-rt
 kmod-tpm-rt
 kmod-integrity-rt
 kmod-opae-fpga-driver-rt
@@ -298,3 +300,6 @@ oidcauthtools
 stx-oidc-auth-helm
 stx-cert-manager-helm
 stx-nginx-ingress-controller-helm
+stx-portieris-helm
+stx-vault-helm
+k8s-pod-recovery

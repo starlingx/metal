@@ -1,6 +1,6 @@
 COPY_LIST="pxe-network-installer/* \
            $GIT_BASE/bsp-files/grub.cfg \
-           $SRC_BASE/cgcs-centos-repo/Binary/images/efiboot.img \
+           $DISTRO_REPO_BASE/Binary/images/efiboot.img \
            /import/mirrors/CentOS/stx-installer/initrd.img \
            /import/mirrors/CentOS/stx-installer/squashfs.img \
            /import/mirrors/CentOS/stx-installer/vmlinuz \

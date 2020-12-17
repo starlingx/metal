@@ -197,10 +197,12 @@ void bmcUtil_info_init ( bmc_info_type & bmc_info )
     bmc_info.power_on = false ;
     bmc_info.restart_cause.clear() ;
 
-    /* clear the supported actions lists */
-    bmc_info.reset_action_list.clear();
-    bmc_info.power_on_action_list.clear();
-    bmc_info.power_off_action_list.clear();
+    bmc_info.power_ctrl.reset.graceful     = "" ;
+    bmc_info.power_ctrl.reset.immediate    = "" ;
+    bmc_info.power_ctrl.poweron.graceful   = "" ;
+    bmc_info.power_ctrl.poweron.immediate  = "" ;
+    bmc_info.power_ctrl.poweroff.graceful  = "" ;
+    bmc_info.power_ctrl.poweroff.immediate = "" ;
 }
 
 /*************************************************************************

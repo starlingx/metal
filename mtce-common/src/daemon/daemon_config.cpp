@@ -49,6 +49,9 @@ void daemon_config_default ( daemon_config_type* config_ptr )
     config_ptr->multicast             = strdup("none");
     config_ptr->barbican_api_host     = strdup("none");
 
+    config_ptr->hostwd_kdump_on_stall = 0 ;
+    config_ptr->bmc_audit_period      = 0 ;
+
     config_ptr->debug_all    = 0 ;
     config_ptr->debug_json   = 0 ;
     config_ptr->debug_timer  = 0 ;
@@ -191,6 +194,18 @@ int timeout_config_handler (       void * user,
     {
         config_ptr->dor_recovery_timeout_ext = atoi(value);
         ilog ("DOR Time Ext: %3d secs\n", config_ptr->dor_recovery_timeout_ext );
+    }
+    else if (MATCH("timeouts", "bmc_audit_period"))
+    {
+        config_ptr->bmc_audit_period = atoi(value);
+        if ( config_ptr->bmc_audit_period )
+        {
+            ilog ("BMC Audit   : %3d secs", config_ptr->bmc_audit_period );
+        }
+        else
+        {
+            ilog ("BMC Audit   : disabled");
+        }
     }
 
     return (PASS);

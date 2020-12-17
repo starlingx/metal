@@ -202,7 +202,7 @@ void nodeLinkClass::mnfa_enter ( void )
      wlog ("MNFA ENTER --> Entering Multi-Node Failure Avoidance\n");
      mtcAlarm_log ( active_controller_hostname , MTC_LOG_ID__EVENT_MNFA_ENTER );
      mnfa_active = true ;
-
+     mnfa_backoff = true ;
      send_hbs_command ( my_hostname, MTC_BACKOFF_HBS );
 
      /* Handle the case where we are already trying to recover from a
@@ -236,6 +236,10 @@ void nodeLinkClass::mnfa_enter ( void )
      {
          wlog ("MNFA Auto-Recovery in %d seconds\n",       this->mnfa_timeout);
          mtcTimer_start ( mtcTimer_mnfa, mtcTimer_handler, this->mnfa_timeout);
+     }
+     else
+     {
+         this->mtcTimer_mnfa.ring = false ;
      }
      log_mnfa_pool ( mnfa_awol_list );
 }
@@ -342,11 +346,6 @@ void nodeLinkClass::mnfa_exit ( bool force )
         /* Start the timer that will eventually send the MTC_RECOVER_HBS command */
         mtcTimer_start ( mtcTimer_mnfa, mtcTimer_handler, MTC_MNFA_RECOVERY_TIMER );
     }
-    else
-    {
-        send_hbs_command ( my_hostname, MTC_RECOVER_HBS );
-    }
-
     mnfa_host_count[MGMNT_IFACE] = 0 ;
     mnfa_host_count[CLSTR_IFACE] = 0 ;
     mnfa_awol_list.clear();
@@ -391,4 +390,56 @@ void nodeLinkClass::mnfa_cancel ( void )
         this->mnfa_active = false ;
     }
     mnfa_awol_list.clear();
+}
+
+/**************************************************************************
+ *
+ * Name       : mnfa_recovery_handler
+ *
+ * Purpose    : Handle recovery from mnfa
+ *
+ * Description: This handler is called from the main loop to handle
+ *              exiting MNFA and scheduling a timer to send the recover
+ *              command to hbsAgent at base level.
+ *
+ * Assumptions: Need to send the recover command to hbsAgent at base level.
+ *
+ *              If mnfa is timer driven ( mnfa_timeout != 0 ) then exit
+ *              from mnfa happens within the mnfa timer handler which
+ *              should not be sending messages.
+ *
+ **************************************************************************/
+
+void nodeLinkClass::mnfa_recovery_handler ( string & hostname )
+{
+    /* if the multi-Node-Failure Avoidance timer rang
+     * then run the recovery handler */
+    if ( this->mtcTimer_mnfa.ring == true )
+    {
+        /* rang due to mnfa_timeout */
+        if ( this->mnfa_active == true )
+        {
+            mtcTimer_mnfa.ring = false ;
+            mnfa_exit ( true );
+        }
+        /* rang due to 3 second recovery timer set in mnfa_exit */
+        else if ( this->mnfa_backoff == true )
+        {
+            ilog("%s heartbeat backoff recovery", hostname.c_str())
+            if ( send_hbs_command ( my_hostname, MTC_RECOVER_HBS ) == PASS )
+            {
+                this->mnfa_backoff = false ;
+            }
+            else
+            {
+                int retry_timeout = MTC_SECS_30 ;
+
+                /* in the case of a send failure, to avoid log flooding,
+                 * start the timer again in 30 seconds */
+                mtcTimer_start ( mtcTimer_mnfa, mtcTimer_handler, retry_timeout );
+                ilog("%s heartbeat backoff recovery command send failed, retrying in %d secs",
+                         hostname.c_str(), retry_timeout);
+            }
+        }
+    }
 }

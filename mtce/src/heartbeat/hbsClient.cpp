@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016 Wind River Systems, Inc.
+ * Copyright (c) 2013-2020 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -437,8 +437,11 @@ int daemon_configure ( void )
         {
             if (strcmp(hbs_config.clstr_iface, hbs_config.mgmnt_iface))
             {
-                clstr_network_provisioned = true ;
-                ilog ("Cluster-host Name  : %s\n", hbs_config.clstr_iface );
+                if (strcmp(hbs_config.clstr_iface, LOOPBACK_IF))
+                {
+                    clstr_network_provisioned = true ;
+                    ilog ("Cluster-host Name  : %s\n", hbs_config.clstr_iface );
+                }
             }
         }
         if ( clstr_network_provisioned == true )
@@ -476,51 +479,95 @@ int _setup_pulse_messaging ( iface_enum i, int rmem )
     /* client sockets are not modified */
     UNUSED(rmem);
 
-    /* Load up the interface name */
-    if ( i == MGMNT_IFACE )
-    {
-        iface = hbs_config.mgmnt_iface ;
-    }
-    else if (( i == CLSTR_IFACE ) && ( hbs_config.clstr_iface != NULL ))
-    {
-        iface = hbs_config.clstr_iface ;
-    }
-    else
-    {
-        wlog ("No Cluster-host Interface\n");
-        return (RETRY);
-    }
-
     _close_pulse_rx_sock (i);
     _close_pulse_tx_sock (i);
 
     /********************************************************************/
     /* Setup multicast Pulse Request Receive Socket                     */
     /********************************************************************/
-
-    hbs_sock.rx_sock[i] =
-    new msgClassRx(hbs_config.multicast,hbs_sock.rx_port[i],IPPROTO_UDP,iface,true,true);
-    if (hbs_sock.rx_sock[i]->return_status != PASS)
+    /* Load up the interface name */
+    if ( i == MGMNT_IFACE )
     {
-        elog("Cannot create socket (%d) (%d:%m)\n", i, errno );
-        _close_pulse_rx_sock (i);
+        iface = hbs_config.mgmnt_iface ;
+        if (strcmp(iface, LOOPBACK_IF))
+        {
+            hbs_sock.rx_sock[i] =
+                new msgClassRx(hbs_config.multicast,hbs_sock.rx_port[i],IPPROTO_UDP,iface,true,true);
+        }
+        else
+        {
+            // Default to unicast heartbeat on management 'lo' interface
+            hbs_sock.rx_sock[i] =
+                new msgClassRx(my_address.data(),hbs_sock.rx_port[i],IPPROTO_UDP,iface,false, false);
+        }
+
+    }
+    else if (( i == CLSTR_IFACE ) &&
+             ( clstr_network_provisioned == true ) &&
+             ( hbs_config.clstr_iface != NULL ))
+    {
+        iface = hbs_config.clstr_iface ;
+        hbs_sock.rx_sock[i] =
+            new msgClassRx(hbs_config.multicast,hbs_sock.rx_port[i],IPPROTO_UDP,iface,true,true);
+    }
+    else
+    {
+        ilog("Cluster host interface not used.");
+        return (PASS);
+    }
+
+    if ( hbs_sock.rx_sock[i] )
+    {
+        if (hbs_sock.rx_sock[i]->return_status != PASS)
+        {
+            elog("Failed to create %s pulse receiver socket (%d:%d:%m)\n",
+                  get_iface_name_str(i),
+                  hbs_sock.rx_sock[i]->return_status,
+                  errno );
+            _close_pulse_rx_sock (i);
+            return (FAIL_SOCKET_CREATE);
+        }
+        if ( hbs_sock.rx_sock[i]->setSocketNonBlocking () != PASS )
+        {
+            wlog("Failed to set %s pulse receiver socket to non-blocking",
+                  get_iface_name_str(i));
+            return(FAIL_SOCKET_NOBLOCK);
+        }
+        hbs_sock.rx_sock[i]->sock_ok(true);
+    }
+    else
+    {
+        elog("Failed to create %s pulse receiver socket (%d:%m)\n",
+              get_iface_name_str(i), errno );
         return (FAIL_SOCKET_CREATE);
     }
-    hbs_sock.rx_sock[i]->sock_ok(true);
 
+    /********************************************************************/
     /* Setup unicast transmit (reply) socket */
+    /********************************************************************/
     hbs_sock.tx_sock[i] =
     new msgClassTx(hbs_config.multicast,hbs_sock.tx_port[i],IPPROTO_UDP, iface);
+    if ( hbs_sock.tx_sock[i] == NULL )
+    {
+        elog("Failed to create %s pulse reply socket (%d:%m)\n",
+              get_iface_name_str(i), errno );
+        return (FAIL_SOCKET_CREATE);
+    }
     if (hbs_sock.tx_sock[i]->return_status != PASS)
     {
-        elog("Cannot create unicast transmit socket (%d) (%d:%m)\n", i, errno );
+        elog("Failed to create %s pulse reply socket (%d:%d:%m)\n",
+              get_iface_name_str(i),
+              hbs_sock.tx_sock[i]->return_status,
+              errno );
         _close_pulse_tx_sock(i);
         return (FAIL_SOCKET_CREATE);
     }
-    hbs_sock.tx_sock[i]->sock_ok(true);
 
     /* set this tx socket interface with priority class messaging */
-    hbs_sock.tx_sock[i]->setPriortyMessaging( iface );
+    rc = hbs_sock.tx_sock[i]->setPriortyMessaging( iface );
+
+    if ( rc == PASS )
+        hbs_sock.tx_sock[i]->sock_ok(true);
 
     return (rc);
 }
@@ -596,6 +643,12 @@ int hbs_socket_init ( void )
 
     hbs_sock.pmon_pulse_sock = new msgClassRx(LOOPBACK_IP,hbs_config.pmon_pulse_port,IPPROTO_UDP);
     if ( rc ) return (rc) ;
+    if ( hbs_sock.pmon_pulse_sock->setSocketNonBlocking () != PASS )
+    {
+        wlog("Failed to set pmon im-alive receiver socket to non-blocking");
+        return (FAIL_SOCKET_NOBLOCK);
+    }
+
     hbs_sock.pmon_pulse_sock->sock_ok(true);
 
     /***************************************************
@@ -1234,7 +1287,7 @@ int daemon_init ( string iface, string nodeType_str )
     }
 
     /* Setup the heartbeat service messaging sockets */
-    else if ( hbs_socket_init () != PASS )
+    else if (( rc = hbs_socket_init ()) != PASS )
     {
         elog ("socket initialization failed (rc:%d)\n", rc );
         rc = FAIL_SOCKET_INIT;
@@ -1242,24 +1295,10 @@ int daemon_init ( string iface, string nodeType_str )
     return (rc);
 }
 
-#define SPACE ' '
-#define ARROW '<'
-
 int stall_threshold_log = 0 ;
 int stall_times_threshold_log = 0 ;
 void daemon_service_run ( void )
 {
-#ifdef WANT_DAEMON_DEBUG
-    time_debug_type before ;
-    time_debug_type after  ;
-    time_delta_type delta  ;
-    time_delta_type select_delta ;
-    char arrow = SPACE ;
-    char str [MAX_LEN] ;
-    int  num        = 0 ;
-    int  flush_thld = 0 ;
-#endif
-
     bool stall_monitor_ready       = false ;
 
     unsigned int flags  = 0 ;
@@ -1331,22 +1370,6 @@ void daemon_service_run ( void )
         hbs_sock.waitd.tv_sec = 0;
         hbs_sock.waitd.tv_usec = SOCKET_WAIT;
 
-#ifdef WANT_DAEMON_DEBUG
-        if ( hbs_config.flush_thld != 0 )
-        {
-            if ( debug_level ( DEBUG_MEM_LOG ) )
-            {
-                gettime (before);
-            }
-        }
-
-        /* Initialize the timeval struct  */
-        if ( hbs_config.flush_thld == 0 )
-        {
-            hbs_sock.waitd.tv_usec = hbs_config.testmask ;
-        }
-#endif
-
         /* Initialize the master fd_set */
         FD_ZERO(&hbs_sock.readfds);
         for ( int i = 0 ; i < MAX_IFACES ; i++ )
@@ -1371,12 +1394,6 @@ void daemon_service_run ( void )
         {
             FD_SET(hbs_sock.netlink_sock, &hbs_sock.readfds);
         }
-#ifdef WANT_CLUSTER_DEBUG
-        if ( hbs_sock.sm_client_sock && hbs_sock.sm_client_sock->getFD() )
-        {
-            FD_SET(hbs_sock.sm_client_sock->getFD(), &hbs_sock.readfds);
-        }
-#endif
         rc = select( socks.back()+1,
                      &hbs_sock.readfds, NULL, NULL,
                      &hbs_sock.waitd);
@@ -1399,19 +1416,6 @@ void daemon_service_run ( void )
         /* Only service sockets for the rc > 0 case */
         else if ( rc )
         {
-#ifdef WANT_CLUSTER_DEBUG
-            if ( hbs_sock.sm_client_sock && FD_ISSET(hbs_sock.sm_client_sock->getFD(), &hbs_sock.readfds ) )
-            {
-                mtce_hbs_cluster_type msg ;
-                /* Receive event messages */
-                memset ( &msg , 0, sizeof(mtce_hbs_cluster_type));
-                int bytes = hbs_sock.sm_client_sock->read((char*)&msg, sizeof(mtce_hbs_cluster_type));
-                if ( bytes )
-                {
-                    hbs_cluster_dump (msg );
-                }
-            }
-#endif
             if (hbs_sock.rx_sock[MGMNT_IFACE]&&FD_ISSET(hbs_sock.rx_sock[MGMNT_IFACE]->getFD(), &hbs_sock.readfds))
             {
                 /* Receive pulse request and send a response */
@@ -1647,21 +1651,7 @@ void daemon_service_run ( void )
             hbs_send_event ( MTC_EVENT_MONITOR_READY );
             readyEvent_timer.ring = false ;
         }
-
         daemon_signal_hdlr ();
-
-#ifdef WANT_DAEMON_DEBUG
-        /* Support the log flush config option */
-        if ( hbs_config.flush )
-        {
-            if ( ++flush_thld > hbs_config.flush_thld )
-            {
-                flush_thld = 0 ;
-                fflush (stdout);
-                fflush (stderr);
-            }
-        }
-#endif
     }
     daemon_exit ();
 }

@@ -1,0 +1,12 @@
+[Unit]
+Description=Crash Dump Manager
+After=network.target
+Before=sshd.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=no
+ExecStart=/etc/init.d/crashDumpMgr --max-size 3Gi
+
+[Install]
+WantedBy=multi-user.target

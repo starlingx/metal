@@ -9,6 +9,13 @@ cat <<END_FUNCTIONS >/tmp/ks-functions.sh
 # SPDX-License-Identifier: Apache-2.0
 #
 
+function wlog()
+{
+    [ -z "\$stdout" ] && stdout=1
+    local dt="\$(date "+%Y-%m-%d %H:%M:%S.%3N")"
+    echo "\$dt - \$1" >&\${stdout}
+}
+
 function get_by_path()
 {
     local disk=\$(cd /dev ; readlink -f \$1)
@@ -73,7 +80,7 @@ function get_http_port()
     echo \$(cat /proc/cmdline |xargs -n1 echo |grep '^inst.repo=' | sed -r 's#^[^/]*://[^/]*:([0-9]*)/.*#\1#')
 }
 
-get_disk_dev()
+function get_disk_dev()
 {
     local disk
     # Detect HDD
@@ -95,6 +102,53 @@ get_disk_dev()
             fi
         fi
     done
+}
+
+function exec_no_fds()
+{
+    # Close open FDs when executing commands that complain about leaked FDs.
+    local fds=\$1
+    local cmd=\$2
+    local retries=\$3
+    local interval=\$4
+    local ret_code=0
+    local ret_stdout=""
+    for fd in \$fds
+    do
+        local cmd="\$cmd \$fd>&-"
+    done
+    if [ -z "\$retries" ]; then
+        #wlog "Running command: '\$cmd'."
+        eval "\$cmd"
+    else
+        ret_stdout=\$(exec_retry "\$retries" "\$interval" "\$cmd")
+        ret_code=\$?
+        echo "\${ret_stdout}"
+        return \${ret_code}
+    fi
+}
+
+function exec_retry()
+{
+    local retries=\$1
+    local interval=\$2
+    local cmd=\$3
+    let -i retry_count=1
+    local ret_code=0
+    local ret_stdout=""
+    cmd="\$cmd" # 2>&\$stdout"
+    while [ \$retry_count -le \$retries ]; do
+        #wlog "Running command: '\$cmd'."
+        ret_stdout=\$(eval \$cmd)
+        ret_code=\$?
+        [ \$ret_code -eq 0 ] && break
+        wlog "Error running command '\${cmd}'. Try \${retry_count} of \${retries} at \${interval}s."
+        wlog "ret_code: \${ret_code}, stdout: '\${ret_stdout}'."
+        sleep \$interval
+        let retry_count++
+    done
+    echo "\${ret_stdout}"
+    return \${ret_code}
 }
 
 END_FUNCTIONS

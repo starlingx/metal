@@ -252,6 +252,7 @@ netlink monitoring for provisioned oam, mgmt and cluster-host interfaces.
 %define local_sbindir %{local_dir}/sbin
 %define local_etc_pmond      %{_sysconfdir}/pmon.d
 %define local_etc_goenabledd %{_sysconfdir}/goenabled.d
+%define local_etc_collectd   %{_sysconfdir}/collect.d
 %define local_etc_servicesd  %{_sysconfdir}/services.d
 %define local_etc_logrotated %{_sysconfdir}/logrotate.d
 %define bmc_profilesd        %{_sysconfdir}/bmc/server_profiles.d
@@ -296,13 +297,13 @@ install -m 755 -p -D %{_buildsubdir}/scripts/mtcAgent %{buildroot}/usr/lib/ocf/r
 install -m 755 -p -D %{_buildsubdir}/hwmon/scripts/ocf/hwmon %{buildroot}/usr/lib/ocf/resource.d/platform/hwmon
 
 # config files
-install -m 644 -p -D %{_buildsubdir}/scripts/mtc.ini %{buildroot}%{_sysconfdir}/mtc.ini
-install -m 644 -p -D %{_buildsubdir}/scripts/mtc.conf %{buildroot}%{_sysconfdir}/mtc.conf
-install -m 644 -p -D %{_buildsubdir}/fsmon/scripts/fsmond.conf %{buildroot}%{_sysconfdir}/mtc/fsmond.conf
-install -m 644 -p -D %{_buildsubdir}/hwmon/scripts/hwmond.conf %{buildroot}%{_sysconfdir}/mtc/hwmond.conf
-install -m 644 -p -D %{_buildsubdir}/pmon/scripts/pmond.conf %{buildroot}%{_sysconfdir}/mtc/pmond.conf
-install -m 644 -p -D %{_buildsubdir}/lmon/scripts/lmond.conf %{buildroot}%{_sysconfdir}/mtc/lmond.conf
-install -m 644 -p -D %{_buildsubdir}/hostw/scripts/hostwd.conf %{buildroot}%{_sysconfdir}/mtc/hostwd.conf
+install -m 600 -p -D %{_buildsubdir}/scripts/mtc.ini %{buildroot}%{_sysconfdir}/mtc.ini
+install -m 600 -p -D %{_buildsubdir}/scripts/mtc.conf %{buildroot}%{_sysconfdir}/mtc.conf
+install -m 600 -p -D %{_buildsubdir}/fsmon/scripts/fsmond.conf %{buildroot}%{_sysconfdir}/mtc/fsmond.conf
+install -m 600 -p -D %{_buildsubdir}/hwmon/scripts/hwmond.conf %{buildroot}%{_sysconfdir}/mtc/hwmond.conf
+install -m 600 -p -D %{_buildsubdir}/pmon/scripts/pmond.conf %{buildroot}%{_sysconfdir}/mtc/pmond.conf
+install -m 600 -p -D %{_buildsubdir}/lmon/scripts/lmond.conf %{buildroot}%{_sysconfdir}/mtc/lmond.conf
+install -m 600 -p -D %{_buildsubdir}/hostw/scripts/hostwd.conf %{buildroot}%{_sysconfdir}/mtc/hostwd.conf
 
 install -m 755 -d %{buildroot}/%{_sysconfdir}/etc/bmc/server_profiles.d
 install -m 644 -p -D %{_buildsubdir}/scripts/sensor_hp360_v1_ilo_v4.profile %{buildroot}/%{_sysconfdir}/bmc/server_profiles.d/sensor_hp360_v1_ilo_v4.profile
@@ -310,39 +311,41 @@ install -m 644 -p -D %{_buildsubdir}/scripts/sensor_hp380_v1_ilo_v4.profile %{bu
 install -m 644 -p -D %{_buildsubdir}/scripts/sensor_quanta_v1_ilo_v4.profile %{buildroot}/%{_sysconfdir}/bmc/server_profiles.d/sensor_quanta_v1_ilo_v4.profile
 
 # binaries
-install -m 755 -p -D %{_buildsubdir}/maintenance/mtcAgent %{buildroot}/%{local_bindir}/mtcAgent
-install -m 755 -p -D %{_buildsubdir}/maintenance/mtcClient %{buildroot}/%{local_bindir}/mtcClient
-install -m 755 -p -D %{_buildsubdir}/heartbeat/hbsAgent %{buildroot}/%{local_bindir}/hbsAgent
-install -m 755 -p -D %{_buildsubdir}/heartbeat/hbsClient %{buildroot}/%{local_bindir}/hbsClient
-install -m 755 -p -D %{_buildsubdir}/pmon/pmond %{buildroot}/%{local_bindir}/pmond
-install -m 755 -p -D %{_buildsubdir}/lmon/lmond %{buildroot}/%{local_bindir}/lmond
-install -m 755 -p -D %{_buildsubdir}/hostw/hostwd %{buildroot}/%{local_bindir}/hostwd
-install -m 755 -p -D %{_buildsubdir}/fsmon/fsmond %{buildroot}/%{local_bindir}/fsmond
-install -m 755 -p -D %{_buildsubdir}/hwmon/hwmond %{buildroot}/%{local_bindir}/hwmond
-install -m 755 -p -D %{_buildsubdir}/mtclog/mtclogd %{buildroot}/%{local_bindir}/mtclogd
-install -m 755 -p -D %{_buildsubdir}/alarm/mtcalarmd %{buildroot}/%{local_bindir}/mtcalarmd
-install -m 755 -p -D %{_buildsubdir}/scripts/wipedisk %{buildroot}/%{local_bindir}/wipedisk
-install -m 755 -p -D %{_buildsubdir}/fsync/fsync %{buildroot}/%{_sbindir}/fsync
+install -m 700 -p -D %{_buildsubdir}/maintenance/mtcAgent %{buildroot}/%{local_bindir}/mtcAgent
+install -m 700 -p -D %{_buildsubdir}/maintenance/mtcClient %{buildroot}/%{local_bindir}/mtcClient
+install -m 700 -p -D %{_buildsubdir}/heartbeat/hbsAgent %{buildroot}/%{local_bindir}/hbsAgent
+install -m 700 -p -D %{_buildsubdir}/heartbeat/hbsClient %{buildroot}/%{local_bindir}/hbsClient
+install -m 700 -p -D %{_buildsubdir}/pmon/pmond %{buildroot}/%{local_bindir}/pmond
+install -m 700 -p -D %{_buildsubdir}/lmon/lmond %{buildroot}/%{local_bindir}/lmond
+install -m 700 -p -D %{_buildsubdir}/hostw/hostwd %{buildroot}/%{local_bindir}/hostwd
+install -m 700 -p -D %{_buildsubdir}/fsmon/fsmond %{buildroot}/%{local_bindir}/fsmond
+install -m 700 -p -D %{_buildsubdir}/hwmon/hwmond %{buildroot}/%{local_bindir}/hwmond
+install -m 700 -p -D %{_buildsubdir}/mtclog/mtclogd %{buildroot}/%{local_bindir}/mtclogd
+install -m 700 -p -D %{_buildsubdir}/alarm/mtcalarmd %{buildroot}/%{local_bindir}/mtcalarmd
+install -m 700 -p -D %{_buildsubdir}/scripts/wipedisk %{buildroot}/%{local_bindir}/wipedisk
+install -m 700 -p -D %{_buildsubdir}/fsync/fsync %{buildroot}/%{_sbindir}/fsync
 install -m 700 -p -D %{_buildsubdir}/pmon/scripts/pmon-restart %{buildroot}/%{local_sbindir}/pmon-restart
 install -m 700 -p -D %{_buildsubdir}/pmon/scripts/pmon-start %{buildroot}/%{local_sbindir}/pmon-start
 install -m 700 -p -D %{_buildsubdir}/pmon/scripts/pmon-stop %{buildroot}/%{local_sbindir}/pmon-stop
 
 # init script files
-install -m 755 -p -D %{_buildsubdir}/scripts/mtcClient %{buildroot}%{_sysconfdir}/init.d/mtcClient
-install -m 755 -p -D %{_buildsubdir}/scripts/hbsClient %{buildroot}%{_sysconfdir}/init.d/hbsClient
-install -m 755 -p -D %{_buildsubdir}/hwmon/scripts/lsb/hwmon %{buildroot}%{_sysconfdir}/init.d/hwmon
-install -m 755 -p -D %{_buildsubdir}/fsmon/scripts/fsmon %{buildroot}%{_sysconfdir}/init.d/fsmon
-install -m 755 -p -D %{_buildsubdir}/scripts/mtclog %{buildroot}%{_sysconfdir}/init.d/mtclog
-install -m 755 -p -D %{_buildsubdir}/pmon/scripts/pmon %{buildroot}%{_sysconfdir}/init.d/pmon
-install -m 755 -p -D %{_buildsubdir}/lmon/scripts/lmon %{buildroot}%{_sysconfdir}/init.d/lmon
-install -m 755 -p -D %{_buildsubdir}/hostw/scripts/hostw %{buildroot}%{_sysconfdir}/init.d/hostw
-install -m 755 -p -D %{_buildsubdir}/alarm/scripts/mtcalarm.init %{buildroot}%{_sysconfdir}/init.d/mtcalarm
+install -m 700 -p -D %{_buildsubdir}/scripts/mtcClient %{buildroot}%{_sysconfdir}/init.d/mtcClient
+install -m 700 -p -D %{_buildsubdir}/scripts/hbsClient %{buildroot}%{_sysconfdir}/init.d/hbsClient
+install -m 700 -p -D %{_buildsubdir}/hwmon/scripts/lsb/hwmon %{buildroot}%{_sysconfdir}/init.d/hwmon
+install -m 700 -p -D %{_buildsubdir}/fsmon/scripts/fsmon %{buildroot}%{_sysconfdir}/init.d/fsmon
+install -m 700 -p -D %{_buildsubdir}/scripts/mtclog %{buildroot}%{_sysconfdir}/init.d/mtclog
+install -m 700 -p -D %{_buildsubdir}/pmon/scripts/pmon %{buildroot}%{_sysconfdir}/init.d/pmon
+install -m 700 -p -D %{_buildsubdir}/lmon/scripts/lmon %{buildroot}%{_sysconfdir}/init.d/lmon
+install -m 700 -p -D %{_buildsubdir}/hostw/scripts/hostw %{buildroot}%{_sysconfdir}/init.d/hostw
+install -m 700 -p -D %{_buildsubdir}/alarm/scripts/mtcalarm.init %{buildroot}%{_sysconfdir}/init.d/mtcalarm
 
 # install -m 755 -p -D %{_buildsubdir}/scripts/config %{buildroot}%{_sysconfdir}/init.d/config
 
 # TODO: Init hack. Should move to proper module
 install -m 755 -p -D %{_buildsubdir}/scripts/hwclock.sh %{buildroot}%{_sysconfdir}/init.d/hwclock.sh
 install -m 644 -p -D %{_buildsubdir}/scripts/hwclock.service %{buildroot}%{_unitdir}/hwclock.service
+install -m 755 -p -D %{_buildsubdir}/scripts/crashDumpMgr %{buildroot}%{_sysconfdir}/init.d/crashDumpMgr
+install -m 644 -p -D %{_buildsubdir}/scripts/crashDumpMgr.service %{buildroot}%{_unitdir}/crashDumpMgr.service
 
 # systemd service files
 install -m 644 -p -D %{_buildsubdir}/fsmon/scripts/fsmon.service %{buildroot}%{_unitdir}/fsmon.service
@@ -389,6 +392,7 @@ install -m 644 -p -D %{_buildsubdir}/lmon/scripts/lmon.pmon.conf %{buildroot}%{l
 
 # log rotation
 install -m 755 -d %{buildroot}%{_sysconfdir}/logrotate.d
+install -m 644 -p -D %{_buildsubdir}/scripts/crashdump.logrotate %{buildroot}%{local_etc_logrotated}/crashdump.logrotate
 install -m 644 -p -D %{_buildsubdir}/scripts/mtce.logrotate %{buildroot}%{local_etc_logrotated}/mtce.logrotate
 install -m 644 -p -D %{_buildsubdir}/hostw/scripts/hostw.logrotate %{buildroot}%{local_etc_logrotated}/hostw.logrotate
 install -m 644 -p -D %{_buildsubdir}/pmon/scripts/pmon.logrotate %{buildroot}%{local_etc_logrotated}/pmon.logrotate
@@ -396,6 +400,13 @@ install -m 644 -p -D %{_buildsubdir}/lmon/scripts/lmon.logrotate %{buildroot}%{l
 install -m 644 -p -D %{_buildsubdir}/fsmon/scripts/fsmon.logrotate %{buildroot}%{local_etc_logrotated}/fsmon.logrotate
 install -m 644 -p -D %{_buildsubdir}/hwmon/scripts/hwmon.logrotate %{buildroot}%{local_etc_logrotated}/hwmon.logrotate
 install -m 644 -p -D %{_buildsubdir}/alarm/scripts/mtcalarm.logrotate %{buildroot}%{local_etc_logrotated}/mtcalarm.logrotate
+
+# collect scripts
+install -m 755 -d %{buildroot}%{local_etc_collectd}
+install -m 755 -p -D %{_buildsubdir}/scripts/collect_bmc.sh %{buildroot}%{local_etc_collectd}/collect_bmc
+
+# syslog configuration
+install -m 644 -p -D %{_buildsubdir}/scripts/mtce.syslog %{buildroot}%{_sysconfdir}/syslog-ng/conf.d/mtce.conf
 
 # software development files
 install -m 644 -p -D %{_buildsubdir}/heartbeat/mtceHbsCluster.h %{buildroot}/%{_includedir}/mtceHbsCluster.h
@@ -418,6 +429,7 @@ install -m 755 -d %{buildroot}/var/run
 /bin/systemctl enable rsyncd.service
 /bin/systemctl enable goenabled.service
 /bin/systemctl enable mtcalarm.service
+/bin/systemctl enable crashDumpMgr.service
 
 %post -n mtce-hostw
 /bin/systemctl enable hostw.service
@@ -464,6 +476,13 @@ install -m 755 -d %{buildroot}/var/run
 %{local_etc_logrotated}/fsmon.logrotate
 %{local_etc_logrotated}/mtce.logrotate
 %{local_etc_logrotated}/mtcalarm.logrotate
+%{local_etc_logrotated}/crashdump.logrotate
+
+# Maintenance collect files
+%{local_etc_collectd}/collect_bmc
+
+# Maintenance syslog config
+%{_sysconfdir}/syslog-ng/conf.d/mtce.conf
 
 # Maintenance start/stop services scripts
 %{local_etc_servicesd}/controller/mtcTest
@@ -484,6 +503,7 @@ install -m 755 -d %{buildroot}/var/run
 %{_sysconfdir}/init.d/mtcClient
 %{_sysconfdir}/init.d/mtcalarm
 %{_sysconfdir}/init.d/hwclock.sh
+%{_sysconfdir}/init.d/crashDumpMgr
 
 %{_unitdir}/runservices.service
 %{_unitdir}/goenabled.service
@@ -493,6 +513,7 @@ install -m 755 -d %{buildroot}/var/run
 %{_unitdir}/mtcClient.service
 %{_unitdir}/hbsClient.service
 %{_unitdir}/hwclock.service
+%{_unitdir}/crashDumpMgr.service
 
 # Binaries
 %{local_bindir}/mtcAgent

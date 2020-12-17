@@ -13,6 +13,7 @@ kmod-i40e
 kmod-iavf
 kmod-ixgbe
 kmod-ixgbevf
+kmod-igb_uio
 kmod-tpm
 kmod-integrity
 kmod-opae-fpga-driver
@@ -21,3 +22,4 @@ qat17
 kernel-tools
 kernel-tools-libs
 kmod-drbd
+kernel-modules-extra

@@ -1,7 +1,7 @@
 #ifndef __INCLUDE_NODEBASE_HH__
 #define __INCLUDE_NODEBASE_HH__
 /*
- * Copyright (c) 2013-2016 Wind River Systems, Inc.
+ * Copyright (c) 2013-2020 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -161,10 +161,10 @@ typedef enum
 
 
 /** 'lo' interface IP address - TODO: get it from the interface */
-#define LOOPBACK_IP "127.0.0.1"
+#define LOCALHOST     "localhost"
+#define LOOPBACK_IP   "127.0.0.1"
 #define LOOPBACK_IPV6 "::1"
-#define LOCALHOST   "localhost"
-
+#define LOOPBACK_IF   "lo"
 
 #define CLUSTER_HOST_SUFFIX    ((const char*)("-cluster-host"))
 
@@ -1069,8 +1069,6 @@ typedef enum
     MTC_REINSTALL__NETBOOT_WAIT,
     MTC_REINSTALL__POWERON,
     MTC_REINSTALL__POWERON_WAIT,
-    MTC_REINSTALL__RESET,
-    MTC_REINSTALL__RESET_WAIT,
     MTC_REINSTALL__WIPEDISK,
     MTC_REINSTALL__WIPEDISK_WAIT,
     MTC_REINSTALL__OFFLINE_WAIT,
@@ -1104,9 +1102,11 @@ typedef enum
     MTC_POWEROFF__FAIL,
     MTC_POWEROFF__FAIL_WAIT,
     MTC_POWEROFF__QUEUE,
-
+    MTC_POWEROFF__OFFLINE_WAIT,
+    MTC_POWEROFF__POWERQRY,
+    MTC_POWEROFF__POWERQRY_WAIT,
     MTC_POWER__DONE, /* clear power action */
-    MTC_POWER__STAGES       
+    MTC_POWER__STAGES
 }   mtc_powerStages_enum ;
 
 /** Return the string representing the specified 'power' stage */

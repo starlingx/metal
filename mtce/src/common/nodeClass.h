@@ -1382,7 +1382,9 @@ public:
     /* the main fsm entrypoint to service all hosts */
     void fsm ( void ) ;
 
-   /** This controller's hostname set'er */
+    void mnfa_recovery_handler ( string & hostname );
+
+    /** This controller's hostname set'er */
     void   set_my_hostname ( string hostname );
 
     /** This controller's hostname get'er */
@@ -1506,6 +1508,7 @@ public:
      *  node failure avoidance threshold and until there are no more
      *  in service trouble hosts */
     bool mnfa_active ;
+    bool mnfa_backoff = false ;
     void mnfa_cancel( void );
 
     std::list<string>           mnfa_awol_list ;

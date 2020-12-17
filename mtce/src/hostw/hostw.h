@@ -57,10 +57,18 @@ using namespace std;
 #include "hostwMsg.h"      /* message format */
 
 /* Configuration Files */
-#define HOSTWD_CONFIG_FILE   ((const char *)"/etc/mtc/hostwd.conf")
-#define PMOND_CONFIG_FILE    ((const char *)"/etc/mtc/pmond.conf")
+#define HOSTWD_CONFIG_FILE   ((const char * const)"/etc/mtc/hostwd.conf")
+#define PMOND_CONFIG_FILE    ((const char * const)"/etc/mtc/pmond.conf")
 
-#define HOSTW_MIN_KERN_UPDATE_PERIOD  60 /* user can set how long until kernel
+/* kernel SysRq control interface file used to enable the magic SysRq key.
+ * Used to ensure that the SysRq service is enabled when needed. */
+#define SYSRQ_CONTROL_INTERFACE ((const char * const)"/proc/sys/kernel/sysrq")
+
+/* kernel SysRq trigger interface file used to trigger a SysRq command.
+ * commands @ https://www.kernel.org/doc/html/latest/admin-guide/sysrq.html */
+#define SYSRQ_COMMAND_INTERFACE ((const char * const)"/proc/sysrq-trigger")
+
+#define HOSTW_MIN_KERN_UPDATE_PERIOD  5  /* user can set how long until kernel
                                           * watchdog panics, down to this
                                           * minimum (seconds) */
 
@@ -93,9 +101,12 @@ using namespace std;
 /* Context control structure */
 typedef struct
 {
+    int nodetype ;
+
     /* Watchdog interface                                                    */
     /* ------------------                                                    */
-    int watchdog           ; /** The opened /dev/watchdog file               */
+    int watchdog            ; /** The opened /dev/watchdog file              */
+    int kernwd_update_period; /** period in seconds the watchdog is serviced */
 
     /* Loop counters                                                         */
     /* ------------------                                                    */
@@ -105,6 +116,17 @@ typedef struct
     struct sigaction info  ; /**< This daemon signal action struct  */
     struct sigaction prev  ; /**< Action handler that was replaced  */
                              /**< This is put back on the exit      */
+
+    bool quorum_failed     ; /** When true gates repeated failure handling   */
+
+    /* Crash Dump Support                                                    */
+    /* ------------------                                                    */
+    bool kdump_supported   ; /** State of kdump support; not supported default.
+                               * kdump support is queried through systemctl
+                               * on process startup when this is updated to
+                               * true if supported */
+    int  fd_sysrq_enable   ; /** SysRq magic key file descriptor             */
+    int  fd_sysrq_command  ; /** SysRq command interface file descriptor     */
 
 } hostw_ctrl_type ;
 

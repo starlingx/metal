@@ -1,3 +1,8 @@
 SRC_DIR="${GIT_BASE}/bsp-files"
 COPY_LIST="$PKG_BASE/LICENSE"
-TIS_PATCH_VER=4
+
+# Use eb851a9 as the srcrev for the SRC_GITREVCOUNT,
+# as it is the last commit in the bsp-files dir prior
+# to branching for stx-3.0.
+SRC_BASE_SRCREV=eb851a9
+TIS_PATCH_VER=SRC_GITREVCOUNT

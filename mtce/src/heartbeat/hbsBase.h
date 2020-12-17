@@ -290,7 +290,8 @@ void hbs_cluster_peer ( void );
  */
 void hbs_cluster_update ( iface_enum iface,
                           unsigned short not_responding_hosts,
-                          bool storage_0_responding );
+                          bool storage_0_responding,
+                          bool sm_heartbeat_ok);
 
 /* Called by the hbsAgent pulse transmitter to append this controllers
  * running cluster view in the next multicast pulse request.

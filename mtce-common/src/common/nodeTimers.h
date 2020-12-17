@@ -66,7 +66,7 @@
 #define MTC_SWACT_POLL_TIMER         (10)
 #define MTC_TASK_UPDATE_DELAY        (30)
 #define MTC_BM_PING_TIMEOUT          (30)
-#define MTC_BM_POWEROFF_TIMEOUT      (30)
+#define MTC_BM_POWEROFF_TIMEOUT      (60)
 #define MTC_BM_POWERON_TIMEOUT       (30)
 #define MTC_RESET_PROG_TIMEOUT       (20)
 #define MTC_WORKQUEUE_TIMEOUT        (60)

@@ -425,6 +425,10 @@ void mtc_stages_init ( void )
    powerStages_str   [MTC_POWEROFF__START              ] = "Power-Off-Start";
    powerStages_str   [MTC_POWEROFF__REQ_SEND           ] = "Power-Off-Req-Send";
    powerStages_str   [MTC_POWEROFF__RESP_WAIT          ] = "Power-Off-Resp-Wait";
+   powerStages_str   [MTC_POWEROFF__OFFLINE_WAIT       ] = "Power-Off-Offline-Wait";
+   powerStages_str   [MTC_POWEROFF__POWERQRY           ] = "Power-Off-Power-Query";
+   powerStages_str   [MTC_POWEROFF__POWERQRY_WAIT      ] = "Power-Off-Power-Query-Wait";
+   powerStages_str   [MTC_POWEROFF__QUEUE              ] = "Power-Off-Queue";
    powerStages_str   [MTC_POWEROFF__DONE               ] = "Power-Off-Done";
    powerStages_str   [MTC_POWEROFF__FAIL               ] = "Power-Off-Fail";
    powerStages_str   [MTC_POWEROFF__FAIL_WAIT          ] = "Power-Off-Fail-Wait";
@@ -471,8 +475,6 @@ void mtc_stages_init ( void )
    reinstallStages_str   [MTC_REINSTALL__NETBOOT_WAIT  ] = "Reinstall-Netboot-Wait";
    reinstallStages_str   [MTC_REINSTALL__POWERON       ] = "Reinstall-PowerOn";
    reinstallStages_str   [MTC_REINSTALL__POWERON_WAIT  ] = "Reinstall-PowerOn-Wait";
-   reinstallStages_str   [MTC_REINSTALL__RESET         ] = "Reinstall-Reset";
-   reinstallStages_str   [MTC_REINSTALL__RESET_WAIT    ] = "Reinstall-Reset-Wait";
    reinstallStages_str   [MTC_REINSTALL__WIPEDISK      ] = "Reinstall-Wipedisk";
    reinstallStages_str   [MTC_REINSTALL__WIPEDISK_WAIT ] = "Reinstall-Wipedisk-Wait";
    reinstallStages_str   [MTC_REINSTALL__OFFLINE_WAIT  ] = "Reinstall-Offline-Wait";

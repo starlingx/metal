@@ -286,11 +286,13 @@ kernel-rt
 kernel-module-igb-uio
 kernel-module-igb-uio-rt
 kernel-rt-kvm
+kernel-rt-modules-extra
 kmod-e1000e-rt
 kmod-i40e-rt
 kmod-iavf-rt
 kmod-ixgbe-rt
 kmod-ixgbevf-rt
+kmod-igb_uio-rt
 kmod-tpm-rt
 kmod-integrity-rt
 kmod-opae-fpga-driver-rt
@@ -308,10 +310,6 @@ tpm2-tools
 tss2
 tpm2-openssl-engine
 libtpms
-swtpm
-swtpm-tools
-swtpm-cuse
-swtpm-libs
 OVMF
 python2-networking-bgpvpn
 python-networking-bgpvpn-dashboard
@@ -341,3 +339,7 @@ oidcauthtools
 stx-oidc-auth-helm
 stx-cert-manager-helm
 stx-nginx-ingress-controller-helm
+stx-portieris-helm
+stx-vault-helm
+sysinv-fpga-agent
+k8s-pod-recovery
