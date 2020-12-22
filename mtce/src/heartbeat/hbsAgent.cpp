@@ -1381,6 +1381,7 @@ int daemon_init ( string iface, string nodetype )
         hbs_ctrl.locked = true ;
     }
 
+
     daemon_init_fit();
     return (rc);
 }
@@ -1817,6 +1818,10 @@ void daemon_service_run ( void )
                         inv.name = hbsInv.my_hostname ;
                         inv.nodetype = CONTROLLER_TYPE ;
                         hbsInv.add_heartbeat_host ( inv );
+
+                        /* add this host to local inventory */
+                        hostname_inventory.push_front(hbsInv.my_hostname);
+                        ilog ("%s added to inventory (self)", hbsInv.my_hostname.c_str());
                     }
 
                     /* enable the base level signal handler latency monitor */
@@ -2074,6 +2079,7 @@ void daemon_service_run ( void )
                             inv.nodetype = msg.parm[0];
                             hbsInv.add_heartbeat_host ( inv ) ;
                             hostname_inventory.push_back ( inv.name );
+                            hostname_inventory.unique(); // avoid duplicates
                             ilog ("%s added to heartbeat service (%d)\n",
                                       inv.name.c_str(),
                                       inv.nodetype);

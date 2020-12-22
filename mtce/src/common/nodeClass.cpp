@@ -7746,7 +7746,11 @@ int nodeLinkClass::mon_host ( const string & hostname, bool true_false, bool sen
 
             if ( true_false == true )
             {
-                ilog ("%s heartbeat start", hostname.c_str());
+                ilog ("%s %s heartbeat %sstart",
+                          hostname.c_str(),
+                          get_iface_name_str(iface),
+                          node_ptr->monitor[iface] ? "re" : "");
+
                 node_ptr->no_work_log_throttle = 0 ;
                 node_ptr->b2b_misses_count[iface] = 0 ;
                 node_ptr->hbs_misses_count[iface] = 0 ;
@@ -7758,7 +7762,12 @@ int nodeLinkClass::mon_host ( const string & hostname, bool true_false, bool sen
             }
             else
             {
-                ilog ("%s heartbeat stop", hostname.c_str());
+                if (  node_ptr->monitor[iface] == true )
+                {
+                    ilog ("%s %s heartbeat stop",
+                              hostname.c_str(),
+                              get_iface_name_str(iface));
+                }
             }
             node_ptr->monitor[iface] = true_false ;
         }
@@ -7771,7 +7780,7 @@ int nodeLinkClass::mon_host ( const string & hostname, bool true_false, bool sen
 void nodeLinkClass::set_hwmond_monitor_state ( string & hostname, bool state )
 {
     if ( hostname.length() )
-    {  
+    {
         struct nodeLinkClass::node* node_ptr ;
         node_ptr = nodeLinkClass::getNode ( hostname );
         if ( node_ptr != NULL )
