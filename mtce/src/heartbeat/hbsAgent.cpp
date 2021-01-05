@@ -1521,6 +1521,7 @@ void hbs_sm_handler ( void )
  *              False if time delta is greater
  *
  ***************************************************************************/
+#define HUGE_NUMBER_B2B_SM_HEARTBEAT_MISSES (10000)
 bool manage_sm_heartbeat ( void )
 {
     struct timespec ts ;
@@ -1532,8 +1533,9 @@ bool manage_sm_heartbeat ( void )
     if ( delta_in_ms > SM_HEARTBEAT_PULSE_PERIOD_MSECS )
     {
         sm_heartbeat_count = 0;
-        if (( ++sm_heartbeat_count_b2b_misses < 20 )||
-            (!( sm_heartbeat_count_b2b_misses % 100 )))
+        if ((( ++sm_heartbeat_count_b2b_misses < 20 ) ||
+            (!( sm_heartbeat_count_b2b_misses % 1000 ))) &&
+            ( sm_heartbeat_count_b2b_misses < HUGE_NUMBER_B2B_SM_HEARTBEAT_MISSES ))
         {
             wlog("SM Heartbeat missing since %ld.%03ld secs ago ; HBS Period Misses:%3d ; Running HB Count:%4d",
                   delta.secs, delta.msecs,
@@ -2523,7 +2525,9 @@ void daemon_service_run ( void )
                 }
             }
             /* log cluster throttled */
-            if (( heartbeat_ok == false ) && ( !( sm_heartbeat_count_b2b_misses % 100 )))
+            if ((( heartbeat_ok == false ) &&
+                ( !( sm_heartbeat_count_b2b_misses % 1000 ))) &&
+                ( sm_heartbeat_count_b2b_misses < HUGE_NUMBER_B2B_SM_HEARTBEAT_MISSES ))
             {
                 hbs_state_audit ( );
             }
