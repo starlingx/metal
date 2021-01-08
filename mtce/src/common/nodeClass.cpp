@@ -8511,7 +8511,7 @@ void nodeLinkClass::manage_heartbeat_alarm ( struct nodeLinkClass::node * node_p
 
 
 
-#define HBS_LOSS_REPORT_THROTTLE (100)
+#define HBS_LOSS_REPORT_THROTTLE (100000)
 int nodeLinkClass::lost_pulses ( iface_enum iface, bool & storage_0_responding )
 {
     int lost = 0  ;
@@ -8551,6 +8551,13 @@ int nodeLinkClass::lost_pulses ( iface_enum iface, bool & storage_0_responding )
 
             if ( pulse_ptr->b2b_misses_count[iface] > 1 )
             {
+                if ( pulse_ptr->b2b_misses_count[iface] < hbs_failure_threshold )
+                {
+                    hbs_cluster_change ( pulse_ptr->hostname + " " +
+                            get_iface_name_str(iface) +
+                            " heartbeat miss " +
+                            itos(pulse_ptr->b2b_misses_count[iface]));
+                }
                 if ( pulse_ptr->b2b_misses_count[iface] >= hbs_failure_threshold )
                 {
                     if ( pulse_ptr->b2b_misses_count[iface] == hbs_failure_threshold )
@@ -8657,57 +8664,43 @@ int nodeLinkClass::lost_pulses ( iface_enum iface, bool & storage_0_responding )
                 }
             }
 
-            /* Turn the cluster-host heartbeat loss into a degrade only
-             * condition if the clstr_degrade_only flag is set */
-            if (( iface == CLSTR_IFACE ) &&
-                ( pulse_ptr->b2b_misses_count[iface] >= hbs_failure_threshold ) &&
-                ( clstr_degrade_only == true ))
-            {
-                /* Only print the log at the threshold boundary */
-                if (( pulse_ptr->b2b_misses_count[iface]%HBS_LOSS_REPORT_THROTTLE) == hbs_failure_threshold )
-                {
-                    if ( this->active_controller )
-                    {
-                        manage_heartbeat_alarm ( pulse_ptr, FM_ALARM_SEVERITY_CRITICAL, iface );
-                    }
-
-                    wlog ( "%s %s *** Heartbeat Loss *** (degrade only)\n",
-                               pulse_ptr->hostname.c_str(),
-                               get_iface_name_str(iface) );
-                    hbs_cluster_change ( pulse_ptr->hostname + " heartbeat loss" );
-                }
-            }
-
             /* Turn the clstr heartbeat loss into a degrade only
              * condition for inactive controller on normal system. */
-            else if (( iface == CLSTR_IFACE ) &&
-                     ( pulse_ptr->b2b_misses_count[iface] >= hbs_failure_threshold ) &&
-                     ( this->system_type == SYSTEM_TYPE__NORMAL ) &&
-                     (( pulse_ptr->nodetype & CONTROLLER_TYPE) == CONTROLLER_TYPE ))
+            if (( iface == CLSTR_IFACE ) &&
+                ((( this->system_type == SYSTEM_TYPE__NORMAL ) &&
+                 (( pulse_ptr->nodetype & CONTROLLER_TYPE) == CONTROLLER_TYPE )) ||
+                 ( clstr_degrade_only == true )))
             {
                 /* Only print the log at the threshold boundary */
-                if ( (pulse_ptr->b2b_misses_count[iface]%HBS_LOSS_REPORT_THROTTLE) == hbs_failure_threshold )
+                if ( pulse_ptr->b2b_misses_count[iface]%HBS_LOSS_REPORT_THROTTLE == hbs_failure_threshold )
                 {
                     if ( this->active_controller )
                     {
                         manage_heartbeat_alarm ( pulse_ptr, FM_ALARM_SEVERITY_CRITICAL, iface );
                     }
-                    wlog ( "%s %s *** Heartbeat Loss *** (degrade only)\n",
+                    wlog ( "%s %s *** Heartbeat Loss *** (degrade only due to %s)\n",
                                pulse_ptr->hostname.c_str(),
-                               get_iface_name_str(iface));
-                    hbs_cluster_change ( pulse_ptr->hostname + " heartbeat loss" );
+                               get_iface_name_str(iface),
+                               clstr_degrade_only ? "config option" : "system type");
+                    hbs_cluster_change ( pulse_ptr->hostname + " " + get_iface_name_str(iface) + " heartbeat loss" );
                 }
             }
 
             else if ((pulse_ptr->b2b_misses_count[iface]%HBS_LOSS_REPORT_THROTTLE) == hbs_failure_threshold )
+            // else if ( pulse_ptr->hbs_failure[iface] == false )
             {
-                elog ("%s %s *** Heartbeat Loss ***\n", pulse_ptr->hostname.c_str(),
-                                                        get_iface_name_str(iface) );
+                elog ("%s %s *** Heartbeat Loss *** (b2b_misses:0x%x)\n",
+                          pulse_ptr->hostname.c_str(),
+                          get_iface_name_str(iface),
+                          pulse_ptr->b2b_misses_count[iface]);
+                hbs_cluster_change ( pulse_ptr->hostname + " " + get_iface_name_str(iface) + " heartbeat loss" );
 
                 if ( this->active_controller )
                 {
-                    manage_heartbeat_alarm ( pulse_ptr, FM_ALARM_SEVERITY_CRITICAL, iface );
-
+                    if ( pulse_ptr->hbs_failure[iface] == false )
+                    {
+                        manage_heartbeat_alarm ( pulse_ptr, FM_ALARM_SEVERITY_CRITICAL, iface );
+                    }
                     /* report this host as failed */
                     if ( send_event ( pulse_ptr->hostname, MTC_EVENT_HEARTBEAT_LOSS , iface ) == PASS )
                     {
@@ -8715,10 +8708,8 @@ int nodeLinkClass::lost_pulses ( iface_enum iface, bool & storage_0_responding )
                     }
                 }
                 else
-                {
                     pulse_ptr->hbs_failure[iface] = true ;
-                }
-                hbs_cluster_change ( pulse_ptr->hostname + " heartbeat loss" );
+
                 pulse_ptr->hbs_failure_count[iface]++ ;
             }
             if ( pulse_ptr->b2b_misses_count[iface] > pulse_ptr->max_count[iface] )
