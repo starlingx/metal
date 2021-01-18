@@ -2374,6 +2374,7 @@ void daemon_service_run ( void )
                     arrival_histogram[iface] = "" ;
                     unexpected_pulse_list[iface] = "" ;
 
+
                     rc = hbs_pulse_request ( (iface_enum)iface, seq_num, ri, rri );
                     if ( rc != 0 )
                     {
