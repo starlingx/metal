@@ -57,6 +57,8 @@ int ipmiUtil_init ( void );
 
 int  ipmiUtil_bmc_info_load ( string hostname, const char * filename, bmc_info_type & mc_info );
 
+int  ipmiUtil_reset_host_now ( string hostname, bmcUtil_accessInfo_type accessInfo, string output_filename );
+
 /* Create the ipmi request */
 string ipmiUtil_create_request ( string cmd, string & ip, string & un, string & pw, string & out );
 

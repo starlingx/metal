@@ -3295,6 +3295,102 @@ void nodeLinkClass::mtcInfo_log ( struct nodeLinkClass::node * node_ptr )
     }
 }
 
+/***************************************************************************
+ *
+ * Name        : build_mtcInfo_dict
+ *
+ * Purpose     : Build a json dictionary for the specified info code enum
+ *
+ * Assumptions : Only MTC_INFO_CODE__PEER_CONTROLLER_KILL_INFO is supported
+ *
+ * Returns     : Returns a json dictionary of mtcInfo.
+ *
+ *               {
+ *                  "controller-0":{
+ *                      "ip":"192.168.204.2",
+ *                      "bm_ip":"xxx.xxx.xx.23",
+ *                      "bm_un":"root",
+ *                      "bm_pw":"root"
+ *                   },
+ *                   "controller-1":{
+ *                      "ip":"192.168.204.3",
+ *                      "bm_ip":"xxx.xxx.xx.24",
+ *                      "bm_un":"root",
+ *                      "bm_pw":"root"
+ *                   }
+ *               }
+ *
+ **************************************************************************/
+
+string nodeLinkClass::build_mtcInfo_dict ( mtcInfo_enum mtcInfo_code )
+{
+    string mtcInfo_dict = "" ;
+
+    /* loop/exit control */
+    int temp = 0 ;
+
+    /* should never happen but better to be safe */
+    if ( head == NULL )
+        return mtcInfo_dict ;
+
+    /* force the update to be a dictionary */
+    mtcInfo_dict = "{" ;
+
+    for ( struct node * ptr = head ;  ; ptr = ptr->next )
+    {
+        if (( ptr->nodetype & CONTROLLER_TYPE ) &&
+            ( mtcInfo_code == MTC_INFO_CODE__PEER_CONTROLLER_KILL_INFO ))
+        {
+            if ( temp )
+                mtcInfo_dict.append(",");
+            mtcInfo_dict.append("\"" + ptr->hostname + "\":{");
+            mtcInfo_dict.append("\"mgmt_ip\":\"" + ptr->ip + "\",");
+            mtcInfo_dict.append("\"bm_ip\":\"" + ptr->bm_ip + "\",");
+            mtcInfo_dict.append("\"bm_un\":\"" + ptr->bm_un + "\",");
+            mtcInfo_dict.append("\"bm_pw\":\"" + ptr->bm_pw + "\"}");
+            if ( ++temp >= 2 )
+                break ;
+        }
+        if (( ptr->next == NULL ) || ( ptr == tail ))
+           break ;
+    }
+    mtcInfo_dict.append("}");
+    return mtcInfo_dict ;
+}
+
+/**************************************************************************
+ *
+ * Name          : mtcInfo_handler
+ *
+ * Purpose       : Send mtcInfo update to provisioned controllers when
+ *                 the push flag is set.
+ *
+ **************************************************************************/
+
+void nodeLinkClass::mtcInfo_handler ( void )
+{
+    /* This is set in the bm_handler once access to the BMC using
+     * provisioned credentials have been verified. */
+    if ( this->want_mtcInfo_push )
+    {
+        /* handler will enhance when more codes are introduced */
+        mtcInfo_enum mtcInfo_code = MTC_INFO_CODE__PEER_CONTROLLER_KILL_INFO ;
+
+        string mtcInfo_dict = build_mtcInfo_dict(mtcInfo_code);
+        if ( ! mtcInfo_dict.empty() )
+        {
+            string temp = CONTROLLER_0 ;
+            send_mtc_cmd ( temp, MTC_MSG_INFO, MGMNT_INTERFACE, mtcInfo_dict);
+            if ( this->controllers > 1 )
+            {
+                temp = CONTROLLER_1;
+                send_mtc_cmd ( temp, MTC_MSG_INFO, MGMNT_INTERFACE, mtcInfo_dict);
+            }
+        }
+        this->want_mtcInfo_push = false ;
+    }
+}
+
 /* Lock Rules
  *
  * 1. Cannot lock this controller
@@ -4419,6 +4515,18 @@ string nodeLinkClass::get_bm_ip   ( string hostname )
          return (node_ptr->bm_ip);
     }
     elog ("%s bm ip lookup failed\n", hostname.c_str() );
+    return ("");
+}
+
+string nodeLinkClass::get_bm_pw   ( string hostname )
+{
+    nodeLinkClass::node* node_ptr ;
+    node_ptr = nodeLinkClass::getNode ( hostname );
+    if ( node_ptr != NULL )
+    {
+         return (node_ptr->bm_pw);
+    }
+    elog ("%s bm pw lookup failed\n", hostname.c_str() );
     return ("");
 }
 

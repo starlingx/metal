@@ -82,6 +82,14 @@ typedef struct
 
 } bmc_info_type ;
 
+typedef struct
+{
+    string hostname;
+    string host_ip ;
+    string   bm_ip ;
+    string   bm_un ;
+    string   bm_pw ;
+} bmcUtil_accessInfo_type ;
 
 /* BMC commands */
 typedef enum
@@ -107,6 +115,7 @@ typedef enum
 #define BMC_QUERY_FILE_SUFFIX          ((const char *)("_root_query"))
 #define BMC_INFO_FILE_SUFFIX           ((const char *)("_bmc_info"))
 #define BMC_POWER_CMD_FILE_SUFFIX      ((const char *)("_power_cmd_result"))
+#define BMC_RESET_CMD_FILE_SUFFIX      ((const char *)("_reset"))
 #define BMC_BOOTDEV_CMD_FILE_SUFFIX    ((const char *)("_bootdev"))
 #define BMC_RESTART_CAUSE_FILE_SUFFIX  ((const char *)("_restart_cause"))
 #define BMC_POWER_STATUS_FILE_SUFFIX   ((const char *)("_power_status"))
@@ -137,9 +146,9 @@ void bmcUtil_create_pw_file ( thread_info_type * info_ptr,
                              bmc_protocol_enum   protocol );
 
 /* create the output filename */
-string bmcUtil_create_data_fn ( string & hostname,
-                                string   file_suffix,
-                     bmc_protocol_enum   protocol );
+string bmcUtil_create_data_fn ( const string & hostname,
+                                string file_suffix,
+                     bmc_protocol_enum protocol );
 
 /*  Get power state from query response data. */
 int bmcUtil_is_power_on ( string              hostname,

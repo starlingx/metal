@@ -6166,6 +6166,8 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
 
             if ( is_controller(node_ptr) )
             {
+                this->controllers++ ;
+
                 mtc_cmd_enum state = CONTROLLER_DISABLED ;
 
                 if (( node_ptr->adminState   == MTC_ADMIN_STATE__UNLOCKED ) &&
@@ -6635,6 +6637,8 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
                         mtcInfo_set ( node_ptr, MTCE_INFO_KEY__BMC_PROTOCOL, BMC_PROTOCOL__IPMI_STR );
                         node_ptr->bmc_protocol = BMC_PROTOCOL__IPMITOOL ;
                     }
+                    /* store mtcInfo, which specifies the selected BMC protocol,
+                     * into the sysinv database */
                     mtcInvApi_update_mtcInfo ( node_ptr );
 
                     ilog ("%s bmc control using %s:%s",
@@ -6751,7 +6755,14 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
                         node_ptr->bmc_thread_ctrl.done = true  ;
                         node_ptr->bmc_thread_info.command = 0  ;
                     }
+                    /* store mtcInfo, which specifies the selected BMC protocol,
+                     * into the sysinv database */
                     mtcInvApi_update_mtcInfo ( node_ptr );
+
+                    /* push the BMC access info out to the mtcClient when
+                     * a controller's BMC connection is established/verified */
+                    if ( node_ptr->nodetype & CONTROLLER_TYPE )
+                        this->want_mtcInfo_push = true ;
 
                     send_hwmon_command ( node_ptr->hostname, MTC_CMD_ADD_HOST );
                     send_hwmon_command ( node_ptr->hostname, MTC_CMD_START_HOST );
@@ -6941,6 +6952,11 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
                                     availStatusChange ( node_ptr, MTC_AVAIL_STATUS__POWERED_OFF );
                                 }
                             } /* end power off detection handling     */
+
+                            /* push the BMC access info out to the mtcClient when
+                             * a controller's BMC connection is established/verified */
+                            if ( node_ptr->nodetype & CONTROLLER_TYPE )
+                                this->want_mtcInfo_push = true ;
 
                             send_hwmon_command ( node_ptr->hostname, MTC_CMD_ADD_HOST );
                             send_hwmon_command ( node_ptr->hostname, MTC_CMD_START_HOST );

@@ -751,7 +751,9 @@ typedef struct
 #define MTC_CMD_START_STORAGE_SVCS    19  /*   to host */
 #define MTC_CMD_LAZY_REBOOT           20  /*   to host */
 #define MTC_CMD_HOST_SVCS_RESULT      21  /*   to host */
-#define MTC_CMD_LAST                  22
+#define MTC_MSG_INFO                  22  /*   to host */
+#define MTC_CMD_SYNC                  23  /*   to host */
+#define MTC_CMD_LAST                  24
 
 #define RESET_PROG_MAX_REBOOTS_B4_RESET (5)
 #define RESET_PROG_MAX_REBOOTS_B4_RETRY (RESET_PROG_MAX_REBOOTS_B4_RESET+2)
@@ -1262,6 +1264,14 @@ typedef enum
     MTC_AR_DISABLE_CAUSE__LAST,
     MTC_AR_DISABLE_CAUSE__NONE,
 } autorecovery_disable_cause_enum ;
+
+/* code that represents a specific group of maintenance information
+ * ... typically for a specific feature */
+typedef enum
+{
+    MTC_INFO_CODE__PEER_CONTROLLER_KILL_INFO,
+    MTC_INFO_CODE__LAST
+} mtcInfo_enum ;
 
 /* Service Based Auto Recovery Control Structure */
 typedef struct
