@@ -81,8 +81,6 @@ nova-tests
 nova-api-proxy
 nova-placement-api
 novnc
-net-snmp
-net-snmp-config
 neutron-plugin-ml2
 neutron-server
 neutron-tests
@@ -141,7 +139,6 @@ python-swiftclient
 python-wsme
 fm-mgr
 fm-rest-api
-snmp-ext
 sm
 sm-api
 sm-client
@@ -274,7 +271,6 @@ kernel-tools-libs
 kernel-modules-extra
 NaviCLI-Linux-64-x86-en_US
 kmod-drbd-rt
-snmp-audittrail
 wrs-ssl
 tpm2-tools
 tss2
@@ -302,5 +298,6 @@ stx-oidc-auth-helm
 stx-cert-manager-helm
 stx-nginx-ingress-controller-helm
 stx-portieris-helm
+stx-snmp-helm
 stx-vault-helm
 k8s-pod-recovery

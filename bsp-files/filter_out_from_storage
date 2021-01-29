@@ -120,8 +120,6 @@ nova-tests
 nova-api-proxy
 nova-placement-api
 novnc
-net-snmp
-net-snmp-config
 openstack-aodh-api
 openstack-aodh-commmon
 openstack-aodh-compat
@@ -256,7 +254,6 @@ qemu-kvm-ev
 qemu-kvm-tools-ev
 radvd
 rubygem-rdoc
-snmp-ext
 task-cloud-compute
 task-cloud-controller
 tgt
@@ -304,7 +301,6 @@ kernel-rt-tools
 kernel-rt-tools-libs
 NaviCLI-Linux-64-x86-en_US
 kmod-drbd-rt
-snmp-audittrail
 wrs-ssl
 tpm2-tools
 tss2
@@ -340,6 +336,7 @@ stx-oidc-auth-helm
 stx-cert-manager-helm
 stx-nginx-ingress-controller-helm
 stx-portieris-helm
+stx-snmp-helm
 stx-vault-helm
 sysinv-fpga-agent
 k8s-pod-recovery
