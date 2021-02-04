@@ -70,11 +70,15 @@ void stop_pmon( void )
 {
     /* max pipe command response length */
     #define PIPE_COMMAND_RESPON_LEN (100)
+
+    ilog("Stopping collectd.");
+    int rc = system("/usr/local/sbin/pmon-stop collectd");
+    sleep (2);
     ilog("Stopping pmon to prevent process recovery during shutdown");
     for ( int retry = 0 ; retry < 5 ; retry++ )
     {
         char pipe_cmd_output [PIPE_COMMAND_RESPON_LEN] ;
-        int rc = system("/usr/bin/systemctl stop pmon");
+        rc = system("/usr/bin/systemctl stop pmon");
         sleep(2);
 
         /* confirm pmon is no longer active */
