@@ -258,6 +258,7 @@ kernel-module-igb-uio
 kmod-e1000e
 kmod-i40e
 kmod-iavf
+kmod-ice
 kmod-ixgbe
 kmod-ixgbevf
 kmod-igb_uio

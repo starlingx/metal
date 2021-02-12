@@ -33,6 +33,7 @@ kernel-rt-modules-extra
 kmod-e1000e-rt
 kmod-i40e-rt
 kmod-iavf-rt
+kmod-ice-rt
 kmod-ixgbe-rt
 kmod-ixgbevf-rt
 kmod-igb_uio-rt
