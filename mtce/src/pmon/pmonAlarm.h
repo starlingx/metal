@@ -37,8 +37,10 @@ typedef struct
     EFmAlarmSeverityT severity ;
 } active_process_alarms_type   ;
 
-/* Clear any pending alarms if the specified hostname is valid */
-void manage_queried_alarms (  list<active_process_alarms_type> & alarm_list, string hostname="" );
+/* Query FM for a list of Process Monitor (200.006) alarms */
+int query_alarms (  list<active_process_alarms_type> & alarm_list, string hostname="" );
+
+void alarmed_process_audit ( void );
 
 void pmonAlarm_init ( void );
 

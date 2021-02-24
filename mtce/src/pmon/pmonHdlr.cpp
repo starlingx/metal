@@ -41,15 +41,6 @@ static struct mtc_timer ptimer[MAX_PROCESSES] ;
 std::list<string> config_files ;
 std::list<string>::iterator string_iter_ptr ;
 
-/* If there is an alarm in the list that matches one in the process list
- * then update that process with its severity and failed state.
- * If there is a process in the saved list that is not in the process list
- * then clear its alarm as it is no longer valid.
- */
-void manage_process_alarms (  list<active_process_alarms_type> & _list,
-                              process_config_type * const ptr,
-                              int const processes );
-
 static process_config_type process_config[MAX_PROCESSES] ;
 
 /* lookup process control by index  and return its pointer if found.
@@ -216,6 +207,7 @@ void pmon_timer_init ( void )
         /* Init the timer for this process */
         mtcTimer_init ( process_config[i].pt_ptr, _pmon_ctrl_ptr->my_hostname, "process" ) ;
     }
+    _pmon_ctrl_ptr->last_alarm_query_pass = false ;
 }
 
 void _process_death_hdlr ( int sig_num, siginfo_t * info_ptr, void * context_ptr );
@@ -371,7 +363,7 @@ void init_process_config_memory ( void )
  * all the process config files from /etc/pmon.d */
 void load_processes ( void )
 {
-    list<active_process_alarms_type> saved_alarm_list ;
+    list<active_process_alarms_type> queried_alarm_list ;
 
     int rc = PASS ;
 
@@ -385,10 +377,6 @@ void load_processes ( void )
         close_process_socket ( &process_config[i] );
     }
 
-    /* Query fm for existing pmon process alarms and
-     * for each that is found store their 'name' and
-     * 'severity' in the passed in saved list */
-    manage_queried_alarms ( saved_alarm_list );
 
     /* init the process config memory */
     init_process_config_memory ();
@@ -454,13 +442,8 @@ void load_processes ( void )
     }
     _pmon_ctrl_ptr->reload_config = false ;
 
-    /* If there were process alarms that existed over the reload
-     * then ensure that those processes are updated with that information. */
-    if ( saved_alarm_list.size () )
-    {
-        ilog ("there are %ld active alarms over reload\n", saved_alarm_list.size());
-        manage_process_alarms ( saved_alarm_list, &process_config[0], _pmon_ctrl_ptr->processes );
-    }
+    /* use the audit to clear pre-existing alarms at process startup */
+    alarmed_process_audit ();
 }
 
 
@@ -1702,64 +1685,123 @@ void _process_death_hdlr ( int sig_num, siginfo_t * info_ptr, void * context_ptr
     }
 }
 
-/************************************************************************
+/***************************************************************************
  *
- * Name :       manage_process_alarms
+ * Name       : alarmed_process_audit
  *
- * Description: This interface manages process alarms over a process
- *              configuration reload
+ * Purpose    : Verify the process state matches the queried alarm state
  *
- * Steps:
+ * Description: To correct process alarm state mismatches.
  *
- * 1. Loop over each item in the list and mark the process as failed
- *    with the specified severity level.
- *
- * 2. If the process is not found then clear its alarm as it is no
- *    longer a valid process in the new profile and we don't want a
- *    lingering stuck alarm.
- *
- *************************************************************************/
+ ***************************************************************************/
 
-void manage_process_alarms (  list<active_process_alarms_type> & _list,
-                              process_config_type * const ptr,
-                              int const processes )
+void alarmed_process_audit ( void )
 {
-    /* get out if the list is empty ; should not have been called if
-     * empty but ... just in case */
-    if ( ! _list.empty() )
+    /* Don't audit FM in service after the last query was successful.
+     * There is a blocking issue that needs to be dealt with */
+    if ( _pmon_ctrl_ptr->last_alarm_query_pass == true )
+        return ;
+
+    /*
+     * Query fm for existing pmon process alarms and
+     * for each that is found store their 'name' and
+     * 'severity' in the passed in queried_alarm_list.
+     */
+    list<active_process_alarms_type> queried_alarm_list ;
+    int rc = query_alarms ( queried_alarm_list, get_ctrl_ptr()->my_hostname );
+    _pmon_ctrl_ptr->last_alarm_query_pass = (rc == PASS);
+
+    /* just return if query failed */
+    if ( _pmon_ctrl_ptr->last_alarm_query_pass == false )
+        return ;
+
+    if ( queried_alarm_list.size () )
     {
         list<active_process_alarms_type>::iterator _iter_ptr ;
 
+        alog ("audit found %ld active alarms", queried_alarm_list.size());
+
         /* loop over the list ... */
-        for ( _iter_ptr=_list.begin(); _iter_ptr!=_list.end(); ++_iter_ptr )
+        for (   _iter_ptr=queried_alarm_list.begin();
+                _iter_ptr!=queried_alarm_list.end();
+              ++_iter_ptr )
         {
-            /* for each item assum it is not found */
             bool found = false ;
+            alog ("%s audit", _iter_ptr->process.c_str());
 
-            /* try and find this process in the new process profile */
-            for ( int i = 0 ; i < processes ; i++ )
+            /* find this process*/
+            for ( int i = 0 ; (i < _pmon_ctrl_ptr->processes) && !found ; i++ )
             {
-                if ( ! _iter_ptr->process.compare((ptr+i)->process) )
-                {
-                    /* If the process is found then mark it as failed and update its severity.
-                     * At this point we then assume that there is an alarm raised for this process. */
-                    found = true ;
+                process_config_type * ptr = &process_config[i];
 
-                   (ptr+i)->failed = false ;
-                    wlog ("%s process was failed critical ; clearing existing alarm\n", _iter_ptr->process.c_str() );
-                    pmonAlarm_clear ( get_ctrl_ptr()->my_hostname, PMON_ALARM_ID__PMOND, _iter_ptr->process );
+                if ( ! _iter_ptr->process.compare(ptr->process) )
+                {
+                    found = true ;
+                    if ( ptr->failed == false )
+                    {
+                        ilog ("%s stale alarm ; clearing",
+                                  _iter_ptr->process.c_str() );
+
+                        pmonAlarm_clear ( get_ctrl_ptr()->my_hostname,
+                                          PMON_ALARM_ID__PMOND,
+                                          _iter_ptr->process );
+                    }
+                    else if ( _iter_ptr->severity != ptr->alarm_severity )
+                    {
+                        wlog ("%s alarm severity mismatch ; %s -> %s ; correcting",
+                                  ptr->process,
+                                  alarmUtil_getSev_str(_iter_ptr->severity).c_str(),
+                                  alarmUtil_getSev_str(ptr->alarm_severity).c_str());
+                        if ( ptr->alarm_severity == FM_ALARM_SEVERITY_MINOR )
+                        {
+                            pmonAlarm_minor(get_ctrl_ptr()->my_hostname,
+                                            PMON_ALARM_ID__PMOND,
+                                            ptr->process, 0);
+                        }
+                        else if (ptr->alarm_severity == FM_ALARM_SEVERITY_MAJOR )
+                        {
+                            pmonAlarm_major(get_ctrl_ptr()->my_hostname,
+                                            PMON_ALARM_ID__PMOND,
+                                            ptr->process);
+                        }
+                        else if (ptr->alarm_severity == FM_ALARM_SEVERITY_CRITICAL )
+                        {
+                             pmonAlarm_critical(get_ctrl_ptr()->my_hostname,
+                                                PMON_ALARM_ID__PMOND,
+                                                ptr->process);
+                        }
+                        else
+                        {
+                            wlog ("%s unexpected severity '%s' ; clearing alarm",
+                                      ptr->process,
+                                      ptr->severity);
+
+                            pmonAlarm_clear ( get_ctrl_ptr()->my_hostname,
+                                              PMON_ALARM_ID__PMOND,
+                                              ptr->process );
+                        }
+                    }
+                    else
+                    {
+                        alog ("%s is alarmed '%s' ; audit",
+                                  ptr->process,
+                                  ptr->severity);
+                    }
                 }
             }
-
             /* if not found then just clear the alarm */
             if ( found == false)
             {
-                wlog ("%s process alarm clear ; not in current process profile\n", _iter_ptr->process.c_str() );
-                pmonAlarm_clear ( get_ctrl_ptr()->my_hostname, PMON_ALARM_ID__PMOND, _iter_ptr->process );
+                wlog ("%s is not a monitored process ; clearing alarm",
+                          _iter_ptr->process.c_str());
+                pmonAlarm_clear ( get_ctrl_ptr()->my_hostname,
+                                  PMON_ALARM_ID__PMOND,
+                                  _iter_ptr->process );
             }
         }
     }
 }
+
 
 void pmon_service ( pmon_ctrl_type * ctrl_ptr )
 {
@@ -1931,6 +1973,8 @@ void pmon_service ( pmon_ctrl_type * ctrl_ptr )
         {
             _get_events ();
             mtcTimer_start ( pmonTimer_audit, pmon_timer_handler, audit_period );
+
+            alarmed_process_audit ();
         }
 
         /* Run the degrade set/clear by audit */
