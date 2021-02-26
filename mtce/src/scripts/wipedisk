@@ -100,11 +100,14 @@ fi
 BACKUP_PART_GUID="BA5EBA11-0000-1111-2222-000000000002"
 part_type_guid_str="Partition GUID code"
 
+# get the nodetype variable to check later if this node is a controller
+. /etc/platform/platform.conf
+
 for dev in $WIPE_HDD
 do
     if [[ -e $dev ]]
     then
-        if [ "$dev" == "$rootfs" ]
+        if [[ "$dev" == "$rootfs" && "${nodetype}" == "controller" ]]
         then
             part_numbers=( $(parted -s $dev print | awk '$1 == "Number" {i=1; next}; i {print $1}') )
             for part_number in "${part_numbers[@]}"; do
