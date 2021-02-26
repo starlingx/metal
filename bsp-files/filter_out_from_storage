@@ -340,3 +340,7 @@ stx-snmp-helm
 stx-vault-helm
 sysinv-fpga-agent
 k8s-pod-recovery
+kernel-rt-headers
+kernel-rt-devel
+kernel-headers
+kernel-devel

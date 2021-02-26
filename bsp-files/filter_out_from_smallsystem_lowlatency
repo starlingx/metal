@@ -23,3 +23,5 @@ kernel-tools
 kernel-tools-libs
 kmod-drbd
 kernel-modules-extra
+kernel-headers
+kernel-devel
