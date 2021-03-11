@@ -964,6 +964,10 @@ static int _parse_redfish_sensor_data( char * json_str_ptr, thread_info_type * i
                         {
                             strcpy(_sample_list[samples].status, "cr");
                         }
+                        else if  (!strcmp (health.data(), REDFISH_SEVERITY__NONRECOVERABLE ))
+                        {
+                            strcpy(_sample_list[samples].status, "nr");
+                        }
                         else
                         {
                             strcpy(_sample_list[samples].status, "na");
