@@ -63,6 +63,11 @@ int nodeLinkClass::fsm ( struct nodeLinkClass::node * node_ptr )
 
     /* Monitor and Manage active threads */
     thread_handler ( node_ptr->bmc_thread_ctrl, node_ptr->bmc_thread_info );
+    if ( node_ptr->bmc_thread_ctrl.stage == THREAD_STAGE__KILL )
+    {
+        /* do nothing while thread is being killed */
+        return RETRY ;
+    }
 
     /* manage the host connected state and board management alarms */
     nodeLinkClass::bmc_handler ( node_ptr );

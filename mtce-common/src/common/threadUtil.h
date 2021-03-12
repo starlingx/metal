@@ -284,6 +284,7 @@ bool   thread_done   ( thread_ctrl_type & ctrl );
 bool   thread_idle   ( thread_ctrl_type & ctrl );
 void   thread_kill   ( thread_ctrl_type & ctrl , thread_info_type & info );
 string thread_stage  ( thread_ctrl_type & ctrl );
+int    thread_done_consume ( thread_ctrl_type & ctrl, thread_info_type & info );
 
 /* Cooperative service of cancel and exit requests from parent */
 void pthread_signal_handler ( thread_info_type * info_ptr );
