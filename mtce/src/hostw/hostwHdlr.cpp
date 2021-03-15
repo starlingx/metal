@@ -188,7 +188,7 @@ void manage_quorum_failed ( void )
          * by clearing the control boolean that prevents recovery. */
         ilog ("Quorum failed but all reboot/reset recovery options disabled");
         ilog ("... allowing auto recovery");
-        ctrl_ptr->quorum_failed = 0 ;
+        ctrl_ptr->quorum_failed = false ;
         ctrl_ptr->pmon_grace_loops = config_ptr->hostwd_failure_threshold ;
     }
 }
@@ -285,7 +285,7 @@ void hostw_service ( void )
                 pmonTimer.ring = false ;
             }
         }
-        else if ( ctrl->quorum_failed == 0 )
+        else if ( ctrl->quorum_failed == false )
         {
             if (FD_ISSET(hostw_socket->status_sock, &(hostw_socket->readfds)))
             {
@@ -304,13 +304,14 @@ void hostw_service ( void )
                     }
                 }
                 else if ( rc != RETRY )
-                    ctrl->quorum_failed++ ;
+                    ctrl->quorum_failed = true ;
             }
         }
         if ( 0 >= ctrl->pmon_grace_loops )
         {
-            if ( ctrl->quorum_failed++ == 0 )
+            if ( ctrl->quorum_failed == false )
             {
+                ctrl->quorum_failed = true ;
                 if (daemon_is_file_present(NODE_LOCKED_FILE))
                 {
                     wlog( "Host watchdog (hostwd) not receiving messages from PMON"

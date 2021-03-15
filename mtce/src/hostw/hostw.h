@@ -57,16 +57,16 @@ using namespace std;
 #include "hostwMsg.h"      /* message format */
 
 /* Configuration Files */
-#define HOSTWD_CONFIG_FILE   ((const char * const)"/etc/mtc/hostwd.conf")
-#define PMOND_CONFIG_FILE    ((const char * const)"/etc/mtc/pmond.conf")
+#define HOSTWD_CONFIG_FILE   ((const char *)"/etc/mtc/hostwd.conf")
+#define PMOND_CONFIG_FILE    ((const char *)"/etc/mtc/pmond.conf")
 
 /* kernel SysRq control interface file used to enable the magic SysRq key.
  * Used to ensure that the SysRq service is enabled when needed. */
-#define SYSRQ_CONTROL_INTERFACE ((const char * const)"/proc/sys/kernel/sysrq")
+#define SYSRQ_CONTROL_INTERFACE ((const char *)"/proc/sys/kernel/sysrq")
 
 /* kernel SysRq trigger interface file used to trigger a SysRq command.
  * commands @ https://www.kernel.org/doc/html/latest/admin-guide/sysrq.html */
-#define SYSRQ_COMMAND_INTERFACE ((const char * const)"/proc/sysrq-trigger")
+#define SYSRQ_COMMAND_INTERFACE ((const char *)"/proc/sysrq-trigger")
 
 #define HOSTW_MIN_KERN_UPDATE_PERIOD  5  /* user can set how long until kernel
                                           * watchdog panics, down to this
