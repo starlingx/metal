@@ -948,7 +948,7 @@ typedef enum
 string get_delStages_str ( mtc_delStages_enum stage );
 
 
-#define MTC_MAX_FAST_ENABLES (3)
+#define MTC_MAX_FAST_ENABLES (5)
 typedef enum
 {
     MTC_RECOVERY__START =  0,
@@ -974,10 +974,9 @@ typedef enum
     MTC_RECOVERY__HEARTBEAT_START,
     MTC_RECOVERY__HEARTBEAT_SOAK,
     MTC_RECOVERY__STATE_CHANGE,
-    MTC_RECOVERY__ENABLE_START,
     MTC_RECOVERY__FAILURE,
     MTC_RECOVERY__WORKQUEUE_WAIT,
-    MTC_RECOVERY__ENABLE_WAIT,
+    MTC_RECOVERY__ENABLE,
     MTC_RECOVERY__STAGES,
 } mtc_recoveryStages_enum ;
 

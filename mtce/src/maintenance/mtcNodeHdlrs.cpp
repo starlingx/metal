@@ -1660,7 +1660,8 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
              *   2. Setting the node operational state to Disabled
              *   3. Setting the Enable action
              */
-            if ( ++node_ptr->graceful_recovery_counter > MTC_MAX_FAST_ENABLES )
+            node_ptr->graceful_recovery_counter++ ;
+            if ( node_ptr->graceful_recovery_counter > MTC_MAX_FAST_ENABLES )
             {
                 /* gate off further mtcAlive messaging timme the offline
                 * handler runs. This prevents stale messages from making it
@@ -2555,7 +2556,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
             else if ( rc == PASS )
             {
                 /* Start Graceful Recovery */
-                recoveryStageChange ( node_ptr, MTC_RECOVERY__ENABLE_START ) ;
+                recoveryStageChange ( node_ptr, MTC_RECOVERY__ENABLE ) ;
                 break ;
             }
             else if ( rc == FAIL_WORKQ_TIMEOUT )
@@ -2571,51 +2572,37 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
             nodeLinkClass::force_full_enable ( node_ptr );
             break ;
         }
-        case MTC_RECOVERY__ENABLE_START:
+        case MTC_RECOVERY__ENABLE:
         {
-            /* Create the recovery enable timer. This timer is short.
-             * A node need to stay enabled with the hartbeat service
-             * running for a period of time before declaring it enabled */
-            mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_HEARTBEAT_SOAK_BEFORE_ENABLE );
-
-            recoveryStageChange ( node_ptr, MTC_RECOVERY__ENABLE_WAIT ) ;
-            break;
-        }
-        case MTC_RECOVERY__ENABLE_WAIT:
-        {
-            /* When this timer fires the host has been up for enough time */
-            if ( node_ptr->mtcTimer.ring == true )
+            if ( is_controller(node_ptr) )
             {
-                if ( is_controller(node_ptr) )
+                if ( mtcSmgrApi_request ( node_ptr,
+                                          CONTROLLER_ENABLED,
+                                          SMGR_MAX_RETRIES ) != PASS )
                 {
-                    if ( mtcSmgrApi_request ( node_ptr,
-                                              CONTROLLER_ENABLED,
-                                              SMGR_MAX_RETRIES ) != PASS )
-                    {
-                        wlog ("%s Failed to send 'unlocked-disabled' to HA Service Manager ; allowing enable\n",
-                              node_ptr->hostname.c_str());
-                    }
+                    wlog ("%s Failed to send 'unlocked-enabled' to HA Service Manager ; allowing enable\n",
+                          node_ptr->hostname.c_str());
                 }
-                /* Node Has Recovered */
-                node_ptr->graceful_recovery_counter = 0 ;
-                recoveryStageChange ( node_ptr, MTC_RECOVERY__START );
-                adminActionChange   ( node_ptr, MTC_ADMIN_ACTION__NONE );
-                node_ptr->health_threshold_counter = 0 ;
-                node_ptr->enabled_count++ ;
-                node_ptr->http_retries_cur = 0 ;
-
-                doneQueue_purge ( node_ptr );
-                if ( node_ptr->was_dor_recovery_mode )
-                {
-                    report_dor_recovery (  node_ptr , "is ENABLED" );
-                }
-                else
-                {
-                    plog ("%s is ENABLED (Gracefully Recovered)\n",
-                              node_ptr->hostname.c_str());
-                }
-                alarm_enabled_clear ( node_ptr, false );
             }
+            /* Node Has Recovered */
+            node_ptr->graceful_recovery_counter = 0 ;
+            recoveryStageChange ( node_ptr, MTC_RECOVERY__START );
+            adminActionChange   ( node_ptr, MTC_ADMIN_ACTION__NONE );
+            node_ptr->health_threshold_counter = 0 ;
+            node_ptr->enabled_count++ ;
+            node_ptr->http_retries_cur = 0 ;
+
+            doneQueue_purge ( node_ptr );
+            if ( node_ptr->was_dor_recovery_mode )
+            {
+                report_dor_recovery (  node_ptr , "is ENABLED" );
+            }
+            else
+            {
+                plog ("%s is ENABLED (Gracefully Recovered)\n",
+                          node_ptr->hostname.c_str());
+            }
+            alarm_enabled_clear ( node_ptr, false );
             break ;
         }
         default:

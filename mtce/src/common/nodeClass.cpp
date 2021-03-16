@@ -4927,17 +4927,17 @@ void nodeLinkClass::hbs_minor_clear ( struct nodeLinkClass::node * node_ptr, ifa
     }
 
      if ( temp_count != mnfa_host_count[iface] )
-     {    
+     {
          slog ("%s MNFA host tally (%s:%d incorrect - expected %d) ; correcting\n",
                    node_ptr->hostname.c_str(),
                    get_iface_name_str(iface),
                    mnfa_host_count[iface], temp_count );
                    mnfa_host_count[iface] = temp_count ;
          mnfa_host_count[iface] = temp_count ;
-     }    
+     }
      else
      {
-         wlog ("%s MNFA host tally (%s:%d)\n",
+         dlog ("%s MNFA host tally (%s:%d)\n",
                    node_ptr->hostname.c_str(),
                    get_iface_name_str(iface),
                    mnfa_host_count[iface] );
@@ -5903,9 +5903,6 @@ int nodeLinkClass::critical_process_failed( string & hostname,
                       node_ptr->hostname.c_str()); /* dlog */
         }
 
-        /* Start fresh the next time we enter graceful recovery handler */
-        node_ptr->graceful_recovery_counter = 0 ;
-
         /* Set node as unlocked-disabled-failed */
         allStateChange ( node_ptr, MTC_ADMIN_STATE__UNLOCKED,
                                    MTC_OPER_STATE__DISABLED,
@@ -6863,7 +6860,7 @@ int nodeLinkClass::disableStageChange ( struct nodeLinkClass::node * node_ptr,
 }
 
 /** Validate and log Recovery stage changes */
-int nodeLinkClass::recoveryStageChange  ( struct nodeLinkClass::node * node_ptr, 
+int nodeLinkClass::recoveryStageChange  ( struct nodeLinkClass::node * node_ptr,
                                           mtc_recoveryStages_enum newHdlrStage )
 {
     int rc = PASS ;
@@ -6871,14 +6868,14 @@ int nodeLinkClass::recoveryStageChange  ( struct nodeLinkClass::node * node_ptr,
     if (( newHdlrStage >= MTC_RECOVERY__STAGES ) ||
         ( node_ptr->recoveryStage >= MTC_RECOVERY__STAGES ))
     {
-        slog ("%s Invalid recovery stage (%d:%d)\n", 
+        slog ("%s Invalid recovery stage (%d:%d)\n",
                   node_ptr->hostname.c_str(),
-                  node_ptr->recoveryStage, 
+                  node_ptr->recoveryStage,
                   newHdlrStage );
 
         if ( newHdlrStage < MTC_RECOVERY__STAGES )
         {
-            clog ("%s ? -> %s\n", 
+            clog ("%s ? -> %s\n",
                node_ptr->hostname.c_str(),
                get_recoveryStages_str(newHdlrStage).c_str());
 
@@ -6890,11 +6887,11 @@ int nodeLinkClass::recoveryStageChange  ( struct nodeLinkClass::node * node_ptr,
             rc = FAIL ;
         }
     }
-    else 
+    else
     {
-        clog ("%s %s -> %s\n", 
+        clog ("%s %s -> %s\n",
                node_ptr->hostname.c_str(),
-               get_recoveryStages_str(node_ptr->recoveryStage).c_str(), 
+               get_recoveryStages_str(node_ptr->recoveryStage).c_str(),
                get_recoveryStages_str(newHdlrStage).c_str());
 
         node_ptr->recoveryStage = newHdlrStage  ;

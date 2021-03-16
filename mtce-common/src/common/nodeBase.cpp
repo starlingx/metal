@@ -397,10 +397,9 @@ void mtc_stages_init ( void )
    recoveryStages_str[MTC_RECOVERY__HEARTBEAT_START    ] = "Heartbeat-Start";
    recoveryStages_str[MTC_RECOVERY__HEARTBEAT_SOAK     ] = "Heartbeat-Soak";
    recoveryStages_str[MTC_RECOVERY__STATE_CHANGE       ] = "State Change";
-   recoveryStages_str[MTC_RECOVERY__ENABLE_START       ] = "Enable-Start";
    recoveryStages_str[MTC_RECOVERY__FAILURE            ] = "Failure";
    recoveryStages_str[MTC_RECOVERY__WORKQUEUE_WAIT     ] = "WorkQ-Wait";
-   recoveryStages_str[MTC_RECOVERY__ENABLE_WAIT        ] = "Enable-Wait";
+   recoveryStages_str[MTC_RECOVERY__ENABLE             ] = "Enable";
    recoveryStages_str[MTC_RECOVERY__STAGES             ] = "unknown";
 
    disableStages_str [MTC_DISABLE__START               ] = "Disable-Start";
