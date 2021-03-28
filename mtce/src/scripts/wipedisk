@@ -18,6 +18,28 @@ usage ()
     exit 1
 }
 
+# Systemd automatically remounts all the mounted filesystems at shutdown
+# When we are deleting a partition, we have to unmount its corresponding filesystem
+# because remounting deleted filesystems at shutdown will throw errors
+unmount_fs()
+{
+  local fs=$1
+  local ret_code=0
+  echo "Trying to unmount $fs"
+  if findmnt $fs > /dev/null 2>&1 ; then
+      if umount -f $fs ; then
+         echo "$fs has been successfully unmounted"
+      else
+         echo "Error! Failed to unmount $fs"
+         ret_code=1
+      fi
+  else
+      echo "Warning! $fs is not mounted"
+      ret_code=2
+  fi
+  return $ret_code
+}
+
 OPTS=`getopt -o h -l force -- "$@"`
 if [ $? != 0 ]
 then
@@ -131,6 +153,7 @@ do
                 # Skip / or we will lose access to the tools on the system.
                 if [[ $part != $rootfs_part ]]
                 then
+                    unmount_fs $part
                     dd if=/dev/zero of=$part bs=512 count=34
                     dd if=/dev/zero of=$part bs=512 count=34 seek=$((`blockdev --getsz $part` - 34))
                 fi
@@ -144,6 +167,7 @@ do
         else
             echo "Wiping $dev..."
             wipefs -f -a $dev
+            unmount_fs $dev
 
             # Clearing previous GPT tables or LVM data
             # Delete the first few bytes at the start and end of the partition. This is required with
