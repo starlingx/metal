@@ -69,6 +69,7 @@ influxdb
 influxdb-extensions
 io-monitor
 io-scheduler
+isolcpus-device-plugin
 isomd5sum
 ipxe-roms-qemu
 kernel-module-openvswitch
