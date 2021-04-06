@@ -660,7 +660,7 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
     {
         ptr->alarms[id] = FM_ALARM_SEVERITY_CLEAR ;
     }
-    ptr->alarms_loaded   = false ;
+    ptr->active_alarms = "" ; /* no active alarms */
 
     ptr->cfgEvent.base   = NULL ;
     ptr->sysinvEvent.base= NULL ;
@@ -777,6 +777,7 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
 
     return ptr ;
 }
+
 
 struct nodeLinkClass::node* nodeLinkClass::getNode ( string hostname )
 {
@@ -5088,6 +5089,15 @@ void nodeLinkClass::manage_heartbeat_failure ( string hostname, iface_enum iface
     }
 }
 
+/****************************************************************************
+ *
+ * Name       : manage_heartbeat_clear
+ *
+ * Description: Manage clearing heartbeat failure status
+ *
+ * Assuptions : Called by Both hbsAgent and mtcAgent
+ *
+ ***************************************************************************/
 void nodeLinkClass::manage_heartbeat_clear ( string hostname, iface_enum iface )
 {
     nodeLinkClass::node * node_ptr = nodeLinkClass::getNode ( hostname );
@@ -5103,13 +5113,17 @@ void nodeLinkClass::manage_heartbeat_clear ( string hostname, iface_enum iface )
             node_ptr->heartbeat_failed[i] = false ;
             if ( i == MGMNT_IFACE )
             {
-                node_ptr->alarms[HBS_ALARM_ID__HB_MGMNT] = FM_ALARM_SEVERITY_CLEAR ;
-                node_ptr->degrade_mask &= ~DEGRADE_MASK_HEARTBEAT_MGMNT ;
+                if ( heartbeat )
+                    node_ptr->alarms[HBS_ALARM_ID__HB_MGMNT] = FM_ALARM_SEVERITY_CLEAR ;
+                if ( maintenance )
+                    node_ptr->degrade_mask &= ~DEGRADE_MASK_HEARTBEAT_MGMNT ;
             }
             if ( i == CLSTR_IFACE )
             {
-                node_ptr->alarms[HBS_ALARM_ID__HB_CLSTR] = FM_ALARM_SEVERITY_CLEAR ;
-                node_ptr->degrade_mask &= ~DEGRADE_MASK_HEARTBEAT_CLSTR ;
+                if ( heartbeat )
+                    node_ptr->alarms[HBS_ALARM_ID__HB_CLSTR] = FM_ALARM_SEVERITY_CLEAR ;
+                if ( maintenance )
+                    node_ptr->degrade_mask &= ~DEGRADE_MASK_HEARTBEAT_CLSTR ;
             }
         }
     }
@@ -5118,13 +5132,17 @@ void nodeLinkClass::manage_heartbeat_clear ( string hostname, iface_enum iface )
         node_ptr->heartbeat_failed[iface] = false ;
         if ( iface == MGMNT_IFACE )
         {
-            node_ptr->alarms[HBS_ALARM_ID__HB_MGMNT] = FM_ALARM_SEVERITY_CLEAR ;
-            node_ptr->degrade_mask &= ~DEGRADE_MASK_HEARTBEAT_MGMNT ;
+            if ( heartbeat )
+                node_ptr->alarms[HBS_ALARM_ID__HB_MGMNT] = FM_ALARM_SEVERITY_CLEAR ;
+            if ( maintenance )
+                node_ptr->degrade_mask &= ~DEGRADE_MASK_HEARTBEAT_MGMNT ;
         }
         else if ( iface == CLSTR_IFACE )
         {
-            node_ptr->alarms[HBS_ALARM_ID__HB_CLSTR] = FM_ALARM_SEVERITY_CLEAR ;
-            node_ptr->degrade_mask &= ~DEGRADE_MASK_HEARTBEAT_CLSTR ;
+            if ( heartbeat )
+                node_ptr->alarms[HBS_ALARM_ID__HB_CLSTR] = FM_ALARM_SEVERITY_CLEAR ;
+            if ( maintenance )
+                node_ptr->degrade_mask &= ~DEGRADE_MASK_HEARTBEAT_CLSTR ;
         }
     }
 }
@@ -9068,21 +9086,21 @@ void nodeLinkClass::mem_log_mtcalive ( struct nodeLinkClass::node * node_ptr )
 {
     char str[MAX_MEM_LOG_DATA] ;
 
-    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tmtcAlive: online:%c offline:%c Cnt:%d Gate:%s Misses:%d\n", 
-                node_ptr->hostname.c_str(), 
+    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tmtcAlive: online:%c offline:%c Cnt:%d Gate:%s Misses:%d\n",
+                node_ptr->hostname.c_str(),
                 node_ptr->mtcAlive_online ? 'Y' : 'N',
                 node_ptr->mtcAlive_offline ? 'Y' : 'N',
                 node_ptr->mtcAlive_count,
                 node_ptr->mtcAlive_gate ? "closed" : "open",
-                node_ptr->mtcAlive_misses); 
+                node_ptr->mtcAlive_misses);
     mem_log (str);
 }
 
 void nodeLinkClass::mem_log_alarm1 ( struct nodeLinkClass::node * node_ptr )
 {
     char str[MAX_MEM_LOG_DATA] ;
-    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tAlarm List:%s%s%s%s%s%s\n", 
-               node_ptr->hostname.c_str(), 
+    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tAlarm List:%s%s%s%s%s%s\n",
+               node_ptr->hostname.c_str(),
                node_ptr->alarms[MTC_ALARM_ID__LOCK    ] ? " Locked"   : " .",
                node_ptr->alarms[MTC_ALARM_ID__CONFIG  ] ? " Config"   : " .",
                node_ptr->alarms[MTC_ALARM_ID__ENABLE  ] ? " Enable"   : " .",
@@ -9090,6 +9108,18 @@ void nodeLinkClass::mem_log_alarm1 ( struct nodeLinkClass::node * node_ptr )
                node_ptr->alarms[MTC_ALARM_ID__CH_COMP ] ? " Compute"  : " .",
                node_ptr->alarms[MTC_ALARM_ID__BM      ] ? " Brd Mgmt" : " .");
     mem_log (str);
+}
+
+void nodeLinkClass::mem_log_alarm2 ( struct nodeLinkClass::node * node_ptr )
+{
+    if ( ! node_ptr->active_alarms.empty() )
+    {
+        char str[MAX_MEM_LOG_DATA] ;
+        snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tActive Alarms:%s\n",
+                   node_ptr->hostname.c_str(),
+                   node_ptr->active_alarms.c_str());
+        mem_log (str);
+    }
 }
 
 void nodeLinkClass::mem_log_stage ( struct nodeLinkClass::node * node_ptr )
@@ -9142,8 +9172,8 @@ void nodeLinkClass::mem_log_network ( struct nodeLinkClass::node * node_ptr )
 {
     char str[MAX_MEM_LOG_DATA] ;
     snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\t%s %s cluster_host_ip: %s Uptime: %u\n",
-                node_ptr->hostname.c_str(), 
-                node_ptr->mac.c_str(), 
+                node_ptr->hostname.c_str(),
+                node_ptr->mac.c_str(),
                 node_ptr->ip.c_str(),
                 node_ptr->clstr_ip.c_str(),
                 node_ptr->uptime );
@@ -9155,11 +9185,11 @@ void nodeLinkClass::mem_log_heartbeat ( struct nodeLinkClass::node * node_ptr )
     char str[MAX_MEM_LOG_DATA] ;
     for ( int iface = 0 ; iface < MAX_IFACES ; iface++ )
     {
-        snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\t%s Minor:%s Degrade:%s Failed:%s  Monitor:%s\n", 
-                   node_ptr->hostname.c_str(), 
+        snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\t%s Minor:%s Degrade:%s Failed:%s  Monitor:%s\n",
+                   node_ptr->hostname.c_str(),
                    get_iface_name_str (iface),
-                   node_ptr->hbs_minor[iface] ? "true " : "false", 
-                   node_ptr->hbs_degrade[iface] ? "true " : "false", 
+                   node_ptr->hbs_minor[iface] ? "true " : "false",
+                   node_ptr->hbs_degrade[iface] ? "true " : "false",
                    node_ptr->hbs_failure[iface] ? "true " : "false",
                    node_ptr->monitor[iface] ? "YES" : "no"  );
         mem_log (str);
@@ -9188,8 +9218,8 @@ void nodeLinkClass::mem_log_hbs_cnts ( struct nodeLinkClass::node * node_ptr )
 void nodeLinkClass::mem_log_test_info ( struct nodeLinkClass::node * node_ptr )
 {
     char str[MAX_MEM_LOG_DATA] ;
-    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tOOS Stage:%s Runs:%d - INSV Stage:%s Runs:%d\n", 
-                node_ptr->hostname.c_str(), 
+    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tOOS Stage:%s Runs:%d - INSV Stage:%s Runs:%d\n",
+                node_ptr->hostname.c_str(),
                 get_oosTestStages_str(node_ptr->oosTestStage).c_str(),
                 node_ptr->oos_test_count,
                 get_insvTestStages_str(node_ptr->insvTestStage).c_str(),
@@ -9261,6 +9291,7 @@ void nodeLinkClass::memDumpNodeState ( string hostname )
             // mem_log_reset_info ( node_ptr );
             mem_log_power_info ( node_ptr );
             mem_log_alarm1     ( node_ptr );
+            mem_log_alarm2     ( node_ptr );
             mem_log_mtcalive   ( node_ptr );
             mem_log_stage      ( node_ptr );
             mem_log_bm         ( node_ptr );

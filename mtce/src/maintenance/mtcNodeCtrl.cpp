@@ -1187,15 +1187,6 @@ int _self_provision ( void )
 
             if ( my_identity.name == record_info.name )
             {
-                /* If the active controller was 'locked' and is being auto-corrected
-                 * to 'unlocked' then ensure that there is no locked alarm set for it */
-                if ( record_info.admin != "locked" )
-                {
-                        mtcAlarm_clear ( my_identity.name, MTC_ALARM_ID__LOCK );
-                        /* this is not required because its already inited to clear */
-                        // node_ptr->alarms[MTC_ALARM_ID__LOCK] = FM_ALARM_SEVERITY_CLEAR
-                }
-
                 if ( my_identity.mac != record_info.mac )
                 {
                     wlog ("%s mac address mismatch (%s - %s)\n",

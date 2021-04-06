@@ -652,20 +652,18 @@ private:
 
         /** @} private_monitoring_services_variables */
 
-        /* List of alarms and current severity */
-        #define MAX_ALARMS           (10)
+        /* List of alarms current severity */
         EFmAlarmSeverityT alarms[MAX_ALARMS];
 
-        /* tracks whether the alarms for this host have been loaded already or not */
-        bool alarms_loaded ;
+        /* string containing active alarms and their severity
+         * ... for logging purposes only */
+        string active_alarms ;
 
         /** true if this host has recovered before the mnfa timeout period.
          *  This bool flags the graceful recovery handler that this node
          *  is recovering from mnfa and should manage graceful recovery
          *  and uptime accordingly */
         bool mnfa_graceful_recovery ;
-
-        int stress_iteration ;
 
         /* BMC Protocol Learning Controls and State */
 
@@ -842,6 +840,9 @@ private:
 
     /* server specific power state query handler */
     bool (*is_poweron_handler) (string hostname, string query_response );
+
+    /* Audit that monitors and auto corrects alarm state mismatches */
+    void mtcAlarm_audit ( struct nodeLinkClass::node * node_ptr );
 
     /* Calculate the overall reset progression timeout */
     int calc_reset_prog_timeout ( struct nodeLinkClass::node * node_ptr, int retries );
@@ -1304,6 +1305,7 @@ private:
     void mem_log_state1    ( struct nodeLinkClass::node * node_ptr );
     void mem_log_state2    ( struct nodeLinkClass::node * node_ptr );
     void mem_log_alarm1    ( struct nodeLinkClass::node * node_ptr );
+    void mem_log_alarm2    ( struct nodeLinkClass::node * node_ptr );
     void mem_log_mtcalive  ( struct nodeLinkClass::node * node_ptr );
     void mem_log_stage     ( struct nodeLinkClass::node * node_ptr );
     void mem_log_test_info ( struct nodeLinkClass::node * node_ptr );

@@ -26,6 +26,7 @@ using namespace std;
 #include "daemon_common.h" /*                                           */
 
 #include "nodeBase.h"      /*                                           */
+#include "nodeClass.h"     /*                                           */
 #include "nodeTimers.h"    /*                                           */
 #include "nodeUtil.h"      /*                                           */
 #include "mtcAlarm.h"      /* for ... this module header                */
@@ -379,7 +380,168 @@ void mtcAlarm_clear_all ( string hostname )
     }
 }
 
+/****************************************************************************
+ *
+ * Name       : mtcAlarm_audit
+ *
+ * Purpose    : Monitor and Auto-Correct maintenance alarms
+ *
+ * Description: Query locked state alarm (raw)
+ *              if successful
+ *                 - Query alarms
+ *                 - compare to running state
+ *                 - correct mismatches ; internal state takes precidence
+ *                 - log all alarm state changes
+ *
+ ****************************************************************************/
+
+void nodeLinkClass::mtcAlarm_audit ( struct nodeLinkClass::node * node_ptr )
+{
+   /*
+    * Read locked state alarm directly to detect fm access failures.
+    * If successful further reads are done using a wrapper utility.
+    */
+    SFmAlarmDataT alarm_query  ;
+    AlarmFilter   alarm_filter ;
+    EFmErrorT     rc           ;
+
+    memset(&alarm_query, 0, sizeof(alarm_query));
+    memset(&alarm_filter, 0, sizeof(alarm_filter));
+    snprintf ( &alarm_filter.alarm_id[0], FM_MAX_BUFFER_LENGTH, "%s",
+               LOCK_ALARM_ID);
+    snprintf ( &alarm_filter.entity_instance_id[0], FM_MAX_BUFFER_LENGTH, "%s%s",
+                    ENTITY_PREFIX, node_ptr->hostname.data());
+    rc = fm_get_fault ( &alarm_filter, &alarm_query );
+    if (( rc != FM_ERR_OK ) && ( rc != FM_ERR_ENTITY_NOT_FOUND ))
+    {
+        wlog("%s alarm query failure ; code:%d",
+                 node_ptr->hostname.c_str(),
+                 rc );
+        return ;
+    }
+
+    /* With FM comms proven working lets check the other mtc alarms */
+    string active_alarms = "";
+    for ( int i = 0 ; i < MAX_ALARMS ; i++ )
+    {
+        mtc_alarm_id_enum id = (mtc_alarm_id_enum)i ;
+        if ( id == MTC_ALARM_ID__LOCK )
+        {
+            /* Unexpected severity case */
+            if ( node_ptr->adminState == MTC_ADMIN_STATE__LOCKED )
+            {
+                if ( alarm_query.severity != FM_ALARM_SEVERITY_WARNING )
+                {
+                    node_ptr->alarms[id] = FM_ALARM_SEVERITY_WARNING ;
+
+                    wlog("%s %s alarm mismatch ; %s -> %s",
+                             node_ptr->hostname.c_str(),
+                             _getIdentity(id).c_str(),
+                             alarmUtil_getSev_str(alarm_query.severity).c_str(),
+                             alarmUtil_getSev_str(node_ptr->alarms[id]).c_str());
+
+                    mtcAlarm_warning ( node_ptr->hostname, MTC_ALARM_ID__LOCK );
+
+                }
+                if (!active_alarms.empty())
+                    active_alarms.append(", ");
+                active_alarms.append(_getIdentity(id) + ":");
+                active_alarms.append(alarmUtil_getSev_str(node_ptr->alarms[id]));
+            }
+            /* Unexpected assertion case */
+            else if (( node_ptr->adminState == MTC_ADMIN_STATE__UNLOCKED ) &&
+                     (  alarm_query.severity != FM_ALARM_SEVERITY_CLEAR ))
+            {
+                node_ptr->alarms[id] = FM_ALARM_SEVERITY_CLEAR ;
+
+                wlog("%s %s alarm mismatch ; %s -> %s",
+                         node_ptr->hostname.c_str(),
+                         _getIdentity(id).c_str(),
+                         alarmUtil_getSev_str(alarm_query.severity).c_str(),
+                         alarmUtil_getSev_str(node_ptr->alarms[id]).c_str());
+
+                mtcAlarm_clear ( node_ptr->hostname, id );
+            }
+        }
+        else if (( id == MTC_ALARM_ID__CONFIG ) ||
+                 ( id == MTC_ALARM_ID__ENABLE ) ||
+                 ( id == MTC_ALARM_ID__BM     ) ||
+                 ( id == MTC_ALARM_ID__CH_CONT) ||
+                 ( id == MTC_ALARM_ID__CH_COMP))
+        {
+            EFmAlarmSeverityT severity = mtcAlarm_state ( node_ptr->hostname, id);
+            if ( severity != node_ptr->alarms[id] )
+            {
+                ilog ("%s %s alarm mismatch ; %s -> %s",
+                          node_ptr->hostname.c_str(),
+                          _getIdentity(id).c_str(),
+                           alarmUtil_getSev_str(severity).c_str(),
+                           alarmUtil_getSev_str(node_ptr->alarms[id]).c_str());
+
+                if ( node_ptr->alarms[id] == FM_ALARM_SEVERITY_CLEAR )
+                {
+                    mtcAlarm_clear ( node_ptr->hostname, id );
+                }
+                else
+                {
+                    mtcAlarm_raise ( node_ptr->hostname, id, node_ptr->alarms[id] );
+                }
+            }
+            if ( node_ptr->alarms[id] != FM_ALARM_SEVERITY_CLEAR )
+            {
+                if (!active_alarms.empty())
+                    active_alarms.append(", ");
+                active_alarms.append(_getIdentity(id) + ":");
+                active_alarms.append(alarmUtil_getSev_str(node_ptr->alarms[id]));
+            }
+        }
+        /* else don't care about other alarm ids ; logs events etc */
+    }
+
+    /* manage logging of active alarms */
+    if ( !active_alarms.empty() )
+    {
+        if ( node_ptr->active_alarms != active_alarms )
+        {
+            ilog ("%s active alarms: %s",
+                      node_ptr->hostname.c_str(),
+                      active_alarms.c_str());
+
+            node_ptr->active_alarms = active_alarms ;
+        }
+        /* else
+         *    do nothing because there are active alarms
+         *    that have not changed since the last audit.
+         */
+    }
+    else if ( ! node_ptr->active_alarms.empty() )
+    {
+        /* clear active alarm list since there 'were' active alarms
+         * but there are no longer active alarms */
+        node_ptr->active_alarms.clear();
+        ilog ("%s no active alarms", node_ptr->hostname.c_str());
+    }
+    /* else
+     *    no active alarms ; don't log */
+}
+
 /*************************   A L A R M I N G   **************************/
+
+/* Raise the specified maintenance alarm severity */
+int mtcAlarm_raise ( string hostname, mtc_alarm_id_enum id, EFmAlarmSeverityT severity )
+{
+    switch ( severity )
+    {
+        case FM_ALARM_SEVERITY_MINOR:
+            return (mtcAlarm_minor(hostname,id));
+        case FM_ALARM_SEVERITY_MAJOR:
+            return (mtcAlarm_major(hostname,id));
+        case FM_ALARM_SEVERITY_CRITICAL:
+            return (mtcAlarm_critical(hostname,id));
+        default:
+            return (FAIL_BAD_PARM);
+    }
+}
 
 /* Clear the specified hosts's maintenance alarm */
 int mtcAlarm_clear ( string hostname, mtc_alarm_id_enum id )

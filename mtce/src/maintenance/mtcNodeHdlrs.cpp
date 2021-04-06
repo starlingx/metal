@@ -6107,48 +6107,32 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
                 mtcInvApi_update_state ( node_ptr, "availability", "available" );
             }
 
-            /* handle other cases */
-            EFmAlarmSeverityT sev = mtcAlarm_state ( node_ptr->hostname,
-                                                     MTC_ALARM_ID__ENABLE);
+            /* Query FM for existing Enable and Config alarm status */
+            EFmAlarmSeverityT enable_alarm_severity =
+                mtcAlarm_state ( node_ptr->hostname, MTC_ALARM_ID__ENABLE);
+            EFmAlarmSeverityT config_alarm_severity =
+                mtcAlarm_state ( node_ptr->hostname, MTC_ALARM_ID__CONFIG);
 
-            if ( node_ptr->adminState == MTC_ADMIN_STATE__LOCKED )
+            /* Clear generic enable alarm over process restart.
+             * Will get reasserted if the cause condition still exists */
+            if ( enable_alarm_severity != FM_ALARM_SEVERITY_CLEAR )
             {
-                node_ptr->alarms[MTC_ALARM_ID__LOCK] = FM_ALARM_SEVERITY_WARNING ;
-
-                /* If the node is locked then the Enable alarm
-                 * should not be present */
-                if ( sev != FM_ALARM_SEVERITY_CLEAR )
-                {
-                    mtcAlarm_clear ( node_ptr->hostname, MTC_ALARM_ID__ENABLE );
-                    sev = FM_ALARM_SEVERITY_CLEAR ;
-                }
+                ilog ("%s found enable alarm ; clearing %s",
+                          node_ptr->hostname.c_str(),
+                          alarmUtil_getSev_str(enable_alarm_severity).c_str());
+                mtcAlarm_clear ( node_ptr->hostname, MTC_ALARM_ID__ENABLE );
             }
 
-            /* Manage enable alarm over process restart.
-             *
-             * - clear the alarm in the active controller case
-             * - maintain the alarm, set degrade state in MAJOR and CRIT cases
-             * - clear alarm for all other severities.
-             */
-            if ( THIS_HOST )
+            /* The config alarm is maintained if it exists.
+             * The in-service test handler will clear the alarm
+             * if the config failure is gone */
+            if ( config_alarm_severity != FM_ALARM_SEVERITY_CLEAR )
             {
-                if ( sev != FM_ALARM_SEVERITY_CLEAR )
-                {
-                    mtcAlarm_clear ( node_ptr->hostname, MTC_ALARM_ID__ENABLE );
-                }
-            }
-            else
-            {
-                if (( sev == FM_ALARM_SEVERITY_CRITICAL ) ||
-                    ( sev == FM_ALARM_SEVERITY_MAJOR ))
-                {
-                    node_ptr->alarms[MTC_ALARM_ID__ENABLE] = sev ;
-                    node_ptr->degrade_mask |= DEGRADE_MASK_ENABLE ;
-                }
-                else if ( sev != FM_ALARM_SEVERITY_CLEAR )
-                {
-                    mtcAlarm_clear ( node_ptr->hostname, MTC_ALARM_ID__ENABLE );
-                }
+                node_ptr->degrade_mask |= DEGRADE_MASK_CONFIG ;
+                node_ptr->alarms[MTC_ALARM_ID__CONFIG] = config_alarm_severity ;
+                ilog ("%s found config alarm ; loaded %s",
+                          node_ptr->hostname.c_str(),
+                          alarmUtil_getSev_str(config_alarm_severity).c_str());
             }
 
             if ( is_controller(node_ptr) )
@@ -6188,7 +6172,6 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
                     {
                         ilog ("%s %s\n",node_ptr->hostname.c_str(), MTC_TASK_SWACT_COMPLETE );
 
-                        /* Work Around for issue: */
                         mtcInvApi_update_uptime ( node_ptr, node_ptr->uptime );
 
                         mtcInvApi_update_task ( node_ptr, MTC_TASK_SWACT_COMPLETE );
@@ -6222,7 +6205,6 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
                     mtcSmgrApi_request ( node_ptr, state , SWACT_FAIL_THRESHOLD );
                 }
             }
-
             if ( daemon_get_cfg_ptr()->debug_level & 1 )
                 nodeLinkClass::host_print (node_ptr);
 
@@ -6357,6 +6339,7 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
         }
         case MTC_ADD__WORKQUEUE_WAIT:
         {
+
             rc = workQueue_done ( node_ptr );
             if ( rc == RETRY )
             {
@@ -6444,6 +6427,7 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
             }
 
             node_ptr->addStage = MTC_ADD__START;
+
             plog ("%s Host Add Completed (uptime:%d)\n", node_ptr->hostname.c_str(), node_ptr->uptime );
             node_ptr->add_completed = true ;
             break ;
@@ -7202,6 +7186,9 @@ int nodeLinkClass::oos_test_handler ( struct nodeLinkClass::node * node_ptr )
                 }
             }
 
+            /* audit alarms */
+            mtcAlarm_audit (node_ptr );
+
             break ;
         }
         case MTC_OOS_TEST__WAIT:
@@ -7600,7 +7587,7 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
                 }
             }
 
-            /* Monitor the health of the host - no pass file */
+            /* Monitor the health of the host */
             if ((  node_ptr->adminState  == MTC_ADMIN_STATE__UNLOCKED ) &&
                 (  node_ptr->operState   == MTC_OPER_STATE__ENABLED   ) &&
                 (( node_ptr->availStatus == MTC_AVAIL_STATUS__AVAILABLE ) ||
@@ -7626,6 +7613,11 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
                     ilog ("%s sm degrade clear\n", node_ptr->hostname.c_str());
                 }
 
+                /*
+                 * In-service Config Failure/Alarm handling
+                 */
+
+                /* Detect new config failure condition */
                 if ( node_ptr->mtce_flags & MTC_FLAG__I_AM_NOT_HEALTHY)
                 {
                     /* not healthy .... */
@@ -7637,16 +7629,7 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
                         {
                             wlog_throttled ( node_ptr->health_threshold_counter, (MTC_UNHEALTHY_THRESHOLD*10), "%s is UNHEALTHY\n", node_ptr->hostname.c_str());
                             if ( node_ptr->health_threshold_counter >= MTC_UNHEALTHY_THRESHOLD )
-                            {
-                                node_ptr->degrade_mask |= DEGRADE_MASK_CONFIG ;
-
-                                /* threshold is reached so raise the config alarm if it is not already raised */
-                                if ( node_ptr->alarms[MTC_ALARM_ID__CONFIG] != FM_ALARM_SEVERITY_CRITICAL )
-                                {
-                                    mtcAlarm_critical ( node_ptr->hostname, MTC_ALARM_ID__CONFIG );
-                                    node_ptr->alarms[MTC_ALARM_ID__CONFIG] = FM_ALARM_SEVERITY_CRITICAL ;
-                                }
-                            }
+                                alarm_config_failure ( node_ptr );
                         }
                     }
                     else
@@ -7665,6 +7648,12 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
                                        node_ptr->health_threshold_counter );
                         }
                     }
+                }
+                /* or correct an alarmed config failure that has cleared */
+                else if ( node_ptr->degrade_mask & DEGRADE_MASK_CONFIG )
+                {
+                    if ( node_ptr->mtce_flags & MTC_FLAG__I_AM_HEALTHY )
+                        alarm_config_clear ( node_ptr );
                 }
                 else
                 {

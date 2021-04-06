@@ -95,6 +95,9 @@ string mtcAlarm_getId_str ( mtc_alarm_id_enum id );
 /** Clear the specified maintenance alarm for specific host */
 int  mtcAlarm_clear    ( string hostname, mtc_alarm_id_enum id );
 
+/** Raise specified severity level alarm for the specified host */
+int mtcAlarm_raise ( string hostname, mtc_alarm_id_enum id, EFmAlarmSeverityT severity );
+
 /** Assert a specified mtce alarm against the specified host with a WARNING severity level */
 int  mtcAlarm_warning  ( string hostname, mtc_alarm_id_enum id );
 
