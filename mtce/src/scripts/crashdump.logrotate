@@ -1,7 +1,11 @@
+#
+# Copyright (c) 2020-2021 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 /var/log/crash/vmcore.tar
 /var/log/crash/vmcore_first.tar
 {
-    nodateext
     size 1K
     start 1
     rotate 1

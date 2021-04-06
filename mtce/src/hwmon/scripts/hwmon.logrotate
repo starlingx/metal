@@ -1,28 +1,21 @@
-#daily
-nodateext
-start 1
-missingok
-notifempty
-compress
-sharedscripts
-postrotate
-    systemctl reload syslog-ng > /dev/null 2>&1 || true
-endscript
+#
+# Copyright (c) 2020-2021 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
 
 /var/log/hwmond.log
-{
-    size 50M
-    rotate 5
-}
-
 /var/log/hwmond_event.log
-{
-    size 50M
-    rotate 5
-}
-
 /var/log/hwmond_api.log
 {
+    create 0640 root root
+    start 1
     size 50M
     rotate 5
+    compress
+    notifempty
+    missingok
+    postrotate
+        systemctl reload syslog-ng > /dev/null 2>&1 || true
+    endscript
+    delaycompress
 }
