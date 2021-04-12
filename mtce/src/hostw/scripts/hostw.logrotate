@@ -1,16 +1,19 @@
-#daily
-nodateext
+#
+# Copyright (c) 2020-2021 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
 
 /var/log/hostwd.log
 {
-    nodateext
-    size 10M
+    create 0640 root root
     start 1
-    missingok
+    size 10M
     rotate 20
     compress
-    sharedscripts
+    notifempty
+    missingok
     postrotate
         systemctl reload syslog-ng > /dev/null 2>&1 || true
     endscript
+    delaycompress
 }

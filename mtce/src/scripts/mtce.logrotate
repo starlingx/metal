@@ -1,59 +1,67 @@
-#daily
-
-# Apply all these options to all the logs
-nodateext
-start 1
-compress
-notifempty
-missingok
-sharedscripts
-postrotate
-    systemctl reload syslog-ng > /dev/null 2>&1 || true
-endscript
-
+#
+# Copyright (c) 2015-2021 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
 /var/log/mtcAgent.log
 {
-    size 100M
+    create 0640 root root
+    start 1
     rotate 10
+    size 100M
+    compress
+    notifempty
+    missingok
+    postrotate
+        systemctl reload syslog-ng > /dev/null 2>&1 || true
+    endscript
+    delaycompress
 }
 
 /var/log/hbsAgent.log
-{
-    size 20M
-    rotate 5
-}
-
 /var/log/mtcClient.log
-{
-    size 20M
-    rotate 5
-}
-
 /var/log/hbsClient.log
 {
-    size 20M
+    create 0640 root root
+    start 1
     rotate 5
+    size 20M
+    compress
+    notifempty
+    missingok
+    postrotate
+        systemctl reload syslog-ng > /dev/null 2>&1 || true
+    endscript
+    delaycompress
 }
 
 /var/log/mtclogd.log
 {
-    size 10M
+    create 0640 root root
+    start 1
     rotate 5
+    size 10M
+    compress
+    notifempty
+    missingok
+    postrotate
+        systemctl reload syslog-ng > /dev/null 2>&1 || true
+    endscript
+    delaycompress
 }
 
+# The mtclogd opens and closes these log files on every log addition.
+# Therefore does not require a notification over log rotation.
+/var/log/mtcAgent_event.log
+/var/log/mtcAgent_alarm.log
 /var/log/mtcAgent_api.log
 {
-    size 20M
+    create 0640 root root
+    start 1
     rotate 5
-}
-
-/var/log/mtcAgent_event.log
-{
-    size 20M
-    rotate 5
-}
-/var/log/mtcAgent_alarm.log
-{
     size 10M
-    rotate 5
+    compress
+    notifempty
+    missingok
+    delaycompress
 }

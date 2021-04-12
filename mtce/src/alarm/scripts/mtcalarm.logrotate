@@ -1,17 +1,19 @@
-#daily
-nodateext
-start 1
-compress
-copytruncate
-notifempty
-missingok
+#
+# Copyright (c) 2018-2021 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
 
 /var/log/mtcalarmd.log
 {
+    create 0640 root root
+    start 1
     size 10M
     rotate 20
-    sharedscripts
+    compress
+    notifempty
+    missingok
     postrotate
         systemctl reload syslog-ng > /dev/null 2>&1 || true
     endscript
+    delaycompress
 }
