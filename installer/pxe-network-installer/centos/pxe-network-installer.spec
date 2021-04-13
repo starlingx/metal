@@ -37,6 +37,7 @@ Source057: efi-centos-pxe-smallsystem_lowlatency-install
 
 
 BuildRequires: syslinux
+BuildRequires: syslinux-nonlinux
 BuildRequires: grub2
 BuildRequires: grub2-efi-x64-pxeboot
 
@@ -121,9 +122,8 @@ install -v -m 0644 \
     %{_datadir}/syslinux/chain.c32 \
     %{_datadir}/syslinux/linux.c32 \
     %{_datadir}/syslinux/reboot.c32 \
-    %{_datadir}/syslinux/pxechain.com \
+    %{_datadir}/syslinux/pxechn.c32 \
     %{_datadir}/syslinux/pxelinux.0 \
-    %{_datadir}/syslinux/gpxelinux.0 \
     %{buildroot}/pxeboot
 
 # Copy StarlingX grub.cfg. It will be used to create ISO on the Controller.
