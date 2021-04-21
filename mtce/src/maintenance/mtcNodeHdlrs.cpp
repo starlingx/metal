@@ -481,7 +481,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
         if ( node_ptr->adminAction == MTC_ADMIN_ACTION__UNLOCK )
         {
             bool aio = false ;
-            if ( SIMPLEX_CPE_SYSTEM )
+            if ( SIMPLEX_AIO_SYSTEM )
                 aio = true ;
             else
                 aio = false ;
@@ -525,7 +525,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                 }
             }
             mtcInvApi_update_states_now ( node_ptr, "unlocked", "disabled" , "offline", "disabled", "offline" );
-            mtcInvApi_update_task_now   ( node_ptr, aio ? MTC_TASK_CPE_SX_UNLOCK_MSG : MTC_TASK_SELF_UNLOCK_MSG );
+            mtcInvApi_update_task_now   ( node_ptr, aio ? MTC_TASK_AIO_SX_UNLOCK_MSG : MTC_TASK_SELF_UNLOCK_MSG );
 
             wlog ("%s unlocking %s with reboot\n",
                       my_hostname.c_str(),
@@ -546,7 +546,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
              * Condition 1: While there is no in-service backup controller
              *              to swact to. In this case the ctive controller
              *              - is only degraded to avoid a system outage.
-             *              - the CPE subfunction is failed
+             *              - the AIO subfunction is failed
              *              - worker SubFunction Alarm is raised
              *              - Enable alarm is raised
              *              - A process monitor alarm may also be raised if
@@ -648,7 +648,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                 }
                 else
                 {
-                    if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+                    if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
                     {
                         /* Raise Critical Compute Function Alarm */
                         alarm_compute_failure ( node_ptr , FM_ALARM_SEVERITY_CRITICAL );
@@ -661,7 +661,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
             node_ptr->graceful_recovery_counter = 0 ;
             node_ptr->health_threshold_counter  = 0 ;
 
-            if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+            if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
             {
                 node_ptr->inservice_failed_subf = true ;
                 subfStateChange ( node_ptr, MTC_OPER_STATE__DISABLED,
@@ -1358,7 +1358,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                  * have a worker function and the heartbeat for those hosts
                  * are started at the end of the subfunction handler. */
                 if (( THIS_HOST ) ||
-                   (( CPE_SYSTEM ) && ( is_controller(node_ptr)) ))
+                   (( AIO_SYSTEM ) && ( is_controller(node_ptr)) ))
                 {
                     enableStageChange ( node_ptr, MTC_ENABLE__STATE_CHANGE );
                 }
@@ -1523,8 +1523,8 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
             if ( is_controller(node_ptr) )
             {
                 /* Defer telling SM the controller state if
-                 * this is a CPE and this is the only controller */
-                if ( CPE_SYSTEM && ( num_controllers_enabled() > 0 ))
+                 * this is a AIO and this is the only controller */
+                if ( AIO_SYSTEM && ( num_controllers_enabled() > 0 ))
                 {
                     wlog ("%s deferring SM enable notification till subfunction-enable complete\n",
                               node_ptr->hostname.c_str());
@@ -1555,7 +1555,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
 
             enableStageChange ( node_ptr, MTC_ENABLE__START );
 
-            if (( CPE_SYSTEM ) && ( is_controller(node_ptr)))
+            if (( AIO_SYSTEM ) && ( is_controller(node_ptr)))
             {
                 ilog ("%s running worker sub-function enable handler\n", node_ptr->hostname.c_str());
                 mtcInvApi_update_task ( node_ptr, MTC_TASK_ENABLING_SUBF );
@@ -1876,7 +1876,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
                                            MTC_OPER_STATE__DISABLED,
                                            MTC_AVAIL_STATUS__FAILED );
 
-                if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+                if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
                 {
                     subfStateChange ( node_ptr, MTC_OPER_STATE__DISABLED,
                                                MTC_AVAIL_STATUS__FAILED );
@@ -2267,7 +2267,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
             {
                 /* The active controller would never get/be here but
                  * if it did then just fall through to change state. */
-                if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+                if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
                 {
                     /* Here we need to run the sub-fnction goenable and start
                      * host services if this is the other controller in a AIO
@@ -2511,7 +2511,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
         }
         case MTC_RECOVERY__STATE_CHANGE:
         {
-            if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+            if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
             {
                 /* Set node as unlocked-enabled */
                 subfStateChange ( node_ptr, MTC_OPER_STATE__ENABLED,
@@ -2770,7 +2770,7 @@ int nodeLinkClass::disable_handler  ( struct nodeLinkClass::node * node_ptr )
                                            MTC_OPER_STATE__DISABLED,
                                            locked_status );
 
-                if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+                if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
                 {
                     subfStateChange ( node_ptr, MTC_OPER_STATE__DISABLED,
                                                 locked_status );
@@ -3419,7 +3419,7 @@ int nodeLinkClass::online_handler ( struct nodeLinkClass::node * node_ptr )
 
                         /* otherwise change state */
                         mtcInvApi_update_state(node_ptr, MTC_JSON_INV_AVAIL,"offline" );
-                        if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+                        if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
                         {
                             mtcInvApi_update_state(node_ptr, MTC_JSON_INV_AVAIL_SUBF,"offline" );
                         }
@@ -3460,7 +3460,7 @@ int nodeLinkClass::online_handler ( struct nodeLinkClass::node * node_ptr )
                                   node_ptr->hostname.c_str());
 
                         mtcInvApi_update_state ( node_ptr, MTC_JSON_INV_AVAIL, "online" );
-                        if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+                        if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
                         {
                             mtcInvApi_update_state ( node_ptr, MTC_JSON_INV_AVAIL_SUBF, "online" );
                         }
@@ -6080,7 +6080,7 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
 
             mtcInfo_log(node_ptr);
 
-            if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+            if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
             {
                 if ( daemon_is_file_present ( CONFIG_COMPLETE_WORKER ) == false )
                 {
@@ -6325,7 +6325,7 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
 
             send_hbs_command   ( node_ptr->hostname, MTC_CMD_ADD_HOST );
 
-            if ( ( CPE_SYSTEM ) || ( is_worker (node_ptr) == true ))
+            if ( ( AIO_SYSTEM ) || ( is_worker (node_ptr) == true ))
             {
                 send_guest_command ( node_ptr->hostname, MTC_CMD_ADD_HOST );
             }
@@ -6365,11 +6365,11 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
                 ( node_ptr->operState  == MTC_OPER_STATE__ENABLED ))
             {
                 /* start the heartbeat service in all cases except for
-                 * THIS host and CPE controller hosts */
+                 * THIS host and AIO controller hosts */
                 if ( NOT_THIS_HOST )
                 {
                     if (( LARGE_SYSTEM ) ||
-                        (( CPE_SYSTEM ) && ( this->dor_mode_active == false )))
+                        (( AIO_SYSTEM ) && ( this->dor_mode_active == false )))
                     {
                         send_hbs_command ( node_ptr->hostname, MTC_CMD_START_HOST );
                     }
@@ -6402,7 +6402,7 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
                 node_ptr->configAction = MTC_CONFIG_ACTION__INSTALL_PASSWD ;
             }
 
-            if (( ! SIMPLEX_CPE_SYSTEM ) &&
+            if (( ! SIMPLEX_AIO_SYSTEM ) &&
                 ( node_ptr->bmc_provisioned == true ))
             {
                 mtcAlarm_clear ( node_ptr->hostname, MTC_ALARM_ID__BM );
@@ -6410,7 +6410,7 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
             }
 
             /* Special Add handling for the AIO system */
-            if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+            if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
             {
                 if (( node_ptr->adminState == MTC_ADMIN_STATE__UNLOCKED ) &&
                     ( node_ptr->operState  == MTC_OPER_STATE__ENABLED ))
@@ -7484,7 +7484,7 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
              *  In the restart case the subfunction fsm enable handler is not run so
              *  we try to detect the missing goenabled_subf flag as an inservice test.
              *
-             *  Only in CPE type
+             *  Only in AIO type
              *   - clear the alarm if the issue goes away -
              *     i.e. the goenabled tests eventually pass. Today
              *     hey are not re-run in the background but someday they may be
@@ -7492,7 +7492,7 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
              *     and we have only a single enabled controller (which must be this one)
              *     and the alarm is not already raised.
              **/
-            if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+            if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
             {
                 if (( node_ptr->adminState == MTC_ADMIN_STATE__UNLOCKED ) &&
                     ( node_ptr->operState == MTC_OPER_STATE__ENABLED ) &&

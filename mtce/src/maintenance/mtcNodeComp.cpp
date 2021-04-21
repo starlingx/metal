@@ -449,7 +449,7 @@ void setup_clstr_tx_sockets ( void )
             mtc_sock.mtc_client_tx_socket_c0_clstr->sock_ok(false);
         }
     }
-    if ( ctrl.system_type != SYSTEM_TYPE__CPE_MODE__SIMPLEX )
+    if ( ctrl.system_type != SYSTEM_TYPE__AIO__SIMPLEX )
     {
         dlog ("setup of %s TX\n", CONTROLLER_1_CLUSTER_HOST);
 
@@ -1401,8 +1401,20 @@ void daemon_service_run ( void )
                 socket_reinit = true ;
             }
 
-            /* Clstr Tx */
-            else if (( ctrl.clstr_iface_provisioned == true ) &&
+            /* Clstr Tx ; AIO SX */
+            else if ((ctrl.system_type == SYSTEM_TYPE__AIO__SIMPLEX) &&
+                     ( ctrl.clstr_iface_provisioned == true ) &&
+                     (( mtc_sock.mtc_client_tx_socket_c0_clstr == NULL ) ||
+                      ( mtc_sock.mtc_client_tx_socket_c0_clstr->sock_ok() == false )))
+            {
+                wlog ("calling setup_clstr_tx_sockets (auto-recovery)\n");
+                setup_clstr_tx_sockets();
+                socket_reinit = true ;
+            }
+
+            /* Clstr Tx ; not AIO SX */
+            else if ((ctrl.system_type != SYSTEM_TYPE__AIO__SIMPLEX) &&
+                     ( ctrl.clstr_iface_provisioned == true ) &&
                      (( mtc_sock.mtc_client_tx_socket_c0_clstr == NULL ) ||
                       ( mtc_sock.mtc_client_tx_socket_c1_clstr == NULL ) ||
                       ( mtc_sock.mtc_client_tx_socket_c0_clstr->sock_ok() == false ) ||
@@ -1713,7 +1725,7 @@ int run_hostservices_scripts ( unsigned int cmd )
 
 
     /* For the stop command we need the mtcClient to run both controller and
-     * worker stop services if we are on a CPE system.
+     * worker stop services if we are on a AIO system.
      * This saves the mtcAgent from having to issue and manage 2 commands,
      * one for controller and 1 for worker */
     if ( ctrl.system_type != SYSTEM_TYPE__NORMAL )

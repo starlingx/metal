@@ -169,7 +169,7 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
              *
              * issue: subfunction go-enable patching script fails and
              * maintenance reboots the active controller when no-reboot
-             * patching maintenance in CPE.
+             * patching maintenance in AIO.
              *
              * The fix is to avoid running the subfunction go-enabled tests
              * on self while patching.
@@ -490,7 +490,7 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
 
                 fail = true ;
             }
-            else if ( this->system_type != SYSTEM_TYPE__CPE_MODE__SIMPLEX )
+            else if ( this->system_type != SYSTEM_TYPE__AIO__SIMPLEX )
             {
                 /* Loop over the heartbeat interfaces and fail the Enable if any of them are failing */
                 for ( int i = 0 ; i < MAX_IFACES ; i++ )

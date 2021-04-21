@@ -952,15 +952,18 @@ int send_mtcAlive_msg ( mtc_socket_type * sock_ptr, string identity, int interfa
         }
 
         /* Send to controller-1 cluster address */
-        if (( sock_ptr->mtc_client_tx_socket_c1_clstr ) &&
-            ( sock_ptr->mtc_client_tx_socket_c1_clstr->sock_ok() == true ))
+        if ( get_ctrl_ptr()->system_type != SYSTEM_TYPE__AIO__SIMPLEX )
         {
-            print_mtc_message ( CONTROLLER_1, MTC_CMD_TX, msg, get_iface_name_str(CLSTR_INTERFACE), false );
-            sock_ptr->mtc_client_tx_socket_c1_clstr->write((char*)&msg.hdr[0], bytes ) ;
-        }
-        else
-        {
-            elog("mtc_client_tx_socket_c1_clstr not ok");
+            if (( sock_ptr->mtc_client_tx_socket_c1_clstr ) &&
+                ( sock_ptr->mtc_client_tx_socket_c1_clstr->sock_ok() == true ))
+            {
+                print_mtc_message ( CONTROLLER_1, MTC_CMD_TX, msg, get_iface_name_str(CLSTR_INTERFACE), false );
+                sock_ptr->mtc_client_tx_socket_c1_clstr->write((char*)&msg.hdr[0], bytes ) ;
+            }
+            else
+            {
+                elog("mtc_client_tx_socket_c1_clstr not ok");
+            }
         }
     }
     else

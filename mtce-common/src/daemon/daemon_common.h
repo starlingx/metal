@@ -38,15 +38,15 @@ using namespace std ;
 /* List of different types */
 typedef enum
 {
-    SYSTEM_TYPE__NORMAL                  =0,
-    SYSTEM_TYPE__CPE_MODE__DUPLEX        =1,
-    SYSTEM_TYPE__CPE_MODE__DUPLEX_DIRECT =2,
-    SYSTEM_TYPE__CPE_MODE__SIMPLEX       =3,
+    SYSTEM_TYPE__NORMAL             =0,
+    SYSTEM_TYPE__AIO__DUPLEX        =1,
+    SYSTEM_TYPE__AIO__DUPLEX_DIRECT =2,
+    SYSTEM_TYPE__AIO__SIMPLEX       =3,
 } system_type_enum ;
 
 
 /** Called by signal handler on daemon exit
-  * Performs cleanup by closing open files 
+  * Performs cleanup by closing open files
   * and freeing used memory */
 void daemon_exit ( void );
 

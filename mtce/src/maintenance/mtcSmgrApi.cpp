@@ -96,7 +96,7 @@ int nodeLinkClass::mtcSmgrApi_request ( struct nodeLinkClass::node * node_ptr, m
     int rc = PASS ;
     string operation_string = "unknown" ;
 
-    if ( system_type == SYSTEM_TYPE__CPE_MODE__SIMPLEX )
+    if ( system_type == SYSTEM_TYPE__AIO__SIMPLEX )
     {
         dlog ("%s simpex mode ; SM '%d' request not sent\n", node_ptr->hostname.c_str(), operation );
         return ( PASS );

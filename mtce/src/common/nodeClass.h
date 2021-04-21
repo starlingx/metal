@@ -76,11 +76,11 @@ using namespace std;
 #define LARGE_SYSTEM \
     ( this->system_type == SYSTEM_TYPE__NORMAL )
 
-#define CPE_SYSTEM \
+#define AIO_SYSTEM \
     ( this->system_type != SYSTEM_TYPE__NORMAL )
 
-#define SIMPLEX_CPE_SYSTEM \
-    ( this->system_type == SYSTEM_TYPE__CPE_MODE__SIMPLEX )
+#define SIMPLEX_AIO_SYSTEM \
+    ( this->system_type == SYSTEM_TYPE__AIO__SIMPLEX )
 
 /**
  * @addtogroup nodeLinkClass

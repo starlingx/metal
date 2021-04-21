@@ -1224,7 +1224,7 @@ int service_events ( nodeLinkClass * obj_ptr, mtc_socket_type * sock_ptr )
     else if ( msg.cmd == MTC_EVENT_HEARTBEAT_READY )
     {
         /* no heartbeating in simplex mode */
-        if ( obj_ptr->system_type == SYSTEM_TYPE__CPE_MODE__SIMPLEX )
+        if ( obj_ptr->system_type == SYSTEM_TYPE__AIO__SIMPLEX )
         {
             return (PASS);
         }

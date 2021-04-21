@@ -347,7 +347,7 @@ string daemon_mgmnt_iface ( void )
 system_type_enum daemon_system_type ( void )
 {
     char buffer  [BUFFER];
-    system_type_enum system_type = SYSTEM_TYPE__CPE_MODE__SIMPLEX ;
+    system_type_enum system_type = SYSTEM_TYPE__AIO__SIMPLEX ;
     FILE * cfg_file_stream = fopen ( PLATFORM_CONF_FILE, "r" );
     if ( cfg_file_stream != NULL )
     {
@@ -401,11 +401,11 @@ system_type_enum daemon_system_type ( void )
                         if ( !mode.empty() )
                         {
                             if ( mode.compare("duplex") == 0 )
-                                system_type = SYSTEM_TYPE__CPE_MODE__DUPLEX ;
+                                system_type = SYSTEM_TYPE__AIO__DUPLEX ;
                             else if ( mode.compare("duplex-direct") == 0 )
-                                system_type = SYSTEM_TYPE__CPE_MODE__DUPLEX_DIRECT ;
+                                system_type = SYSTEM_TYPE__AIO__DUPLEX_DIRECT ;
                             else if ( mode.compare("simplex") == 0 )
-                                system_type = SYSTEM_TYPE__CPE_MODE__SIMPLEX ;
+                                system_type = SYSTEM_TYPE__AIO__SIMPLEX ;
                             else
                             {
                                 elog ("%s All-In-One system type ; mode unknown\n", SYSTEM_TYPE_PREFIX );
@@ -438,21 +438,21 @@ system_type_enum daemon_system_type ( void )
             ilog("%s Standard System\n", SYSTEM_TYPE_PREFIX);
             break ;
         }
-        case SYSTEM_TYPE__CPE_MODE__DUPLEX_DIRECT:
+        case SYSTEM_TYPE__AIO__DUPLEX_DIRECT:
         {
             ilog ("%s All-in-one Duplex Direct Connect\n", SYSTEM_TYPE_PREFIX );
             break ;
         }
-        case SYSTEM_TYPE__CPE_MODE__DUPLEX:
+        case SYSTEM_TYPE__AIO__DUPLEX:
         {
             ilog ("%s All-in-one Duplex\n", SYSTEM_TYPE_PREFIX );
             break ;
         }
-        case SYSTEM_TYPE__CPE_MODE__SIMPLEX:
+        case SYSTEM_TYPE__AIO__SIMPLEX:
         default:
         {
             ilog ("%s All-in-one Simplex \n", SYSTEM_TYPE_PREFIX );
-            system_type = SYSTEM_TYPE__CPE_MODE__SIMPLEX ;
+            system_type = SYSTEM_TYPE__AIO__SIMPLEX ;
             break ;
         }
     }

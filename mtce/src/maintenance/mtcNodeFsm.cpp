@@ -315,10 +315,10 @@ int nodeLinkClass::fsm ( struct nodeLinkClass::node * node_ptr )
     }
 
     /****************************************************************************
-     * No Op: Do nothing for this Healthy Enabled Locked CPE Simplex Host
+     * No Op: Do nothing for this Healthy Enabled Locked AIO Simplex Host
      ****************************************************************************
      */
-    else if (( this->system_type == SYSTEM_TYPE__CPE_MODE__SIMPLEX ) &&
+    else if (( this->system_type == SYSTEM_TYPE__AIO__SIMPLEX ) &&
              ( node_ptr->adminAction == MTC_ADMIN_ACTION__NONE ) &&
              ( node_ptr->adminState  == MTC_ADMIN_STATE__LOCKED ))
     {

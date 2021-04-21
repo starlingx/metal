@@ -1507,9 +1507,9 @@ void daemon_service_run ( void )
 
     if ( ts.tv_sec < MTC_MINS_15 )
     {
-        /* CPE DOR window is much greater in CPE since heartbeat
-         * cannot start until the inactive CPE has run both manifests */
-        int timeout = DEFAULT_DOR_MODE_CPE_TIMEOUT ;
+        /* AIO DOR window is much greater in AIO since heartbeat
+         * cannot start until the inactive AIO has run both manifests */
+        int timeout = DEFAULT_DOR_MODE_AIO_TIMEOUT ;
 
         /* override the timeout to a smaller value for normal system */
         if ( mtcInv.system_type == SYSTEM_TYPE__NORMAL )
@@ -1593,7 +1593,7 @@ void daemon_service_run ( void )
         if ( mtcInv.system_type == SYSTEM_TYPE__NORMAL )
             mtc_sock.waitd.tv_usec = MTCAGENT_SELECT_TIMEOUT ;
         else
-            mtc_sock.waitd.tv_usec = MTCAGENT_CPE_SELECT_TIMEOUT ;
+            mtc_sock.waitd.tv_usec = MTCAGENT_AIO_SELECT_TIMEOUT ;
 
         /* This is used as a delay up to select_timeout */
         rc = select( socks.back()+1, &mtc_sock.readfds, NULL, NULL, &mtc_sock.waitd);

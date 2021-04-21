@@ -2707,7 +2707,7 @@ int nodeLinkClass::add_host ( node_inv_type & inv )
         node_ptr->operState   = operState_str_to_enum   (inv.oper.data ());
         node_ptr->availStatus = availStatus_str_to_enum (inv.avail.data());
 
-        if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+        if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
         {
             node_ptr->operState_subf   = operState_str_to_enum (inv.oper_subf.data());
             node_ptr->availStatus_subf = availStatus_str_to_enum (inv.avail_subf.data());
@@ -2819,7 +2819,7 @@ int nodeLinkClass::add_host ( node_inv_type & inv )
                     node_ptr->operState   = operState_str_to_enum   (inv.oper.data ());
                     node_ptr->availStatus = availStatus_str_to_enum (inv.avail.data());
 
-                    if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+                    if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
                     {
                         node_ptr->operState_subf   = operState_str_to_enum (inv.oper_subf.data());
                         node_ptr->availStatus_subf = availStatus_str_to_enum (inv.avail_subf.data());
@@ -2836,7 +2836,7 @@ int nodeLinkClass::add_host ( node_inv_type & inv )
                     node_ptr->operState   = operState_str_to_enum   (inv.oper.data ());
                     node_ptr->availStatus = availStatus_str_to_enum (inv.avail.data());
 
-                    if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+                    if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
                     {
                         node_ptr->operState_subf   = operState_str_to_enum (inv.oper_subf.data());
                         node_ptr->availStatus_subf = availStatus_str_to_enum (inv.avail_subf.data());
@@ -2854,7 +2854,7 @@ int nodeLinkClass::add_host ( node_inv_type & inv )
                     node_ptr->operState   = operState_str_to_enum   (inv.oper.data ());
                     node_ptr->availStatus = availStatus_str_to_enum (inv.avail.data());
 
-                    if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+                    if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
                     {
                         node_ptr->operState_subf   = operState_str_to_enum (inv.oper_subf.data());
                         node_ptr->availStatus_subf = availStatus_str_to_enum (inv.avail_subf.data());
@@ -2872,7 +2872,7 @@ int nodeLinkClass::add_host ( node_inv_type & inv )
                     node_ptr->operState   = operState_str_to_enum   (inv.oper.data ());
                     node_ptr->availStatus = availStatus_str_to_enum (inv.avail.data());
 
-                    if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+                    if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
                     {
                         node_ptr->operState_subf   = operState_str_to_enum (inv.oper_subf.data());
                         node_ptr->availStatus_subf = availStatus_str_to_enum (inv.avail_subf.data());
@@ -2890,7 +2890,7 @@ int nodeLinkClass::add_host ( node_inv_type & inv )
                     node_ptr->operState   = operState_str_to_enum   (inv.oper.data ());
                     node_ptr->availStatus = availStatus_str_to_enum (inv.avail.data());
 
-                    if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+                    if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
                     {
                         node_ptr->operState_subf   = operState_str_to_enum (inv.oper_subf.data());
                         node_ptr->availStatus_subf = availStatus_str_to_enum (inv.avail_subf.data());
@@ -2941,7 +2941,7 @@ int nodeLinkClass::add_host ( node_inv_type & inv )
                     node_ptr->operState   = MTC_OPER_STATE__DISABLED ;
                     node_ptr->availStatus = MTC_AVAIL_STATUS__OFFLINE ;
 
-                    if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+                    if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
                     {
                         node_ptr->operState_subf   = MTC_OPER_STATE__DISABLED ;
                         node_ptr->availStatus_subf = MTC_AVAIL_STATUS__OFFLINE ;
@@ -2959,7 +2959,7 @@ int nodeLinkClass::add_host ( node_inv_type & inv )
                 node_ptr->operState   = operState_str_to_enum   (inv.oper.data ());
                 node_ptr->availStatus = availStatus_str_to_enum (inv.avail.data());
 
-                if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+                if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
                 {
                     node_ptr->operState_subf   = operState_str_to_enum (inv.oper_subf.data());
                     node_ptr->availStatus_subf = availStatus_str_to_enum (inv.avail_subf.data());
@@ -4211,7 +4211,7 @@ void nodeLinkClass::set_mtce_flags ( string hostname, int flags, int iface )
 
 
         /* Deal with sub-function if AIO controller host */
-        if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+        if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
         {
             if ( flags & MTC_FLAG__SUBF_GOENABLED )
             {
@@ -7637,7 +7637,7 @@ int nodeLinkClass::ar_manage ( struct nodeLinkClass::node * node_ptr,
         mtcInvApi_update_states ( node_ptr, "unlocked", "disabled", "failed" );
 
         if (( NOT_THIS_HOST ) &&
-            ( this->system_type != SYSTEM_TYPE__CPE_MODE__SIMPLEX ))
+            ( this->system_type != SYSTEM_TYPE__AIO__SIMPLEX ))
         {
             if ( ++node_ptr->ar_count[node_ptr->ar_cause] >=
                   this->ar_threshold [node_ptr->ar_cause] )
@@ -9252,7 +9252,7 @@ void nodeLinkClass::mem_log_type_info ( struct nodeLinkClass::node * node_ptr )
                 node_ptr->function);
     mem_log (str);
 
-    if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+    if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
     {
         snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tSub-Function: %s (%u) (SubFunc Enabled:%c)\n",
                 node_ptr->hostname.c_str(),

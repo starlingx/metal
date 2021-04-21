@@ -185,7 +185,7 @@ typedef enum
 #define DEFAULT_MTCALIVE_TIMEOUT    (1200)
 #define DEFAULT_GOENABLE_TIMEOUT     (300)
 #define DEFAULT_DOR_MODE_TIMEOUT      (20)
-#define DEFAULT_DOR_MODE_CPE_TIMEOUT (600)
+#define DEFAULT_DOR_MODE_AIO_TIMEOUT (600)
 
 /** TODO: Convert names to omit JSON part */
 #define MTC_JSON_INV_LABEL     "ihosts"
@@ -311,7 +311,7 @@ typedef enum
 #define MTC_TASK_POWERCYCLE_FAIL   "Critical Event Power-Cycle %d; failed"
 #define MTC_TASK_POWERCYCLE_DOWN   "Critical Event Power-Down ; due to persistent critical sensor"
 #define MTC_TASK_RESETTING_HOST    "Resetting Host, critical sensor"
-#define MTC_TASK_CPE_SX_UNLOCK_MSG "Unlocking, please stand-by while the system gracefully reboots"
+#define MTC_TASK_AIO_SX_UNLOCK_MSG "Unlocking, please stand-by while the system gracefully reboots"
 #define MTC_TASK_SELF_UNLOCK_MSG   "Unlocking active controller, please stand-by while it reboots"
 #define MTC_TASK_FAILED_SWACT_REQ  "Critical failure.Requesting SWACT to enabled standby controller"
 #define MTC_TASK_FAILED_NO_BACKUP  "Critical failure.Please provision/enable standby controller"
@@ -383,8 +383,8 @@ typedef enum
 /* 5 milliseconds */
 #define MTCAGENT_SELECT_TIMEOUT (5000)
 
-/* dedicate more idle time in CPE ; there is less maintenance to do */
-#define MTCAGENT_CPE_SELECT_TIMEOUT (10000)
+/* dedicate more idle time in AIO ; there is less maintenance to do */
+#define MTCAGENT_AIO_SELECT_TIMEOUT (10000)
 
 /** Number of retries maintenance will do when it experiences
  *  a REST API call failure ; any failure */

@@ -1848,7 +1848,7 @@ void daemon_service_run ( void )
                     clock_gettime (CLOCK_MONOTONIC, &sm_heartbeat_timestamp_last );
 
                     /* no need for the heartbeat audit in a simplex system */
-                    if ( hbsInv.system_type != SYSTEM_TYPE__CPE_MODE__SIMPLEX )
+                    if ( hbsInv.system_type != SYSTEM_TYPE__AIO__SIMPLEX )
                     {
                         /* start the state audit */
                         /* run the first audit in 30 seconds */
@@ -2063,7 +2063,7 @@ void daemon_service_run ( void )
                                           hbsInv.active_controller ? "" : "in" );
 
                                 /* no need for the heartbeat audit in a simplex system */
-                                if ( hbsInv.system_type != SYSTEM_TYPE__CPE_MODE__SIMPLEX )
+                                if ( hbsInv.system_type != SYSTEM_TYPE__AIO__SIMPLEX )
                                 {
                                     /* Due to activity state change we will dump
                                      * the heartbeat cluster state at now time
