@@ -4131,6 +4131,18 @@ int  nodeLinkClass::get_uptime_refresh_ctr ( string & hostname )
     return (0);
 }
 
+
+int nodeLinkClass::get_mtce_flags ( string & hostname )
+{
+    nodeLinkClass::node* node_ptr ;
+    node_ptr = nodeLinkClass::getNode ( hostname );
+    if ( node_ptr != NULL )
+    {
+        return ( node_ptr->mtce_flags );
+    }
+    return (0);
+}
+
 void nodeLinkClass::set_mtce_flags ( string hostname, int flags, int iface )
 {
     nodeLinkClass::node* node_ptr = nodeLinkClass::getNode ( hostname );
@@ -4883,7 +4895,10 @@ void nodeLinkClass::hbs_minor_clear ( struct nodeLinkClass::node * node_ptr, ifa
 
             /* Otherwise this is a single host that has recovered
              * possibly as part of a mnfa group or simply a lone wolf */
-            else
+            else if (( node_ptr->hbs_minor[MGMNT_IFACE] == false ) &&
+                     (( clstr_network_provisioned == false ) ||
+                      (( clstr_network_provisioned == true ) &&
+                       ( node_ptr->hbs_minor[CLSTR_IFACE] == false ))))
             {
                 if ( node_ptr->mnfa_graceful_recovery == true )
                 {
@@ -4891,6 +4906,8 @@ void nodeLinkClass::hbs_minor_clear ( struct nodeLinkClass::node * node_ptr, ifa
                     mnfa_awol_list.remove(node_ptr->hostname);
                 }
 
+                /* Don't recover until heartbeat is working over all
+                 * monitored interfaces */
                 mnfa_recover_host ( node_ptr );
 
                 if ( mnfa_active == true )
@@ -5044,11 +5061,28 @@ void nodeLinkClass::manage_heartbeat_failure ( string hostname, iface_enum iface
             }
             return ;
         }
+        else if ( node_ptr->recoveryStage == MTC_RECOVERY__HEARTBEAT_SOAK )
+        {
+            elog ("%s %s *** Heartbeat Loss *** (during recovery soak)\n",
+                      hostname.c_str(),
+                      get_iface_name_str(iface));
+            force_full_enable ( node_ptr );
+            return ;
+        }
 
         mnfa_add_host ( node_ptr , iface );
 
         if ( mnfa_active == false )
         {
+            /* if node is already in graceful recovery just ignore the event */
+            if ( node_ptr->graceful_recovery_counter != 0 )
+            {
+                dlog ("%s %s loss event ; already in graceful recovery try %d",
+                          hostname.c_str(),
+                          get_iface_name_str(iface),
+                          node_ptr->graceful_recovery_counter );
+                return ;
+            }
             elog ("%s %s *** Heartbeat Loss ***\n", hostname.c_str(), get_iface_name_str(iface));
             if ( iface == CLSTR_IFACE )
             {

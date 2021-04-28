@@ -263,6 +263,7 @@ typedef enum
 #define MTC_TASK_ENABLE_WORK_FAIL  "Enable Action Failed"
 #define MTC_TASK_ENABLE_WORK_TO    "Enable Action Timeout"
 #define MTC_TASK_ENABLE_FAIL_HB    "Enable Heartbeat Failure, re-enabling"
+#define MTC_TASK_RECOVERY_FAIL_HB  "Graceful Recovery Heartbeat Failure, re-enabling"
 #define MTC_TASK_RECOVERY_FAIL     "Graceful Recovery Failed, re-enabling"
 #define MTC_TASK_RECOVERY_WAIT     "Graceful Recovery Wait"
 #define MTC_TASK_RECOVERED         "Gracefully Recovered"

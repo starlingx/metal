@@ -1637,9 +1637,10 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
             node_ptr->http_retries_cur = 0 ;
             node_ptr->unknown_health_reported = false ;
 
-            plog ("%s %sGraceful Recovery (uptime was %d)\n",
+            plog ("%s %sGraceful Recovery (%d) (uptime was %d)\n",
                       node_ptr->hostname.c_str(),
                       node_ptr->mnfa_graceful_recovery ? "MNFA " : "",
+                      node_ptr->graceful_recovery_counter,
                       node_ptr->uptime );
 
             /* Cancel any outstanding timers */
@@ -1773,10 +1774,11 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
 
                 else if ( node_ptr->mnfa_graceful_recovery == true )
                 {
-                    if ( node_ptr->uptime > MTC_MINS_10 )
+                    if ( node_ptr->uptime > MTC_MINS_15 )
                     {
                         /* did not reboot case */
-                        wlog ("%s Connectivity Recovered ; host did not reset\n", node_ptr->hostname.c_str());
+                        wlog ("%s Connectivity Recovered ; host did not reset (uptime:%d)\n",
+                                  node_ptr->hostname.c_str(), node_ptr->uptime);
                         wlog ("%s ... continuing with MNFA graceful recovery\n", node_ptr->hostname.c_str());
                         wlog ("%s ... with no affect to host services\n", node_ptr->hostname.c_str());
 
@@ -1789,7 +1791,8 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
                     else
                     {
                         /* did reboot case */
-                        wlog ("%s Connectivity Recovered ; host has reset\n", node_ptr->hostname.c_str());
+                        wlog ("%s Connectivity Recovered ; host has reset (uptime:%d)\n",
+                                  node_ptr->hostname.c_str(),  node_ptr->uptime);
                         ilog ("%s ... continuing with MNFA graceful recovery\n", node_ptr->hostname.c_str());
                         ilog ("%s ... without additional reboot %s\n",
                                   node_ptr->hostname.c_str(), node_ptr->bm_ip.empty() ? "or reset" : "" );
@@ -1807,12 +1810,13 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
                         break ;
                     }
                 }
-                else if (( node_ptr->uptime_save ) && ( node_ptr->uptime >= node_ptr->uptime_save ))
+                else if ( node_ptr->uptime > MTC_MINS_15 )
                 {
                     /* did not reboot case */
-                    wlog ("%s Connectivity Recovered ; host did not reset%s\n",
+                    wlog ("%s Connectivity Recovered ; host did not reset%s (uptime:%d)",
                               node_ptr->hostname.c_str(),
-                              node_ptr->was_dor_recovery_mode ? " (DOR)" : "" );
+                              node_ptr->was_dor_recovery_mode ? " (DOR)" : "",
+                              node_ptr->uptime);
 
                     wlog ("%s ... continuing with graceful recovery\n", node_ptr->hostname.c_str());
                     wlog ("%s ... with no affect to host services\n", node_ptr->hostname.c_str());
@@ -1906,7 +1910,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
         {
             int timeout = 0 ;
 
-            /* Set the FSM task state to booting */
+            /* Set the FSM task state to 'Graceful Recovery Wait' */
             node_ptr->uptime = 0 ;
             mtcInvApi_update_task ( node_ptr, MTC_TASK_RECOVERY_WAIT );
 
@@ -2443,10 +2447,10 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
             }
             else /* success path */
             {
-                /* allow the fsm to wait for up to 1 minute for the
-                 * hbsClient's ready event before starting heartbeat
+                /* allow the fsm to wait for up to 'worker config timeout'
+                 * for the hbsClient's ready event before starting heartbeat
                  * test. */
-                mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_MINS_1 );
+                mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_WORKER_CONFIG_TIMEOUT );
                 recoveryStageChange ( node_ptr, MTC_RECOVERY__HEARTBEAT_START );
             }
             break ;
@@ -2503,6 +2507,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
         {
             if ( node_ptr->mtcTimer.ring == true )
             {
+                ilog ("%s heartbeating", node_ptr->hostname.c_str());
                 /* if heartbeat is not working then we will
                  * never get here and enable the host */
                 recoveryStageChange ( node_ptr, MTC_RECOVERY__STATE_CHANGE );
@@ -6259,6 +6264,40 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
                     adminActionChange ( node_ptr, MTC_ADMIN_ACTION__NONE );
                     plog ("%s Host Add Completed ; auto recovery disabled state (uptime:%d)\n",
                               node_ptr->hostname.c_str(), node_ptr->uptime );
+                    break ;
+                }
+                /* Handle catching and recovering/restoring hosts that might
+                 * have been in the Graceful Recovery Wait state.
+                 *
+                 * Prevents an extra reboot for hosts that might be in
+                 * Graceful Recovery over a maintenance process restart. */
+                else if (( NOT_THIS_HOST ) &&
+                         ( !node_ptr->task.compare(MTC_TASK_RECOVERY_WAIT)))
+                {
+                    ilog ("%s is in %s ; restoring state",
+                              node_ptr->hostname.c_str(),
+                              MTC_TASK_RECOVERY_WAIT);
+
+                    /* Complete necessary add operations before switching
+                     * to Recovery */
+                    LOAD_NODETYPE_TIMERS ;
+                    workQueue_purge ( node_ptr );
+                    if (( hostUtil_is_valid_bm_type  ( node_ptr->bm_type )) &&
+                        ( hostUtil_is_valid_ip_addr  ( node_ptr->bm_ip )) &&
+                        ( hostUtil_is_valid_username ( node_ptr->bm_un )))
+                    {
+                        set_bm_prov ( node_ptr, true ) ;
+                    }
+                    mtcTimer_reset ( node_ptr->mtcTimer );
+                    adminActionChange ( node_ptr, MTC_ADMIN_ACTION__NONE );
+                    node_ptr->addStage = MTC_ADD__START;
+
+                    /* Switch into recovery_handler's Graceful Recovery Wait
+                     * state with the Graceful Recovery Wait timeout */
+                    adminActionChange ( node_ptr, MTC_ADMIN_ACTION__RECOVER );
+                    mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler,
+                                     node_ptr->mtcalive_timeout );
+                    recoveryStageChange ( node_ptr, MTC_RECOVERY__MTCALIVE_WAIT );
                     break ;
                 }
                 else

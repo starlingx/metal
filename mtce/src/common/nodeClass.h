@@ -1775,6 +1775,7 @@ public:
         #define MTC_FLAG__I_AM_LOCKED      (0x00000008)
     */
     void set_mtce_flags ( string hostname, int flags, int iface );
+    int  get_mtce_flags ( string & hostname );
 
     /** Updates the node's health code
       * Codes are found in nodeBase.h

@@ -2127,7 +2127,7 @@ void daemon_service_run ( void )
                         {
                             if ( hostname != hbsInv.my_hostname )
                             {
-                                hbsInv.mon_host ( hostname, false, true );
+                                hbsInv.mon_host ( hostname, false, false );
                                 hbs_cluster_del ( hostname );
                                 ilog ("%s heartbeat service disabled by stop command",
                                           hostname.c_str());

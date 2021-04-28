@@ -1262,13 +1262,69 @@ int service_events ( nodeLinkClass * obj_ptr, mtc_socket_type * sock_ptr )
             {
                 elog ("%s Failed to send inventory to heartbeat service\n", hostname.c_str());
             }
-            /* Send the start event to the heartbeat service for all enabled hosts */
-            if (( obj_ptr->get_adminState  ( hostname ) == MTC_ADMIN_STATE__UNLOCKED ) &&
+            /* Consider sending the 'start' request to the heartbeat service
+             * for all enabled hosts except for this active controller. */
+            if (( obj_ptr->my_hostname != hostname ) &&
+                ( obj_ptr->get_adminState  ( hostname ) == MTC_ADMIN_STATE__UNLOCKED ) &&
                 ( obj_ptr->get_operState   ( hostname ) == MTC_OPER_STATE__ENABLED ) &&
                 ((obj_ptr->get_availStatus ( hostname ) == MTC_AVAIL_STATUS__AVAILABLE ) ||
                  (obj_ptr->get_availStatus ( hostname ) == MTC_AVAIL_STATUS__DEGRADED )))
             {
-                send_hbs_command ( hostname, MTC_CMD_START_HOST, controller );
+                /* However, bypass sending heartbeat 'start' for nodes that
+                 * are not ready to heartbeat; enabling, configuring, testing.
+                 * Such cases are if a host is:
+                 *
+                 * 1. running the add_handler or
+                 * 2. running the enable_handler or
+                 * 3. running the enable_subf_handler or
+                 * 4. not configured or
+                 * 5. not tested (goenabled not complete)
+                 *
+                 */
+                mtc_nodeAdminAction_enum current_action =
+                    obj_ptr->get_adminAction (hostname);
+                if (( current_action != MTC_ADMIN_ACTION__ADD ) &&
+                    ( current_action != MTC_ADMIN_ACTION__ENABLE ) &&
+                    ( current_action != MTC_ADMIN_ACTION__ENABLE_SUBF ))
+                {
+                    int mtce_flags = obj_ptr->get_mtce_flags(hostname);
+                    if (( mtce_flags & MTC_FLAG__I_AM_CONFIGURED ) &&
+                        ( mtce_flags & MTC_FLAG__I_AM_HEALTHY  ) &&
+                        ( mtce_flags & MTC_FLAG__MAIN_GOENABLED ))
+                    {
+                        if (( obj_ptr->system_type != SYSTEM_TYPE__NORMAL ) &&
+                            ( obj_ptr->get_nodetype ( hostname ) & CONTROLLER_TYPE ))
+                        {
+                            /* If its an AIO then its worker subfunction
+                             * needs to have been be configured and tested. */
+                            if (( mtce_flags & MTC_FLAG__SUBF_CONFIGURED ) &&
+                                ( mtce_flags & MTC_FLAG__SUBF_GOENABLED ))
+                            {
+                                ilog("%s heartbeat start (AIO controller)",
+                                         hostname.c_str());
+                                send_hbs_command ( hostname, MTC_CMD_START_HOST, controller );
+                            }
+                            else
+                            {
+                                wlog ("%s not heartbeat ready (subf) (oob:%x)",
+                                          hostname.c_str(),
+                                          mtce_flags);
+                            }
+                        }
+                        else
+                        {
+                            ilog("%s heartbeat start (from ready event)",
+                                     hostname.c_str());
+                            send_hbs_command ( hostname, MTC_CMD_START_HOST, controller );
+                        }
+                    }
+                    else
+                    {
+                        wlog ("%s not heartbeat ready (main) (oob:%x)",
+                                  hostname.c_str(),
+                                  mtce_flags);
+                    }
+                }
             }
         }
         ilog ("%s %s inventory push ... done",
