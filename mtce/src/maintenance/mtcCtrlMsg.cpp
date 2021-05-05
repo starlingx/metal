@@ -1263,9 +1263,8 @@ int service_events ( nodeLinkClass * obj_ptr, mtc_socket_type * sock_ptr )
                 elog ("%s Failed to send inventory to heartbeat service\n", hostname.c_str());
             }
             /* Consider sending the 'start' request to the heartbeat service
-             * for all enabled hosts except for this active controller. */
-            if (( obj_ptr->my_hostname != hostname ) &&
-                ( obj_ptr->get_adminState  ( hostname ) == MTC_ADMIN_STATE__UNLOCKED ) &&
+             * for all enabled hosts. */
+            if (( obj_ptr->get_adminState  ( hostname ) == MTC_ADMIN_STATE__UNLOCKED ) &&
                 ( obj_ptr->get_operState   ( hostname ) == MTC_OPER_STATE__ENABLED ) &&
                 ((obj_ptr->get_availStatus ( hostname ) == MTC_AVAIL_STATUS__AVAILABLE ) ||
                  (obj_ptr->get_availStatus ( hostname ) == MTC_AVAIL_STATUS__DEGRADED )))
