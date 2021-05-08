@@ -11,7 +11,7 @@ Source0: LICENSE
 
 Source001: vmlinuz
 Source002: initrd.img
-Source003: squashfs.img
+Source003: install.img
 
 Source010: pxeboot-update.sh
 Source011: grub.cfg
@@ -64,8 +64,8 @@ install -v -m 644 %{_sourcedir}/initrd.img \
 ln -s installer-bzImage_1.0 %{buildroot}/pxeboot/rel-%{platform_release}/installer-bzImage
 ln -s installer-intel-x86-64-initrd_1.0 %{buildroot}/pxeboot/rel-%{platform_release}/installer-initrd
 
-install -v -D -m 644 %{_sourcedir}/squashfs.img \
-    %{buildroot}/www/pages/feed/rel-%{platform_release}/LiveOS/squashfs.img
+install -v -D -m 644 %{_sourcedir}/install.img \
+    %{buildroot}/www/pages/feed/rel-%{platform_release}/images/install.img
 
 install -v -d -m 755 %{buildroot}%{_sbindir}
 
@@ -122,7 +122,9 @@ install -v -m 0644 \
     %{_datadir}/syslinux/chain.c32 \
     %{_datadir}/syslinux/linux.c32 \
     %{_datadir}/syslinux/reboot.c32 \
-    %{_datadir}/syslinux/pxechn.c32 \
+    %{_datadir}/syslinux/ldlinux.c32 \
+    %{_datadir}/syslinux/libcom32.c32 \
+    %{_datadir}/syslinux/libutil.c32 \
     %{_datadir}/syslinux/pxelinux.0 \
     %{buildroot}/pxeboot
 
@@ -139,5 +141,5 @@ ln -s pxelinux.cfg/grub.cfg %{buildroot}/pxeboot/grub.cfg
 %dir /pxeboot
 /pxeboot/*
 %{_sbindir}/pxeboot-update-%{platform_release}.sh
-/www/pages/feed/rel-%{platform_release}/LiveOS/squashfs.img
+/www/pages/feed/rel-%{platform_release}/images/install.img
 
