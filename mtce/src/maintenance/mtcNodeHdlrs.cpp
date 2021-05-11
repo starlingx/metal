@@ -7400,27 +7400,44 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
                 }
 
                /*************************************************************
-                * Handle Start Host Services if its posted for execution
+                * Handle Main Function Start Host Services if it's 'needed'
                 ************************************************************/
                 else if ( node_ptr->start_services_needed == true )
                 {
-                    /* If Main Start Host Services is not already running then launch it */
-                    if (( node_ptr->start_services_running_main == false ) &&
-                        ( node_ptr->start_services_running_subf == false ))
+                    /* If Main Start Host Services is not already running
+                     * then launch it */
+                    if ( node_ptr->start_services_running_main == false )
                     {
-                        bool start = true ;
-                        if ( this->launch_host_services_cmd ( node_ptr , start ) != PASS )
+                        /* Only launch if the node is successfully configured
+                         * and tested */
+                        if (( node_ptr->mtce_flags & MTC_FLAG__I_AM_HEALTHY  ) &&
+                            ( node_ptr->mtce_flags & MTC_FLAG__I_AM_CONFIGURED ) &&
+                            ( node_ptr->mtce_flags & MTC_FLAG__MAIN_GOENABLED ))
                         {
-                            node_ptr->hostservices_failed = true ;
-                            node_ptr->start_services_retries++ ;
+                            /* Launch 'start' for this node type */
+                            bool start = true ;
+                            if ( this->launch_host_services_cmd ( node_ptr , start ) != PASS )
+                            {
+                                /* failed -> retry */
+                                node_ptr->hostservices_failed = true ;
+                                node_ptr->start_services_running_main = false ;
+                                node_ptr->start_services_retries++ ;
+                            }
+                            else
+                            {
+                                /* launched successfully */
+                                node_ptr->start_services_running_main = true ;
+                                node_ptr->hostservices_failed = false ;
+                            }
                         }
                         else
                         {
-                            node_ptr->start_services_running_main = true ;
+                            ilog("%s start host services ; waiting to launch (%x)",
+                                     node_ptr->hostname.c_str(),
+                                     node_ptr->mtce_flags);
                         }
                     }
-                    /* Handle start host services response for both main and
-                     * subfunction levels */
+                    /* Handle Main start host services response */
                     else
                     {
                         /* Wait for host services to complete - pass or fail.
@@ -7431,23 +7448,81 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
                             /* wait for the mtcClient's response ... */
                             break ;
                         }
-
-                        node_ptr->start_services_running_main = false ;
-
-                        if ( rc != PASS )
+                        else if ( rc != PASS )
                         {
-
-                            /* set the correct failed flag */
-                            if ( node_ptr->start_services_needed_subf == true )
+                            node_ptr->hostservices_failed = true ;
+                            node_ptr->start_services_retries++ ;
+                            wlog ("%s %s request failed ; (retry %d)\n",
+                                      node_ptr->hostname.c_str(),
+                                      node_ptr->host_services_req.name.c_str(),
+                                      node_ptr->start_services_retries);
+                        }
+                        else /* success path */
+                        {
+                            node_ptr->start_services_needed  = false ;
+                            node_ptr->hostservices_failed = false ;
+                            node_ptr->start_services_retries = 0  ;
+                        }
+                        node_ptr->start_services_running_main = false ;
+                    }
+                }
+               /*************************************************************
+                * Handle Sub Function Start Host Services if it's 'needed'
+                ************************************************************/
+                else if ( node_ptr->start_services_needed_subf == true )
+                {
+                    /* If Subf Start Host Services is not already running
+                     * then launch it */
+                    if ( node_ptr->start_services_running_subf == false )
+                    {
+                        /* Only launch if the node and subfunction are
+                         * successfully configured and tested */
+                        if (( node_ptr->mtce_flags & MTC_FLAG__I_AM_HEALTHY ) &&
+                            ( node_ptr->mtce_flags & MTC_FLAG__I_AM_CONFIGURED ) &&
+                            ( node_ptr->mtce_flags & MTC_FLAG__MAIN_GOENABLED ) &&
+                            ( node_ptr->mtce_flags & MTC_FLAG__SUBF_CONFIGURED ) &&
+                            ( node_ptr->mtce_flags & MTC_FLAG__SUBF_GOENABLED ))
+                        {
+                            /* Launch 'start' for this subfunction  type */
+                            bool start = true ;
+                            bool subf  = true ;
+                            if ( this->launch_host_services_cmd ( node_ptr, start, subf ) != PASS )
                             {
-                                node_ptr->start_services_running_subf = false ;
+                                /* failed -> retry */
                                 node_ptr->hostservices_failed_subf = true ;
+                                node_ptr->start_services_running_subf = false ;
+                                node_ptr->start_services_retries++ ;
                             }
                             else
                             {
-                                node_ptr->hostservices_failed = true ;
+                                /* launched successfully */
+                                node_ptr->hostservices_failed_subf = false ;
+                                node_ptr->start_services_running_subf = true ;
                             }
-
+                        }
+                        else
+                        {
+                            ilog("%s subf start host services ; waiting to launch (%x)",
+                                     node_ptr->hostname.c_str(),
+                                     node_ptr->mtce_flags);
+                        }
+                    }
+                    /* Handle Subf start host services response */
+                    else
+                    {
+                        /* Wait for host services to complete - pass or fail.
+                         * The host_services_handler manages timeout. */
+                        int rc = this->host_services_handler ( node_ptr );
+                        if ( rc == RETRY )
+                        {
+                            /* wait for the mtcClient's response ... */
+                            break ;
+                        }
+                        node_ptr->start_services_running_subf = false ;
+                        if ( rc != PASS )
+                        {
+                            node_ptr->start_services_running_subf = false ;
+                            node_ptr->hostservices_failed_subf = true ;
                             node_ptr->start_services_retries++ ;
 
                             wlog ("%s %s request failed ; (retry %d)\n",
@@ -7457,52 +7532,14 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
                         }
                         else /* success path */
                         {
-                            /* clear the correct fail flag */
-                            if (( node_ptr->start_services_needed_subf == true ) &&
-                                ( node_ptr->start_services_running_subf == true ))
-                            {
-                                node_ptr->start_services_needed_subf  = false ;
-                                node_ptr->start_services_running_subf = false ;
-                                node_ptr->hostservices_failed_subf    = false ;
-                            }
-                            else
-                            {
-                                node_ptr->hostservices_failed = false ;
-                            }
-
-                            /*************************************************
-                             * Handle running the subfunction start worker
-                             * host services command as a background operation
-                             * after the controller start result has come in
-                             * as a PASS.
-                             ************************************************/
-                            if ( node_ptr->start_services_needed_subf == true )
-                            {
-                                bool start = true ;
-                                bool subf  = node_ptr->start_services_needed_subf ;
-                                if ( this->launch_host_services_cmd ( node_ptr, start, subf ) != PASS )
-                                {
-                                    node_ptr->hostservices_failed_subf = true ;
-
-                                    /* try again on next audit */
-                                    node_ptr->start_services_retries++ ;
-                                }
-                                else
-                                {
-                                    node_ptr->start_services_running_subf = true ;
-                                }
-                            }
-                            else
-                            {
-                                /* All host service scripts pass ; done */
-                                clear_hostservices_ctls ( node_ptr );
-                                node_ptr->hostservices_failed_subf = false ;
-                                node_ptr->hostservices_failed = false ;
-                            }
+                            node_ptr->start_services_needed_subf = false ;
+                            node_ptr->hostservices_failed_subf = false ;
+                            node_ptr->start_services_running_subf = false ;
+                            node_ptr->start_services_retries = 0  ;
                         }
+                        node_ptr->start_services_running_subf = false ;
                     }
                 }
-
                 if ( NOT_THIS_HOST )
                 {
                     if ((( node_ptr->availStatus == MTC_AVAIL_STATUS__AVAILABLE ) ||
