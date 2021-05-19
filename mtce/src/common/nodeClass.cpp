@@ -660,7 +660,7 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
     {
         ptr->alarms[id] = FM_ALARM_SEVERITY_CLEAR ;
     }
-    ptr->alarms_loaded   = false ;
+    ptr->active_alarms = "" ; /* no active alarms */
 
     ptr->cfgEvent.base   = NULL ;
     ptr->sysinvEvent.base= NULL ;
@@ -777,6 +777,7 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
 
     return ptr ;
 }
+
 
 struct nodeLinkClass::node* nodeLinkClass::getNode ( string hostname )
 {
@@ -2706,7 +2707,7 @@ int nodeLinkClass::add_host ( node_inv_type & inv )
         node_ptr->operState   = operState_str_to_enum   (inv.oper.data ());
         node_ptr->availStatus = availStatus_str_to_enum (inv.avail.data());
 
-        if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+        if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
         {
             node_ptr->operState_subf   = operState_str_to_enum (inv.oper_subf.data());
             node_ptr->availStatus_subf = availStatus_str_to_enum (inv.avail_subf.data());
@@ -2818,7 +2819,7 @@ int nodeLinkClass::add_host ( node_inv_type & inv )
                     node_ptr->operState   = operState_str_to_enum   (inv.oper.data ());
                     node_ptr->availStatus = availStatus_str_to_enum (inv.avail.data());
 
-                    if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+                    if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
                     {
                         node_ptr->operState_subf   = operState_str_to_enum (inv.oper_subf.data());
                         node_ptr->availStatus_subf = availStatus_str_to_enum (inv.avail_subf.data());
@@ -2835,7 +2836,7 @@ int nodeLinkClass::add_host ( node_inv_type & inv )
                     node_ptr->operState   = operState_str_to_enum   (inv.oper.data ());
                     node_ptr->availStatus = availStatus_str_to_enum (inv.avail.data());
 
-                    if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+                    if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
                     {
                         node_ptr->operState_subf   = operState_str_to_enum (inv.oper_subf.data());
                         node_ptr->availStatus_subf = availStatus_str_to_enum (inv.avail_subf.data());
@@ -2853,7 +2854,7 @@ int nodeLinkClass::add_host ( node_inv_type & inv )
                     node_ptr->operState   = operState_str_to_enum   (inv.oper.data ());
                     node_ptr->availStatus = availStatus_str_to_enum (inv.avail.data());
 
-                    if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+                    if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
                     {
                         node_ptr->operState_subf   = operState_str_to_enum (inv.oper_subf.data());
                         node_ptr->availStatus_subf = availStatus_str_to_enum (inv.avail_subf.data());
@@ -2871,7 +2872,7 @@ int nodeLinkClass::add_host ( node_inv_type & inv )
                     node_ptr->operState   = operState_str_to_enum   (inv.oper.data ());
                     node_ptr->availStatus = availStatus_str_to_enum (inv.avail.data());
 
-                    if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+                    if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
                     {
                         node_ptr->operState_subf   = operState_str_to_enum (inv.oper_subf.data());
                         node_ptr->availStatus_subf = availStatus_str_to_enum (inv.avail_subf.data());
@@ -2889,7 +2890,7 @@ int nodeLinkClass::add_host ( node_inv_type & inv )
                     node_ptr->operState   = operState_str_to_enum   (inv.oper.data ());
                     node_ptr->availStatus = availStatus_str_to_enum (inv.avail.data());
 
-                    if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+                    if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
                     {
                         node_ptr->operState_subf   = operState_str_to_enum (inv.oper_subf.data());
                         node_ptr->availStatus_subf = availStatus_str_to_enum (inv.avail_subf.data());
@@ -2940,7 +2941,7 @@ int nodeLinkClass::add_host ( node_inv_type & inv )
                     node_ptr->operState   = MTC_OPER_STATE__DISABLED ;
                     node_ptr->availStatus = MTC_AVAIL_STATUS__OFFLINE ;
 
-                    if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+                    if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
                     {
                         node_ptr->operState_subf   = MTC_OPER_STATE__DISABLED ;
                         node_ptr->availStatus_subf = MTC_AVAIL_STATUS__OFFLINE ;
@@ -2958,7 +2959,7 @@ int nodeLinkClass::add_host ( node_inv_type & inv )
                 node_ptr->operState   = operState_str_to_enum   (inv.oper.data ());
                 node_ptr->availStatus = availStatus_str_to_enum (inv.avail.data());
 
-                if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+                if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
                 {
                     node_ptr->operState_subf   = operState_str_to_enum (inv.oper_subf.data());
                     node_ptr->availStatus_subf = availStatus_str_to_enum (inv.avail_subf.data());
@@ -3292,6 +3293,102 @@ void nodeLinkClass::mtcInfo_log ( struct nodeLinkClass::node * node_ptr )
                      node_ptr->hostname.c_str(),
                      node_ptr->mtce_info.substr(1,node_ptr->mtce_info.length()-2).c_str());
         }
+    }
+}
+
+/***************************************************************************
+ *
+ * Name        : build_mtcInfo_dict
+ *
+ * Purpose     : Build a json dictionary for the specified info code enum
+ *
+ * Assumptions : Only MTC_INFO_CODE__PEER_CONTROLLER_KILL_INFO is supported
+ *
+ * Returns     : Returns a json dictionary of mtcInfo.
+ *
+ *               {
+ *                  "controller-0":{
+ *                      "ip":"192.168.204.2",
+ *                      "bm_ip":"xxx.xxx.xx.23",
+ *                      "bm_un":"root",
+ *                      "bm_pw":"root"
+ *                   },
+ *                   "controller-1":{
+ *                      "ip":"192.168.204.3",
+ *                      "bm_ip":"xxx.xxx.xx.24",
+ *                      "bm_un":"root",
+ *                      "bm_pw":"root"
+ *                   }
+ *               }
+ *
+ **************************************************************************/
+
+string nodeLinkClass::build_mtcInfo_dict ( mtcInfo_enum mtcInfo_code )
+{
+    string mtcInfo_dict = "" ;
+
+    /* loop/exit control */
+    int temp = 0 ;
+
+    /* should never happen but better to be safe */
+    if ( head == NULL )
+        return mtcInfo_dict ;
+
+    /* force the update to be a dictionary */
+    mtcInfo_dict = "{" ;
+
+    for ( struct node * ptr = head ;  ; ptr = ptr->next )
+    {
+        if (( ptr->nodetype & CONTROLLER_TYPE ) &&
+            ( mtcInfo_code == MTC_INFO_CODE__PEER_CONTROLLER_KILL_INFO ))
+        {
+            if ( temp )
+                mtcInfo_dict.append(",");
+            mtcInfo_dict.append("\"" + ptr->hostname + "\":{");
+            mtcInfo_dict.append("\"mgmt_ip\":\"" + ptr->ip + "\",");
+            mtcInfo_dict.append("\"bm_ip\":\"" + ptr->bm_ip + "\",");
+            mtcInfo_dict.append("\"bm_un\":\"" + ptr->bm_un + "\",");
+            mtcInfo_dict.append("\"bm_pw\":\"" + ptr->bm_pw + "\"}");
+            if ( ++temp >= 2 )
+                break ;
+        }
+        if (( ptr->next == NULL ) || ( ptr == tail ))
+           break ;
+    }
+    mtcInfo_dict.append("}");
+    return mtcInfo_dict ;
+}
+
+/**************************************************************************
+ *
+ * Name          : mtcInfo_handler
+ *
+ * Purpose       : Send mtcInfo update to provisioned controllers when
+ *                 the push flag is set.
+ *
+ **************************************************************************/
+
+void nodeLinkClass::mtcInfo_handler ( void )
+{
+    /* This is set in the bm_handler once access to the BMC using
+     * provisioned credentials have been verified. */
+    if ( this->want_mtcInfo_push )
+    {
+        /* handler will enhance when more codes are introduced */
+        mtcInfo_enum mtcInfo_code = MTC_INFO_CODE__PEER_CONTROLLER_KILL_INFO ;
+
+        string mtcInfo_dict = build_mtcInfo_dict(mtcInfo_code);
+        if ( ! mtcInfo_dict.empty() )
+        {
+            string temp = CONTROLLER_0 ;
+            send_mtc_cmd ( temp, MTC_MSG_INFO, MGMNT_INTERFACE, mtcInfo_dict);
+            if ( this->controllers > 1 )
+            {
+                temp = CONTROLLER_1;
+                send_mtc_cmd ( temp, MTC_MSG_INFO, MGMNT_INTERFACE, mtcInfo_dict);
+            }
+        }
+        this->want_mtcInfo_push = false ;
     }
 }
 
@@ -4034,6 +4131,18 @@ int  nodeLinkClass::get_uptime_refresh_ctr ( string & hostname )
     return (0);
 }
 
+
+int nodeLinkClass::get_mtce_flags ( string & hostname )
+{
+    nodeLinkClass::node* node_ptr ;
+    node_ptr = nodeLinkClass::getNode ( hostname );
+    if ( node_ptr != NULL )
+    {
+        return ( node_ptr->mtce_flags );
+    }
+    return (0);
+}
+
 void nodeLinkClass::set_mtce_flags ( string hostname, int flags, int iface )
 {
     nodeLinkClass::node* node_ptr = nodeLinkClass::getNode ( hostname );
@@ -4114,7 +4223,7 @@ void nodeLinkClass::set_mtce_flags ( string hostname, int flags, int iface )
 
 
         /* Deal with sub-function if AIO controller host */
-        if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+        if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
         {
             if ( flags & MTC_FLAG__SUBF_GOENABLED )
             {
@@ -4419,6 +4528,18 @@ string nodeLinkClass::get_bm_ip   ( string hostname )
          return (node_ptr->bm_ip);
     }
     elog ("%s bm ip lookup failed\n", hostname.c_str() );
+    return ("");
+}
+
+string nodeLinkClass::get_bm_pw   ( string hostname )
+{
+    nodeLinkClass::node* node_ptr ;
+    node_ptr = nodeLinkClass::getNode ( hostname );
+    if ( node_ptr != NULL )
+    {
+         return (node_ptr->bm_pw);
+    }
+    elog ("%s bm pw lookup failed\n", hostname.c_str() );
     return ("");
 }
 
@@ -4774,7 +4895,10 @@ void nodeLinkClass::hbs_minor_clear ( struct nodeLinkClass::node * node_ptr, ifa
 
             /* Otherwise this is a single host that has recovered
              * possibly as part of a mnfa group or simply a lone wolf */
-            else
+            else if (( node_ptr->hbs_minor[MGMNT_IFACE] == false ) &&
+                     (( clstr_network_provisioned == false ) ||
+                      (( clstr_network_provisioned == true ) &&
+                       ( node_ptr->hbs_minor[CLSTR_IFACE] == false ))))
             {
                 if ( node_ptr->mnfa_graceful_recovery == true )
                 {
@@ -4782,6 +4906,8 @@ void nodeLinkClass::hbs_minor_clear ( struct nodeLinkClass::node * node_ptr, ifa
                     mnfa_awol_list.remove(node_ptr->hostname);
                 }
 
+                /* Don't recover until heartbeat is working over all
+                 * monitored interfaces */
                 mnfa_recover_host ( node_ptr );
 
                 if ( mnfa_active == true )
@@ -4819,17 +4945,17 @@ void nodeLinkClass::hbs_minor_clear ( struct nodeLinkClass::node * node_ptr, ifa
     }
 
      if ( temp_count != mnfa_host_count[iface] )
-     {    
+     {
          slog ("%s MNFA host tally (%s:%d incorrect - expected %d) ; correcting\n",
                    node_ptr->hostname.c_str(),
                    get_iface_name_str(iface),
                    mnfa_host_count[iface], temp_count );
                    mnfa_host_count[iface] = temp_count ;
          mnfa_host_count[iface] = temp_count ;
-     }    
+     }
      else
      {
-         wlog ("%s MNFA host tally (%s:%d)\n",
+         dlog ("%s MNFA host tally (%s:%d)\n",
                    node_ptr->hostname.c_str(),
                    get_iface_name_str(iface),
                    mnfa_host_count[iface] );
@@ -4935,11 +5061,28 @@ void nodeLinkClass::manage_heartbeat_failure ( string hostname, iface_enum iface
             }
             return ;
         }
+        else if ( node_ptr->recoveryStage == MTC_RECOVERY__HEARTBEAT_SOAK )
+        {
+            elog ("%s %s *** Heartbeat Loss *** (during recovery soak)\n",
+                      hostname.c_str(),
+                      get_iface_name_str(iface));
+            force_full_enable ( node_ptr );
+            return ;
+        }
 
         mnfa_add_host ( node_ptr , iface );
 
         if ( mnfa_active == false )
         {
+            /* if node is already in graceful recovery just ignore the event */
+            if ( node_ptr->graceful_recovery_counter != 0 )
+            {
+                dlog ("%s %s loss event ; already in graceful recovery try %d",
+                          hostname.c_str(),
+                          get_iface_name_str(iface),
+                          node_ptr->graceful_recovery_counter );
+                return ;
+            }
             elog ("%s %s *** Heartbeat Loss ***\n", hostname.c_str(), get_iface_name_str(iface));
             if ( iface == CLSTR_IFACE )
             {
@@ -4980,6 +5123,15 @@ void nodeLinkClass::manage_heartbeat_failure ( string hostname, iface_enum iface
     }
 }
 
+/****************************************************************************
+ *
+ * Name       : manage_heartbeat_clear
+ *
+ * Description: Manage clearing heartbeat failure status
+ *
+ * Assuptions : Called by Both hbsAgent and mtcAgent
+ *
+ ***************************************************************************/
 void nodeLinkClass::manage_heartbeat_clear ( string hostname, iface_enum iface )
 {
     nodeLinkClass::node * node_ptr = nodeLinkClass::getNode ( hostname );
@@ -4995,13 +5147,17 @@ void nodeLinkClass::manage_heartbeat_clear ( string hostname, iface_enum iface )
             node_ptr->heartbeat_failed[i] = false ;
             if ( i == MGMNT_IFACE )
             {
-                node_ptr->alarms[HBS_ALARM_ID__HB_MGMNT] = FM_ALARM_SEVERITY_CLEAR ;
-                node_ptr->degrade_mask &= ~DEGRADE_MASK_HEARTBEAT_MGMNT ;
+                if ( heartbeat )
+                    node_ptr->alarms[HBS_ALARM_ID__HB_MGMNT] = FM_ALARM_SEVERITY_CLEAR ;
+                if ( maintenance )
+                    node_ptr->degrade_mask &= ~DEGRADE_MASK_HEARTBEAT_MGMNT ;
             }
             if ( i == CLSTR_IFACE )
             {
-                node_ptr->alarms[HBS_ALARM_ID__HB_CLSTR] = FM_ALARM_SEVERITY_CLEAR ;
-                node_ptr->degrade_mask &= ~DEGRADE_MASK_HEARTBEAT_CLSTR ;
+                if ( heartbeat )
+                    node_ptr->alarms[HBS_ALARM_ID__HB_CLSTR] = FM_ALARM_SEVERITY_CLEAR ;
+                if ( maintenance )
+                    node_ptr->degrade_mask &= ~DEGRADE_MASK_HEARTBEAT_CLSTR ;
             }
         }
     }
@@ -5010,13 +5166,17 @@ void nodeLinkClass::manage_heartbeat_clear ( string hostname, iface_enum iface )
         node_ptr->heartbeat_failed[iface] = false ;
         if ( iface == MGMNT_IFACE )
         {
-            node_ptr->alarms[HBS_ALARM_ID__HB_MGMNT] = FM_ALARM_SEVERITY_CLEAR ;
-            node_ptr->degrade_mask &= ~DEGRADE_MASK_HEARTBEAT_MGMNT ;
+            if ( heartbeat )
+                node_ptr->alarms[HBS_ALARM_ID__HB_MGMNT] = FM_ALARM_SEVERITY_CLEAR ;
+            if ( maintenance )
+                node_ptr->degrade_mask &= ~DEGRADE_MASK_HEARTBEAT_MGMNT ;
         }
         else if ( iface == CLSTR_IFACE )
         {
-            node_ptr->alarms[HBS_ALARM_ID__HB_CLSTR] = FM_ALARM_SEVERITY_CLEAR ;
-            node_ptr->degrade_mask &= ~DEGRADE_MASK_HEARTBEAT_CLSTR ;
+            if ( heartbeat )
+                node_ptr->alarms[HBS_ALARM_ID__HB_CLSTR] = FM_ALARM_SEVERITY_CLEAR ;
+            if ( maintenance )
+                node_ptr->degrade_mask &= ~DEGRADE_MASK_HEARTBEAT_CLSTR ;
         }
     }
 }
@@ -5794,9 +5954,6 @@ int nodeLinkClass::critical_process_failed( string & hostname,
             dlog ("%s critical process failure (aio)\n",
                       node_ptr->hostname.c_str()); /* dlog */
         }
-
-        /* Start fresh the next time we enter graceful recovery handler */
-        node_ptr->graceful_recovery_counter = 0 ;
 
         /* Set node as unlocked-disabled-failed */
         allStateChange ( node_ptr, MTC_ADMIN_STATE__UNLOCKED,
@@ -6755,7 +6912,7 @@ int nodeLinkClass::disableStageChange ( struct nodeLinkClass::node * node_ptr,
 }
 
 /** Validate and log Recovery stage changes */
-int nodeLinkClass::recoveryStageChange  ( struct nodeLinkClass::node * node_ptr, 
+int nodeLinkClass::recoveryStageChange  ( struct nodeLinkClass::node * node_ptr,
                                           mtc_recoveryStages_enum newHdlrStage )
 {
     int rc = PASS ;
@@ -6763,14 +6920,14 @@ int nodeLinkClass::recoveryStageChange  ( struct nodeLinkClass::node * node_ptr,
     if (( newHdlrStage >= MTC_RECOVERY__STAGES ) ||
         ( node_ptr->recoveryStage >= MTC_RECOVERY__STAGES ))
     {
-        slog ("%s Invalid recovery stage (%d:%d)\n", 
+        slog ("%s Invalid recovery stage (%d:%d)\n",
                   node_ptr->hostname.c_str(),
-                  node_ptr->recoveryStage, 
+                  node_ptr->recoveryStage,
                   newHdlrStage );
 
         if ( newHdlrStage < MTC_RECOVERY__STAGES )
         {
-            clog ("%s ? -> %s\n", 
+            clog ("%s ? -> %s\n",
                node_ptr->hostname.c_str(),
                get_recoveryStages_str(newHdlrStage).c_str());
 
@@ -6782,11 +6939,11 @@ int nodeLinkClass::recoveryStageChange  ( struct nodeLinkClass::node * node_ptr,
             rc = FAIL ;
         }
     }
-    else 
+    else
     {
-        clog ("%s %s -> %s\n", 
+        clog ("%s %s -> %s\n",
                node_ptr->hostname.c_str(),
-               get_recoveryStages_str(node_ptr->recoveryStage).c_str(), 
+               get_recoveryStages_str(node_ptr->recoveryStage).c_str(),
                get_recoveryStages_str(newHdlrStage).c_str());
 
         node_ptr->recoveryStage = newHdlrStage  ;
@@ -7514,7 +7671,7 @@ int nodeLinkClass::ar_manage ( struct nodeLinkClass::node * node_ptr,
         mtcInvApi_update_states ( node_ptr, "unlocked", "disabled", "failed" );
 
         if (( NOT_THIS_HOST ) &&
-            ( this->system_type != SYSTEM_TYPE__CPE_MODE__SIMPLEX ))
+            ( this->system_type != SYSTEM_TYPE__AIO__SIMPLEX ))
         {
             if ( ++node_ptr->ar_count[node_ptr->ar_cause] >=
                   this->ar_threshold [node_ptr->ar_cause] )
@@ -7746,7 +7903,11 @@ int nodeLinkClass::mon_host ( const string & hostname, bool true_false, bool sen
 
             if ( true_false == true )
             {
-                ilog ("%s heartbeat start", hostname.c_str());
+                ilog ("%s %s heartbeat %sstart",
+                          hostname.c_str(),
+                          get_iface_name_str(iface),
+                          node_ptr->monitor[iface] ? "re" : "");
+
                 node_ptr->no_work_log_throttle = 0 ;
                 node_ptr->b2b_misses_count[iface] = 0 ;
                 node_ptr->hbs_misses_count[iface] = 0 ;
@@ -7758,7 +7919,12 @@ int nodeLinkClass::mon_host ( const string & hostname, bool true_false, bool sen
             }
             else
             {
-                ilog ("%s heartbeat stop", hostname.c_str());
+                if (  node_ptr->monitor[iface] == true )
+                {
+                    ilog ("%s %s heartbeat stop",
+                              hostname.c_str(),
+                              get_iface_name_str(iface));
+                }
             }
             node_ptr->monitor[iface] = true_false ;
         }
@@ -7771,7 +7937,7 @@ int nodeLinkClass::mon_host ( const string & hostname, bool true_false, bool sen
 void nodeLinkClass::set_hwmond_monitor_state ( string & hostname, bool state )
 {
     if ( hostname.length() )
-    {  
+    {
         struct nodeLinkClass::node* node_ptr ;
         node_ptr = nodeLinkClass::getNode ( hostname );
         if ( node_ptr != NULL )
@@ -8511,7 +8677,7 @@ void nodeLinkClass::manage_heartbeat_alarm ( struct nodeLinkClass::node * node_p
 
 
 
-#define HBS_LOSS_REPORT_THROTTLE (100)
+#define HBS_LOSS_REPORT_THROTTLE (100000)
 int nodeLinkClass::lost_pulses ( iface_enum iface, bool & storage_0_responding )
 {
     int lost = 0  ;
@@ -8551,6 +8717,13 @@ int nodeLinkClass::lost_pulses ( iface_enum iface, bool & storage_0_responding )
 
             if ( pulse_ptr->b2b_misses_count[iface] > 1 )
             {
+                if ( pulse_ptr->b2b_misses_count[iface] < hbs_failure_threshold )
+                {
+                    hbs_cluster_change ( pulse_ptr->hostname + " " +
+                            get_iface_name_str(iface) +
+                            " heartbeat miss " +
+                            itos(pulse_ptr->b2b_misses_count[iface]));
+                }
                 if ( pulse_ptr->b2b_misses_count[iface] >= hbs_failure_threshold )
                 {
                     if ( pulse_ptr->b2b_misses_count[iface] == hbs_failure_threshold )
@@ -8657,57 +8830,43 @@ int nodeLinkClass::lost_pulses ( iface_enum iface, bool & storage_0_responding )
                 }
             }
 
-            /* Turn the cluster-host heartbeat loss into a degrade only
-             * condition if the clstr_degrade_only flag is set */
-            if (( iface == CLSTR_IFACE ) &&
-                ( pulse_ptr->b2b_misses_count[iface] >= hbs_failure_threshold ) &&
-                ( clstr_degrade_only == true ))
-            {
-                /* Only print the log at the threshold boundary */
-                if (( pulse_ptr->b2b_misses_count[iface]%HBS_LOSS_REPORT_THROTTLE) == hbs_failure_threshold )
-                {
-                    if ( this->active_controller )
-                    {
-                        manage_heartbeat_alarm ( pulse_ptr, FM_ALARM_SEVERITY_CRITICAL, iface );
-                    }
-
-                    wlog ( "%s %s *** Heartbeat Loss *** (degrade only)\n",
-                               pulse_ptr->hostname.c_str(),
-                               get_iface_name_str(iface) );
-                    hbs_cluster_change ( pulse_ptr->hostname + " heartbeat loss" );
-                }
-            }
-
             /* Turn the clstr heartbeat loss into a degrade only
              * condition for inactive controller on normal system. */
-            else if (( iface == CLSTR_IFACE ) &&
-                     ( pulse_ptr->b2b_misses_count[iface] >= hbs_failure_threshold ) &&
-                     ( this->system_type == SYSTEM_TYPE__NORMAL ) &&
-                     (( pulse_ptr->nodetype & CONTROLLER_TYPE) == CONTROLLER_TYPE ))
+            if (( iface == CLSTR_IFACE ) &&
+                ((( this->system_type == SYSTEM_TYPE__NORMAL ) &&
+                 (( pulse_ptr->nodetype & CONTROLLER_TYPE) == CONTROLLER_TYPE )) ||
+                 ( clstr_degrade_only == true )))
             {
                 /* Only print the log at the threshold boundary */
-                if ( (pulse_ptr->b2b_misses_count[iface]%HBS_LOSS_REPORT_THROTTLE) == hbs_failure_threshold )
+                if ( pulse_ptr->b2b_misses_count[iface]%HBS_LOSS_REPORT_THROTTLE == hbs_failure_threshold )
                 {
                     if ( this->active_controller )
                     {
                         manage_heartbeat_alarm ( pulse_ptr, FM_ALARM_SEVERITY_CRITICAL, iface );
                     }
-                    wlog ( "%s %s *** Heartbeat Loss *** (degrade only)\n",
+                    wlog ( "%s %s *** Heartbeat Loss *** (degrade only due to %s)\n",
                                pulse_ptr->hostname.c_str(),
-                               get_iface_name_str(iface));
-                    hbs_cluster_change ( pulse_ptr->hostname + " heartbeat loss" );
+                               get_iface_name_str(iface),
+                               clstr_degrade_only ? "config option" : "system type");
+                    hbs_cluster_change ( pulse_ptr->hostname + " " + get_iface_name_str(iface) + " heartbeat loss" );
                 }
             }
 
             else if ((pulse_ptr->b2b_misses_count[iface]%HBS_LOSS_REPORT_THROTTLE) == hbs_failure_threshold )
+            // else if ( pulse_ptr->hbs_failure[iface] == false )
             {
-                elog ("%s %s *** Heartbeat Loss ***\n", pulse_ptr->hostname.c_str(),
-                                                        get_iface_name_str(iface) );
+                elog ("%s %s *** Heartbeat Loss *** (b2b_misses:0x%x)\n",
+                          pulse_ptr->hostname.c_str(),
+                          get_iface_name_str(iface),
+                          pulse_ptr->b2b_misses_count[iface]);
+                hbs_cluster_change ( pulse_ptr->hostname + " " + get_iface_name_str(iface) + " heartbeat loss" );
 
                 if ( this->active_controller )
                 {
-                    manage_heartbeat_alarm ( pulse_ptr, FM_ALARM_SEVERITY_CRITICAL, iface );
-
+                    if ( pulse_ptr->hbs_failure[iface] == false )
+                    {
+                        manage_heartbeat_alarm ( pulse_ptr, FM_ALARM_SEVERITY_CRITICAL, iface );
+                    }
                     /* report this host as failed */
                     if ( send_event ( pulse_ptr->hostname, MTC_EVENT_HEARTBEAT_LOSS , iface ) == PASS )
                     {
@@ -8715,10 +8874,8 @@ int nodeLinkClass::lost_pulses ( iface_enum iface, bool & storage_0_responding )
                     }
                 }
                 else
-                {
                     pulse_ptr->hbs_failure[iface] = true ;
-                }
-                hbs_cluster_change ( pulse_ptr->hostname + " heartbeat loss" );
+
                 pulse_ptr->hbs_failure_count[iface]++ ;
             }
             if ( pulse_ptr->b2b_misses_count[iface] > pulse_ptr->max_count[iface] )
@@ -8963,21 +9120,21 @@ void nodeLinkClass::mem_log_mtcalive ( struct nodeLinkClass::node * node_ptr )
 {
     char str[MAX_MEM_LOG_DATA] ;
 
-    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tmtcAlive: online:%c offline:%c Cnt:%d Gate:%s Misses:%d\n", 
-                node_ptr->hostname.c_str(), 
+    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tmtcAlive: online:%c offline:%c Cnt:%d Gate:%s Misses:%d\n",
+                node_ptr->hostname.c_str(),
                 node_ptr->mtcAlive_online ? 'Y' : 'N',
                 node_ptr->mtcAlive_offline ? 'Y' : 'N',
                 node_ptr->mtcAlive_count,
                 node_ptr->mtcAlive_gate ? "closed" : "open",
-                node_ptr->mtcAlive_misses); 
+                node_ptr->mtcAlive_misses);
     mem_log (str);
 }
 
 void nodeLinkClass::mem_log_alarm1 ( struct nodeLinkClass::node * node_ptr )
 {
     char str[MAX_MEM_LOG_DATA] ;
-    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tAlarm List:%s%s%s%s%s%s\n", 
-               node_ptr->hostname.c_str(), 
+    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tAlarm List:%s%s%s%s%s%s\n",
+               node_ptr->hostname.c_str(),
                node_ptr->alarms[MTC_ALARM_ID__LOCK    ] ? " Locked"   : " .",
                node_ptr->alarms[MTC_ALARM_ID__CONFIG  ] ? " Config"   : " .",
                node_ptr->alarms[MTC_ALARM_ID__ENABLE  ] ? " Enable"   : " .",
@@ -8985,6 +9142,18 @@ void nodeLinkClass::mem_log_alarm1 ( struct nodeLinkClass::node * node_ptr )
                node_ptr->alarms[MTC_ALARM_ID__CH_COMP ] ? " Compute"  : " .",
                node_ptr->alarms[MTC_ALARM_ID__BM      ] ? " Brd Mgmt" : " .");
     mem_log (str);
+}
+
+void nodeLinkClass::mem_log_alarm2 ( struct nodeLinkClass::node * node_ptr )
+{
+    if ( ! node_ptr->active_alarms.empty() )
+    {
+        char str[MAX_MEM_LOG_DATA] ;
+        snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tActive Alarms:%s\n",
+                   node_ptr->hostname.c_str(),
+                   node_ptr->active_alarms.c_str());
+        mem_log (str);
+    }
 }
 
 void nodeLinkClass::mem_log_stage ( struct nodeLinkClass::node * node_ptr )
@@ -9037,8 +9206,8 @@ void nodeLinkClass::mem_log_network ( struct nodeLinkClass::node * node_ptr )
 {
     char str[MAX_MEM_LOG_DATA] ;
     snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\t%s %s cluster_host_ip: %s Uptime: %u\n",
-                node_ptr->hostname.c_str(), 
-                node_ptr->mac.c_str(), 
+                node_ptr->hostname.c_str(),
+                node_ptr->mac.c_str(),
                 node_ptr->ip.c_str(),
                 node_ptr->clstr_ip.c_str(),
                 node_ptr->uptime );
@@ -9050,11 +9219,11 @@ void nodeLinkClass::mem_log_heartbeat ( struct nodeLinkClass::node * node_ptr )
     char str[MAX_MEM_LOG_DATA] ;
     for ( int iface = 0 ; iface < MAX_IFACES ; iface++ )
     {
-        snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\t%s Minor:%s Degrade:%s Failed:%s  Monitor:%s\n", 
-                   node_ptr->hostname.c_str(), 
+        snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\t%s Minor:%s Degrade:%s Failed:%s  Monitor:%s\n",
+                   node_ptr->hostname.c_str(),
                    get_iface_name_str (iface),
-                   node_ptr->hbs_minor[iface] ? "true " : "false", 
-                   node_ptr->hbs_degrade[iface] ? "true " : "false", 
+                   node_ptr->hbs_minor[iface] ? "true " : "false",
+                   node_ptr->hbs_degrade[iface] ? "true " : "false",
                    node_ptr->hbs_failure[iface] ? "true " : "false",
                    node_ptr->monitor[iface] ? "YES" : "no"  );
         mem_log (str);
@@ -9083,8 +9252,8 @@ void nodeLinkClass::mem_log_hbs_cnts ( struct nodeLinkClass::node * node_ptr )
 void nodeLinkClass::mem_log_test_info ( struct nodeLinkClass::node * node_ptr )
 {
     char str[MAX_MEM_LOG_DATA] ;
-    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tOOS Stage:%s Runs:%d - INSV Stage:%s Runs:%d\n", 
-                node_ptr->hostname.c_str(), 
+    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tOOS Stage:%s Runs:%d - INSV Stage:%s Runs:%d\n",
+                node_ptr->hostname.c_str(),
                 get_oosTestStages_str(node_ptr->oosTestStage).c_str(),
                 node_ptr->oos_test_count,
                 get_insvTestStages_str(node_ptr->insvTestStage).c_str(),
@@ -9117,7 +9286,7 @@ void nodeLinkClass::mem_log_type_info ( struct nodeLinkClass::node * node_ptr )
                 node_ptr->function);
     mem_log (str);
 
-    if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+    if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
     {
         snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tSub-Function: %s (%u) (SubFunc Enabled:%c)\n",
                 node_ptr->hostname.c_str(),
@@ -9156,6 +9325,7 @@ void nodeLinkClass::memDumpNodeState ( string hostname )
             // mem_log_reset_info ( node_ptr );
             mem_log_power_info ( node_ptr );
             mem_log_alarm1     ( node_ptr );
+            mem_log_alarm2     ( node_ptr );
             mem_log_mtcalive   ( node_ptr );
             mem_log_stage      ( node_ptr );
             mem_log_bm         ( node_ptr );

@@ -33,6 +33,7 @@
 #define REDFISH_SEVERITY__GOOD     "OK"
 #define REDFISH_SEVERITY__MAJOR    "Warning"
 #define REDFISH_SEVERITY__CRITICAL "Critical"
+#define REDFISH_SEVERITY__NONRECOVERABLE "NonRecoverable"
 
 #define BMC_SENSOR_DEFAULT_UNIT_TYPE_TEMP    "degrees"
 #define BMC_SENSOR_DEFAULT_UNIT_TYPE_VOLT    "Volts"

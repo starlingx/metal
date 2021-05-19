@@ -159,19 +159,20 @@ void nodeLinkClass::mnfa_recover_host ( struct nodeLinkClass::node * node_ptr )
 
     if ( node_ptr->mnfa_graceful_recovery == true )
     {
-        /* Restart the heartbeat for this recovered host */
-        // send_hbs_command ( node_ptr->hostname, MTC_RESTART_HBS );
-
         if ( node_ptr->adminAction != MTC_ADMIN_ACTION__RECOVER )
         {
-            ilog ("%s graceful recovery from MNFA\n", node_ptr->hostname.c_str());
-            recoveryStageChange ( node_ptr, MTC_RECOVERY__START );
-            adminActionChange   ( node_ptr, MTC_ADMIN_ACTION__RECOVER );
+            ilog ("%s graceful recovery (graceful recover count:%d)",
+                      node_ptr->hostname.c_str(),
+                      node_ptr->graceful_recovery_counter);
         }
         else
         {
-            wlog ("%s already gracefully recovering\n", node_ptr->hostname.c_str() );
+            wlog ("%s graceful recovery restart (graceful recover count:%d)",
+                      node_ptr->hostname.c_str(),
+                      node_ptr->graceful_recovery_counter );
         }
+        recoveryStageChange ( node_ptr, MTC_RECOVERY__START );
+        adminActionChange   ( node_ptr, MTC_ADMIN_ACTION__RECOVER );
     }
 }
 
@@ -298,43 +299,38 @@ void nodeLinkClass::mnfa_exit ( bool force )
          * Clear heartbeat degrades */
         for ( struct node * ptr = head ;  ; ptr = ptr->next )
         {
-            if ((( ptr->hbs_minor[CLSTR_IFACE] == true ) ||
-                 ( ptr->hbs_minor[MGMNT_IFACE] == true )) &&
-                 ( ptr->operState == MTC_OPER_STATE__ENABLED ))
+            std::list<string>::iterator mnfa_awol_ptr  ;
+            for ( mnfa_awol_ptr = mnfa_awol_list.begin() ;
+                  mnfa_awol_ptr != mnfa_awol_list.end() ;
+                  mnfa_awol_ptr++ )
             {
-                ptr->hbs_minor[MGMNT_IFACE] = false ;
-                ptr->hbs_minor[CLSTR_IFACE] = false ;
+                /* skip host if not in the mnfa pool */
+                if ( ptr->hostname.compare(*(mnfa_awol_ptr)) )
+                   continue ;
 
-                if ( force == true )
+                if ((( ptr->hbs_minor[CLSTR_IFACE] == true ) ||
+                     ( ptr->hbs_minor[MGMNT_IFACE] == true )) &&
+                     ( ptr->operState == MTC_OPER_STATE__ENABLED ))
                 {
-                    elog ("... %s failed ; auto-recovering\n",
-                               ptr->hostname.c_str());
+                    ptr->hbs_minor[MGMNT_IFACE] = false ;
+                    ptr->hbs_minor[CLSTR_IFACE] = false ;
 
-                    /* Set node as failed */
-                    availStatusChange ( ptr, MTC_AVAIL_STATUS__FAILED );
-                    enableStageChange ( ptr, MTC_ENABLE__START );
-                    adminActionChange ( ptr, MTC_ADMIN_ACTION__NONE );
-                }
-                else
-                {
-                    if ( ptr->availStatus == MTC_AVAIL_STATUS__DEGRADED )
+                    if ( force == true )
                     {
-                        if ( ptr->degrade_mask == 0 )
-                        {
-                            availStatusChange ( ptr, MTC_AVAIL_STATUS__AVAILABLE );
-                        }
-                    }
+                        elog ("... %s failed ; auto-recovering\n",
+                                   ptr->hostname.c_str());
 
-                    if ( ptr->adminAction != MTC_ADMIN_ACTION__RECOVER )
-                    {
-                        recoveryStageChange ( ptr, MTC_RECOVERY__START );
-                        adminActionChange   ( ptr, MTC_ADMIN_ACTION__RECOVER );
+                        /* Set node as failed */
+                        availStatusChange ( ptr, MTC_AVAIL_STATUS__FAILED );
+                        enableStageChange ( ptr, MTC_ENABLE__START );
+                        adminActionChange ( ptr, MTC_ADMIN_ACTION__NONE );
                     }
                     else
                     {
-                        wlog ("%s already gracefully recovering\n", ptr->hostname.c_str() );
+                        mnfa_recover_host ( ptr );
                     }
                 }
+                break ;
             }
             if (( ptr->next == NULL ) || ( ptr == tail ))
                 break ;

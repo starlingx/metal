@@ -254,7 +254,7 @@ void hwmonGroup_init ( string & hostname , struct sensor_group_type * group_ptr 
         group_ptr->actions_critical_choices.append(HWMON_ACTION_ALARM);
 
         /* Don't support reset and power cycle in AIO simplex mode */
-        if ( obj_ptr->system_type != SYSTEM_TYPE__CPE_MODE__SIMPLEX )
+        if ( obj_ptr->system_type != SYSTEM_TYPE__AIO__SIMPLEX )
         {
             group_ptr->actions_critical_choices.append(",");
             group_ptr->actions_critical_choices.append(HWMON_ACTION_RESET);

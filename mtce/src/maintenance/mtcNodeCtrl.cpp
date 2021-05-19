@@ -1187,15 +1187,6 @@ int _self_provision ( void )
 
             if ( my_identity.name == record_info.name )
             {
-                /* If the active controller was 'locked' and is being auto-corrected
-                 * to 'unlocked' then ensure that there is no locked alarm set for it */
-                if ( record_info.admin != "locked" )
-                {
-                        mtcAlarm_clear ( my_identity.name, MTC_ALARM_ID__LOCK );
-                        /* this is not required because its already inited to clear */
-                        // node_ptr->alarms[MTC_ALARM_ID__LOCK] = FM_ALARM_SEVERITY_CLEAR
-                }
-
                 if ( my_identity.mac != record_info.mac )
                 {
                     wlog ("%s mac address mismatch (%s - %s)\n",
@@ -1326,6 +1317,7 @@ void nodeLinkClass::fsm ( void )
             daemon_signal_hdlr ();
             mtcHttpSvr_look ( mtce_event );
         }
+        mtcInv.mtcInfo_handler();
     }
 }
 
@@ -1515,9 +1507,9 @@ void daemon_service_run ( void )
 
     if ( ts.tv_sec < MTC_MINS_15 )
     {
-        /* CPE DOR window is much greater in CPE since heartbeat
-         * cannot start until the inactive CPE has run both manifests */
-        int timeout = DEFAULT_DOR_MODE_CPE_TIMEOUT ;
+        /* AIO DOR window is much greater in AIO since heartbeat
+         * cannot start until the inactive AIO has run both manifests */
+        int timeout = DEFAULT_DOR_MODE_AIO_TIMEOUT ;
 
         /* override the timeout to a smaller value for normal system */
         if ( mtcInv.system_type == SYSTEM_TYPE__NORMAL )
@@ -1601,7 +1593,7 @@ void daemon_service_run ( void )
         if ( mtcInv.system_type == SYSTEM_TYPE__NORMAL )
             mtc_sock.waitd.tv_usec = MTCAGENT_SELECT_TIMEOUT ;
         else
-            mtc_sock.waitd.tv_usec = MTCAGENT_CPE_SELECT_TIMEOUT ;
+            mtc_sock.waitd.tv_usec = MTCAGENT_AIO_SELECT_TIMEOUT ;
 
         /* This is used as a delay up to select_timeout */
         rc = select( socks.back()+1, &mtc_sock.readfds, NULL, NULL, &mtc_sock.waitd);

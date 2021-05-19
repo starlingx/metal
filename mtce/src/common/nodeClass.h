@@ -76,11 +76,11 @@ using namespace std;
 #define LARGE_SYSTEM \
     ( this->system_type == SYSTEM_TYPE__NORMAL )
 
-#define CPE_SYSTEM \
+#define AIO_SYSTEM \
     ( this->system_type != SYSTEM_TYPE__NORMAL )
 
-#define SIMPLEX_CPE_SYSTEM \
-    ( this->system_type == SYSTEM_TYPE__CPE_MODE__SIMPLEX )
+#define SIMPLEX_AIO_SYSTEM \
+    ( this->system_type == SYSTEM_TYPE__AIO__SIMPLEX )
 
 /**
  * @addtogroup nodeLinkClass
@@ -652,20 +652,18 @@ private:
 
         /** @} private_monitoring_services_variables */
 
-        /* List of alarms and current severity */
-        #define MAX_ALARMS           (10)
+        /* List of alarms current severity */
         EFmAlarmSeverityT alarms[MAX_ALARMS];
 
-        /* tracks whether the alarms for this host have been loaded already or not */
-        bool alarms_loaded ;
+        /* string containing active alarms and their severity
+         * ... for logging purposes only */
+        string active_alarms ;
 
         /** true if this host has recovered before the mnfa timeout period.
          *  This bool flags the graceful recovery handler that this node
          *  is recovering from mnfa and should manage graceful recovery
          *  and uptime accordingly */
         bool mnfa_graceful_recovery ;
-
-        int stress_iteration ;
 
         /* BMC Protocol Learning Controls and State */
 
@@ -828,9 +826,12 @@ private:
     int oos_test_handler   ( struct nodeLinkClass::node * node_ptr );
     int insv_test_handler  ( struct nodeLinkClass::node * node_ptr );
     int stress_handler     ( struct nodeLinkClass::node * node_ptr );
-    int bmc_handler         ( struct nodeLinkClass::node * node_ptr );
+    int bmc_handler        ( struct nodeLinkClass::node * node_ptr );
     int degrade_handler    ( struct nodeLinkClass::node * node_ptr );
+
     int uptime_handler     ( void );
+
+    void mtcInfo_handler   ( void );
 
     int host_services_handler ( struct nodeLinkClass::node * node_ptr );
 
@@ -839,6 +840,9 @@ private:
 
     /* server specific power state query handler */
     bool (*is_poweron_handler) (string hostname, string query_response );
+
+    /* Audit that monitors and auto corrects alarm state mismatches */
+    void mtcAlarm_audit ( struct nodeLinkClass::node * node_ptr );
 
     /* Calculate the overall reset progression timeout */
     int calc_reset_prog_timeout ( struct nodeLinkClass::node * node_ptr, int retries );
@@ -851,12 +855,21 @@ private:
     void ctl_mtcAlive_gate ( struct nodeLinkClass::node * node_ptr, bool gate_state );
     void set_mtcAlive      ( struct nodeLinkClass::node * node_ptr, int interface );
 
+    /*********               mtcInfo in the database              ************/
     int    mtcInfo_set ( struct nodeLinkClass::node * node_ptr, string key, string value );
     string mtcInfo_get ( struct nodeLinkClass::node * node_ptr, string key );
     void   mtcInfo_clr ( struct nodeLinkClass::node * node_ptr, string key );
     void   mtcInfo_log ( struct nodeLinkClass::node * node_ptr );
-
     int    set_mtcInfo ( struct nodeLinkClass::node * node_ptr, string & mtc_info );
+
+    /*********       mtcInfo that gets puished out to daemons      ***********/
+
+
+    /* flag telling mtce when a mtcInfo push needs to be done */
+    bool want_mtcInfo_push = false ;
+
+    /* performs the mtcInfo push */
+    void push_mtcInfo ( void );
 
     /*****************************************************************************
      *
@@ -1192,11 +1205,11 @@ private:
      * Set to true when the autorecovery threshold is reached
      * and we want to avoid taking further autorecovery action
      * even though it may be requested. */
-    bool autorecovery_disabled ;
+    bool autorecovery_disabled = false ;
 
     /* Set to true by fault detection methods that are
      * autorecoverable when in simplex mode. */
-    bool autorecovery_enabled ;
+    bool autorecovery_enabled = false ;
 
     /** Tracks the number of hosts that 'are currently' in service trouble
      *  wrt heartbeat (above minor threshold).
@@ -1292,6 +1305,7 @@ private:
     void mem_log_state1    ( struct nodeLinkClass::node * node_ptr );
     void mem_log_state2    ( struct nodeLinkClass::node * node_ptr );
     void mem_log_alarm1    ( struct nodeLinkClass::node * node_ptr );
+    void mem_log_alarm2    ( struct nodeLinkClass::node * node_ptr );
     void mem_log_mtcalive  ( struct nodeLinkClass::node * node_ptr );
     void mem_log_stage     ( struct nodeLinkClass::node * node_ptr );
     void mem_log_test_info ( struct nodeLinkClass::node * node_ptr );
@@ -1464,11 +1478,14 @@ public:
 
     /***********************************************************/
 
+    /** Number of provisioned controllers */
+    int controllers = 0 ;
+
     /** Number of provisioned hosts (nodes) */
-    int hosts  ;
+    int hosts = 0 ;
 
     /* Set to True while waiting for UNLOCK_READY_FILE in simplex mode */
-    bool unlock_ready_wait ;
+    bool unlock_ready_wait = false ;
 
     /** Host has been deleted */
     bool host_deleted ;
@@ -1516,6 +1533,9 @@ public:
 
     /** Return the number of inventoried hosts */
     int num_hosts ( void );
+
+    /** Return the number of inventoried controllers */
+    int num_controllers ( void );
 
     /** **********************************************************************
       *
@@ -1664,6 +1684,9 @@ public:
     /* Clear heartbeat failed flag for all interfaces */
     void manage_heartbeat_clear   ( string hostname, iface_enum iface );
 
+    /* Build a json dictionary of containing code specified maintenance info */
+    string build_mtcInfo_dict ( mtcInfo_enum mtcInfo_code );
+
    /** Test and Debug Members and Variables */
 
     /** Print node info banner */
@@ -1752,6 +1775,7 @@ public:
         #define MTC_FLAG__I_AM_LOCKED      (0x00000008)
     */
     void set_mtce_flags ( string hostname, int flags, int iface );
+    int  get_mtce_flags ( string & hostname );
 
     /** Updates the node's health code
       * Codes are found in nodeBase.h
@@ -1789,6 +1813,7 @@ public:
 
     string get_bm_ip   ( string hostname );
     string get_bm_un   ( string hostname );
+    string get_bm_pw   ( string hostname );
     string get_bm_type ( string hostname );
 
     string get_hostname_from_bm_ip ( string bm_ip );

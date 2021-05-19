@@ -443,6 +443,34 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
                     obj_ptr->declare_service_ready ( hostname, MTC_SERVICE_HEARTBEAT );
                     return (PASS);
                 }
+                else if ( service == MTC_SERVICE_MTCCLIENT_NAME )
+                {
+                    ilog ("%s %s ready", hostname.c_str(), MTC_SERVICE_MTCCLIENT_NAME);
+
+                    /* if this ready event is from the mtcClient of a
+                     * controller that has valid bmc access info then
+                     * build the 'peer controller kill' mtcInfo and
+                     * send it to that mtcClient */
+                    if ( obj_ptr->get_nodetype ( hostname ) & CONTROLLER_TYPE )
+                    {
+                        string bm_pw = obj_ptr->get_bm_pw ( hostname ) ;
+                        if ( !bm_pw.empty() && ( bm_pw != NONE ))
+                        {
+                            string bm_un = obj_ptr->get_bm_un ( hostname ) ;
+                            string bm_ip = obj_ptr->get_bm_ip ( hostname ) ;
+                            if (( hostUtil_is_valid_username  ( bm_un )) &&
+                                ( hostUtil_is_valid_ip_addr   ( bm_ip )))
+                            {
+                                send_mtc_cmd ( hostname,
+                                               MTC_MSG_INFO,
+                                               MGMNT_INTERFACE,
+                                               obj_ptr->build_mtcInfo_dict (
+                                MTC_INFO_CODE__PEER_CONTROLLER_KILL_INFO));
+                            }
+                        }
+                    }
+                    return (PASS);
+                }
                 if (  service == MTC_SERVICE_HWMOND_NAME )
                 {
                     std::list<string>::iterator temp ;
@@ -578,11 +606,12 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
     return (rc);
 }
 
-int send_mtc_cmd ( string & hostname, int cmd , int interface )
+int send_mtc_cmd ( string & hostname, int cmd , int interface, string json_dict )
 {
     int rc = FAIL ;
     bool force = false ;
     mtc_message_type mtc_cmd ;
+    string data = "" ;
     mtc_socket_type * sock_ptr = get_sockPtr ();
     memset (&mtc_cmd,0,sizeof(mtc_message_type));
 
@@ -592,6 +621,16 @@ int send_mtc_cmd ( string & hostname, int cmd , int interface )
 
     switch ( cmd )
     {
+        case MTC_MSG_INFO:
+        {
+            snprintf ( &mtc_cmd.hdr[0], MSG_HEADER_SIZE, "%s" , get_cmd_req_msg_header() );
+            mtc_cmd.cmd = cmd ;
+            mtc_cmd.num = 0 ;
+            data = "{\"mtcInfo\":" + json_dict + "}";
+            ilog("%s mtc info update", hostname.c_str());
+            rc = PASS ;
+            break ;
+        }
         case MTC_REQ_MTCALIVE:
         {
             snprintf ( &mtc_cmd.hdr[0], MSG_HEADER_SIZE, "%s" , get_cmd_req_msg_header() );
@@ -689,11 +728,20 @@ int send_mtc_cmd ( string & hostname, int cmd , int interface )
          * Note: the minus 1 is to overwrite the null */
         snprintf ( &mtc_cmd.hdr[MSG_HEADER_SIZE-1], MSG_HEADER_SIZE, "%s", obj_ptr->get_hostIfaceMac(hostname, MGMNT_IFACE).data());
 
-        string data = "{\"address\":\"";
-        data.append(obj_ptr->my_float_ip) ;
-        data.append("\",\"interface\":\"");
-        data.append(get_iface_name_str(interface));
-        data.append("\"}");
+        /* If data is empty then at least add where the message came from */
+        if ( data.empty() )
+        {
+            data = "{\"address\":\"";
+            data.append(obj_ptr->my_float_ip) ;
+            data.append("\",\"interface\":\"");
+            data.append(get_iface_name_str(interface));
+            data.append("\"}");
+        }
+        else
+        {
+            ; /* data is already pre loaded by the command case above */
+        }
+        /* copy data into message buffer */
         snprintf ( &mtc_cmd.buf[0], data.length()+1, "%s", data.data());
         bytes = (sizeof(mtc_message_type)-(BUF_SIZE-(data.length()+1)));
 
@@ -1176,7 +1224,7 @@ int service_events ( nodeLinkClass * obj_ptr, mtc_socket_type * sock_ptr )
     else if ( msg.cmd == MTC_EVENT_HEARTBEAT_READY )
     {
         /* no heartbeating in simplex mode */
-        if ( obj_ptr->system_type == SYSTEM_TYPE__CPE_MODE__SIMPLEX )
+        if ( obj_ptr->system_type == SYSTEM_TYPE__AIO__SIMPLEX )
         {
             return (PASS);
         }
@@ -1214,13 +1262,68 @@ int service_events ( nodeLinkClass * obj_ptr, mtc_socket_type * sock_ptr )
             {
                 elog ("%s Failed to send inventory to heartbeat service\n", hostname.c_str());
             }
-            /* Send the start event to the heartbeat service for all enabled hosts */
+            /* Consider sending the 'start' request to the heartbeat service
+             * for all enabled hosts. */
             if (( obj_ptr->get_adminState  ( hostname ) == MTC_ADMIN_STATE__UNLOCKED ) &&
                 ( obj_ptr->get_operState   ( hostname ) == MTC_OPER_STATE__ENABLED ) &&
                 ((obj_ptr->get_availStatus ( hostname ) == MTC_AVAIL_STATUS__AVAILABLE ) ||
                  (obj_ptr->get_availStatus ( hostname ) == MTC_AVAIL_STATUS__DEGRADED )))
             {
-                send_hbs_command ( hostname, MTC_CMD_START_HOST, controller );
+                /* However, bypass sending heartbeat 'start' for nodes that
+                 * are not ready to heartbeat; enabling, configuring, testing.
+                 * Such cases are if a host is:
+                 *
+                 * 1. running the add_handler or
+                 * 2. running the enable_handler or
+                 * 3. running the enable_subf_handler or
+                 * 4. not configured or
+                 * 5. not tested (goenabled not complete)
+                 *
+                 */
+                mtc_nodeAdminAction_enum current_action =
+                    obj_ptr->get_adminAction (hostname);
+                if (( current_action != MTC_ADMIN_ACTION__ADD ) &&
+                    ( current_action != MTC_ADMIN_ACTION__ENABLE ) &&
+                    ( current_action != MTC_ADMIN_ACTION__ENABLE_SUBF ))
+                {
+                    int mtce_flags = obj_ptr->get_mtce_flags(hostname);
+                    if (( mtce_flags & MTC_FLAG__I_AM_CONFIGURED ) &&
+                        ( mtce_flags & MTC_FLAG__I_AM_HEALTHY  ) &&
+                        ( mtce_flags & MTC_FLAG__MAIN_GOENABLED ))
+                    {
+                        if (( obj_ptr->system_type != SYSTEM_TYPE__NORMAL ) &&
+                            ( obj_ptr->get_nodetype ( hostname ) & CONTROLLER_TYPE ))
+                        {
+                            /* If its an AIO then its worker subfunction
+                             * needs to have been be configured and tested. */
+                            if (( mtce_flags & MTC_FLAG__SUBF_CONFIGURED ) &&
+                                ( mtce_flags & MTC_FLAG__SUBF_GOENABLED ))
+                            {
+                                ilog("%s heartbeat start (AIO controller)",
+                                         hostname.c_str());
+                                send_hbs_command ( hostname, MTC_CMD_START_HOST, controller );
+                            }
+                            else
+                            {
+                                wlog ("%s not heartbeat ready (subf) (oob:%x)",
+                                          hostname.c_str(),
+                                          mtce_flags);
+                            }
+                        }
+                        else
+                        {
+                            ilog("%s heartbeat start (from ready event)",
+                                     hostname.c_str());
+                            send_hbs_command ( hostname, MTC_CMD_START_HOST, controller );
+                        }
+                    }
+                    else
+                    {
+                        wlog ("%s not heartbeat ready (main) (oob:%x)",
+                                  hostname.c_str(),
+                                  mtce_flags);
+                    }
+                }
             }
         }
         ilog ("%s %s inventory push ... done",

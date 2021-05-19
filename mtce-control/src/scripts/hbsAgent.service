@@ -1,22 +1,13 @@
 [Unit]
 Description=StarlingX Maintenance Heartbeat Agent
-After=network.target syslog.service config.service
+After=hbsClient.service
 Before=pmon.service
 
 [Service]
 Type=forking
 ExecStart=/etc/rc.d/init.d/hbsAgent start
-ExecStop=/etc/rc.d/init.d/hbsAgent start
+ExecStop=/etc/rc.d/init.d/hbsAgent stop
 PIDFile=/var/run/hbsAgent.pid
-KillMode=process
-SendSIGKILL=no
-
-# Process recovery is handled by pmond if its running.
-# Delay 10 seconds to give pmond a chance to recover
-# before systemd kicks in to do it as a backup plan.
-Restart=always
-RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
-

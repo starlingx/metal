@@ -39,6 +39,26 @@ int nodeLinkClass::bmc_command_send ( struct nodeLinkClass::node * node_ptr,
 {
     int rc = PASS ;
 
+    /* handle 'kill of in-progress' thread or 'done but not consumed' thread */
+    if ( ! thread_idle ( node_ptr->bmc_thread_ctrl ))
+    {
+        if ( ! thread_done ( node_ptr->bmc_thread_ctrl ))
+        {
+            thread_kill ( node_ptr->bmc_thread_ctrl,
+                          node_ptr->bmc_thread_info );
+            return (RETRY);
+        }
+        else
+        {
+             mtcTimer_reset ( node_ptr->bmc_thread_ctrl.timer );
+             if ( thread_done_consume ( node_ptr->bmc_thread_ctrl,
+                                        node_ptr->bmc_thread_info ) != PASS )
+             {
+                 return (RETRY);
+             }
+        }
+    }
+
     node_ptr->bmc_thread_info.command = command ;
 
     /* Update / Setup the BMC access credentials */
@@ -437,6 +457,13 @@ bmc_command_recv_cleanup:
 
     if ( rc != RETRY )
     {
+        ilog ("%s %s recv '%s' command (%s) (rc:%d)",
+                  node_ptr->hostname.c_str(),
+                  node_ptr->bmc_thread_ctrl.name.c_str(),
+                  bmcUtil_getCmd_str(node_ptr->bmc_thread_info.command).c_str(),
+                  bmcUtil_getProtocol_str(node_ptr->bmc_protocol).c_str(),
+                  rc);
+
         node_ptr->bmc_thread_ctrl.done = true ;
         node_ptr->bmc_thread_ctrl.retries = 0 ;
         node_ptr->bmc_thread_ctrl.id = 0 ;

@@ -231,6 +231,7 @@ typedef struct
     recovery_method_type recovery_method ; /**< How processes are recovered */
     bool reload_config ;
     bool patching_in_progress ;
+    bool last_alarm_query_pass;
 
 } pmon_ctrl_type ;
 void pmon_set_ctrl_ptr ( pmon_ctrl_type * ctrl_ptr );

@@ -1381,6 +1381,7 @@ int daemon_init ( string iface, string nodetype )
         hbs_ctrl.locked = true ;
     }
 
+
     daemon_init_fit();
     return (rc);
 }
@@ -1521,6 +1522,7 @@ void hbs_sm_handler ( void )
  *              False if time delta is greater
  *
  ***************************************************************************/
+#define HUGE_NUMBER_B2B_SM_HEARTBEAT_MISSES (10000)
 bool manage_sm_heartbeat ( void )
 {
     struct timespec ts ;
@@ -1532,8 +1534,9 @@ bool manage_sm_heartbeat ( void )
     if ( delta_in_ms > SM_HEARTBEAT_PULSE_PERIOD_MSECS )
     {
         sm_heartbeat_count = 0;
-        if (( ++sm_heartbeat_count_b2b_misses < 20 )||
-            (!( sm_heartbeat_count_b2b_misses % 100 )))
+        if ((( ++sm_heartbeat_count_b2b_misses < 20 ) ||
+            (!( sm_heartbeat_count_b2b_misses % 1000 ))) &&
+            ( sm_heartbeat_count_b2b_misses < HUGE_NUMBER_B2B_SM_HEARTBEAT_MISSES ))
         {
             wlog("SM Heartbeat missing since %ld.%03ld secs ago ; HBS Period Misses:%3d ; Running HB Count:%4d",
                   delta.secs, delta.msecs,
@@ -1817,6 +1820,10 @@ void daemon_service_run ( void )
                         inv.name = hbsInv.my_hostname ;
                         inv.nodetype = CONTROLLER_TYPE ;
                         hbsInv.add_heartbeat_host ( inv );
+
+                        /* add this host to local inventory */
+                        hostname_inventory.push_front(hbsInv.my_hostname);
+                        ilog ("%s added to inventory (self)", hbsInv.my_hostname.c_str());
                     }
 
                     /* enable the base level signal handler latency monitor */
@@ -1841,7 +1848,7 @@ void daemon_service_run ( void )
                     clock_gettime (CLOCK_MONOTONIC, &sm_heartbeat_timestamp_last );
 
                     /* no need for the heartbeat audit in a simplex system */
-                    if ( hbsInv.system_type != SYSTEM_TYPE__CPE_MODE__SIMPLEX )
+                    if ( hbsInv.system_type != SYSTEM_TYPE__AIO__SIMPLEX )
                     {
                         /* start the state audit */
                         /* run the first audit in 30 seconds */
@@ -2056,7 +2063,7 @@ void daemon_service_run ( void )
                                           hbsInv.active_controller ? "" : "in" );
 
                                 /* no need for the heartbeat audit in a simplex system */
-                                if ( hbsInv.system_type != SYSTEM_TYPE__CPE_MODE__SIMPLEX )
+                                if ( hbsInv.system_type != SYSTEM_TYPE__AIO__SIMPLEX )
                                 {
                                     /* Due to activity state change we will dump
                                      * the heartbeat cluster state at now time
@@ -2074,6 +2081,7 @@ void daemon_service_run ( void )
                             inv.nodetype = msg.parm[0];
                             hbsInv.add_heartbeat_host ( inv ) ;
                             hostname_inventory.push_back ( inv.name );
+                            hostname_inventory.unique(); // avoid duplicates
                             ilog ("%s added to heartbeat service (%d)\n",
                                       inv.name.c_str(),
                                       inv.nodetype);
@@ -2119,7 +2127,7 @@ void daemon_service_run ( void )
                         {
                             if ( hostname != hbsInv.my_hostname )
                             {
-                                hbsInv.mon_host ( hostname, false, true );
+                                hbsInv.mon_host ( hostname, false, false );
                                 hbs_cluster_del ( hostname );
                                 ilog ("%s heartbeat service disabled by stop command",
                                           hostname.c_str());
@@ -2366,6 +2374,7 @@ void daemon_service_run ( void )
                     arrival_histogram[iface] = "" ;
                     unexpected_pulse_list[iface] = "" ;
 
+
                     rc = hbs_pulse_request ( (iface_enum)iface, seq_num, ri, rri );
                     if ( rc != 0 )
                     {
@@ -2523,7 +2532,9 @@ void daemon_service_run ( void )
                 }
             }
             /* log cluster throttled */
-            if (( heartbeat_ok == false ) && ( !( sm_heartbeat_count_b2b_misses % 100 )))
+            if ((( heartbeat_ok == false ) &&
+                ( !( sm_heartbeat_count_b2b_misses % 1000 ))) &&
+                ( sm_heartbeat_count_b2b_misses < HUGE_NUMBER_B2B_SM_HEARTBEAT_MISSES ))
             {
                 hbs_state_audit ( );
             }

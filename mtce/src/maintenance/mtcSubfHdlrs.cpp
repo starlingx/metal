@@ -110,14 +110,16 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
             if ( node_ptr->mtce_flags & MTC_FLAG__SUBF_CONFIGURED )
             {
                 mtcTimer_reset (node_ptr->mtcTimer);
-                plog ("%s Subf Configured OK\n", name.c_str());
+                plog ("%s Subf Configured OK (oob:%x)\n",
+                          name.c_str(), node_ptr->mtce_flags);
                 enableStageChange ( node_ptr, MTC_ENABLE__GOENABLED_TIMER );
                 alarm_config_clear ( node_ptr );
                 break ;
             }
 
-            if ((( !node_ptr->mtce_flags & MTC_FLAG__I_AM_CONFIGURED )) ||
-                ((  node_ptr->mtce_flags & MTC_FLAG__I_AM_NOT_HEALTHY )))
+            if (( node_ptr->mtce_flags ) &&
+                (( !node_ptr->mtce_flags & MTC_FLAG__I_AM_CONFIGURED ) ||
+                 (  node_ptr->mtce_flags & MTC_FLAG__I_AM_NOT_HEALTHY )))
             {
                 mtcTimer_reset (node_ptr->mtcTimer);
 
@@ -140,9 +142,10 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
             /* timeout handling */
             else if ( node_ptr->mtcTimer.ring == true )
             {
-                elog ("%s configuration timeout (%d secs)\n",
+                elog ("%s configuration timeout (%d secs) (oob:%x)\n",
                           name.c_str(),
-                          MTC_WORKER_CONFIG_TIMEOUT );
+                          MTC_WORKER_CONFIG_TIMEOUT,
+                          node_ptr->mtce_flags);
 
                 alarm_config_failure ( node_ptr );
 
@@ -169,7 +172,7 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
              *
              * issue: subfunction go-enable patching script fails and
              * maintenance reboots the active controller when no-reboot
-             * patching maintenance in CPE.
+             * patching maintenance in AIO.
              *
              * The fix is to avoid running the subfunction go-enabled tests
              * on self while patching.
@@ -490,7 +493,7 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
 
                 fail = true ;
             }
-            else if ( this->system_type != SYSTEM_TYPE__CPE_MODE__SIMPLEX )
+            else if ( this->system_type != SYSTEM_TYPE__AIO__SIMPLEX )
             {
                 /* Loop over the heartbeat interfaces and fail the Enable if any of them are failing */
                 for ( int i = 0 ; i < MAX_IFACES ; i++ )

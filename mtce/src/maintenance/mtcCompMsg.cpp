@@ -20,7 +20,7 @@
 
 #include <stdio.h>
 #include <string.h>
-#include <sys/un.h>      /* for ... unix domain sockets     */
+#include <sys/un.h>    /* for ... unix domain sockets     */
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <net/if.h>
@@ -29,8 +29,8 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <errno.h>
-#include <list>        /* for the list of conf file names */
-
+#include <list>        /* for ... list of conf file names */
+#include <unistd.h>    /* for ... sync                    */
 
 using namespace std;
 
@@ -70,11 +70,15 @@ void stop_pmon( void )
 {
     /* max pipe command response length */
     #define PIPE_COMMAND_RESPON_LEN (100)
+
+    ilog("Stopping collectd.");
+    int rc = system("/usr/local/sbin/pmon-stop collectd");
+    sleep (2);
     ilog("Stopping pmon to prevent process recovery during shutdown");
     for ( int retry = 0 ; retry < 5 ; retry++ )
     {
         char pipe_cmd_output [PIPE_COMMAND_RESPON_LEN] ;
-        int rc = system("/usr/bin/systemctl stop pmon");
+        rc = system("/usr/bin/systemctl stop pmon");
         sleep(2);
 
         /* confirm pmon is no longer active */
@@ -203,6 +207,24 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
         {
             mlog1 ("mtcAlive request received (%s network)\n", interface_name.c_str());
             return ( send_mtcAlive_msg ( sock_ptr, get_who_i_am(), interface ));
+        }
+        else if ( msg.cmd == MTC_MSG_INFO )
+        {
+            mlog1("mtc 'info' message received (%s network)\n", interface_name.c_str());
+            load_mtcInfo_msg ( msg );
+            return ( PASS ); /* no ack for this message */
+        }
+        else if ( msg.cmd == MTC_CMD_SYNC )
+        {
+            ilog ("mtc '%s' message received (%s network)\n",
+                   get_mtcNodeCommand_str(msg.cmd),
+                   interface_name.c_str());
+
+            ilog ("Sync Start");
+            sync ();
+            ilog ("Sync Done");
+
+            return ( PASS ); /* no ack for this message */
         }
         else if ( msg.cmd == MTC_MSG_LOCKED )
         {
@@ -603,7 +625,7 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
 }
 
 /** Send an event to the mtcAgent **/
-int mtce_send_event ( mtc_socket_type * sock_ptr, int cmd , const char * mtce_name_ptr )
+int mtce_send_event ( mtc_socket_type * sock_ptr, unsigned int cmd , const char * mtce_name_ptr )
 {
     mtc_message_type event ;
 
@@ -618,6 +640,24 @@ int mtce_send_event ( mtc_socket_type * sock_ptr, int cmd , const char * mtce_na
 
         /* We don't use the buffer for mtce events to remove it from the size */
         bytes = ((sizeof(mtc_message_type))-(BUF_SIZE));
+    }
+    else if ( cmd == MTC_EVENT_MONITOR_READY )
+    {
+        string event_info = "{\"" ;
+        event_info.append(MTC_JSON_INV_NAME);
+        event_info.append("\":\"");
+        event_info.append(get_hostname());
+        event_info.append("\",\"");
+        event_info.append(MTC_JSON_SERVICE);
+        event_info.append("\":\"");
+        event_info.append(MTC_SERVICE_MTCCLIENT_NAME );
+        event_info.append("\"}");
+
+        size_t len =  event_info.length()+1 ;
+        snprintf ( &event.hdr[0], MSG_HEADER_SIZE, "%s", get_mtce_event_header());
+        snprintf ( &event.buf[0], len, "%s", event_info.data());
+        bytes = ((sizeof(mtc_message_type))-(BUF_SIZE-len));
+        ilog ("%s %s ready", get_hostname().c_str(), MTC_SERVICE_MTCCLIENT_NAME);
     }
     else if (( cmd == MTC_EVENT_AVS_CLEAR    ) ||
              ( cmd == MTC_EVENT_AVS_MAJOR    ) ||
@@ -666,7 +706,7 @@ int mtce_send_event ( mtc_socket_type * sock_ptr, int cmd , const char * mtce_na
     {
         if ( bytes == 0 )
         {
-           slog ("message send failed ; message size=0 for cmd:%d is 0\n", event.cmd );
+           slog ("message send failed ; message size=0 for cmd:0x%x is 0\n", event.cmd );
            rc = FAIL_NO_DATA ;
         }
         else if ((rc = sock_ptr->mtc_client_tx_socket->write((char*)&event.hdr[0], bytes))!= bytes )
@@ -912,15 +952,18 @@ int send_mtcAlive_msg ( mtc_socket_type * sock_ptr, string identity, int interfa
         }
 
         /* Send to controller-1 cluster address */
-        if (( sock_ptr->mtc_client_tx_socket_c1_clstr ) &&
-            ( sock_ptr->mtc_client_tx_socket_c1_clstr->sock_ok() == true ))
+        if ( get_ctrl_ptr()->system_type != SYSTEM_TYPE__AIO__SIMPLEX )
         {
-            print_mtc_message ( CONTROLLER_1, MTC_CMD_TX, msg, get_iface_name_str(CLSTR_INTERFACE), false );
-            sock_ptr->mtc_client_tx_socket_c1_clstr->write((char*)&msg.hdr[0], bytes ) ;
-        }
-        else
-        {
-            elog("mtc_client_tx_socket_c1_clstr not ok");
+            if (( sock_ptr->mtc_client_tx_socket_c1_clstr ) &&
+                ( sock_ptr->mtc_client_tx_socket_c1_clstr->sock_ok() == true ))
+            {
+                print_mtc_message ( CONTROLLER_1, MTC_CMD_TX, msg, get_iface_name_str(CLSTR_INTERFACE), false );
+                sock_ptr->mtc_client_tx_socket_c1_clstr->write((char*)&msg.hdr[0], bytes ) ;
+            }
+            else
+            {
+                elog("mtc_client_tx_socket_c1_clstr not ok");
+            }
         }
     }
     else
@@ -933,32 +976,59 @@ int send_mtcAlive_msg ( mtc_socket_type * sock_ptr, string identity, int interfa
     return (PASS) ;
 }
 
-/* Accelerated Virtual Switch 'events' socket
- * - for receiving data port state change event
- * Event strings are
-  *
-  * {"type":"port-state", "severity":"critical|major|clear"}
-  *
-  * type:port-state - the provider network data port status has changed to the supplied fault severity
-  *
-  * severity:
-  *   critical - port has failed and is not part of an aggregate or is the last port in an aggregate (degrade, disable services)
-  *   major    - port has failed and is part of an aggregate with other inservice-ports (degrade only)
-  *   clear    - port has recovered from a failed state and is operational (clear degrade, enable services)
-  *
-  * NOTE: The port status can transition from any of the above states to any other state.
-  *
-  * The neutron agent monitors the vswitch ports at a 2 second interval.
-  * If a port changes link state during the polling period, it will
-  * raise/clear the alarm, but now also calculates the impact of that port
-  * failure on the provider network data interface.
-  *
-  * The overall aggregated state across all provider network interfaces will
-  * be reported to maintenance when ports enter a link down or up state.
-  * The agent will also periodically send the current provider network port
-  * status to maintenance every 30 seconds.
-  *
-  */
+int send_mtcClient_cmd ( mtc_socket_type * sock_ptr, int cmd, string hostname, string address, int port)
+{
+    mtc_message_type msg ;
+    int bytes = 0 ;
+    MEMSET_ZERO (msg);
+    snprintf ( &msg.hdr[0], MSG_HEADER_SIZE, "%s", get_cmd_req_msg_header());
+    msg.cmd = cmd ;
+
+    switch ( cmd )
+    {
+        case MTC_CMD_SYNC:
+        {
+            ilog ("Sending '%s' command to %s:%s:%d",
+                   get_mtcNodeCommand_str(cmd),
+                   hostname.c_str(),
+                   address.c_str(), port);
+
+            msg.num = 0   ;
+
+            /* buffer  not used in this message */
+            bytes = ((sizeof(mtc_message_type))-(BUF_SIZE));
+
+            break ;
+        }
+        default:
+        {
+            slog("Unsupported command ; %s:%d", get_mtcNodeCommand_str(cmd), cmd );
+            return (FAIL_BAD_CASE);
+        }
+    }
+    int rc = FAIL ;
+
+    /* Send to controller floating address */
+    if (( sock_ptr->mtc_client_tx_socket ) &&
+        ( sock_ptr->mtc_client_tx_socket->sock_ok() == true ))
+    {
+        print_mtc_message ( hostname, MTC_CMD_TX, msg, get_iface_name_str(MGMNT_INTERFACE), false );
+        rc = sock_ptr->mtc_client_tx_socket->write((char*)&msg.hdr[0], bytes, address.data(), port ) ;
+        if ( 0 >= rc )
+        {
+            elog("failed to send command to mtcClient (%d) (%d:%s)", rc, errno, strerror(errno));
+            rc = FAIL_SOCKET_SENDTO ;
+        }
+        else
+            rc = PASS ;
+    }
+    else
+    {
+        elog("mtc_client_tx_socket not ok");
+        rc = FAIL_BAD_STATE ;
+    }
+    return (rc) ;
+}
 
 int mtcCompMsg_testhead ( void )
 {

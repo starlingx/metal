@@ -25,6 +25,7 @@ mtce-guestServer
 nfscheck
 radvd
 config-gate-worker
+isolcpus-device-plugin
 kernel-rt
 kernel-module-igb-uio
 kernel-module-igb-uio-rt
@@ -33,6 +34,7 @@ kernel-rt-modules-extra
 kmod-e1000e-rt
 kmod-i40e-rt
 kmod-iavf-rt
+kmod-ice-rt
 kmod-ixgbe-rt
 kmod-ixgbevf-rt
 kmod-igb_uio-rt
@@ -53,3 +55,7 @@ openvswitch-config
 pci-irq-affinity-agent
 kvm-timer-advance
 sysinv-fpga-agent
+kernel-rt-headers
+kernel-rt-devel
+kernel-headers
+kernel-devel

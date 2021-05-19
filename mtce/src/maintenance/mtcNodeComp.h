@@ -17,6 +17,10 @@
 #include <string.h>
 #include <unistd.h>
 
+using namespace std;
+
+#include "nodeTimers.h"     /* for ... Timer Service  */
+
 /** Compute Config mask */
 #define CONFIG_CLIENT_MASK  (CONFIG_AGENT_MTC_MGMNT_PORT  |\
                              CONFIG_CLIENT_MTC_MGMNT_PORT |\
@@ -59,6 +63,22 @@ typedef struct
 } script_ctrl_type ;
 void script_ctrl_init ( script_ctrl_type * script_ctrl_ptr );
 
+/* peer controller reset control structure and associated definitions */
+
+/* This is a flag file set by SM when SM wants maintanence to perform a
+ * BMC reset of the other (peer) controller */
+#define RESET_PEER_NOW "/var/run/.sm_reset_peer"
+
+#define PEER_CTRLR_AUDIT_PERIOD (2)
+typedef struct
+{
+    struct
+    mtc_timer  sync_timer  ;
+    mtc_timer audit_timer  ;
+    int       audit_period ;
+    bool      sync   ;
+} peer_ctrlr_reset_type ;
+
 typedef struct
 {
     char             hostname [MAX_HOST_NAME_SIZE+1];
@@ -76,7 +96,7 @@ typedef struct
     unsigned int     function ;
     unsigned int  subfunction ;
 
-    struct mtc_timer timer ; /* mtcAlive timer */
+    struct mtc_timer timer       ; /* mtcAlive timer */
 
     bool             clstr_iface_provisioned ;
 
@@ -102,6 +122,7 @@ typedef struct
     /* Where to send events */
     string mtcAgent_ip ;
 
+    peer_ctrlr_reset_type peer_ctrlr_reset;
 } ctrl_type ;
 
 ctrl_type * get_ctrl_ptr ( void );
@@ -109,5 +130,6 @@ ctrl_type * get_ctrl_ptr ( void );
 bool is_subfunction_worker ( void );
 int run_goenabled_scripts ( mtc_socket_type * sock_ptr , string requestor );
 int run_hostservices_scripts ( unsigned int cmd );
+void load_mtcInfo_msg ( mtc_message_type & msg );
 
 #endif

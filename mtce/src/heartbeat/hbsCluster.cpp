@@ -69,6 +69,8 @@ typedef struct
 
     msgClassSock * sm_socket_ptr ;
 
+    string cluster_change_reason ;
+
 } hbs_cluster_ctrl_type ;
 
 /* Cluster control structire construct allocation. */
@@ -122,6 +124,8 @@ void hbs_cluster_init ( unsigned short period, msgClassSock * sm_socket_ptr )
     {
         ctrl.sm_socket_ptr = sm_socket_ptr ;
     }
+    ctrl.cluster_change_reason = "";
+
     ctrl.log_throttle = 0 ;
 }
 
@@ -173,7 +177,30 @@ void hbs_cluster_nums ( unsigned short this_controller,
 
 void hbs_cluster_change ( string cluster_change_reason )
 {
-    hbs_cluster_send( ctrl.sm_socket_ptr, 0, cluster_change_reason );
+    ilog ("reason: %s", cluster_change_reason.c_str());
+    if ( ctrl.cluster_change_reason.empty() )
+        ctrl.cluster_change_reason = cluster_change_reason ;
+    else
+        ctrl.cluster_change_reason.append("," + cluster_change_reason) ;
+}
+
+/****************************************************************************
+ *
+ * Name        : hbs_cluster_change_notifier
+ *
+ * Description : Send SM the cluster info if there has been a state change.
+ *
+ ***************************************************************************/
+void hbs_cluster_change_notifier ( void )
+{
+    if ( ! ctrl.cluster_change_reason.empty () )
+    {
+        if ( hbs_cluster_send( ctrl.sm_socket_ptr, 0,
+                               ctrl.cluster_change_reason ) == PASS )
+        {
+            ctrl.cluster_change_reason.clear();
+        }
+    }
 }
 
 /****************************************************************************
@@ -444,6 +471,7 @@ void hbs_cluster_update ( iface_enum iface,
             wlog_throttled ( ctrl.log_throttle, THROTTLE_COUNT,
                              "Unable to store history beyond %d ",
                              ctrl.cluster.histories );
+            hbs_cluster_change_notifier ();
             return ;
         }
         else
@@ -543,6 +571,8 @@ void hbs_cluster_update ( iface_enum iface,
         history_ptr->oldest_entry_index = 0 ;
     else
         history_ptr->oldest_entry_index++ ;
+
+    hbs_cluster_change_notifier ();
 
     /* clear the log throttle if we are updating history ok. */
     ctrl.log_throttle = 0 ;
@@ -647,12 +677,12 @@ unsigned short hbs_cluster_unused_bytes ( void )
  *
  ***************************************************************************/
 
-void hbs_cluster_send ( msgClassSock * sm_client_sock, int reqid , string reason )
+int hbs_cluster_send ( msgClassSock * sm_client_sock, int reqid , string reason )
 {
+    int rc = FAIL_SOCKET_SENDTO ;
     ctrl.cluster.reqid = (unsigned short)reqid ;
     if (( sm_client_sock ) && ( sm_client_sock->sock_ok() == true ))
     {
-        ilog ("cluster state notification Reason: %s", reason.c_str());
         int len = sizeof(mtce_hbs_cluster_type)-hbs_cluster_unused_bytes();
         int bytes = sm_client_sock->write((char*)&ctrl.cluster, len);
         if ( bytes <= 0 )
@@ -660,12 +690,19 @@ void hbs_cluster_send ( msgClassSock * sm_client_sock, int reqid , string reason
              elog ("failed to send cluster vault to SM (bytes=%d) (%d:%s)\n",
                     bytes , errno, strerror(errno));
         }
-        hbs_cluster_dump ( ctrl.cluster );
+        else
+        {
+            /* limit the string length */
+            ilog ("reason: %s", reason.substr(0,80).c_str());
+            hbs_cluster_dump ( ctrl.cluster );
+            rc = PASS ;
+        }
     }
     else
     {
         wlog ("cannot send cluster info due to socket error");
     }
+    return(rc);
 }
 
 /****************************************************************************
@@ -689,7 +726,7 @@ void hbs_history_save ( string hostname,
         {
             if ( hbs_cluster_cmp( sample, ctrl.cluster.history[h] ) )
             {
-                 hbs_cluster_change ("peer controller cluster event " +
+                 hbs_cluster_change ("peer cluster delta " +
                  hbs_cluster_network_name((mtce_hbs_network_enum)sample.network));
             }
 

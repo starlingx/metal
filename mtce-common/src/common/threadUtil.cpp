@@ -311,6 +311,48 @@ bool thread_idle ( thread_ctrl_type & ctrl )
 
 /****************************************************************************
  *
+ * Name       : thread_done_consume
+ *
+ * Description: Return to IDLE stage.
+ *
+ ****************************************************************************/
+
+int thread_done_consume ( thread_ctrl_type & ctrl, thread_info_type & info )
+{
+    if ( ctrl.stage == THREAD_STAGE__IDLE )
+    {
+        return PASS ;
+    }
+    else if ( ctrl.done == false )
+    {
+        if ( info.runcount > ctrl.runcount )
+        {
+            ilog("%s thread cleanup ; cmd:%d ; cnt:%d:%d",
+                 info.hostname.c_str(),
+                 info.command,
+                 ctrl.runcount,
+                 info.runcount);
+            ctrl.done = true ;
+            ctrl.stage = THREAD_STAGE__DONE ;
+            thread_handler (ctrl, info);
+            return PASS ;
+        }
+        else
+        {
+            thread_kill(ctrl, info);
+            return RETRY ;
+        }
+    }
+    else
+    {
+        ctrl.stage = THREAD_STAGE__DONE ;
+        thread_handler( ctrl, info );
+        return PASS ;
+    }
+}
+
+/****************************************************************************
+ *
  * Name       : thread_launch
  *
  * Description: Perform prechecks that verify the ctrl struct is ready for
@@ -381,7 +423,7 @@ void thread_kill ( thread_ctrl_type & ctrl, thread_info_type & info )
         ( ctrl.stage != THREAD_STAGE__WAIT ) &&
         ( ctrl.stage != THREAD_STAGE__IDLE ))
     {
-        blog ("%s kill request\n", ctrl.hostname.c_str() );
+        wlog ("%s kill request\n", ctrl.hostname.c_str() );
         _stage_change ( ctrl, THREAD_STAGE__KILL );
     }
 }

@@ -110,6 +110,7 @@ install -v -m 644 %{_sourcedir}/efi-centos-pxe-worker_lowlatency-install \
 install -v -m 644 %{_sourcedir}/efi-centos-pxe-smallsystem_lowlatency-install \
     %{buildroot}/pxeboot/pxelinux.cfg.files/efi-pxe-smallsystem_lowlatency-install-%{platform_release}
 
+ln -sf /pxeboot/EFI/grubx64.efi %{buildroot}/pxeboot/grubx64.efi
 
 sed -i "s/xxxSW_VERSIONxxx/%{platform_release}/g" \
     %{buildroot}/pxeboot/pxelinux.cfg.files/pxe-* \

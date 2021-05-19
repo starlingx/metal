@@ -481,7 +481,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
         if ( node_ptr->adminAction == MTC_ADMIN_ACTION__UNLOCK )
         {
             bool aio = false ;
-            if ( SIMPLEX_CPE_SYSTEM )
+            if ( SIMPLEX_AIO_SYSTEM )
                 aio = true ;
             else
                 aio = false ;
@@ -525,7 +525,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                 }
             }
             mtcInvApi_update_states_now ( node_ptr, "unlocked", "disabled" , "offline", "disabled", "offline" );
-            mtcInvApi_update_task_now   ( node_ptr, aio ? MTC_TASK_CPE_SX_UNLOCK_MSG : MTC_TASK_SELF_UNLOCK_MSG );
+            mtcInvApi_update_task_now   ( node_ptr, aio ? MTC_TASK_AIO_SX_UNLOCK_MSG : MTC_TASK_SELF_UNLOCK_MSG );
 
             wlog ("%s unlocking %s with reboot\n",
                       my_hostname.c_str(),
@@ -546,7 +546,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
              * Condition 1: While there is no in-service backup controller
              *              to swact to. In this case the ctive controller
              *              - is only degraded to avoid a system outage.
-             *              - the CPE subfunction is failed
+             *              - the AIO subfunction is failed
              *              - worker SubFunction Alarm is raised
              *              - Enable alarm is raised
              *              - A process monitor alarm may also be raised if
@@ -648,7 +648,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                 }
                 else
                 {
-                    if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+                    if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
                     {
                         /* Raise Critical Compute Function Alarm */
                         alarm_compute_failure ( node_ptr , FM_ALARM_SEVERITY_CRITICAL );
@@ -661,7 +661,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
             node_ptr->graceful_recovery_counter = 0 ;
             node_ptr->health_threshold_counter  = 0 ;
 
-            if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+            if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
             {
                 node_ptr->inservice_failed_subf = true ;
                 subfStateChange ( node_ptr, MTC_OPER_STATE__DISABLED,
@@ -1358,7 +1358,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                  * have a worker function and the heartbeat for those hosts
                  * are started at the end of the subfunction handler. */
                 if (( THIS_HOST ) ||
-                   (( CPE_SYSTEM ) && ( is_controller(node_ptr)) ))
+                   (( AIO_SYSTEM ) && ( is_controller(node_ptr)) ))
                 {
                     enableStageChange ( node_ptr, MTC_ENABLE__STATE_CHANGE );
                 }
@@ -1523,8 +1523,8 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
             if ( is_controller(node_ptr) )
             {
                 /* Defer telling SM the controller state if
-                 * this is a CPE and this is the only controller */
-                if ( CPE_SYSTEM && ( num_controllers_enabled() > 0 ))
+                 * this is a AIO and this is the only controller */
+                if ( AIO_SYSTEM && ( num_controllers_enabled() > 0 ))
                 {
                     wlog ("%s deferring SM enable notification till subfunction-enable complete\n",
                               node_ptr->hostname.c_str());
@@ -1555,7 +1555,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
 
             enableStageChange ( node_ptr, MTC_ENABLE__START );
 
-            if (( CPE_SYSTEM ) && ( is_controller(node_ptr)))
+            if (( AIO_SYSTEM ) && ( is_controller(node_ptr)))
             {
                 ilog ("%s running worker sub-function enable handler\n", node_ptr->hostname.c_str());
                 mtcInvApi_update_task ( node_ptr, MTC_TASK_ENABLING_SUBF );
@@ -1637,9 +1637,10 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
             node_ptr->http_retries_cur = 0 ;
             node_ptr->unknown_health_reported = false ;
 
-            plog ("%s %sGraceful Recovery (uptime was %d)\n",
+            plog ("%s %sGraceful Recovery (%d) (uptime was %d)\n",
                       node_ptr->hostname.c_str(),
                       node_ptr->mnfa_graceful_recovery ? "MNFA " : "",
+                      node_ptr->graceful_recovery_counter,
                       node_ptr->uptime );
 
             /* Cancel any outstanding timers */
@@ -1660,7 +1661,8 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
              *   2. Setting the node operational state to Disabled
              *   3. Setting the Enable action
              */
-            if ( ++node_ptr->graceful_recovery_counter > MTC_MAX_FAST_ENABLES )
+            node_ptr->graceful_recovery_counter++ ;
+            if ( node_ptr->graceful_recovery_counter > MTC_MAX_FAST_ENABLES )
             {
                 /* gate off further mtcAlive messaging timme the offline
                 * handler runs. This prevents stale messages from making it
@@ -1772,10 +1774,11 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
 
                 else if ( node_ptr->mnfa_graceful_recovery == true )
                 {
-                    if ( node_ptr->uptime > MTC_MINS_10 )
+                    if ( node_ptr->uptime > MTC_MINS_15 )
                     {
                         /* did not reboot case */
-                        wlog ("%s Connectivity Recovered ; host did not reset\n", node_ptr->hostname.c_str());
+                        wlog ("%s Connectivity Recovered ; host did not reset (uptime:%d)\n",
+                                  node_ptr->hostname.c_str(), node_ptr->uptime);
                         wlog ("%s ... continuing with MNFA graceful recovery\n", node_ptr->hostname.c_str());
                         wlog ("%s ... with no affect to host services\n", node_ptr->hostname.c_str());
 
@@ -1788,7 +1791,8 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
                     else
                     {
                         /* did reboot case */
-                        wlog ("%s Connectivity Recovered ; host has reset\n", node_ptr->hostname.c_str());
+                        wlog ("%s Connectivity Recovered ; host has reset (uptime:%d)\n",
+                                  node_ptr->hostname.c_str(),  node_ptr->uptime);
                         ilog ("%s ... continuing with MNFA graceful recovery\n", node_ptr->hostname.c_str());
                         ilog ("%s ... without additional reboot %s\n",
                                   node_ptr->hostname.c_str(), node_ptr->bm_ip.empty() ? "or reset" : "" );
@@ -1806,12 +1810,13 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
                         break ;
                     }
                 }
-                else if (( node_ptr->uptime_save ) && ( node_ptr->uptime >= node_ptr->uptime_save ))
+                else if ( node_ptr->uptime > MTC_MINS_15 )
                 {
                     /* did not reboot case */
-                    wlog ("%s Connectivity Recovered ; host did not reset%s\n",
+                    wlog ("%s Connectivity Recovered ; host did not reset%s (uptime:%d)",
                               node_ptr->hostname.c_str(),
-                              node_ptr->was_dor_recovery_mode ? " (DOR)" : "" );
+                              node_ptr->was_dor_recovery_mode ? " (DOR)" : "",
+                              node_ptr->uptime);
 
                     wlog ("%s ... continuing with graceful recovery\n", node_ptr->hostname.c_str());
                     wlog ("%s ... with no affect to host services\n", node_ptr->hostname.c_str());
@@ -1875,7 +1880,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
                                            MTC_OPER_STATE__DISABLED,
                                            MTC_AVAIL_STATUS__FAILED );
 
-                if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+                if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
                 {
                     subfStateChange ( node_ptr, MTC_OPER_STATE__DISABLED,
                                                MTC_AVAIL_STATUS__FAILED );
@@ -1905,7 +1910,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
         {
             int timeout = 0 ;
 
-            /* Set the FSM task state to booting */
+            /* Set the FSM task state to 'Graceful Recovery Wait' */
             node_ptr->uptime = 0 ;
             mtcInvApi_update_task ( node_ptr, MTC_TASK_RECOVERY_WAIT );
 
@@ -2266,7 +2271,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
             {
                 /* The active controller would never get/be here but
                  * if it did then just fall through to change state. */
-                if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+                if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
                 {
                     /* Here we need to run the sub-fnction goenable and start
                      * host services if this is the other controller in a AIO
@@ -2442,10 +2447,10 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
             }
             else /* success path */
             {
-                /* allow the fsm to wait for up to 1 minute for the
-                 * hbsClient's ready event before starting heartbeat
+                /* allow the fsm to wait for up to 'worker config timeout'
+                 * for the hbsClient's ready event before starting heartbeat
                  * test. */
-                mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_MINS_1 );
+                mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_WORKER_CONFIG_TIMEOUT );
                 recoveryStageChange ( node_ptr, MTC_RECOVERY__HEARTBEAT_START );
             }
             break ;
@@ -2502,6 +2507,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
         {
             if ( node_ptr->mtcTimer.ring == true )
             {
+                ilog ("%s heartbeating", node_ptr->hostname.c_str());
                 /* if heartbeat is not working then we will
                  * never get here and enable the host */
                 recoveryStageChange ( node_ptr, MTC_RECOVERY__STATE_CHANGE );
@@ -2510,7 +2516,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
         }
         case MTC_RECOVERY__STATE_CHANGE:
         {
-            if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+            if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
             {
                 /* Set node as unlocked-enabled */
                 subfStateChange ( node_ptr, MTC_OPER_STATE__ENABLED,
@@ -2555,7 +2561,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
             else if ( rc == PASS )
             {
                 /* Start Graceful Recovery */
-                recoveryStageChange ( node_ptr, MTC_RECOVERY__ENABLE_START ) ;
+                recoveryStageChange ( node_ptr, MTC_RECOVERY__ENABLE ) ;
                 break ;
             }
             else if ( rc == FAIL_WORKQ_TIMEOUT )
@@ -2571,51 +2577,37 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
             nodeLinkClass::force_full_enable ( node_ptr );
             break ;
         }
-        case MTC_RECOVERY__ENABLE_START:
+        case MTC_RECOVERY__ENABLE:
         {
-            /* Create the recovery enable timer. This timer is short.
-             * A node need to stay enabled with the hartbeat service
-             * running for a period of time before declaring it enabled */
-            mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_HEARTBEAT_SOAK_BEFORE_ENABLE );
-
-            recoveryStageChange ( node_ptr, MTC_RECOVERY__ENABLE_WAIT ) ;
-            break;
-        }
-        case MTC_RECOVERY__ENABLE_WAIT:
-        {
-            /* When this timer fires the host has been up for enough time */
-            if ( node_ptr->mtcTimer.ring == true )
+            if ( is_controller(node_ptr) )
             {
-                if ( is_controller(node_ptr) )
+                if ( mtcSmgrApi_request ( node_ptr,
+                                          CONTROLLER_ENABLED,
+                                          SMGR_MAX_RETRIES ) != PASS )
                 {
-                    if ( mtcSmgrApi_request ( node_ptr,
-                                              CONTROLLER_ENABLED,
-                                              SMGR_MAX_RETRIES ) != PASS )
-                    {
-                        wlog ("%s Failed to send 'unlocked-disabled' to HA Service Manager ; allowing enable\n",
-                              node_ptr->hostname.c_str());
-                    }
+                    wlog ("%s Failed to send 'unlocked-enabled' to HA Service Manager ; allowing enable\n",
+                          node_ptr->hostname.c_str());
                 }
-                /* Node Has Recovered */
-                node_ptr->graceful_recovery_counter = 0 ;
-                recoveryStageChange ( node_ptr, MTC_RECOVERY__START );
-                adminActionChange   ( node_ptr, MTC_ADMIN_ACTION__NONE );
-                node_ptr->health_threshold_counter = 0 ;
-                node_ptr->enabled_count++ ;
-                node_ptr->http_retries_cur = 0 ;
-
-                doneQueue_purge ( node_ptr );
-                if ( node_ptr->was_dor_recovery_mode )
-                {
-                    report_dor_recovery (  node_ptr , "is ENABLED" );
-                }
-                else
-                {
-                    plog ("%s is ENABLED (Gracefully Recovered)\n",
-                              node_ptr->hostname.c_str());
-                }
-                alarm_enabled_clear ( node_ptr, false );
             }
+            /* Node Has Recovered */
+            node_ptr->graceful_recovery_counter = 0 ;
+            recoveryStageChange ( node_ptr, MTC_RECOVERY__START );
+            adminActionChange   ( node_ptr, MTC_ADMIN_ACTION__NONE );
+            node_ptr->health_threshold_counter = 0 ;
+            node_ptr->enabled_count++ ;
+            node_ptr->http_retries_cur = 0 ;
+
+            doneQueue_purge ( node_ptr );
+            if ( node_ptr->was_dor_recovery_mode )
+            {
+                report_dor_recovery (  node_ptr , "is ENABLED" );
+            }
+            else
+            {
+                plog ("%s is ENABLED (Gracefully Recovered)\n",
+                          node_ptr->hostname.c_str());
+            }
+            alarm_enabled_clear ( node_ptr, false );
             break ;
         }
         default:
@@ -2783,7 +2775,7 @@ int nodeLinkClass::disable_handler  ( struct nodeLinkClass::node * node_ptr )
                                            MTC_OPER_STATE__DISABLED,
                                            locked_status );
 
-                if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+                if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
                 {
                     subfStateChange ( node_ptr, MTC_OPER_STATE__DISABLED,
                                                 locked_status );
@@ -3432,7 +3424,7 @@ int nodeLinkClass::online_handler ( struct nodeLinkClass::node * node_ptr )
 
                         /* otherwise change state */
                         mtcInvApi_update_state(node_ptr, MTC_JSON_INV_AVAIL,"offline" );
-                        if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+                        if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
                         {
                             mtcInvApi_update_state(node_ptr, MTC_JSON_INV_AVAIL_SUBF,"offline" );
                         }
@@ -3473,7 +3465,7 @@ int nodeLinkClass::online_handler ( struct nodeLinkClass::node * node_ptr )
                                   node_ptr->hostname.c_str());
 
                         mtcInvApi_update_state ( node_ptr, MTC_JSON_INV_AVAIL, "online" );
-                        if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+                        if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
                         {
                             mtcInvApi_update_state ( node_ptr, MTC_JSON_INV_AVAIL_SUBF, "online" );
                         }
@@ -6093,7 +6085,7 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
 
             mtcInfo_log(node_ptr);
 
-            if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+            if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
             {
                 if ( daemon_is_file_present ( CONFIG_COMPLETE_WORKER ) == false )
                 {
@@ -6120,52 +6112,38 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
                 mtcInvApi_update_state ( node_ptr, "availability", "available" );
             }
 
-            /* handle other cases */
-            EFmAlarmSeverityT sev = mtcAlarm_state ( node_ptr->hostname,
-                                                     MTC_ALARM_ID__ENABLE);
+            /* Query FM for existing Enable and Config alarm status */
+            EFmAlarmSeverityT enable_alarm_severity =
+                mtcAlarm_state ( node_ptr->hostname, MTC_ALARM_ID__ENABLE);
+            EFmAlarmSeverityT config_alarm_severity =
+                mtcAlarm_state ( node_ptr->hostname, MTC_ALARM_ID__CONFIG);
 
-            if ( node_ptr->adminState == MTC_ADMIN_STATE__LOCKED )
+            /* Clear generic enable alarm over process restart.
+             * Will get reasserted if the cause condition still exists */
+            if ( enable_alarm_severity != FM_ALARM_SEVERITY_CLEAR )
             {
-                node_ptr->alarms[MTC_ALARM_ID__LOCK] = FM_ALARM_SEVERITY_WARNING ;
-
-                /* If the node is locked then the Enable alarm
-                 * should not be present */
-                if ( sev != FM_ALARM_SEVERITY_CLEAR )
-                {
-                    mtcAlarm_clear ( node_ptr->hostname, MTC_ALARM_ID__ENABLE );
-                    sev = FM_ALARM_SEVERITY_CLEAR ;
-                }
+                ilog ("%s found enable alarm ; clearing %s",
+                          node_ptr->hostname.c_str(),
+                          alarmUtil_getSev_str(enable_alarm_severity).c_str());
+                mtcAlarm_clear ( node_ptr->hostname, MTC_ALARM_ID__ENABLE );
             }
 
-            /* Manage enable alarm over process restart.
-             *
-             * - clear the alarm in the active controller case
-             * - maintain the alarm, set degrade state in MAJOR and CRIT cases
-             * - clear alarm for all other severities.
-             */
-            if ( THIS_HOST )
+            /* The config alarm is maintained if it exists.
+             * The in-service test handler will clear the alarm
+             * if the config failure is gone */
+            if ( config_alarm_severity != FM_ALARM_SEVERITY_CLEAR )
             {
-                if ( sev != FM_ALARM_SEVERITY_CLEAR )
-                {
-                    mtcAlarm_clear ( node_ptr->hostname, MTC_ALARM_ID__ENABLE );
-                }
-            }
-            else
-            {
-                if (( sev == FM_ALARM_SEVERITY_CRITICAL ) ||
-                    ( sev == FM_ALARM_SEVERITY_MAJOR ))
-                {
-                    node_ptr->alarms[MTC_ALARM_ID__ENABLE] = sev ;
-                    node_ptr->degrade_mask |= DEGRADE_MASK_ENABLE ;
-                }
-                else if ( sev != FM_ALARM_SEVERITY_CLEAR )
-                {
-                    mtcAlarm_clear ( node_ptr->hostname, MTC_ALARM_ID__ENABLE );
-                }
+                node_ptr->degrade_mask |= DEGRADE_MASK_CONFIG ;
+                node_ptr->alarms[MTC_ALARM_ID__CONFIG] = config_alarm_severity ;
+                ilog ("%s found config alarm ; loaded %s",
+                          node_ptr->hostname.c_str(),
+                          alarmUtil_getSev_str(config_alarm_severity).c_str());
             }
 
             if ( is_controller(node_ptr) )
             {
+                this->controllers++ ;
+
                 mtc_cmd_enum state = CONTROLLER_DISABLED ;
 
                 if (( node_ptr->adminState   == MTC_ADMIN_STATE__UNLOCKED ) &&
@@ -6199,7 +6177,6 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
                     {
                         ilog ("%s %s\n",node_ptr->hostname.c_str(), MTC_TASK_SWACT_COMPLETE );
 
-                        /* Work Around for issue: */
                         mtcInvApi_update_uptime ( node_ptr, node_ptr->uptime );
 
                         mtcInvApi_update_task ( node_ptr, MTC_TASK_SWACT_COMPLETE );
@@ -6233,7 +6210,6 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
                     mtcSmgrApi_request ( node_ptr, state , SWACT_FAIL_THRESHOLD );
                 }
             }
-
             if ( daemon_get_cfg_ptr()->debug_level & 1 )
                 nodeLinkClass::host_print (node_ptr);
 
@@ -6288,6 +6264,40 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
                     adminActionChange ( node_ptr, MTC_ADMIN_ACTION__NONE );
                     plog ("%s Host Add Completed ; auto recovery disabled state (uptime:%d)\n",
                               node_ptr->hostname.c_str(), node_ptr->uptime );
+                    break ;
+                }
+                /* Handle catching and recovering/restoring hosts that might
+                 * have been in the Graceful Recovery Wait state.
+                 *
+                 * Prevents an extra reboot for hosts that might be in
+                 * Graceful Recovery over a maintenance process restart. */
+                else if (( NOT_THIS_HOST ) &&
+                         ( !node_ptr->task.compare(MTC_TASK_RECOVERY_WAIT)))
+                {
+                    ilog ("%s is in %s ; restoring state",
+                              node_ptr->hostname.c_str(),
+                              MTC_TASK_RECOVERY_WAIT);
+
+                    /* Complete necessary add operations before switching
+                     * to Recovery */
+                    LOAD_NODETYPE_TIMERS ;
+                    workQueue_purge ( node_ptr );
+                    if (( hostUtil_is_valid_bm_type  ( node_ptr->bm_type )) &&
+                        ( hostUtil_is_valid_ip_addr  ( node_ptr->bm_ip )) &&
+                        ( hostUtil_is_valid_username ( node_ptr->bm_un )))
+                    {
+                        set_bm_prov ( node_ptr, true ) ;
+                    }
+                    mtcTimer_reset ( node_ptr->mtcTimer );
+                    adminActionChange ( node_ptr, MTC_ADMIN_ACTION__NONE );
+                    node_ptr->addStage = MTC_ADD__START;
+
+                    /* Switch into recovery_handler's Graceful Recovery Wait
+                     * state with the Graceful Recovery Wait timeout */
+                    adminActionChange ( node_ptr, MTC_ADMIN_ACTION__RECOVER );
+                    mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler,
+                                     node_ptr->mtcalive_timeout );
+                    recoveryStageChange ( node_ptr, MTC_RECOVERY__MTCALIVE_WAIT );
                     break ;
                 }
                 else
@@ -6354,7 +6364,7 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
 
             send_hbs_command   ( node_ptr->hostname, MTC_CMD_ADD_HOST );
 
-            if ( ( CPE_SYSTEM ) || ( is_worker (node_ptr) == true ))
+            if ( ( AIO_SYSTEM ) || ( is_worker (node_ptr) == true ))
             {
                 send_guest_command ( node_ptr->hostname, MTC_CMD_ADD_HOST );
             }
@@ -6368,6 +6378,7 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
         }
         case MTC_ADD__WORKQUEUE_WAIT:
         {
+
             rc = workQueue_done ( node_ptr );
             if ( rc == RETRY )
             {
@@ -6393,11 +6404,11 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
                 ( node_ptr->operState  == MTC_OPER_STATE__ENABLED ))
             {
                 /* start the heartbeat service in all cases except for
-                 * THIS host and CPE controller hosts */
+                 * THIS host and AIO controller hosts */
                 if ( NOT_THIS_HOST )
                 {
                     if (( LARGE_SYSTEM ) ||
-                        (( CPE_SYSTEM ) && ( this->dor_mode_active == false )))
+                        (( AIO_SYSTEM ) && ( this->dor_mode_active == false )))
                     {
                         send_hbs_command ( node_ptr->hostname, MTC_CMD_START_HOST );
                     }
@@ -6430,7 +6441,7 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
                 node_ptr->configAction = MTC_CONFIG_ACTION__INSTALL_PASSWD ;
             }
 
-            if (( ! SIMPLEX_CPE_SYSTEM ) &&
+            if (( ! SIMPLEX_AIO_SYSTEM ) &&
                 ( node_ptr->bmc_provisioned == true ))
             {
                 mtcAlarm_clear ( node_ptr->hostname, MTC_ALARM_ID__BM );
@@ -6438,7 +6449,7 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
             }
 
             /* Special Add handling for the AIO system */
-            if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+            if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
             {
                 if (( node_ptr->adminState == MTC_ADMIN_STATE__UNLOCKED ) &&
                     ( node_ptr->operState  == MTC_OPER_STATE__ENABLED ))
@@ -6455,6 +6466,7 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
             }
 
             node_ptr->addStage = MTC_ADD__START;
+
             plog ("%s Host Add Completed (uptime:%d)\n", node_ptr->hostname.c_str(), node_ptr->uptime );
             node_ptr->add_completed = true ;
             break ;
@@ -6635,6 +6647,8 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
                         mtcInfo_set ( node_ptr, MTCE_INFO_KEY__BMC_PROTOCOL, BMC_PROTOCOL__IPMI_STR );
                         node_ptr->bmc_protocol = BMC_PROTOCOL__IPMITOOL ;
                     }
+                    /* store mtcInfo, which specifies the selected BMC protocol,
+                     * into the sysinv database */
                     mtcInvApi_update_mtcInfo ( node_ptr );
 
                     ilog ("%s bmc control using %s:%s",
@@ -6751,7 +6765,14 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
                         node_ptr->bmc_thread_ctrl.done = true  ;
                         node_ptr->bmc_thread_info.command = 0  ;
                     }
+                    /* store mtcInfo, which specifies the selected BMC protocol,
+                     * into the sysinv database */
                     mtcInvApi_update_mtcInfo ( node_ptr );
+
+                    /* push the BMC access info out to the mtcClient when
+                     * a controller's BMC connection is established/verified */
+                    if ( node_ptr->nodetype & CONTROLLER_TYPE )
+                        this->want_mtcInfo_push = true ;
 
                     send_hwmon_command ( node_ptr->hostname, MTC_CMD_ADD_HOST );
                     send_hwmon_command ( node_ptr->hostname, MTC_CMD_START_HOST );
@@ -6941,6 +6962,11 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
                                     availStatusChange ( node_ptr, MTC_AVAIL_STATUS__POWERED_OFF );
                                 }
                             } /* end power off detection handling     */
+
+                            /* push the BMC access info out to the mtcClient when
+                             * a controller's BMC connection is established/verified */
+                            if ( node_ptr->nodetype & CONTROLLER_TYPE )
+                                this->want_mtcInfo_push = true ;
 
                             send_hwmon_command ( node_ptr->hostname, MTC_CMD_ADD_HOST );
                             send_hwmon_command ( node_ptr->hostname, MTC_CMD_START_HOST );
@@ -7198,6 +7224,9 @@ int nodeLinkClass::oos_test_handler ( struct nodeLinkClass::node * node_ptr )
                     send_mtc_cmd ( node_ptr->hostname , MTC_MSG_LOCKED, CLSTR_INTERFACE );
                 }
             }
+
+            /* audit alarms */
+            mtcAlarm_audit (node_ptr );
 
             break ;
         }
@@ -7494,7 +7523,7 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
              *  In the restart case the subfunction fsm enable handler is not run so
              *  we try to detect the missing goenabled_subf flag as an inservice test.
              *
-             *  Only in CPE type
+             *  Only in AIO type
              *   - clear the alarm if the issue goes away -
              *     i.e. the goenabled tests eventually pass. Today
              *     hey are not re-run in the background but someday they may be
@@ -7502,7 +7531,7 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
              *     and we have only a single enabled controller (which must be this one)
              *     and the alarm is not already raised.
              **/
-            if (( CPE_SYSTEM ) && ( is_controller(node_ptr) == true ))
+            if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
             {
                 if (( node_ptr->adminState == MTC_ADMIN_STATE__UNLOCKED ) &&
                     ( node_ptr->operState == MTC_OPER_STATE__ENABLED ) &&
@@ -7597,7 +7626,7 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
                 }
             }
 
-            /* Monitor the health of the host - no pass file */
+            /* Monitor the health of the host */
             if ((  node_ptr->adminState  == MTC_ADMIN_STATE__UNLOCKED ) &&
                 (  node_ptr->operState   == MTC_OPER_STATE__ENABLED   ) &&
                 (( node_ptr->availStatus == MTC_AVAIL_STATUS__AVAILABLE ) ||
@@ -7623,6 +7652,11 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
                     ilog ("%s sm degrade clear\n", node_ptr->hostname.c_str());
                 }
 
+                /*
+                 * In-service Config Failure/Alarm handling
+                 */
+
+                /* Detect new config failure condition */
                 if ( node_ptr->mtce_flags & MTC_FLAG__I_AM_NOT_HEALTHY)
                 {
                     /* not healthy .... */
@@ -7634,16 +7668,7 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
                         {
                             wlog_throttled ( node_ptr->health_threshold_counter, (MTC_UNHEALTHY_THRESHOLD*10), "%s is UNHEALTHY\n", node_ptr->hostname.c_str());
                             if ( node_ptr->health_threshold_counter >= MTC_UNHEALTHY_THRESHOLD )
-                            {
-                                node_ptr->degrade_mask |= DEGRADE_MASK_CONFIG ;
-
-                                /* threshold is reached so raise the config alarm if it is not already raised */
-                                if ( node_ptr->alarms[MTC_ALARM_ID__CONFIG] != FM_ALARM_SEVERITY_CRITICAL )
-                                {
-                                    mtcAlarm_critical ( node_ptr->hostname, MTC_ALARM_ID__CONFIG );
-                                    node_ptr->alarms[MTC_ALARM_ID__CONFIG] = FM_ALARM_SEVERITY_CRITICAL ;
-                                }
-                            }
+                                alarm_config_failure ( node_ptr );
                         }
                     }
                     else
@@ -7662,6 +7687,12 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
                                        node_ptr->health_threshold_counter );
                         }
                     }
+                }
+                /* or correct an alarmed config failure that has cleared */
+                else if ( node_ptr->degrade_mask & DEGRADE_MASK_CONFIG )
+                {
+                    if ( node_ptr->mtce_flags & MTC_FLAG__I_AM_HEALTHY )
+                        alarm_config_clear ( node_ptr );
                 }
                 else
                 {

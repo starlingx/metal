@@ -326,7 +326,7 @@ void hbs_cluster_log  ( string & hostname, mtce_hbs_cluster_type & cluster, stri
 void hbs_sm_handler ( void );
 
 /* send the cluster vault to SM */
-void hbs_cluster_send ( msgClassSock * sm_client_sock, int reqid , string reason );
+int hbs_cluster_send ( msgClassSock * sm_client_sock, int reqid , string reason );
 
 /* copy cluster data from src to dst */
 void hbs_cluster_copy ( mtce_hbs_cluster_type & src, mtce_hbs_cluster_type & dst );
@@ -337,6 +337,10 @@ void hbs_cluster_dump ( mtce_hbs_cluster_type & vault );
 
 /* Heartbeat service state audit */
 void hbs_state_audit ( void );
+
+/* Send state change message to SM if there has been a
+ * state change in the last period */
+void hbs_cluster_change_notifier ( void );
 
 /**
  * @} hbs_base

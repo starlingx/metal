@@ -202,3 +202,66 @@ int ipmiUtil_bmc_info_load ( string hostname, const char * filename, bmc_info_ty
     ipmiUtil_bmc_info_log ( hostname, bmc_info, rc );
     return (rc);
 }
+
+
+int ipmiUtil_reset_host_now ( string hostname,
+                              bmcUtil_accessInfo_type accessInfo,
+                              string output_filename)
+{
+    dlog("%s %s BMC [IP:%s UN:%s]",
+          accessInfo.hostname.c_str(),
+          accessInfo.host_ip.c_str(),
+          accessInfo.bm_ip.c_str(),
+          accessInfo.bm_un.c_str());
+
+    if (daemon_is_file_present ( BMC_OUTPUT_DIR ) == false )
+        daemon_make_dir(BMC_OUTPUT_DIR) ;
+    if (daemon_is_file_present ( IPMITOOL_OUTPUT_DIR ) == false )
+        daemon_make_dir(IPMITOOL_OUTPUT_DIR) ;
+
+    /* create temp password file */
+    thread_info_type info ;
+    info.hostname = accessInfo.hostname ;
+    info.password_file = "" ;
+    info.pw_file_fd = 0 ;
+
+    /* Use common utility to create a temp pw file */
+    bmcUtil_create_pw_file ( &info, accessInfo.bm_pw, BMC_PROTOCOL__IPMITOOL );
+
+    /* create request */
+    string request =
+    ipmiUtil_create_request ( IPMITOOL_POWER_RESET_CMD,
+                              accessInfo.bm_ip,
+                              accessInfo.bm_un,
+                              info.password_file,
+                              output_filename );
+
+    /* issue request
+     *
+     * Note: Could launch a thread to avoid any stall.
+     *       However, mtcClient can withstand up to a 25 second stall
+     *       before pmon will fail it due to active monitoring.
+     *       UT showed that there is no stall at all. */
+    unsigned long long latency_threshold_secs = DEFAULT_SYSTEM_REQUEST_LATENCY_SECS ;
+    unsigned long long before_time = gettime_monotonic_nsec () ;
+    int rc = system ( request.data()) ;
+    unsigned long long after_time = gettime_monotonic_nsec () ;
+    unsigned long long delta_time = after_time-before_time ;
+    if ( rc )
+    {
+        wlog("system call failed ; rc:%d [%d:%s]", rc, errno, strerror(errno) );
+        rc = FAIL_SYSTEM_CALL ;
+    }
+    if ( delta_time > (latency_threshold_secs*1000000000))
+    {
+        wlog ("%s bmc system call took %2llu.%-8llu sec", hostname.c_str(),
+              (delta_time > NSEC_TO_SEC) ? (delta_time/NSEC_TO_SEC) : 0,
+              (delta_time > NSEC_TO_SEC) ? (delta_time%NSEC_TO_SEC) : 0);
+    }
+
+    /* Cleanup */
+    if ( info.pw_file_fd > 0 )
+        close(info.pw_file_fd);
+    daemon_remove_file ( info.password_file.data());
+    return (rc);
+}

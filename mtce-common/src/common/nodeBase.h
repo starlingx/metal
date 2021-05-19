@@ -185,7 +185,7 @@ typedef enum
 #define DEFAULT_MTCALIVE_TIMEOUT    (1200)
 #define DEFAULT_GOENABLE_TIMEOUT     (300)
 #define DEFAULT_DOR_MODE_TIMEOUT      (20)
-#define DEFAULT_DOR_MODE_CPE_TIMEOUT (600)
+#define DEFAULT_DOR_MODE_AIO_TIMEOUT (600)
 
 /** TODO: Convert names to omit JSON part */
 #define MTC_JSON_INV_LABEL     "ihosts"
@@ -263,6 +263,7 @@ typedef enum
 #define MTC_TASK_ENABLE_WORK_FAIL  "Enable Action Failed"
 #define MTC_TASK_ENABLE_WORK_TO    "Enable Action Timeout"
 #define MTC_TASK_ENABLE_FAIL_HB    "Enable Heartbeat Failure, re-enabling"
+#define MTC_TASK_RECOVERY_FAIL_HB  "Graceful Recovery Heartbeat Failure, re-enabling"
 #define MTC_TASK_RECOVERY_FAIL     "Graceful Recovery Failed, re-enabling"
 #define MTC_TASK_RECOVERY_WAIT     "Graceful Recovery Wait"
 #define MTC_TASK_RECOVERED         "Gracefully Recovered"
@@ -311,7 +312,7 @@ typedef enum
 #define MTC_TASK_POWERCYCLE_FAIL   "Critical Event Power-Cycle %d; failed"
 #define MTC_TASK_POWERCYCLE_DOWN   "Critical Event Power-Down ; due to persistent critical sensor"
 #define MTC_TASK_RESETTING_HOST    "Resetting Host, critical sensor"
-#define MTC_TASK_CPE_SX_UNLOCK_MSG "Unlocking, please stand-by while the system gracefully reboots"
+#define MTC_TASK_AIO_SX_UNLOCK_MSG "Unlocking, please stand-by while the system gracefully reboots"
 #define MTC_TASK_SELF_UNLOCK_MSG   "Unlocking active controller, please stand-by while it reboots"
 #define MTC_TASK_FAILED_SWACT_REQ  "Critical failure.Requesting SWACT to enabled standby controller"
 #define MTC_TASK_FAILED_NO_BACKUP  "Critical failure.Please provision/enable standby controller"
@@ -383,8 +384,8 @@ typedef enum
 /* 5 milliseconds */
 #define MTCAGENT_SELECT_TIMEOUT (5000)
 
-/* dedicate more idle time in CPE ; there is less maintenance to do */
-#define MTCAGENT_CPE_SELECT_TIMEOUT (10000)
+/* dedicate more idle time in AIO ; there is less maintenance to do */
+#define MTCAGENT_AIO_SELECT_TIMEOUT (10000)
 
 /** Number of retries maintenance will do when it experiences
  *  a REST API call failure ; any failure */
@@ -751,7 +752,9 @@ typedef struct
 #define MTC_CMD_START_STORAGE_SVCS    19  /*   to host */
 #define MTC_CMD_LAZY_REBOOT           20  /*   to host */
 #define MTC_CMD_HOST_SVCS_RESULT      21  /*   to host */
-#define MTC_CMD_LAST                  22
+#define MTC_MSG_INFO                  22  /*   to host */
+#define MTC_CMD_SYNC                  23  /*   to host */
+#define MTC_CMD_LAST                  24
 
 #define RESET_PROG_MAX_REBOOTS_B4_RESET (5)
 #define RESET_PROG_MAX_REBOOTS_B4_RETRY (RESET_PROG_MAX_REBOOTS_B4_RESET+2)
@@ -946,7 +949,7 @@ typedef enum
 string get_delStages_str ( mtc_delStages_enum stage );
 
 
-#define MTC_MAX_FAST_ENABLES (3)
+#define MTC_MAX_FAST_ENABLES (5)
 typedef enum
 {
     MTC_RECOVERY__START =  0,
@@ -972,10 +975,9 @@ typedef enum
     MTC_RECOVERY__HEARTBEAT_START,
     MTC_RECOVERY__HEARTBEAT_SOAK,
     MTC_RECOVERY__STATE_CHANGE,
-    MTC_RECOVERY__ENABLE_START,
     MTC_RECOVERY__FAILURE,
     MTC_RECOVERY__WORKQUEUE_WAIT,
-    MTC_RECOVERY__ENABLE_WAIT,
+    MTC_RECOVERY__ENABLE,
     MTC_RECOVERY__STAGES,
 } mtc_recoveryStages_enum ;
 
@@ -1262,6 +1264,14 @@ typedef enum
     MTC_AR_DISABLE_CAUSE__LAST,
     MTC_AR_DISABLE_CAUSE__NONE,
 } autorecovery_disable_cause_enum ;
+
+/* code that represents a specific group of maintenance information
+ * ... typically for a specific feature */
+typedef enum
+{
+    MTC_INFO_CODE__PEER_CONTROLLER_KILL_INFO,
+    MTC_INFO_CODE__LAST
+} mtcInfo_enum ;
 
 /* Service Based Auto Recovery Control Structure */
 typedef struct

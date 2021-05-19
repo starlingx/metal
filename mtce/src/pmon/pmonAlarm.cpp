@@ -38,14 +38,14 @@ void pmonAlarm_init ( void )
     alarmUtil_type * ptr ;
 
     /** Process Failure Alarm ****************************************************/
-    
+
     ptr = &alarm_list[PMON_ALARM_ID__PMOND];
     memset  (&ptr->alarm, 0, (sizeof(SFmAlarmDataT)));
     snprintf(&ptr->alarm.alarm_id[0], FM_MAX_BUFFER_LENGTH, "%s", PMOND_ALARM_ID);
 
     ptr->name = "process failure" ;
     ptr->instc_prefix = "process=" ;
-     
+
     ptr->critl_reason = "";
     ptr->minor_reason = "";
     ptr->major_reason = "";
@@ -56,12 +56,12 @@ void pmonAlarm_init ( void )
     ptr->alarm.inhibit_alarms    = FM_FALSE;
     ptr->alarm.service_affecting = FM_TRUE ;
     ptr->alarm.suppression       = FM_TRUE ;
-            
+
     ptr->alarm.severity          = FM_ALARM_SEVERITY_CLEAR ; /* Dynamic */
     ptr->alarm.alarm_state       = FM_ALARM_STATE_CLEAR    ; /* Dynamic */
 
-    snprintf (ptr->alarm.proposed_repair_action, FM_MAX_BUFFER_LENGTH, 
-              "If problem consistently occurs after Host is locked and unlocked then " 
+    snprintf (ptr->alarm.proposed_repair_action, FM_MAX_BUFFER_LENGTH,
+              "If problem consistently occurs after Host is locked and unlocked then "
               "contact next level of support for root cause analysis and recovery.");
 }
 
@@ -97,38 +97,46 @@ EFmAlarmSeverityT pmonAlarm_state ( string hostname, pmon_alarm_id_enum id )
 
 /******************************************************************************
  *
- * Name       : manage_queried_alarms
+ * Name       : query_alarms
  *
  * Description: query FM for all the existing process monitor alarms and build
  *              up the callers 'saved_alarm_list' with those process names and
  *              corresponding severity.
  *
- * Assumptions: If the hostname is passed in as not empty then assume the clear
- *              is requested.
- *
  * Updates    : callers saved_alarm_list
+ *
+ * Returns    : PASS if FM returns no error
+ *              FAIL_REQUEST      ... alarmUtil_query_identity failed
+ *              FAIL_OPERATION    ... fm_get_fault failed
+ *              FAIL_NULL_POINTER ... failed to get memory
  *
  ******************************************************************************/
 
-void manage_queried_alarms (  list<active_process_alarms_type> & saved_alarm_list, string hostname )
+int query_alarms (  list<active_process_alarms_type> & saved_alarm_list, string hostname )
 {
+    static const char HOSTNAME_LABEL [] = "host=" ;
+    static const char PROCNAME_LABEL [] = ".process=" ;
+
+    int rc = FAIL ;
     saved_alarm_list.clear();
 
-    /**
-     *  Query all the pmon alarms and if there is an alarm for a
-     *  process that is functioing properly then clear the alarm.
-     **/
     SFmAlarmDataT * alarm_list_ptr = (SFmAlarmDataT*) malloc ((sizeof(SFmAlarmDataT)*PMON_MAX_ALARMS));
     if ( alarm_list_ptr )
     {
-        if ( alarmUtil_query_identity ( pmonAlarm_getId_str(PMON_ALARM_ID__PMOND), alarm_list_ptr, PMON_MAX_ALARMS ) == PASS )
+        /* Query all the pmon alarms  */
+        rc = alarmUtil_query_identity ( pmonAlarm_getId_str(PMON_ALARM_ID__PMOND), alarm_list_ptr, PMON_MAX_ALARMS );
+        if ( rc == RETRY )
+        {
+            dlog ("no %s alarms found",  pmonAlarm_getId_str(PMON_ALARM_ID__PMOND).c_str());
+            rc = PASS ;
+        }
+        else if ( rc == PASS )
         {
             for ( int i = 0 ; i < PMON_MAX_ALARMS ; ++i )
             {
                 /* loop over each active alarm and maintain its activity state */
                 if ( strnlen ((alarm_list_ptr+i)->entity_instance_id , MAX_FILENAME_LEN ) )
                 {
-                    int rc ;
                     AlarmFilter   alarm_filter ;
                     SFmAlarmDataT alarm_query  ;
                     memset(&alarm_query, 0, sizeof(alarm_query));
@@ -139,34 +147,49 @@ void manage_queried_alarms (  list<active_process_alarms_type> & saved_alarm_lis
 
                     if (( rc = fm_get_fault ( &alarm_filter, &alarm_query )) == FM_ERR_OK )
                     {
-                        string entity = alarm_filter.entity_instance_id ;
-                        size_t pos = entity.find("process=");
-                        if ( pos != std::string::npos )
-                        {
-                            string pn = entity.substr(pos+strlen("process="));
-                            ilog ("%s alarm is %s (process:%s)\n", alarm_filter.entity_instance_id,
-                                 alarmUtil_getSev_str(alarm_query.severity).c_str(), pn.c_str());
+                        rc = PASS ;
 
-                            /* filter out 'process=pmond' as that alarm is handled by hbsAgent */
-                            if ( pn.compare("pmond") )
+                        string entity = alarm_filter.entity_instance_id ;
+                        size_t pos_hn = entity.find(HOSTNAME_LABEL);
+                        size_t pos_pn = entity.find(PROCNAME_LABEL);
+
+                        if (( pos_hn != std::string::npos ) &&
+                            ( pos_pn != std::string::npos ))
+                        {
+                            string hn = entity.substr(pos_hn+strlen(HOSTNAME_LABEL), pos_pn-strlen(HOSTNAME_LABEL));
+                            string pn = entity.substr(pos_pn+strlen(PROCNAME_LABEL));
+
+                            /* verify hostname */
+                            if ( ( hn.length() == 0 ) || ( hn != hostname ) )
                             {
-                                if ( !hostname.empty() )
-                                {
-                                    pmonAlarm_clear ( hostname, PMON_ALARM_ID__PMOND, pn );
-                                }
-                                else
-                                {
-                                     active_process_alarms_type this_alarm ;
-                                     this_alarm.process  = pn ;
-                                     this_alarm.severity = alarm_query.severity ;
-                                     saved_alarm_list.push_front ( this_alarm  );
-                                }
+                                /* ignore alarms not for this host */
+                                dlog ("%s %s %s alarm not for this host",
+                                          entity.c_str(),
+                                          hn.c_str(),
+                                          pn.c_str());
+                                continue ;
+                            }
+                            dlog ("%s alarm is %s (process:%s)\n",
+                                      alarm_filter.entity_instance_id,
+                                      alarmUtil_getSev_str(alarm_query.severity).c_str(),
+                                      pn.c_str());
+
+                            /* filter out 'process=pmond'
+                             * ... that alarm is handled by hbsAgent */
+                            if ( pn != MTC_SERVICE_PMOND_NAME )
+                            {
+                                 active_process_alarms_type this_alarm ;
+                                 this_alarm.process  = pn ;
+                                 this_alarm.severity = alarm_query.severity ;
+                                 saved_alarm_list.push_front ( this_alarm  );
                             }
                         }
                     }
                     else
                     {
-                        ilog ("fm_get_fault failed (rc:%d)\n", rc );
+                        wlog ("fm_get_fault failed (rc:%d)\n", rc );
+                        rc = FAIL_OPERATION ;
+                        break ;
                     }
                 }
                 else
@@ -174,10 +197,21 @@ void manage_queried_alarms (  list<active_process_alarms_type> & saved_alarm_lis
                     dlog2 ("last entry %d\n", i);
                     break ;
                 }
-            }
+            } /* for loop */
+        }
+        else
+        {
+            wlog("failed to query alarms from fm ; rc:%d", rc);
+            rc = FAIL_REQUEST ;
         }
         free(alarm_list_ptr);
     }
+    else
+    {
+        elog ("unable to allocate memory for alarm list");
+        rc = FAIL_NULL_POINTER ;
+    }
+    return (rc);
 }
 
 /*************************   A L A R M I N G   **************************/
