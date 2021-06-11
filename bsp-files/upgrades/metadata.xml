@@ -3,7 +3,7 @@
     <version>xxxSW_VERSIONxxx</version>
     <supported_upgrades>
         <upgrade>
-            <version>20.06</version>
+            <version>21.05</version>
         </upgrade>
     </supported_upgrades>
 </build>
