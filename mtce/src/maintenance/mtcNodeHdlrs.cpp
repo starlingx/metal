@@ -6441,8 +6441,7 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
                 node_ptr->configAction = MTC_CONFIG_ACTION__INSTALL_PASSWD ;
             }
 
-            if (( ! SIMPLEX_AIO_SYSTEM ) &&
-                ( node_ptr->bmc_provisioned == true ))
+            if ( node_ptr->bmc_provisioned == true )
             {
                 mtcAlarm_clear ( node_ptr->hostname, MTC_ALARM_ID__BM );
                 node_ptr->alarms[MTC_ALARM_ID__BM] = FM_ALARM_SEVERITY_CLEAR ;
