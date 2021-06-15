@@ -362,10 +362,6 @@ void hbs_cluster_del ( string & hostname )
 
         hbs_cluster_change ( hostname + " deleted" );
     }
-    else
-    {
-        slog("%s not found in cluster list", hostname.c_str());
-    }
 }
 
 /****************************************************************************
