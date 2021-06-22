@@ -97,6 +97,9 @@ mv ${COPY_DIR}/pxeboot_grub.cfg ${COPY_DIR}/grub.cfg
 #TFTP Server or dnsmasq
 ln -sf ../grub.cfg ${COPY_DIR}/EFI/grub.cfg
 
+# Copy grubx64.efi from the EFI/BOOT dir to the EFI dir
+cp -f ${ISODIR}/EFI/BOOT/grubx64.efi ${COPY_DIR}/EFI/
+
 #Variable replacement
 sed -i "s#xxxHTTP_URLxxx#${BASE_URL}#g;
         s#xxxHTTP_URL_PATCHESxxx#${BASE_URL}/patches#g;
