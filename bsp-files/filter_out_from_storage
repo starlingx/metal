@@ -65,8 +65,6 @@ heat-tests
 horizon
 horizon-standalone
 horizon-tests
-influxdb
-influxdb-extensions
 io-monitor
 io-scheduler
 isolcpus-device-plugin

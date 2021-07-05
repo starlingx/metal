@@ -50,8 +50,6 @@ heat-contrib-nova-flavor
 heat-engine
 heat-templates
 heat-tests
-influxdb
-influxdb-extensions
 io-monitor
 isomd5sum
 kernel-module-openvswitch
