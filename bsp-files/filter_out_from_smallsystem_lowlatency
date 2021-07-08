@@ -2,6 +2,8 @@ cgcs-dpdk
 cgcs-dpdk-apps
 mtce-storage
 workerconfig-standalone
+workerconfig
+config-gate-worker
 kernel-module-openvswitch
 platform-util-noncontroller
 storageconfig
