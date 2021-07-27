@@ -140,6 +140,12 @@ using namespace std;
 
 /* Notification of Death Of Arbitrary Process */
 
+/* Newer kernel headers expose the PR_DO_NOTIFY_TASK_STATE macro and the
+ * task_state_notify_info structure to user-space via the prctl.h header, so
+ * guard the definition of the macro and the structure with a pre-processor
+ * condition to avoid redefinition-related compilation errors.
+ */
+#ifndef PR_DO_NOTIFY_TASK_STATE
 /* New PRCTL Flag
  *
  * Set/get notification for task state changes */
@@ -158,6 +164,7 @@ struct task_state_notify_info
 	         int   sig   ;
 	unsigned int   events;
 };
+#endif /* !PR_DO_NOTIFY_TASK_STATE */
 
 /* The "events" bits in the struct correspond to the si_code values in the siginfo_t struct
  * that would normally be sent along with a SIGCHLD to the parent process.
