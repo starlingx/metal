@@ -18,7 +18,7 @@ BuildRequires:    perl
 BuildRequires:    perl(Getopt::Long)
 BuildRequires:    perl(POSIX)
 
-%define feed_dir /www/pages/feed/rel-%{platform_release}
+%define feed_dir /var/www/pages/feed/rel-%{platform_release}
 
 %prep
 %setup

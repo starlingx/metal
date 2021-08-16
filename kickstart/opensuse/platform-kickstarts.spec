@@ -1,5 +1,5 @@
 %define platform_release 1
-%define feed_dir /www/pages/feed/rel-%{platform_release}
+%define feed_dir /var/www/pages/feed/rel-%{platform_release}
 
 Summary:        Platform Kickstarts
 Name:           platform-kickstarts
@@ -44,9 +44,9 @@ install -D -m 0444 extra_cfgs/* %{buildroot}/extra_cfgs
 
 %files
 %defattr(-,root,root,-)
-/www
-/www/pages
-/www/pages/feed
+/var/www
+/var/www/pages
+/var/www/pages/feed
 
 %package pxeboot
 Summary:        Kickstarts Pxeboot Server

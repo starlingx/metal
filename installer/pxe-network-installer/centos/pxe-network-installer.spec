@@ -64,7 +64,7 @@ ln -s installer-bzImage_1.0 %{buildroot}/pxeboot/rel-%{platform_release}/install
 ln -s installer-intel-x86-64-initrd_1.0 %{buildroot}/pxeboot/rel-%{platform_release}/installer-initrd
 
 install -v -D -m 644 %{_sourcedir}/squashfs.img \
-    %{buildroot}/www/pages/feed/rel-%{platform_release}/LiveOS/squashfs.img
+    %{buildroot}/var/www/pages/feed/rel-%{platform_release}/LiveOS/squashfs.img
 
 install -v -d -m 755 %{buildroot}%{_sbindir}
 
@@ -140,5 +140,5 @@ ln -s pxelinux.cfg/grub.cfg %{buildroot}/pxeboot/grub.cfg
 %dir /pxeboot
 /pxeboot/*
 %{_sbindir}/pxeboot-update-%{platform_release}.sh
-/www/pages/feed/rel-%{platform_release}/LiveOS/squashfs.img
+/var/www/pages/feed/rel-%{platform_release}/LiveOS/squashfs.img
 
