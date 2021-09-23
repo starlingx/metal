@@ -1,0 +1,7 @@
+---
+debname: mtce
+debver: 1.0
+src_path: src
+revision:
+  dist: $STX_DIST
+  PKG_GITREVCOUNT: true

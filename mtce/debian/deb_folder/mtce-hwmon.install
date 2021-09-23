@@ -1,0 +1,6 @@
+etc/init.d/hwmon
+etc/logrotate.d/hwmon.logrotate
+etc/mtc/hwmond.conf
+lib/systemd/system/hwmon.service
+usr/lib/ocf/resource.d/platform/hwmon
+usr/bin/hwmond

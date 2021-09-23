@@ -1,0 +1,4 @@
+etc/init.d/hostw
+etc/logrotate.d/hostw.logrotate
+etc/mtc/hostwd.conf
+usr/local/bin/hostwd

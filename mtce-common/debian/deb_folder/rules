@@ -1,0 +1,54 @@
+#!/usr/bin/make -f
+# export DH_VERBOSE = 1
+
+PACKAGE = $(shell dh_listpackages)
+INCLUDE_DIR = debian/$(PACKAGE)/usr/include
+MTCE_COMMON_INCLUDE = $(INCLUDE_DIR)/mtce-common
+MTCE_DAEMON_INCLUDE = $(INCLUDE_DIR)/mtce-daemon
+LIB_DIR = debian/$(PACKAGE)/usr/lib
+
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -m 755 -d ${LIB_DIR}
+	install -m 644 -p -D daemon/libdaemon.a ${LIB_DIR}
+	install -m 644 -p -D common/libcommon.a ${LIB_DIR}
+	install -m 644 -p -D common/libthreadUtil.a ${LIB_DIR}
+	install -m 644 -p -D common/libbmcUtils.a ${LIB_DIR}
+	install -m 644 -p -D common/libpingUtil.a ${LIB_DIR}
+	install -m 644 -p -D common/libnodeBase.a ${LIB_DIR}
+	install -m 644 -p -D common/libregexUtil.a ${LIB_DIR}
+	install -m 644 -p -D common/libhostUtil.a ${LIB_DIR}
+
+	install -m 755 -d ${INCLUDE_DIR}
+	install -m 755 -d ${MTCE_COMMON_INCLUDE}
+	install -m 644 -p -D common/alarmUtil.h ${MTCE_COMMON_INCLUDE}/alarmUtil.h
+	install -m 644 -p -D common/bmcUtil.h ${MTCE_COMMON_INCLUDE}/bmcUtil.h
+	install -m 644 -p -D common/fitCodes.h ${MTCE_COMMON_INCLUDE}/fitCodes.h
+	install -m 644 -p -D common/hostClass.h ${MTCE_COMMON_INCLUDE}/hostClass.h
+	install -m 644 -p -D common/hostUtil.h ${MTCE_COMMON_INCLUDE}/hostUtil.h
+	install -m 644 -p -D common/httpUtil.h ${MTCE_COMMON_INCLUDE}/httpUtil.h
+	install -m 644 -p -D common/ipmiUtil.h ${MTCE_COMMON_INCLUDE}/ipmiUtil.h
+	install -m 644 -p -D common/jsonUtil.h ${MTCE_COMMON_INCLUDE}/jsonUtil.h
+	install -m 644 -p -D common/logMacros.h ${MTCE_COMMON_INCLUDE}/logMacros.h
+	install -m 644 -p -D common/msgClass.h ${MTCE_COMMON_INCLUDE}/msgClass.h
+	install -m 644 -p -D common/nlEvent.h ${MTCE_COMMON_INCLUDE}/nlEvent.h
+	install -m 644 -p -D common/nodeBase.h ${MTCE_COMMON_INCLUDE}/nodeBase.h
+	install -m 644 -p -D common/nodeEvent.h ${MTCE_COMMON_INCLUDE}/nodeEvent.h
+	install -m 644 -p -D common/nodeMacro.h ${MTCE_COMMON_INCLUDE}/nodeMacro.h
+	install -m 644 -p -D common/nodeTimers.h ${MTCE_COMMON_INCLUDE}/nodeTimers.h
+	install -m 644 -p -D common/nodeUtil.h ${MTCE_COMMON_INCLUDE}/nodeUtil.h
+	install -m 644 -p -D common/pingUtil.h ${MTCE_COMMON_INCLUDE}/pingUtil.h
+	install -m 644 -p -D common/redfishUtil.h ${MTCE_COMMON_INCLUDE}/redfishUtil.h
+	install -m 644 -p -D common/regexUtil.h ${MTCE_COMMON_INCLUDE}/regexUtil.h
+	install -m 644 -p -D common/returnCodes.h ${MTCE_COMMON_INCLUDE}/returnCodes.h
+	install -m 644 -p -D common/secretUtil.h ${MTCE_COMMON_INCLUDE}/secretUtil.h
+	install -m 644 -p -D common/threadUtil.h ${MTCE_COMMON_INCLUDE}/threadUtil.h
+	install -m 644 -p -D common/timeUtil.h ${MTCE_COMMON_INCLUDE}/timeUtil.h
+	install -m 644 -p -D common/tokenUtil.h ${MTCE_COMMON_INCLUDE}/tokenUtil.h
+
+	install -m 755 -d ${MTCE_DAEMON_INCLUDE}
+	install -m 644 -p -D daemon/daemon_ini.h ${MTCE_DAEMON_INCLUDE}/daemon_ini.h
+	install -m 644 -p -D daemon/daemon_common.h ${MTCE_DAEMON_INCLUDE}/daemon_common.h
+	install -m 644 -p -D daemon/daemon_option.h ${MTCE_DAEMON_INCLUDE}/daemon_option.h

@@ -1,0 +1,19 @@
+#!/usr/bin/make -f
+# export DH_VERBOSE = 1
+
+export ROOT = debian/tmp
+export INITDIR = $(ROOT)/etc/init.d
+export PMONDIR = $(ROOT)/etc/pmon.d
+export SYSTEMDDIR = $(ROOT)/lib/systemd/system
+
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -m 755 -d $(INITDIR)
+	install -m 755 -p -D scripts/goenabled $(INITDIR)/goenabledControl
+	install -m 755 -p -D scripts/hbsAgent $(INITDIR)
+	install -m 755 -d $(PMONDIR)
+	install -m 644 -p -D scripts/hbsAgent.conf $(PMONDIR)
+	install -m 755 -d $(SYSTEMDDIR)
+	install -m 644 -p -D scripts/hbsAgent.service $(SYSTEMDDIR)

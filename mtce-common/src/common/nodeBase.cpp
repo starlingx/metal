@@ -180,10 +180,10 @@ const char * get_mtcNodeCommand_str ( int cmd )
         case MTC_EVENT_HEARTBEAT_RUNNING:    return("heartbeat running");
         case MTC_EVENT_HEARTBEAT_ILLHEALTH:  return("heartbeat illhealth");
         case MTC_EVENT_HEARTBEAT_STOPPED:    return("heartbeat stopped");
-        case MTC_EVENT_HEARTBEAT_DEGRADE_SET:return("heartbeat degrade set");
-        case MTC_EVENT_HEARTBEAT_MINOR_CLR:  return("heartbeat minor clear");
-        case MTC_EVENT_HEARTBEAT_DEGRADE_CLR:return("heartbeat degrade clear");
-        case MTC_EVENT_HEARTBEAT_MINOR_SET:  return("heartbeat minor set");
+        case (int)MTC_EVENT_HEARTBEAT_DEGRADE_SET:return("heartbeat degrade set");
+        case (int)MTC_EVENT_HEARTBEAT_MINOR_CLR:  return("heartbeat minor clear");
+        case (int)MTC_EVENT_HEARTBEAT_DEGRADE_CLR:return("heartbeat degrade clear");
+        case (int)MTC_EVENT_HEARTBEAT_MINOR_SET:  return("heartbeat minor set");
 
         /* degrade events */
         case MTC_DEGRADE_RAISE:       return ("degrade raise");
@@ -191,7 +191,7 @@ const char * get_mtcNodeCommand_str ( int cmd )
 
         /* general events */
         case MTC_EVENT_LOOPBACK:      return ("loopback");
-        case MTC_EVENT_MONITOR_READY: return ("monitor ready event");
+        case (int)MTC_EVENT_MONITOR_READY: return ("monitor ready event");
         case MTC_EVENT_GOENABLE_FAIL: return ("goenable fail");
         case MTC_EVENT_HOST_STALLED: return("host stalled event");
 
@@ -237,12 +237,12 @@ const char * get_mtcNodeCommand_str ( int cmd )
         case MTC_CMD_QRY_INST:      return("query instance");
         case MTC_CMD_VOTE_INST:     return ("vote instance");
         case MTC_CMD_NOTIFY_INST:   return ("notify instance");
-        case MTC_EVENT_VOTE_NOTIFY: return ("notify instance event");
+        case (int)MTC_EVENT_VOTE_NOTIFY: return ("notify instance event");
 
         /* service events */
-        case MTC_SERVICE_PMOND:     return ("pmond service");
-        case MTC_SERVICE_HWMOND:    return ("hwmond service");
-        case MTC_SERVICE_HEARTBEAT: return ("heartbeat service");
+        case (int)MTC_SERVICE_PMOND:     return ("pmond service");
+        case (int)MTC_SERVICE_HWMOND:    return ("hwmond service");
+        case (int)MTC_SERVICE_HEARTBEAT: return ("heartbeat service");
         default:
             break ;
     }

@@ -1,0 +1,6 @@
+etc/init.d/lmon
+etc/logrotate.d/lmon.logrotate
+etc/mtc/lmond.conf
+etc/pmon.d/lmon.conf
+lib/systemd/system/lmon.service
+usr/bin/lmond

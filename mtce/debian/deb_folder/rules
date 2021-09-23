@@ -1,0 +1,166 @@
+#!/usr/bin/make -f
+# export DH_VERBOSE = 1
+
+export ROOT = debian/tmp
+export BINDIR = $(ROOT)/usr/bin
+export LIBDIR = $(ROOT)/usr/lib
+export MTCESHAREDIR = $(ROOT)/usr/share/mtce
+export OCFPLATFORMDIR = $(ROOT)/usr/lib/ocf/resource.d/platform
+export SBINDIR = $(ROOT)/usr/sbin
+export UNITDIR=$(ROOT)/lib/systemd/system
+
+export SYSCONFDIR = $(ROOT)/etc
+export BMCCONFDIR = $(SYSCONFDIR)/bmc/server_profiles.d
+export COLLECTDIR = $(SYSCONFDIR)/collect.d
+export INITDIR =$(SYSCONFDIR)/init.d
+export LOGDIR = $(SYSCONFDIR)/logrotate.d
+export PMONDIR = $(SYSCONFDIR)/pmon.d
+export SERVICESDIR = $(SYSCONFDIR)/services.d
+
+export DEB_VERSION = $(shell dpkg-parsechangelog | egrep '^Version:' | cut -f 2 -d ' ')
+export MAJOR = $(shell echo $(DEB_VERSION) | cut -d. -f1)
+export MINOR = $(shell echo $(shell echo $(DEB_VERSION) | cut -d. -f2) | cut -d- -f1)
+
+%:
+	dh $@
+
+override_dh_auto_install:
+	# Resource agent files
+	install -m 755 -d $(SYSCONFDIR)
+	install -m 755 -d $(SYSCONFDIR)/mtc
+	install -m 755 -d $(SYSCONFDIR)/mtc/tmp
+	install -m 755 -d $(OCFPLATFORMDIR)
+	install -m 755 -p -D scripts/mtcAgent $(OCFPLATFORMDIR)/mtcAgent
+	install -m 755 -p -D hwmon/scripts/ocf/hwmon $(OCFPLATFORMDIR)/hwmon
+
+	# Configuration files
+	install -m 600 -p -D scripts/mtc.ini $(SYSCONFDIR)/mtc.ini
+	install -m 600 -p -D scripts/mtc.conf $(SYSCONFDIR)/mtc.conf
+	install -m 600 -p -D fsmon/scripts/fsmond.conf $(SYSCONFDIR)/mtc/fsmond.conf
+	install -m 600 -p -D hwmon/scripts/hwmond.conf $(SYSCONFDIR)/mtc/hwmond.conf
+	install -m 600 -p -D pmon/scripts/pmond.conf $(SYSCONFDIR)/mtc/pmond.conf
+	install -m 600 -p -D lmon/scripts/lmond.conf $(SYSCONFDIR)/mtc/lmond.conf
+	install -m 600 -p -D hostw/scripts/hostwd.conf $(SYSCONFDIR)/mtc/hostwd.conf
+
+	install -m 755 -d $(BMCCONFDIR)
+	install -m 644 -p -D scripts/sensor_hp360_v1_ilo_v4.profile $(BMCCONFDIR)/sensor_hp360_v1_ilo_v4.profile
+	install -m 644 -p -D scripts/sensor_hp380_v1_ilo_v4.profile $(BMCCONFDIR)/sensor_hp380_v1_ilo_v4.profile
+	install -m 644 -p -D scripts/sensor_quanta_v1_ilo_v4.profile $(BMCCONFDIR)/sensor_quanta_v1_ilo_v4.profile
+
+	# Binaries
+	install -m 755 -d $(BINDIR)
+	install -m 700 -p -D maintenance/mtcAgent $(BINDIR)/mtcAgent
+	install -m 700 -p -D maintenance/mtcClient $(BINDIR)/mtcClient
+	install -m 700 -p -D heartbeat/hbsAgent $(BINDIR)/hbsAgent
+	install -m 700 -p -D heartbeat/hbsClient $(BINDIR)/hbsClient
+	install -m 700 -p -D pmon/pmond $(BINDIR)/pmond
+	install -m 700 -p -D lmon/lmond $(BINDIR)/lmond
+	install -m 700 -p -D hostw/hostwd $(BINDIR)/hostwd
+	install -m 700 -p -D fsmon/fsmond $(BINDIR)/fsmond
+	install -m 700 -p -D hwmon/hwmond $(BINDIR)/hwmond
+	install -m 700 -p -D mtclog/mtclogd $(BINDIR)/mtclogd
+	install -m 700 -p -D alarm/mtcalarmd $(BINDIR)/mtcalarmd
+	install -m 700 -p -D scripts/wipedisk $(BINDIR)/wipedisk
+	install -m 755 -d $(SBINDIR)
+	install -m 700 -p -D fsync/fsync $(SBINDIR)/fsync
+	install -m 755 -d $(SBINDIR)
+	install -m 700 -p -D pmon/scripts/pmon-restart $(SBINDIR)/pmon-restart
+	install -m 700 -p -D pmon/scripts/pmon-start $(SBINDIR)/pmon-start
+	install -m 700 -p -D pmon/scripts/pmon-stop $(SBINDIR)/pmon-stop
+
+	# init script files
+	install -m 755 -d $(INITDIR)
+	install -m 755 -p -D scripts/crashDumpMgr $(INITDIR)/crashDumpMgr
+	install -m 700 -p -D scripts/mtcClient $(INITDIR)/mtcClient
+	install -m 700 -p -D scripts/hbsClient $(INITDIR)/hbsClient
+	install -m 700 -p -D hwmon/scripts/lsb/hwmon $(INITDIR)/hwmon
+	install -m 700 -p -D fsmon/scripts/fsmon $(INITDIR)/fsmon
+	install -m 700 -p -D scripts/mtclog $(INITDIR)/mtclog
+	install -m 700 -p -D pmon/scripts/pmon $(INITDIR)/pmon
+	install -m 700 -p -D lmon/scripts/lmon $(INITDIR)/lmon
+	install -m 700 -p -D hostw/scripts/hostw $(INITDIR)/hostw
+	install -m 700 -p -D alarm/scripts/mtcalarm.init $(INITDIR)/mtcalarm
+
+	# Some files already exist in the system.
+	# We need to copy them to a generic location here and update them during
+	# a post install step.
+	install -m 755 -d $(MTCESHAREDIR)
+	install -m 755 -p -D scripts/hwclock.sh $(MTCESHAREDIR)/hwclock.sh
+	install -m 644 -p -D scripts/hwclock.service $(MTCESHAREDIR)/hwclock.service
+
+	# systemd service files
+	install -m 755 -d $(UNITDIR)
+	install -m 644 -p -D fsmon/scripts/fsmon.service $(UNITDIR)/fsmon.service
+	install -m 644 -p -D hwmon/scripts/hwmon.service $(UNITDIR)/hwmon.service
+	install -m 644 -p -D pmon/scripts/pmon.service $(UNITDIR)/pmon.service
+	install -m 644 -p -D hostw/scripts/hostw.service $(UNITDIR)/hostw.service
+	install -m 644 -p -D scripts/crashDumpMgr.service $(UNITDIR)/crashDumpMgr.service
+	install -m 644 -p -D scripts/mtcClient.service $(UNITDIR)/mtcClient.service
+	install -m 644 -p -D scripts/hbsClient.service $(UNITDIR)/hbsClient.service
+	install -m 644 -p -D scripts/mtclog.service $(UNITDIR)/mtclog.service
+	install -m 644 -p -D scripts/goenabled.service $(UNITDIR)/goenabled.service
+	install -m 644 -p -D scripts/runservices.service $(UNITDIR)/runservices.service
+	install -m 644 -p -D alarm/scripts/mtcalarm.service $(UNITDIR)/mtcalarm.service
+	install -m 644 -p -D lmon/scripts/lmon.service $(UNITDIR)/lmon.service
+
+	# go enabled script
+	install -m 755 -p -D scripts/goenabled $(INITDIR)/goenabled
+
+	# Start/stop services test script
+	install -m 755 -d $(SERVICESDIR)
+	install -m 755 -d $(SERVICESDIR)/controller
+	install -m 755 -p -D scripts/mtcTest $(SERVICESDIR)/controller
+	install -m 755 -d $(SERVICESDIR)/storage
+	install -m 755 -p -D scripts/mtcTest $(SERVICESDIR)/storage
+	install -m 755 -d $(SERVICESDIR)/worker
+	install -m 755 -p -D scripts/mtcTest $(SERVICESDIR)/worker
+	install -m 755 -p -D scripts/runservices $(INITDIR)/runservices
+
+	# Test tools
+	install -m 755 -p -D scripts/dmemchk.sh $(SBINDIR)
+
+	# Process monitor config files
+	install -m 755 -d $(PMONDIR)
+	install -m 644 -p -D scripts/mtcClient.conf $(PMONDIR)/mtcClient.conf
+	install -m 644 -p -D scripts/hbsClient.conf $(PMONDIR)/hbsClient.conf
+	install -m 644 -p -D pmon/scripts/acpid.conf $(PMONDIR)/acpid.conf
+	install -m 644 -p -D pmon/scripts/sshd.conf $(PMONDIR)/sshd.conf
+	install -m 644 -p -D pmon/scripts/syslog-ng.conf $(PMONDIR)/syslog-ng.conf
+	install -m 644 -p -D pmon/scripts/nslcd.conf $(PMONDIR)/nslcd.conf
+	install -m 644 -p -D fsmon/scripts/fsmon.conf $(PMONDIR)/fsmon.conf
+	install -m 644 -p -D scripts/mtclogd.conf $(PMONDIR)/mtclogd.conf
+	install -m 644 -p -D alarm/scripts/mtcalarm.pmon.conf $(PMONDIR)/mtcalarm.conf
+	install -m 644 -p -D lmon/scripts/lmon.pmon.conf $(PMONDIR)/lmon.conf
+
+	# Log rotation
+	install -m 755 -d $(LOGDIR)
+	install -m 644 -p -D scripts/crashdump.logrotate $(LOGDIR)/crashdump.logrotate
+	install -m 644 -p -D scripts/mtce.logrotate $(LOGDIR)/mtce.logrotate
+	install -m 644 -p -D hostw/scripts/hostw.logrotate $(LOGDIR)/hostw.logrotate
+	install -m 644 -p -D pmon/scripts/pmon.logrotate $(LOGDIR)/pmon.logrotate
+	install -m 644 -p -D lmon/scripts/lmon.logrotate $(LOGDIR)/lmon.logrotate
+	install -m 644 -p -D fsmon/scripts/fsmon.logrotate $(LOGDIR)/fsmon.logrotate
+	install -m 644 -p -D hwmon/scripts/hwmon.logrotate $(LOGDIR)/hwmon.logrotate
+	install -m 644 -p -D alarm/scripts/mtcalarm.logrotate $(LOGDIR)/mtcalarm.logrotate
+
+	# Collect scripts
+	install -m 755 -d $(COLLECTDIR)
+	install -m 755 -p -D scripts/collect_bmc.sh $(COLLECTDIR)/collect_bmc
+
+	# syslog configuration
+	install -m 644 -p -D scripts/mtce.syslog $(SYSCONFDIR)/syslog-ng/conf.d/mtce.conf
+
+	# Software development files
+	install -m 644 -p -D heartbeat/mtceHbsCluster.h $(ROOT)/usr/include/mtceHbsCluster.h
+
+	install -m 755 -d $(LIBDIR)
+	install -m 755 -p -D public/libamon.so.$(MAJOR) $(LIBDIR)/libamon.so.$(MAJOR)
+	cd $(LIBDIR) ; ln -s libamon.so.$(MAJOR) libamon.so.$(MAJOR).$(MINOR)
+	cd $(LIBDIR) ; ln -s libamon.so.$(MAJOR) libamon.so
+
+	# Volatile directories
+	install -m 755 -d $(ROOT)/var
+	install -m 755 -d $(ROOT)/var/run
+
+override_dh_usrlocal:
+	echo "SKIPPING DH USRLOCAL"

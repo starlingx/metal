@@ -1,0 +1,24 @@
+Source: mtce-common
+Section: admin
+Priority: optional
+Maintainer: StarlingX Developers <starlingx-discuss@lists.starlingx.io>
+Build-Depends: debhelper-compat (= 13),
+ expect,
+ fm-common-dev,
+ fm-mgr,
+ libevent-dev,
+ libjson-c-dev,
+ libssl-dev,
+ libsystemd-dev,
+ postgresql,
+ uuid-dev,
+ cppcheck
+Standards-Version: 4.5.1
+Homepage: https://www.starlingx.io
+
+Package: mtce-common-dev
+Architecture: any
+Depends: ${misc:Depends}, ${shlibs:Depends}
+Description: StarlingX Maintenance Common Base Package
+ The StarlingX Maintenance Common Base package contains header files, and
+ related items necessary for software development.

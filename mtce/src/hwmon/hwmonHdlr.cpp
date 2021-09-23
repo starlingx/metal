@@ -1238,7 +1238,7 @@ int hwmonHostClass::bmc_sensor_monitor ( struct hwmonHostClass::hwmon_host * hos
                         {
                             /* Look for ... BMC_JSON__SENSOR_DATA_MESSAGE_HEADER */
                             status = json_object_object_get_ex ( raw_obj, BMC_JSON__SENSOR_DATA_MESSAGE_HEADER, &req_obj );
-                            if (( status == TRUE ) && req_obj )
+                            if (( status == true ) && req_obj )
                             {
                                 char * msg_ptr = (char*)json_object_to_json_string(req_obj) ;
                                 host_ptr->json_bmc_sensors = msg_ptr ;

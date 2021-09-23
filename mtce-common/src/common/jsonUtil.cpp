@@ -61,13 +61,13 @@ static struct json_object * _json_verify_object ( struct json_object * obj,
     struct json_object * req_obj = (struct json_object *)(NULL);
 
     json_bool status = json_object_object_get_ex (obj, label, &req_obj);
-    if (( status == TRUE ) && ( req_obj ))
+    if (( status == true ) && ( req_obj ))
     {
         return (req_obj);
     }
     wlog ("Specified label '%s' not found in response\n", label );
     status = json_object_object_get_ex (obj, "error", &req_obj );
-    if (( status == TRUE ) && ( req_obj ))
+    if (( status == true ) && ( req_obj ))
     {
         jlog ("Found 'error' label instead\n");
     }
@@ -84,7 +84,7 @@ json_object * _json_get_host_next ( struct json_object * obj )
     /* Get the next host entity path */
     struct json_object * next_obj =  (struct json_object *)(NULL);
     json_bool status = json_object_object_get_ex(obj, MTC_JSON_INV_NEXT, &next_obj );
-    if (( status == TRUE ) && ( next_obj ))
+    if (( status == true ) && ( next_obj ))
     {
         return (next_obj);
     }
@@ -154,7 +154,7 @@ string _json_get_key_value_string ( struct json_object * obj, const char * key )
     /* Get the node uuid */
     struct json_object * key_obj = (struct json_object *)(NULL);
     json_bool status = json_object_object_get_ex(obj, key, &key_obj );
-    if ( ( status == TRUE ) && ( key_obj ))
+    if ( ( status == true ) && ( key_obj ))
     {
         value.append(json_object_get_string(key_obj));
     }
@@ -177,7 +177,7 @@ int jsonUtil_get_key_value_int ( struct json_object * obj, const char * key )
     /* Get the node uuid */
     struct json_object * key_obj = (struct json_object *)(NULL);
     json_bool status = json_object_object_get_ex(obj, key, &key_obj);
-    if ( (status == TRUE ) && ( key_obj ))
+    if ( (status == true ) && ( key_obj ))
     {
         value = json_object_get_int(key_obj);
     }
@@ -191,7 +191,7 @@ bool jsonUtil_get_key_value_bool ( struct json_object * obj, const char * key )
     /* Get the node uuid */
     struct json_object * key_obj = (struct json_object *)(NULL);
     json_bool status = json_object_object_get_ex(obj, key, &key_obj );
-    if (( status == TRUE ) && ( key_obj ))
+    if (( status == true ) && ( key_obj ))
     {
         value = json_object_get_boolean(key_obj);
     }
@@ -649,7 +649,7 @@ int jsonUtil_secret_load ( string & name,
     }
 
     status = json_object_object_get_ex(raw_obj, MTC_JSON_SECRET_LIST, &secret_obj );
-    if ( ( status == TRUE ) && ( secret_obj ))
+    if ( ( status == true ) && ( secret_obj ))
     {
         array_list_obj = json_object_get_array(secret_obj );
         if ( array_list_obj )
@@ -893,7 +893,7 @@ int jsonApi_auth_load    ( string & hostname,
 
     /* Get the token object */
     status = json_object_object_get_ex(raw_obj, MTC_JSON_AUTH_TOKEN, &token_obj);
-    if (( status == TRUE ) && ( token_obj ))
+    if (( status == true ) && ( token_obj ))
     {
         info.issued.append (_json_get_key_value_string(token_obj, MTC_JSON_AUTH_ISSUE ));
         info.expiry.append (_json_get_key_value_string(token_obj, MTC_JSON_AUTH_EXPIRE));
@@ -906,7 +906,7 @@ int jsonApi_auth_load    ( string & hostname,
     /* Now look for the compute admin URL */
     /* Get the token object */
     status = json_object_object_get_ex(token_obj, MTC_JSON_AUTH_SVCCAT, &svccat_obj );
-    if (( status == TRUE ) && ( svccat_obj ))
+    if (( status == true ) && ( svccat_obj ))
     {
         array_list_obj = json_object_get_array(svccat_obj);
         if ( array_list_obj )
@@ -934,7 +934,7 @@ int jsonApi_auth_load    ( string & hostname,
     if ( found_type == true )
     {
         json_bool status = json_object_object_get_ex(tuple_obj, MTC_JSON_AUTH_ENDPOINTS, &end_obj);
-        if ( ( status == TRUE ) && ( end_obj ))
+        if ( ( status == true ) && ( end_obj ))
         {
             array_list_obj = json_object_get_array(end_obj);
             if ( array_list_obj )
@@ -1081,7 +1081,7 @@ int jsonApi_array_value ( char * json_str_ptr,
 
     /* Now look in each array element for the 'search_key' */
     status = json_object_object_get_ex(raw_obj, array_label.data(), &array_obj );
-    if (( status == TRUE ) && ( array_obj ))
+    if (( status == true ) && ( array_obj ))
     {
         /* Leaking array_list_obj ???? */
         array_list_obj = json_object_get_array(array_obj);
@@ -1169,7 +1169,7 @@ int jsonUtil_get_array_idx  (   char * json_str_ptr,
 
     /* Now look in each array element for the 'search_key' */
     status = json_object_object_get_ex(raw_obj, label.data(), &array_obj );
-    if (( status == TRUE ) && ( array_obj ))
+    if (( status == true ) && ( array_obj ))
     {
         element.clear();
 
@@ -1244,7 +1244,7 @@ int jsonUtil_array_elements ( char * json_str_ptr, string label, int & elements 
 
     /* Now look in each array element for the 'search_key' */
     status = json_object_object_get_ex(raw_obj, label.data(), &array_obj );
-    if (( status == TRUE ) && ( array_obj ))
+    if (( status == true ) && ( array_obj ))
     {
         array_list_obj = json_object_get_array(array_obj);
         if ( array_list_obj )

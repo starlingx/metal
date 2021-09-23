@@ -431,7 +431,7 @@ int redfishUtil_health_info (             string & hostname,
         json_bool json_rc = json_object_object_get_ex( info_obj,
                                                       REDFISH_LABEL__STATUS,
                                                       &status_obj );
-        if (( json_rc == TRUE ) && ( status_obj ))
+        if (( json_rc == true ) && ( status_obj ))
         {
             status.state         = jsonUtil_get_key_value_string( status_obj,
                                    REDFISH_LABEL__STATE );
@@ -559,7 +559,7 @@ int redfishUtil_get_bmc_info ( string & hostname,
     json_bool json_rc = json_object_object_get_ex( json_obj,
                                                    REDFISH_LABEL__PROCESSOR,
                                                   &proc_obj );
-    if (( json_rc == TRUE ) && ( proc_obj ))
+    if (( json_rc == true ) && ( proc_obj ))
     {
         redfish_entity_status status ;
         bmc_info.processors = jsonUtil_get_key_value_int ( proc_obj, REDFISH_LABEL__COUNT );
@@ -582,7 +582,7 @@ int redfishUtil_get_bmc_info ( string & hostname,
     json_rc = json_object_object_get_ex( json_obj,
                                          REDFISH_LABEL__MEMORY,
                                         &mem_obj );
-    if (( json_rc == TRUE ) && ( mem_obj ))
+    if (( json_rc == true ) && ( mem_obj ))
     {
         redfish_entity_status status ;
         bmc_info.memory_in_gigs = jsonUtil_get_key_value_int ( mem_obj, REDFISH_LABEL__MEMORY_TOTAL );

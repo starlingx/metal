@@ -1,0 +1,76 @@
+Source: mtce
+Section: admin
+Priority: optional
+Maintainer: StarlingX Developers <starlingx-discuss@lists.starlingx.io>
+Build-Depends: debhelper-compat (= 13),
+ expect,
+ fm-common-dev,
+ fm-mgr,
+ libevent-dev,
+ libjson-c-dev,
+ libssl-dev,
+ libsystemd-dev,
+ mtce-common-dev (>= 1.0),
+ postgresql,
+ uuid-dev,
+ cppcheck
+Standards-Version: 4.5.1
+Homepage: https://www.starlingx.io
+
+Package: mtce
+Architecture: any
+Depends: ${misc:Depends}, ${shlibs:Depends}, ipmitool, redfishtool
+Description: StarlingX Host Maintenance Services
+ The host maintenance services package contains a suite of daemons that
+ provide host maintainability and a high level of fault detection with
+ automatic notification and recovery.The Maintenance Service (mtcAgent
+ and mtcClient) manages hosts according to an abbreviated version of the
+ CCITT X.731 ITU specification. The Heartbeat Service (hbsAgent and
+ hbsClient) adds fast failure detection over the management and infstructure
+ networks. The Process Monitor service (pmond) add both passive and active
+ process monitoring and automatic recovery of stopped or killed processes.
+ The File System Monitor Service (fsmond) adds detection and reporting of
+ local file system problems. The Hardware Monitor Service (hwmond) adds
+ present and predictive hardware failure detection, reporting and recovery.
+ The Host Watchdog (hostwd) daemon watches for errors in
+ pmond and logs system information on error. All of these maintenance
+ services improve MTTD of node failures as well as resource overload and out
+ of spec operating conditions that can reduce outage time through automated
+ notification and recovery thereby improving overall platform availability
+ for the customer.
+
+Package: mtce-dev
+Architecture: any
+Depends: ${misc:Depends}, ${shlibs:Depends}
+Description: StarlingX Maintenance Software Development Package
+ The StarlingX Maintenance Software Development package contains
+ header files and related items necessary for software development.
+
+Package: mtce-pmon
+Architecture: any
+Depends: ${misc:Depends}, ${shlibs:Depends}
+Description: StarlingX Maintenance Process Monitor Service
+ The process monitor (pmond) service provides passive (pid), active (msg)
+ and status (qry) process monitoring with automatic recovery and failure
+ reporting of registered failed processes.
+
+Package: mtce-hwmon
+Architecture: any
+Depends: ${misc:Depends}, ${shlibs:Depends}, redfishtool
+Description: StarlingX Maintenance Hardware Monitor Package
+ The host maintenance hardware monitor service (hwmond) adds in and out of
+ service hardware sensor monitoring, alarming and recovery handling.
+
+Package: mtce-hostw
+Architecture: any
+Depends: ${misc:Depends}, ${shlibs:Depends}
+Description: StarlingX Host Watchdog Package
+ The Host Watchdog (hostwd) daemon watches for errors in pmond and logs
+ system information on error.
+
+Package: mtce-lmon
+Architecture: any
+Depends: ${misc:Depends}, ${shlibs:Depends}
+Description: StarlingX Maintenance Link Monitor Package
+ The link monitor service (lmond) provides netlink monitoring for
+ provisioned oam, mgmt and cluster-host interfaces.

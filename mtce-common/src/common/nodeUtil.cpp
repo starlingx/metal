@@ -1373,7 +1373,7 @@ string get_event_str ( int event_code )
 {
     switch ( event_code )
     {
-        case MTC_EVENT_MONITOR_READY:
+        case (int)MTC_EVENT_MONITOR_READY:
             return "ready" ;
         case MTC_EVENT_PMOND_CLEAR:
         case MTC_EVENT_PMON_CLEAR:

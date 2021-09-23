@@ -2000,7 +2000,7 @@ void load_mtcInfo_msg ( mtc_message_type & msg )
             json_bool json_rc = json_object_object_get_ex( _obj,
                                                           "mtcInfo",
                                                           &info_obj );
-            if ( ( json_rc == TRUE ) && ( info_obj ))
+            if ( ( json_rc == true ) && ( info_obj ))
             {
                 struct json_object *ctrl_obj = (struct json_object *)(NULL);
                 json_bool json_rc =
@@ -2008,7 +2008,7 @@ void load_mtcInfo_msg ( mtc_message_type & msg )
                                            peer_controller.hostname.data(),
                                           &ctrl_obj );
 
-                if (( json_rc == TRUE ) && ( ctrl_obj ))
+                if (( json_rc == true ) && ( ctrl_obj ))
                 {
                     peer_controller.host_ip = jsonUtil_get_key_value_string(ctrl_obj, MTC_JSON_INV_HOSTIP) ;
                     peer_controller.bm_ip = jsonUtil_get_key_value_string(ctrl_obj, MTC_JSON_INV_BMIP) ;

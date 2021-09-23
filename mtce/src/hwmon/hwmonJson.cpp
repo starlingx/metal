@@ -35,7 +35,7 @@ string _get_key_value_string ( struct json_object * obj, const char * key )
     /* use the new API ;
      * json_object_object_get is depricated and yields compile warning */
     json_bool status = json_object_object_get_ex(obj, key, &key_obj);
-    if ( ( status == TRUE ) && key_obj )
+    if ( ( status == true ) && key_obj )
     {
         value.append(json_object_get_string(key_obj));
     }

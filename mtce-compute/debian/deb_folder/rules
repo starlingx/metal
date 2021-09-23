@@ -1,0 +1,18 @@
+#!/usr/bin/make -f
+# export DH_VERBOSE = 1
+
+export ROOT = debian/tmp
+export GODIR = $(ROOT)/etc/goenabled.d
+export INITDIR = $(ROOT)/etc/init.d
+export SYSTEMDDIR = $(ROOT)/lib/systemd/system
+
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -m 755 -d $(GODIR)
+	install -m 755 -p -D scripts/virt-support-goenabled.sh $(GODIR)
+	install -m 755 -d $(INITDIR)
+	install -m 755 -p -D scripts/goenabled $(INITDIR)/goenabledWorker
+	install -m 755 -d $(SYSTEMDDIR)
+	install -m 644 -p -D scripts/goenabled-worker.service $(SYSTEMDDIR)
