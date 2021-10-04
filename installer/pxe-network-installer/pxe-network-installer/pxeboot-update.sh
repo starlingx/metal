@@ -10,8 +10,8 @@
 # for BIOS and UEFI mode. This script logs to user.log
 #
 # Command example;
-# /usr/sbin/pxeboot-update-18.03.sh  -i /pxeboot/pxelinux.cfg.files/pxe-controller-install-18.03
-#    -o /pxeboot/pxelinux.cfg/01-08-00-27-3e-f8-05 -b sda -r sda -t -c ttyS0,115200
+# /usr/sbin/pxeboot-update-18.03.sh  -i /var/pxeboot/pxelinux.cfg.files/pxe-controller-install-18.03
+#    -o /var/pxeboot/pxelinux.cfg/01-08-00-27-3e-f8-05 -b sda -r sda -t -c ttyS0,115200
 #
 
 function usage {
