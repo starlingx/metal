@@ -289,6 +289,7 @@ openstack-swift-object
 openstack-swift-account
 openstack-swift-container
 openstack-swift-proxy
+pci-irq-affinity-agent
 Redfishtool
 dex-helm
 oidcauthtools
