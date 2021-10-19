@@ -8,13 +8,14 @@
 
 usage ()
 {
-    echo "Usage: `basename $0` [-h|--force]"
+    echo "Usage: `basename $0` [-h|--force|--include-backup]"
     echo "Erases the master boot record on the hard drive."
     echo "WARNING: All data on this hard drive will be lost."
     echo ""
     echo "Options:"
-    echo "  -h        display this help"
-    echo "  --force   do not ask for confirmation"
+    echo "  -h                  display this help"
+    echo "  --force             do not ask for confirmation"
+    echo "  --include-backup    also removes data from platform backup directory"
     exit 1
 }
 
@@ -40,7 +41,7 @@ unmount_fs()
   return $ret_code
 }
 
-OPTS=`getopt -o h -l force -- "$@"`
+OPTS=`getopt -o h -l force,include-backup -- "$@"`
 if [ $? != 0 ]
 then
     exit 1
@@ -52,6 +53,7 @@ while true ; do
     case "$1" in
         -h) usage; shift;;
         --force) FORCE=1; shift;;
+        --include-backup) INCLUDE_BACKUP=1; shift;;
         --) shift; break;;
     esac
 done
@@ -141,7 +143,7 @@ do
                 esac
                 sgdisk_part_info=$(flock $dev sgdisk -i $part_number $dev)
                 part_type_guid=$(echo "$sgdisk_part_info" | grep "$part_type_guid_str" | awk '{print $4;}')
-                if [ "$part_type_guid" == $BACKUP_PART_GUID ]; then
+                if [[ "$part_type_guid" == $BACKUP_PART_GUID && ! $INCLUDE_BACKUP ]]; then
                     echo "Skipping wipe backup partition $part..."
                     continue
                 fi
@@ -185,3 +187,4 @@ else
     sync
     echo "The disk(s) have been wiped."
 fi
+
