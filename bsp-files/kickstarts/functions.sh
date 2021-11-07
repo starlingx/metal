@@ -87,8 +87,8 @@ function get_disk_dev()
     for blk_dev in vda vdb sda sdb dda ddb hda hdb; do
         if [ -d /sys/block/\$blk_dev ]; then
             disk=\$(ls -l /sys/block/\$blk_dev | grep -v usb | head -n1 | sed 's/^.*\([vsdh]d[a-z]\+\).*$/\1/');  
-            if [ -n \$disk ]; then
-                echo \$disk
+            if [ -n "\$disk" ]; then
+                echo "\$disk"
                 return
             fi
         fi
@@ -96,8 +96,8 @@ function get_disk_dev()
     for blk_dev in nvme0n1 nvme1n1; do
         if [ -d /sys/block/\$blk_dev ]; then
             disk=\$(ls -l /sys/block/\$blk_dev | grep -v usb | head -n1 | sed 's/^.*\(nvme[01]n1\).*$/\1/');
-            if [ -n \$disk ]; then
-                echo \$disk
+            if [ -n "\$disk" ]; then
+                echo "\$disk"
                 return
             fi
         fi
