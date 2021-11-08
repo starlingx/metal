@@ -473,7 +473,11 @@ case ${__OCF_ACTION} in
                  ;;
 esac
 
-ocf_log info "hwmond:${__OCF_ACTION} action"
+if [ ${__OCF_ACTION} = "monitor" ] ; then
+    ocf_log debug "hwmond:${__OCF_ACTION} action"
+else
+    ocf_log info "hwmond:${__OCF_ACTION} action"
+fi
 
 # Anything except meta-data and help must pass validation
 hwmond_validate || exit $?
