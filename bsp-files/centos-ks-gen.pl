@@ -120,7 +120,6 @@ write_config_file("controller-worker-lowlatency",
                   "post_system_aio.cfg",
                   "post_pxeboot_controller.cfg");
 
-
 # Write same net files
 write_config_file("controller",
                   "${output_dir}/net_controller_ks.cfg",
@@ -205,6 +204,46 @@ write_config_file("storage",
                   "post_kernel_storage.cfg",
                   "post_lvm_pv_on_rootfs.cfg",
                   "post_net_common.cfg");
+
+# Write miniboot files
+write_config_file("controller",
+                  "${output_dir}/miniboot_controller_ks.cfg",
+                  "pre_common_head.cfg",
+                  "pre_pkglist.cfg",
+                  "pre_disk_setup_common.cfg",
+                  "pre_disk_controller.cfg",
+                  "pre_disk_setup_tail.cfg",
+                  "post_platform_conf_controller.cfg",
+                  "post_common.cfg",
+                  "post_kernel_controller.cfg",
+                  "post_lvm_pv_on_rootfs.cfg",
+                  "post_miniboot_controller.cfg");
+write_config_file("controller-worker",
+                  "${output_dir}/miniboot_smallsystem_ks.cfg",
+                  "pre_common_head.cfg",
+                  "pre_pkglist.cfg",
+                  "pre_disk_setup_common.cfg",
+                  "pre_disk_aio.cfg",
+                  "pre_disk_setup_tail.cfg",
+                  "post_platform_conf_aio.cfg",
+                  "post_common.cfg",
+                  "post_kernel_aio_and_worker.cfg",
+                  "post_lvm_pv_on_rootfs.cfg",
+                  "post_system_aio.cfg",
+                  "post_miniboot_controller.cfg");
+write_config_file("controller-worker-lowlatency",
+                  "${output_dir}/miniboot_smallsystem_lowlatency_ks.cfg",
+                  "pre_common_head.cfg",
+                  "pre_pkglist_lowlatency.cfg",
+                  "pre_disk_setup_common.cfg",
+                  "pre_disk_aio.cfg",
+                  "pre_disk_setup_tail.cfg",
+                  "post_platform_conf_aio_lowlatency.cfg",
+                  "post_common.cfg",
+                  "post_kernel_aio_and_worker.cfg",
+                  "post_lvm_pv_on_rootfs.cfg",
+                  "post_system_aio.cfg",
+                  "post_miniboot_controller.cfg");
 
 system("mkdir -p ${extra_output_dir}");
 
