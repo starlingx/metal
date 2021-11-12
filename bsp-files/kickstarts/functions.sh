@@ -37,7 +37,14 @@ function report_pre_failure_with_msg()
     local msg=\$1
     echo -e '\n\nInstallation failed.\n'
     echo "\$msg"
+    exit 1
+}
 
+function report_prestaging_failure_with_msg()
+{
+    local msg=\$1
+    echo -e '\n\nPrestaging failed.\n'
+    echo "\$msg"
     exit 1
 }
 
@@ -149,6 +156,18 @@ function exec_retry()
     done
     echo "\${ret_stdout}"
     return \${ret_code}
+}
+
+# debug / fit support tool
+function wait_for_go()
+{
+    for loop in {1..40} ; do
+        sleep 15
+        if [ -e "/tmp/go" ] ; then
+            rm "/tmp/go"
+            break
+        fi
+    done
 }
 
 END_FUNCTIONS
