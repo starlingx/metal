@@ -78,6 +78,23 @@ write_config_file("controller-worker-lowlatency",
                   "post_usb_controller.cfg",
                   "post_usb_addon.cfg");
 
+# Create a special kickstart bundle for prestaged-installer installation.
+#
+# Ideally, this should create a prestaged-installer packaging group.
+# However, patching back a new group is complicated.
+# For now the 'controller' package group is used and a new prestaging
+# package list is used to trim down the set of installed packages.
+#
+write_config_file("controller",
+                  "${output_dir}/prestaged_installer_ks.cfg",
+                  "pre_common_head.cfg",
+                  "pre_pkglist_prestage.cfg",
+                  "pre_disk_setup_common.cfg",
+                  "pre_disk_aio.cfg",
+                  "pre_disk_setup_tail.cfg",
+                  "post_prestaging.cfg",
+                  "post_usb_addon.cfg");
+
 system("mkdir -p ${pxeboot_output_dir}");
 
 # Write PXE boot files
