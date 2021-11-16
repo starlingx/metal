@@ -158,13 +158,18 @@ function exec_retry()
     return \${ret_code}
 }
 
-# debug / fit support tool
+# This is a developer debug tool that can be line inserted in any kickstart.
+# Code should not be committed with a call to this function.
+# When inserted and hit, execution will stall until one of the 2 conditions:
+#  1. /tmp/wait_for_go file is removed 'manually'
+#  2. or after 10 minutes
+
 function wait_for_go()
 {
-    for loop in {1..40} ; do
-        sleep 15
-        if [ -e "/tmp/go" ] ; then
-            rm "/tmp/go"
+    touch /tmp/wait_for_go
+    for loop in {1..60} ; do
+        sleep 10
+        if [ ! -e "/tmp/wait_for_go" ] ; then
             break
         fi
     done
