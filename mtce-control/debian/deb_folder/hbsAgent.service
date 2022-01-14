@@ -1,0 +1,13 @@
+[Unit]
+Description=StarlingX Maintenance Heartbeat Agent
+After=hbsClient.service
+Before=pmon.service
+
+[Service]
+Type=forking
+ExecStart=/etc/init.d/hbsAgent start
+ExecStop=/etc/init.d/hbsAgent stop
+PIDFile=/var/run/hbsAgent.pid
+
+[Install]
+WantedBy=multi-user.target

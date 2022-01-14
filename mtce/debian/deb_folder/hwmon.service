@@ -1,0 +1,16 @@
+[Unit]
+Description=StarlingX Hardware Monitor
+After=network.target syslog.service
+
+[Service]
+Type=forking
+ExecStart=/etc/init.d/hwmon start
+ExecStop=/etc/init.d/hwmon stop
+ExecReload=/etc/init.d/hwmon reload
+PIDFile=/var/run/hwmond.pid
+
+Restart=no
+
+[Install]
+WantedBy=multi-user.target
+

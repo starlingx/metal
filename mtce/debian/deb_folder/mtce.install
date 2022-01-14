@@ -34,11 +34,8 @@ etc/syslog-ng/conf.d/mtce.conf
 lib/systemd/system/crashDumpMgr.service
 lib/systemd/system/fsmon.service
 lib/systemd/system/goenabled.service
-lib/systemd/system/hbsClient.service
 lib/systemd/system/mtcClient.service
-lib/systemd/system/mtcalarm.service
-lib/systemd/system/mtclog.service
-lib/systemd/system/runservices.service
+usr/lib/ocf/resource.d/platform/mtcAgent
 usr/bin/fsmond
 usr/bin/hbsAgent
 usr/bin/hbsClient
@@ -47,7 +44,6 @@ usr/bin/mtcClient
 usr/bin/mtcalarmd
 usr/bin/mtclogd
 usr/bin/wipedisk
-usr/lib/ocf/resource.d/platform/mtcAgent
 usr/sbin/dmemchk.sh
 usr/sbin/fsync
 usr/share/mtce/hwclock.service

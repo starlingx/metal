@@ -91,17 +91,11 @@ override_dh_auto_install:
 	# systemd service files
 	install -m 755 -d $(UNITDIR)
 	install -m 644 -p -D fsmon/scripts/fsmon.service $(UNITDIR)/fsmon.service
-	install -m 644 -p -D hwmon/scripts/hwmon.service $(UNITDIR)/hwmon.service
 	install -m 644 -p -D pmon/scripts/pmon.service $(UNITDIR)/pmon.service
 	install -m 644 -p -D hostw/scripts/hostw.service $(UNITDIR)/hostw.service
 	install -m 644 -p -D scripts/crashDumpMgr.service $(UNITDIR)/crashDumpMgr.service
 	install -m 644 -p -D scripts/mtcClient.service $(UNITDIR)/mtcClient.service
-	install -m 644 -p -D scripts/hbsClient.service $(UNITDIR)/hbsClient.service
-	install -m 644 -p -D scripts/mtclog.service $(UNITDIR)/mtclog.service
 	install -m 644 -p -D scripts/goenabled.service $(UNITDIR)/goenabled.service
-	install -m 644 -p -D scripts/runservices.service $(UNITDIR)/runservices.service
-	install -m 644 -p -D alarm/scripts/mtcalarm.service $(UNITDIR)/mtcalarm.service
-	install -m 644 -p -D lmon/scripts/lmon.service $(UNITDIR)/lmon.service
 
 	# go enabled script
 	install -m 755 -p -D scripts/goenabled $(INITDIR)/goenabled
@@ -161,6 +155,14 @@ override_dh_auto_install:
 	# Volatile directories
 	install -m 755 -d $(ROOT)/var
 	install -m 755 -d $(ROOT)/var/run
+
+override_dh_installsystemd:
+	dh_installsystemd --name hbsClient
+	dh_installsystemd --name hwmon
+	dh_installsystemd --name lmon
+	dh_installsystemd --name mtcalarm
+	dh_installsystemd --name mtclog
+	dh_installsystemd --name runservices
 
 override_dh_usrlocal:
 	echo "SKIPPING DH USRLOCAL"

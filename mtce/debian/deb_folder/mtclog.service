@@ -1,0 +1,23 @@
+[Unit]
+Description=StarlingX Maintenance Logger
+After=network.target syslog.service config.service
+Before=pmon.service
+
+[Service]
+Type=forking
+ExecStart=/etc/init.d/mtclog start
+ExecStop=/etc/init.d/mtclog stop
+ExecReload=/etc/init.d/mtclog reload
+PIDFile=/var/run/mtclogd.pid
+
+# Failure handling
+TimeoutStartSec=10s
+TimeoutStopSec=10s
+
+# process recovery is handled by pmond
+Restart=no
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+
