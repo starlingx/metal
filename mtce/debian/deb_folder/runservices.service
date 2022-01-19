@@ -1,0 +1,12 @@
+[Unit]
+Description=StarlingX Run Host Services
+After=network.target syslog.service
+
+[Service]
+Type=simple
+ExecStart=/etc/init.d/runservices start
+ExecStop=/etc/init.d/runservices stop
+
+[Install]
+WantedBy=multi-user.target
+

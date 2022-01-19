@@ -17,10 +17,22 @@
 # Short-Description: Link Monitor daemon
 ### END INIT INFO
 
-. /etc/init.d/functions
+CENTOS_FUNCTIONS="/etc/init.d/functions"
+DEBIAN_FUNCTIONS="/lib/lsb/init-functions"
+if [ ! -f ${CENTOS_FUNCTIONS} ] ; then 
+    . ${DEBIAN_FUNCTIONS}
+else 
+    . ${CENTOS_FUNCTIONS}
+fi
 
 DAEMON_NAME="lmond"
-DAEMON="/usr/local/bin/${DAEMON_NAME}"
+DAEMON_CENTOS_PATH="/usr/local/bin/${DAEMON_NAME}"
+DAEMON_DEBIAN_PATH="/usr/bin/${DAEMON_NAME}"
+if [ ! -f ${DAEMON_CENTOS_PATH} ] ; then 
+    DAEMON=${DAEMON_DEBIAN_PATH}
+else 
+    DAEMON=${DAEMON_CENTOS_PATH}
+fi
 IFACE=""
 
 if [ ! -e "$DAEMON" ] ; then

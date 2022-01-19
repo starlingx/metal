@@ -1,0 +1,23 @@
+[Unit]
+Description=StarlingX Maintenance Heartbeat Client
+After=network.target syslog.service config.service
+Before=pmon.service mtcClient.service
+
+[Service]
+Type=forking
+ExecStart=/etc/init.d/hbsClient start
+ExecStop=/etc/init.d/hbsClient stop
+ExecReload=/etc/init.d/hbsClient reload
+PIDFile=/var/run/hbsClient.pid
+
+# Failure handling
+TimeoutStartSec=10s
+TimeoutStopSec=10s
+
+# process recovery is handled by pmond
+Restart=no
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+

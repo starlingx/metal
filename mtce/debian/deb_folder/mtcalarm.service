@@ -1,0 +1,14 @@
+[Unit]
+Description=StarlingX Maintenance Alarm Handler Client
+After=network.target syslog.service config.service
+Before=pmon.service
+
+[Service]
+Type=forking
+ExecStart=/etc/init.d/mtcalarm start
+ExecStop=/etc/init.d/mtcalarm stop
+ExecReload=/etc/init.d/mtcalarm reload
+PIDFile=/var/run/mtcalarmd.pid
+
+[Install]
+WantedBy=multi-user.target

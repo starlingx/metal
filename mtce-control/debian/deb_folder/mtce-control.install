@@ -1,4 +1,3 @@
 etc/init.d/goenabledControl
 etc/init.d/hbsAgent
 etc/pmon.d/hbsAgent.conf
-lib/systemd/system/hbsAgent.service

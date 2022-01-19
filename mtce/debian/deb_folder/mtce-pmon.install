@@ -2,10 +2,10 @@ etc/init.d/pmon
 etc/logrotate.d/pmon.logrotate
 etc/mtc/pmond.conf
 lib/systemd/system/pmon.service
+usr/bin/pmond
 usr/lib/libamon.so
 usr/lib/libamon.so.1
 usr/lib/libamon.so.1.0
-usr/bin/pmond
 usr/sbin/pmon-restart
 usr/sbin/pmon-start
 usr/sbin/pmon-stop
