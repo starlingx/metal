@@ -1,0 +1,23 @@
+[Unit]
+Description=StarlingX Maintenance Filesystem Monitor
+After=network.target syslog.service config.service
+Before=pmon.service
+
+[Service]
+Type=forking
+ExecStart=/etc/init.d/fsmon start
+ExecStop=/etc/init.d/fsmon stop
+ExecReload=/etc/init.d/fsmon reload
+PIDFile=/var/run/fsmond.pid
+
+# Failure handling
+TimeoutStartSec=10s
+TimeoutStopSec=10s
+
+# restarted by pmon
+Restart=no
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+

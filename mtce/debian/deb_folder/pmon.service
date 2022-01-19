@@ -1,0 +1,25 @@
+[Unit]
+Description=StarlingX Maintenance Process Monitor
+After=config.service
+# The following thirdparty service files are not modified by StarlingX,
+# so add "After" clauses here rather than "Before=pmon.service" to those
+After=sshd.service acpid.service syslog-ng.service
+After=ntpd.service ptp4l.service phc2sys.service
+Before=hostw.service
+
+[Service]
+Type=forking
+ExecStart=/etc/init.d/pmon start
+ExecStop=/etc/init.d/pmon stop
+ExecReload=/etc/init.d/pmon reload
+PIDFile=/var/run/pmond.pid
+KillMode=process
+
+# Failure handling
+TimeoutStartSec=10s
+TimeoutStopSec=10s
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
