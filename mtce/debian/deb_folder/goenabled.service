@@ -1,0 +1,13 @@
+[Unit]
+Description=StarlingX Maintenance Goenable Ready
+After=config.service
+Before=pmon.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/etc/init.d/goenabled start
+ExecStop=/etc/init.d/goenabled stop
+
+[Install]
+WantedBy=multi-user.target

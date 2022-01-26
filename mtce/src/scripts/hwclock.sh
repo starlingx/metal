@@ -21,7 +21,13 @@
 #               in /etc/default/rcS, or in the proper place below.
 
 # Source function library.
-. /etc/init.d/functions
+CENTOS_FUNCTIONS="/etc/init.d/functions"
+DEBIAN_FUNCTIONS="/lib/lsb/init-functions"
+if [ ! -f ${CENTOS_FUNCTIONS} ] ; then
+    . ${DEBIAN_FUNCTIONS}
+else
+    . ${CENTOS_FUNCTIONS}
+fi
 
 [ ! -x /sbin/hwclock ] && exit 0
 

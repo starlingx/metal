@@ -1,0 +1,23 @@
+[Unit]
+Description=StarlingX Maintenance Host Watchdog
+After=syslog.service network.target hbsClient.service mtcClient.service sm.service fsmon.service
+
+
+[Service]
+Type=forking
+ExecStart=/etc/init.d/hostw start
+ExecStop=/etc/init.d/hostw stop
+ExecReload=/etc/init.d/hostw reload
+PIDFile=/var/run/hostwd.pid
+
+# Failure handling
+TimeoutStartSec=10s
+TimeoutStopSec=10s
+
+# Auto recovery
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+
