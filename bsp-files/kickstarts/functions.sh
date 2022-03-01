@@ -18,6 +18,14 @@ function wlog()
 
 function get_by_path()
 {
+    local dev_name=\$(basename \$1)
+    for p in /dev/mapper/mpath*; do
+        if [ "\$p" = "\$1" -o "\$p" = "/dev/mapper/\$dev_name" ]; then
+            find -L /dev/disk/by-id/dm-uuid* -samefile /dev/mapper/\$dev_name
+            return
+        fi
+    done
+
     local disk=\$(cd /dev ; readlink -f \$1)
     for p in /dev/disk/by-path/*; do
         if [ "\$disk" = "\$(readlink -f \$p)" ]; then
@@ -29,6 +37,11 @@ function get_by_path()
 
 function get_disk()
 {
+    if echo \$1 | grep -q mpath; then
+        find -L /dev/mapper/ -samefile \$1
+        return
+    fi
+
     echo \$(cd /dev ; readlink -f \$1)
 }
 
@@ -95,6 +108,8 @@ function get_disk_dev()
         if [ -d /sys/block/\$blk_dev ]; then
             disk=\$(ls -l /sys/block/\$blk_dev | grep -v usb | head -n1 | sed 's/^.*\([vsdh]d[a-z]\+\).*$/\1/');  
             if [ -n "\$disk" ]; then
+                exec_retry 3 0.5 "multipath -c /dev/\$disk" > /dev/null && continue
+
                 echo "\$disk"
                 return
             fi
@@ -107,6 +122,12 @@ function get_disk_dev()
                 echo "\$disk"
                 return
             fi
+        fi
+    done
+    for mpath_dev in mpatha mpathb; do
+        if [ -e /dev/mapper/\$mpath_dev ]; then
+            echo "/dev/mapper/\$mpath_dev"
+            return
         fi
     done
 }
