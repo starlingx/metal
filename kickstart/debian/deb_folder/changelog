@@ -1,0 +1,5 @@
+platform-kickstarts (2.0-1) unstable; urgency=medium
+
+  * Initial release.
+
+ -- Eric MacDonald <eric.macdonald@windriver.com>  Wed, 02 Mar 2022 21:26:55 +0000

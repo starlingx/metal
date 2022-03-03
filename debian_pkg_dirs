@@ -1,4 +1,5 @@
 installer/pxe-network-installer
+kickstart
 mtce
 mtce-common
 mtce-compute

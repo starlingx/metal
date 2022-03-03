@@ -1,0 +1,15 @@
+Source: platform-kickstarts
+Section: admin
+Priority: optional
+Maintainer: StarlingX Developers <starlingx-discuss@lists.starlingx.io>
+Homepage: https://www.starlingx.io
+Standards-Version: 4.5.1
+Build-Depends: debhelper-compat (= 13),
+ build-info-dev
+
+Package: platform-kickstarts
+Architecture: all
+Depends: ${misc:Depends}
+Description: Platform kickstarts
+ Platform kickstart files used to configure nodes
+ based on install arguement personality traits.
