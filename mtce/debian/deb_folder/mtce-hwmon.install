@@ -1,5 +1,5 @@
 etc/init.d/hwmon
 etc/logrotate.d/hwmon.logrotate
 etc/mtc/hwmond.conf
-usr/bin/hwmond
+usr/local/bin/hwmond
 usr/lib/ocf/resource.d/platform/hwmon
