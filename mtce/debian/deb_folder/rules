@@ -7,6 +7,7 @@ export LIBDIR = $(ROOT)/usr/lib
 export MTCESHAREDIR = $(ROOT)/usr/share/mtce
 export OCFPLATFORMDIR = $(ROOT)/usr/lib/ocf/resource.d/platform
 export SBINDIR = $(ROOT)/usr/sbin
+export LOCAL_SBINDIR = $(ROOT)/usr/local/sbin
 export UNITDIR=$(ROOT)/lib/systemd/system
 
 export SYSCONFDIR = $(ROOT)/etc
@@ -64,9 +65,9 @@ override_dh_auto_install:
 	install -m 755 -d $(SBINDIR)
 	install -m 700 -p -D fsync/fsync $(SBINDIR)/fsync
 	install -m 755 -d $(SBINDIR)
-	install -m 700 -p -D pmon/scripts/pmon-restart $(SBINDIR)/pmon-restart
-	install -m 700 -p -D pmon/scripts/pmon-start $(SBINDIR)/pmon-start
-	install -m 700 -p -D pmon/scripts/pmon-stop $(SBINDIR)/pmon-stop
+	install -m 700 -p -D pmon/scripts/pmon-restart $(LOCAL_SBINDIR)/pmon-restart
+	install -m 700 -p -D pmon/scripts/pmon-start $(LOCAL_SBINDIR)/pmon-start
+	install -m 700 -p -D pmon/scripts/pmon-stop $(LOCAL_SBINDIR)/pmon-stop
 
 	# init script files
 	install -m 755 -d $(INITDIR)

@@ -5,6 +5,6 @@ usr/bin/pmond
 usr/lib/libamon.so
 usr/lib/libamon.so.1
 usr/lib/libamon.so.1.0
-usr/sbin/pmon-restart
-usr/sbin/pmon-start
-usr/sbin/pmon-stop
+usr/local/sbin/pmon-restart
+usr/local/sbin/pmon-start
+usr/local/sbin/pmon-stop
