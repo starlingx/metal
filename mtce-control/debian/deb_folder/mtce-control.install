@@ -1,3 +1,5 @@
 etc/init.d/goenabledControl
 etc/init.d/hbsAgent
 etc/pmon.d/hbsAgent.conf
+lib/systemd/system/hbsAgent.service
+debian/systemd/00-mtce-control.preset etc/systemd/system-preset
