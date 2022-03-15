@@ -2,7 +2,7 @@
 # export DH_VERBOSE = 1
 
 export ROOT = debian/tmp
-export BINDIR = $(ROOT)/usr/bin
+export BINDIR = $(ROOT)/usr/local/bin
 export LIBDIR = $(ROOT)/usr/lib
 export MTCESHAREDIR = $(ROOT)/usr/share/mtce
 export OCFPLATFORMDIR = $(ROOT)/usr/lib/ocf/resource.d/platform

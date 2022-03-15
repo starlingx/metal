@@ -2,4 +2,4 @@ etc/init.d/lmon
 etc/logrotate.d/lmon.logrotate
 etc/mtc/lmond.conf
 etc/pmon.d/lmon.conf
-usr/bin/lmond
+usr/local/bin/lmond

@@ -1,7 +1,7 @@
 etc/init.d/pmon
 etc/logrotate.d/pmon.logrotate
 etc/mtc/pmond.conf
-usr/bin/pmond
+usr/local/bin/pmond
 usr/lib/libamon.so
 usr/lib/libamon.so.1
 usr/lib/libamon.so.1.0
