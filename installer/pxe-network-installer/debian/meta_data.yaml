@@ -1,0 +1,7 @@
+---
+debname: pxe-network-installer
+debver: 2.0-1
+src_path: pxe-network-installer
+revision:
+  dist: $STX_DIST
+  PKG_GITREVCOUNT: true

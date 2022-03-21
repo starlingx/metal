@@ -1,0 +1,8 @@
+default=0
+timeout=10
+GRUB_HIDDEN_TIMEOUT=0
+GRUB_TIMEOUT_STYLE='countdown'
+
+menuentry '1) UEFI All-in-one' {
+      linuxefi rel-xxxSW_VERSIONxxx/installer-bzImage rdinit=/install traits=controller,worker instname=debian instsh=0 instab=0 instw=10 BOOTIF=$net_default_mac instbr=starlingx ks=xxxBASE_URLxxx/feed/rel-xxxSW_VERSIONxxx/kickstart.cfg insturl=xxxBASE_URLxxx/feed/rel-xxxSW_VERSIONxxx/ostree_repo console=ttyS0,115200 console=tty1 biosdevname=0 net.ifnames=0 biosplusefi=1 xxxAPPEND_OPTIONSxxx
+        initrdefi rel-xxxSW_VERSIONxxx/installer-initrd

@@ -1,3 +1,4 @@
+installer/pxe-network-installer
 mtce
 mtce-common
 mtce-compute

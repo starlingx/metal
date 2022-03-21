@@ -1,0 +1,48 @@
+#!/usr/bin/make -f
+
+# export DH_VERBOSE = 1
+export ROOT=$(CURDIR)/debian/tmp
+export platform_release="$(shell grep SW_VERSION /usr/include/build_info.h | cut -d ' ' -f 3)"
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	sed -i "s/xxxSW_VERSIONxxx/${platform_release}/g" debian-pxe-* efi-debian-pxe-*
+	dh_auto_configure
+
+override_dh_install:
+	install -v -d -m 755 $(ROOT)/usr/bin
+	install -v -d -m 755 $(ROOT)/var/pxeboot/pxelinux.cfg
+	install -v -d -m 755 $(ROOT)/var/pxeboot/pxelinux.cfg.files
+	install -v -d -m 755 $(ROOT)/var/pxeboot/rel-${platform_release}
+	install -v -d -m 755 $(ROOT)/usr/share/licenses/pxe-network-installer-1.0.0
+
+	# Review Note: The actual kernel and initrd files will be added later
+	# Pull in the kernel and initrd and add installer links.
+	ln -sf bzImage $(ROOT)/var/pxeboot/rel-${platform_release}/installer-bzImage
+	ln -sf initrd $(ROOT)/var/pxeboot/rel-${platform_release}/installer-initrd
+
+	# Add grub links
+	install -v -m 644 default              $(ROOT)/var/pxeboot/pxelinux.cfg.files/default
+	install -v -m 644 default.static       $(ROOT)/var/pxeboot/pxelinux.cfg.files/default.static
+	install -v -m 644 pxe-grub.cfg         $(ROOT)/var/pxeboot/pxelinux.cfg.files/grub.cfg
+	install -v -m 644 pxe-grub.cfg.static  $(ROOT)/var/pxeboot/pxelinux.cfg.files/grub.cfg.static
+	install -p -D -m 700 pxeboot-update.sh $(ROOT)/usr/sbin/pxeboot-update-${platform_release}.sh
+
+	# Legacy BIOS System Node Install grub menus
+	install -p -D -m 700     debian-pxe-controller-install  $(ROOT)/var/pxeboot/pxelinux.cfg.files/pxe-controller-install-${platform_release}
+	install -p -D -m 700     debian-pxe-smallsystem-install $(ROOT)/var/pxeboot/pxelinux.cfg.files/pxe-smallsystem-install-${platform_release}
+	install -p -D -m 700     debian-pxe-storage-install     $(ROOT)/var/pxeboot/pxelinux.cfg.files/pxe-storage-install-${platform_release}
+	install -p -D -m 700     debian-pxe-worker-install      $(ROOT)/var/pxeboot/pxelinux.cfg.files/pxe-worker-install-${platform_release}
+	install -p -D -m 700     debian-pxe-worker_lowlatency-install $(ROOT)/var/pxeboot/pxelinux.cfg.files/pxe-worker_lowlatency-install-${platform_release}
+	install -p -D -m 700     debian-pxe-smallsystem_lowlatency-install $(ROOT)/var/pxeboot/pxelinux.cfg.files/pxe-smallsystem_lowlatency-install-${platform_release}
+
+	# UEFI System Node Install grub menus
+	install -p -D -m 700 efi-debian-pxe-controller-install  $(ROOT)/var/pxeboot/pxelinux.cfg.files/efi-pxe-controller-install-${platform_release}
+	install -p -D -m 700 efi-debian-pxe-smallsystem-install $(ROOT)/var/pxeboot/pxelinux.cfg.files/efi-pxe-smallsystem-install-${platform_release}
+	install -p -D -m 700 efi-debian-pxe-storage-install     $(ROOT)/var/pxeboot/pxelinux.cfg.files/efi-pxe-storage-install-${platform_release}
+	install -p -D -m 700 efi-debian-pxe-worker-install      $(ROOT)/var/pxeboot/pxelinux.cfg.files/efi-pxe-worker-install-${platform_release}
+	install -p -D -m 700 efi-debian-pxe-worker_lowlatency-install $(ROOT)/var/pxeboot/pxelinux.cfg.files/efi-pxe-worker_lowlatency-install-${platform_release}
+	install -p -D -m 700 efi-debian-pxe-smallsystem_lowlatency-install $(ROOT)/var/pxeboot/pxelinux.cfg.files/efi-pxe-smallsystem_lowlatency-install-${platform_release}
+	dh_install

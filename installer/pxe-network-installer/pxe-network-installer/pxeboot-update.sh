@@ -31,6 +31,7 @@ Arguments:
     -T <tboot value>    : Specify whether or not to use tboot (optional)
     -k <kernel args>    : Specify any extra kernel boot arguments (optional)
     -l <base url>       : Specify installer base URL
+    -d                  : Update Debian grub menus ; rather than centos menus
 
 EOF
 }
@@ -67,8 +68,9 @@ function generate_config {
 
 parms=$@
 logger -t $0 " $parms"
+debian_menus=false
 
-while getopts "i:o:tgc:b:r:u:s:T:k:l:h" opt
+while getopts "i:o:tgc:b:r:u:s:T:k:l:h:d" opt
 do
     case $opt in
         i)
@@ -91,6 +93,9 @@ do
         c)
             console=$OPTARG
             ;;
+        d)
+            debian_menus=true
+            ;;
         b)
             boot_device=$OPTARG
             ;;
@@ -101,10 +106,10 @@ do
             tisnotify=$OPTARG
             ;;
         s)
-            security_profile=$OPTARG
+            logger "security_profile is no longer supported ; ignoring"
             ;;
         T)
-            tboot=$OPTARG
+            logger "tboot is no longer supported ; ignoring"
             ;;
         k)
             kernal_extra_args=$OPTARG
@@ -123,6 +128,29 @@ do
     esac
 done
 
+# handle debian.
+# Support the validation check below by forcing
+#   boot and rootfs device to be set equal.
+if [ ${debian_menus} = true ] ; then
+    if [ "${boot_device}" != "" ] ; then
+        instdev=${boot_device}
+        rootfs_device=${boot_device}
+    elif [ "${rootfs_device}" != "" ] ; then
+        instdev=${rootfs_device}
+        boot_device=${rootfs_device}
+    else
+        logger --stderr -t $0 "Error: Failed to supply an install device: $@"
+        usage
+        exit 1
+    fi
+fi
+
+if [ "$input_file" == "$output_file" ] ; then
+    logger --stderr -t $0 "Error: Input template and Output file must be different"
+    usage
+    exit 1
+fi
+
 # Validate parameters
 if [ -z "$input_file" \
         -o -z "$input_file_efi" \
@@ -135,29 +163,29 @@ if [ -z "$input_file" \
     exit 1
 fi
 
-APPEND_OPTIONS="boot_device=$boot_device rootfs_device=$rootfs_device"
+if [ "${debian_menus}" = true ] ; then
+    APPEND_OPTIONS="instdev=$instdev"
+else
+    APPEND_OPTIONS="boot_device=$boot_device rootfs_device=$rootfs_device"
 
-if [ -n "$text_install" ]; then
-    APPEND_OPTIONS="$APPEND_OPTIONS $text_install"
+    if [ -n "$text_install" ]; then
+        APPEND_OPTIONS="$APPEND_OPTIONS $text_install"
+    fi
+
+    # We now require GPT partitions for all disks regardless of size
+    APPEND_OPTIONS="$APPEND_OPTIONS inst.gpt"
+
+    if [ -n "$tisnotify" ]; then
+        APPEND_OPTIONS="$APPEND_OPTIONS tisnotify=$tisnotify"
+    fi
 fi
 
 if [ -n "$console" ]; then
     APPEND_OPTIONS="$APPEND_OPTIONS console=$console"
 fi
 
-if [ -n "$tisnotify" ]; then
-    APPEND_OPTIONS="$APPEND_OPTIONS tisnotify=$tisnotify"
-fi
-
-# We now require GPT partitions for all disks regardless of size
-APPEND_OPTIONS="$APPEND_OPTIONS inst.gpt"
-
 # Add k8s support for namespaces
 APPEND_OPTIONS="$APPEND_OPTIONS user_namespace.enable=1"
-
-if [ -n "$security_profile" ]; then
-    APPEND_OPTIONS="$APPEND_OPTIONS security_profile=$security_profile"
-fi
 
 if [ -n "$kernal_extra_args" ]; then
     APPEND_OPTIONS="$APPEND_OPTIONS $kernal_extra_args"
@@ -166,13 +194,6 @@ fi
 BASE_URL=$base_url
 
 generate_config $input_file $output_file
-
-# for extended security profile UEFI boot only,
-# a tboot option will be passed to target boot option menu
-if [ "$security_profile" == "extended" -a -n "$tboot" ]; then
-    APPEND_OPTIONS="$APPEND_OPTIONS tboot=$tboot"
-fi
-
 generate_config $input_file_efi $output_file_efi
 
 exit 0

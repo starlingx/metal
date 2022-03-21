@@ -1,0 +1,26 @@
+SERIAL 0 115200
+TIMEOUT 50
+DEFAULT menu.c32
+
+# Menu Configuration
+MENU WIDTH 80
+MENU MARGIN 10
+MENU PASSWORDMARGIN 3
+MENU ROWS 12
+MENU TABMSGROW 18
+MENU CMDLINEROW 18
+MENU ENDROW 24
+MENU PASSWORDROW 11
+MENU TIMEOUTROW 20
+
+PROMPT 0
+NOESCAPE 1
+NOCOMPLETE 1
+ALLOWOPTIONS 0
+
+LABEL 1
+  MENU LABEL ^1) Storage
+  MENU DEFAULT
+  KERNEL rel-xxxSW_VERSIONxxx/installer-bzImage
+  APPEND initrd=rel-xxxSW_VERSIONxxx/installer-initrd rdinit=/install traits=storage instname=debian instsh=0 instab=0 instw=10 instbr=starlingx ks=xxxBASE_URLxxx/feed/rel-xxxSW_VERSIONxxx/kickstart.cfg insturl=xxxBASE_URLxxx/feed/rel-xxxSW_VERSIONxxx/ostree_repo console=ttyS0,115200 console=tty1 biosdevname=0 net.ifnames=0 biosplusefi=1 xxxAPPEND_OPTIONSxxx
+  IPAPPEND 2
