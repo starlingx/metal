@@ -253,6 +253,7 @@ wrs-heat-templates
 python-django-horizon
 kernel
 kernel-module-igb-uio
+kmod-bnxt_en
 kmod-e1000e
 kmod-i40e
 kmod-iavf
