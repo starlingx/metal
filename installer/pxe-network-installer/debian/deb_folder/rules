@@ -13,7 +13,6 @@ override_dh_auto_configure:
 
 override_dh_install:
 	install -v -d -m 755 $(ROOT)/usr/bin
-	install -v -d -m 755 $(ROOT)/var/pxeboot/pxelinux.cfg
 	install -v -d -m 755 $(ROOT)/var/pxeboot/pxelinux.cfg.files
 	install -v -d -m 755 $(ROOT)/var/pxeboot/rel-${platform_release}
 	install -v -d -m 755 $(ROOT)/usr/share/licenses/pxe-network-installer-1.0.0
