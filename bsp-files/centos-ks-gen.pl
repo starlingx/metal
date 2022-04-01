@@ -87,6 +87,7 @@ write_config_file("controller-worker-lowlatency",
 #
 write_config_file("controller",
                   "${output_dir}/prestaged_installer_ks.cfg",
+                  "pre_prestaging_install_check.cfg",
                   "pre_common_head.cfg",
                   "pre_pkglist_prestage.cfg",
                   "pre_disk_setup_common.cfg",
