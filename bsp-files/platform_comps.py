@@ -136,6 +136,8 @@ def main():
     add_group(comps, 'worker-lowlatency', rpmlist,
               filter_dir, 'filter_out_from_worker_lowlatency')
     add_group(comps, 'storage', rpmlist, filter_dir, 'filter_out_from_storage')
+    add_group(comps, 'prestaging', rpmlist, filter_dir,
+              'filter_out_from_prestaging')
 
     add_group(comps, 'controller')
     add_group(comps, 'controller-worker')
@@ -143,6 +145,7 @@ def main():
     add_group(comps, 'worker')
     add_group(comps, 'worker-lowlatency')
     add_group(comps, 'storage')
+    add_group(comps, 'prestaging')
 
     tree.write(groups_file, encoding="UTF-8")
 

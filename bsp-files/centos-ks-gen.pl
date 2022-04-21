@@ -85,11 +85,11 @@ write_config_file("controller-worker-lowlatency",
 # For now the 'controller' package group is used and a new prestaging
 # package list is used to trim down the set of installed packages.
 #
-write_config_file("controller",
+write_config_file("prestaging",
                   "${output_dir}/prestaged_installer_ks.cfg",
                   "pre_prestaging_install_check.cfg",
                   "pre_common_head.cfg",
-                  "pre_pkglist_prestage.cfg",
+                  "pre_pkglist.cfg",
                   "pre_disk_setup_common.cfg",
                   "pre_disk_aio.cfg",
                   "pre_disk_setup_tail.cfg",
