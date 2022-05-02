@@ -57,7 +57,9 @@ Installation failed.
 \$msg
 
 EOF
-    echo "\$msg" >/etc/platform/installation_failed
+    if [ -d /etc/platform ] ; then
+        echo "\$msg" >/etc/platform/installation_failed
+    fi
 
     echo -e '\n\nInstallation failed.\n'
     echo "\$msg"
@@ -74,7 +76,9 @@ Installation failed.
 Please see \$logfile for details of failure
 
 EOF
-    echo \$logfile >/etc/platform/installation_failed
+    if [ -d /etc/platform ] ; then
+        echo \$logfile >/etc/platform/installation_failed
+    fi
 
     echo -e '\n\nInstallation failed.\n'
     cat \$logfile
