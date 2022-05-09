@@ -62,3 +62,18 @@ if [ -d $ISO_DIR/patches ]; then
         | xargs --no-run-if-empty -I files cp --preserve=all files /opt/patching/packages/${VERSION}/
 fi
 
+# copy package checksum if it exists
+
+PKG_FILE=package_checksums
+PKG_FILE_LOC=/usr/local/share/pkg-list
+
+if [ -f ${ISO_DIR}/${PKG_FILE} ]; then
+
+    DEST_PKG_FILE=packages_list
+    if [ ! -d ${PKG_FILE_LOC} ]; then
+        mkdir -p ${PKG_FILE_LOC}
+    fi
+
+    cp ${ISO_DIR}/${PKG_FILE} ${PKG_FILE_LOC}/${DEST_PKG_FILE}
+    cp ${ISO_DIR}/${PKG_FILE} ${FEED_DIR}/${DEST_PKG_FILE}
+fi
