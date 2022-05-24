@@ -17,6 +17,49 @@
 #include <json-c/json.h>      /* for ... json-c json string parsing */
 #include <sstream>
 
+/*********************************************************************
+ *
+ * The json-c shared library api allocates objects that it tracks by
+ * reference. Failure to help json-c manage its reference counts can
+ * lead to a process failure or memory leak.
+ *
+ * A process segmentation fault can occur if json_object_put is called
+ * with an invalid object or an object with 0 reference count.
+ *
+ * Failing to call json_object_put for json objects that increment
+ * the object's reference count will cause a memory leak.
+ *
+ * Calling json_object_put decrements the object's reference count.
+ *
+ * The following json api increments the allocated object's reference
+ * count requiring the caller to call json_object_put ( object )
+ * to decrement the reference count when a function is done with
+ * the object.
+ *
+ *   json_object_new_object:
+ *
+ *     This api creates a new empty object with a reference count 1.
+ *     The caller of this object initially has sole ownership.
+ *
+ *   json_tokener_parse:
+ *
+ *     This function calls json_object_new_object behind the scenes,
+ *     so you need to call json_object_put for the returned object.
+ *
+ * There is no need to adjust reference counts using json_object_put
+ * for these calls.
+ *
+ *   json_object_object_get
+ *   json_object_object_get_ex
+ *   json_object_get_array
+ *   json_object_to_json_string
+ *
+ * For more information refer to https://json-c.github.io/json-c
+ *
+ * centos uses json-c .11
+ * debian uses json-c .15
+ *
+ ***********************************************************************/
 using namespace std;
 
 #ifdef  __AREA__
@@ -463,7 +506,6 @@ int jsonUtil_load_host ( char * json_str_ptr, node_inv_type & info )
     /* init to null to avoid trap on early cleanup call with
      * bad non-null default pointer value */
     struct json_object *node_obj = (struct json_object *)(NULL);
-    struct json_object *err_obj = (struct json_object *)(NULL);
 
     if (( json_str_ptr == NULL ) || ( *json_str_ptr == '\0' ) ||
         ( ! strncmp ( json_str_ptr, "(null)" , 6 )))
@@ -548,7 +590,6 @@ int jsonUtil_load_host ( char * json_str_ptr, node_inv_type & info )
 load_host_cleanup:
 
     if (node_obj) json_object_put(node_obj);
-    if (err_obj) json_object_put(err_obj);
 
     return (rc);
 }
@@ -563,7 +604,6 @@ int jsonUtil_load_host_state ( char * json_str_ptr, node_inv_type & info )
     /* init to null to avoid trap on early cleanup call with
      * bad non-null default pointer value */
     struct json_object *node_obj = (struct json_object *)(NULL);
-    struct json_object *err_obj = (struct json_object *)(NULL);
 
     if (( json_str_ptr == NULL ) || ( *json_str_ptr == '\0' ) ||
         ( ! strncmp ( json_str_ptr, "(null)" , 6 )))
@@ -615,7 +655,6 @@ int jsonUtil_load_host_state ( char * json_str_ptr, node_inv_type & info )
 load_host_cleanup:
 
     if (node_obj) json_object_put(node_obj);
-    if (err_obj) json_object_put(err_obj);
 
     return (rc);
 }
@@ -678,18 +717,18 @@ int jsonUtil_secret_load ( string & name,
         else
         {
             elog ("%s Failed to find %s object array\n", name.c_str(), MTC_JSON_SECRET_LIST );
+            rc = FAIL_NOT_FOUND ;
         }
     }
     else
     {
         elog ("%s Failed to find %s object\n", name.c_str(), MTC_JSON_SECRET_LIST );
+        rc = FAIL_NOT_FOUND ;
     }
 
 secret_load_cleanup:
 
     if (raw_obj) json_object_put(raw_obj );
-    if (secret_obj) json_object_put(secret_obj );
-    if (ref_obj) json_object_put(ref_obj );
 
     return (rc);
 }
@@ -1063,7 +1102,6 @@ int jsonApi_array_value ( char * json_str_ptr,
     struct json_object *raw_obj  = (struct json_object *)(NULL);
     struct json_object *array_obj = (struct json_object *)(NULL);
     struct json_object *tuple_obj = (struct json_object *)(NULL);
-    struct json_object *type_obj = (struct json_object *)(NULL);
 
     if ( strlen(json_str_ptr) < 3 )
     {
@@ -1130,7 +1168,6 @@ int jsonApi_array_value ( char * json_str_ptr,
 array_value_cleanup:
 
     if (raw_obj)   json_object_put(raw_obj);
-    if (type_obj)  json_object_put(type_obj);
 
     return (rc);
 }

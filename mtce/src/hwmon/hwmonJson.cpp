@@ -56,7 +56,6 @@ int hwmonJson_load_inv ( char * json_str_ptr, node_inv_type & info )
     /* init to null to avoid trap on early cleanup call with
      * bad non-null default pointer value */
     struct json_object *node_obj = (struct json_object *)(NULL);
-    struct json_object *err_obj = (struct json_object *)(NULL);
 
     if (( json_str_ptr == NULL ) || ( *json_str_ptr == '\0' ) ||
         ( ! strncmp ( json_str_ptr, "(null)" , 6 )))
@@ -99,7 +98,6 @@ int hwmonJson_load_inv ( char * json_str_ptr, node_inv_type & info )
 hwmon_info_cleanup:
 
     if (node_obj) json_object_put(node_obj);
-    if (err_obj) json_object_put(err_obj);
 
     return (rc);
 }

@@ -47,8 +47,8 @@ using namespace std;
 #define MTC_SECRET_PAYLOAD         "payload"        /**< barbican secret payload label     */
 
 #define SECRET_START_DELAY (1)
-#define SECRET_REPLY_DELAY (1)
-#define SECRET_RETRY_DELAY (8)
+#define SECRET_REPLY_DELAY (10)
+#define SECRET_RETRY_DELAY (10)
 
 barbicanSecret_type * secretUtil_find_secret ( string & host_uuid );
 barbicanSecret_type * secretUtil_manage_secret ( libEvent & event,

@@ -52,6 +52,8 @@ extern char *program_invocation_short_name;
 static char pid_filename  [MAX_FILENAME_LEN] ;
 static char hc_filename   [MAX_FILENAME_LEN] ;
 
+#define BUFFER 1024
+
 void daemon_files_fini ( void )
 {
     close_syslog();
@@ -62,6 +64,50 @@ void daemon_health_test ( void )
     char file_str[2000] ;
     sprintf ( &file_str[0], "I'm healthy: Here is my config ...\n%s\n", daemon_stream_info ());
     daemon_healthcheck (&file_str[0]);
+}
+
+bool daemon_is_os_debian ( void )
+{
+    #define OS_RELEASE_FILE ((const char *)("/etc/os-release"))
+
+    char   buffer   [BUFFER];
+    char   line     [BUFFER];
+
+    memset ( line, 0, BUFFER );
+
+    FILE * file_stream = fopen ( OS_RELEASE_FILE, "r" );
+    if ( file_stream != NULL )
+    {
+        int rc ;
+        while ( fgets (buffer, BUFFER, file_stream) != NULL )
+        {
+            rc = sscanf ( &buffer[0], "ID=%1023s",  &line[0] );
+            if ( rc == 1 )
+            {
+                string os = line ;
+                if ( ! os.compare("debian") )
+                {
+                    dlog("%s:%s", OS_RELEASE_FILE, os.c_str());
+
+                    /* Close the file stream */
+                    fclose(file_stream);
+
+                    return ( true ) ;
+                }
+            }
+            else
+            {
+                dlog1 ("%s:%s", OS_RELEASE_FILE, &line[0]);
+            }
+        }
+        /* Close the file stream */
+        fclose(file_stream);
+    }
+    else
+    {
+        elog ("failed to open %s", OS_RELEASE_FILE);
+    }
+    return ( false );
 }
 
 bool daemon_is_file_present ( const char * filename )
@@ -102,7 +148,6 @@ void daemon_healthcheck ( const char * sig )
     }
 }
 
-#define BUFFER 1024
 
 int daemon_log_value ( const char * filename , const char * str, int val )
 {
