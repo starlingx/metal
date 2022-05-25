@@ -19,6 +19,11 @@ function wlog()
 function get_by_path()
 {
     local dev_name=\$(basename \$1)
+
+    if echo "\$dev_name" | grep -q mpath; then
+        exec_retry 30 1 "ls /dev/mapper/\$dev_name" > /dev/null
+    fi
+
     for p in /dev/mapper/mpath*; do
         if [ "\$p" = "\$1" -o "\$p" = "/dev/mapper/\$dev_name" ]; then
             find -L /dev/disk/by-id/dm-uuid* -samefile /dev/mapper/\$dev_name
