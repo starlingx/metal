@@ -6508,9 +6508,19 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
                                                                      mtcTimer_handler );
             if ( secret->stage == MTC_SECRET__GET_PWD_RECV )
             {
-                node_ptr->bm_pw = secret->payload ;
-                ilog ("%s bmc credentials received",
-                          node_ptr->hostname.c_str());
+                httpUtil_free_conn ( node_ptr->secretEvent );
+                httpUtil_free_base ( node_ptr->secretEvent );
+                if ( secret->payload.empty() )
+                {
+                    wlog ("%s failed to acquire bmc password", node_ptr->hostname.c_str());
+                    secret->stage = MTC_SECRET__GET_PWD_FAIL ;
+                }
+                else
+                {
+                    node_ptr->bm_pw = secret->payload ;
+                    ilog ("%s bmc password received", node_ptr->hostname.c_str());
+                    secret->stage = MTC_SECRET__START ;
+                }
             }
             else
             {

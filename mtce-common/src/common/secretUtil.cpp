@@ -38,6 +38,27 @@
 #include "jsonUtil.h"       /* for ... Json utilities                  */
 #include "secretUtil.h"     /* this .. module header                   */
 
+/**************************************************************************
+ *
+ * Name       : secretUtil_manage_secret
+ *
+ * Description: This FSM serves to fetch a secret from barbican with error
+ *              handling.
+ *
+ * The FSM uses a key value pair map list of type barbicanSecret_type
+ * defined in httpUtil.h
+ *
+ * typedef struct
+ * {
+ *     mtc_secretStages_enum stage    ;
+ *     string                reference;
+ *     string                payload  ;
+ * } barbicanSecret_type;
+ *
+ * The fsm declares a c++ map of this type which serves as
+ * a key:value pair list keyed by host uuid string using the
+ * secretUtil_find_secret utility. */
+
 std::map<string, barbicanSecret_type> secretList;
 
 barbicanSecret_type * secretUtil_find_secret ( string & host_uuid )
@@ -50,6 +71,46 @@ barbicanSecret_type * secretUtil_find_secret ( string & host_uuid )
     }
     return NULL;
 }
+
+/* The FSM uses mtc_secretStages_enum also defined in httpUtil.h
+ *
+ *   MTC_SECRET__START ....... issue request to barbican for the list of
+ *                             secrets for this host_uuid.
+ *
+ *   MTC_SECRET__GET_REF ..... wait for barbican's response with the
+ *                             reference uuid
+ *
+ *   The secret_handler will store the secret reference uuid and change
+ *   state to MTC_SECRET__GET_PWD or MTC_SECRET__GET_REF_FAIL if the
+ *   request fails or there are no secrets available.
+ *
+ *   MTC_SECRET__GET_PWD ..... issue a secret read request using the
+ *                             secret reference uuid
+ *
+ *   MTC_SECRET__GET_PWD_REC . wait for barbican's response with the
+ *                             secret string and extract it once recv'ed
+ *
+ *   The secret_handler will store the secret payload and change state
+ *   to MTC_SECRET__GET_PWD_RECV or MTC_SECRET__GET_PWD_FAIL if the
+ *   request to provide a secret payload failed or was empty.
+ *
+ * The secretUtil_get_secret and secretUtil_read_secret http requests
+ * are non-blocking.
+ *
+ * Parameters:
+ *
+ * event  .......... reference to an http libevent event
+ * hostname ........ the host's name
+ * host_uuid ....... the host's uuid
+ * secret_timer .... a maintenance timer for request timeout detection
+ * secret_handler .. pointer
+ *
+ * Updates   : secretList host_uuid key value is updated with reference
+ *             and payload ; the secret.
+ *
+ * Returns   : execution status
+ *
+ ***************************************************************************/
 
 barbicanSecret_type * secretUtil_manage_secret ( libEvent & event,
                                                  string & hostname,
@@ -64,100 +125,150 @@ barbicanSecret_type * secretUtil_manage_secret ( libEvent & event,
     {
          barbicanSecret_type secret;
          secret.stage = MTC_SECRET__START;
+         secret.payload.clear();
+         secret.reference.clear();
          it = secretList.insert( std::pair<string, barbicanSecret_type>( host_uuid, secret ) ).first;
     }
 
-    if ( it->second.stage == MTC_SECRET__START )
+    if ( event.active == true )
     {
-        it->second.reference.clear();
-        it->second.payload.clear();
+        if (( it->second.stage != MTC_SECRET__GET_REF ) &&
+            ( it->second.stage != MTC_SECRET__GET_PWD ))
+        {
+            slog ("%s event is active while in the wrong stage (%d)", hostname.c_str(), it->second.stage );
+            event.active = false ; /* correct the error */
+            return & it->second ;
+        }
     }
 
-    if ( it->second.stage == MTC_SECRET__START ||
-         it->second.stage == MTC_SECRET__GET_REF_FAIL )
+    switch ( it->second.stage )
     {
-        if ( mtcTimer_expired ( secret_timer ) )
+        case MTC_SECRET__START:
         {
-            rc = secretUtil_get_secret ( event, hostname, host_uuid );
-            if (rc)
+            if ( mtcTimer_expired ( secret_timer ) )
             {
-                wlog ( "%s getting secret reference failed \n", host_uuid.c_str() );
-                it->second.stage = MTC_SECRET__GET_REF_FAIL;
-                mtcTimer_start( secret_timer, handler, SECRET_RETRY_DELAY );
+                ilog ("%s query bmc password", hostname.c_str());
+
+                it->second.reference.clear();
+                it->second.payload.clear();
+
+                rc = secretUtil_get_secret ( event, hostname, host_uuid );
+                if (rc)
+                {
+                    elog ("%s get secret request failed (%d)", hostname.c_str(), rc );
+                    it->second.stage = MTC_SECRET__GET_REF_FAIL;
+                }
+                else
+                {
+                    it->second.stage = MTC_SECRET__GET_REF;
+                    mtcTimer_start ( secret_timer, handler, SECRET_REPLY_DELAY );
+                }
+            }
+            break ;
+        }
+        case MTC_SECRET__GET_REF:
+        {
+            if ( mtcTimer_expired ( secret_timer ) == false )
+            {
+                if ( event.active == true )
+                {
+                    /* Look for the response */
+                    if ( event.base )
+                    {
+                        dlog ( "%s calling event_base_loop \n", hostname.c_str() );
+                        event_base_loop ( event.base, EVLOOP_NONBLOCK );
+                    }
+                    else
+                    {
+                        /* should not get here. event active while base is null
+                         *    try and recover from this error case. */
+                        slog ("%s active with null base", hostname.c_str());
+                        event.active = false ;
+                    }
+                }
             }
             else
             {
-                mtcTimer_start( secret_timer, handler, SECRET_REPLY_DELAY );
+                elog ( "%s timeout waiting for secret reference \n", hostname.c_str() );
+                it->second.stage = MTC_SECRET__GET_REF_FAIL ;
             }
+            break ;
         }
-        else if ( event.base )
+        case MTC_SECRET__GET_PWD:
         {
+            if ( mtcTimer_expired ( secret_timer ) == false )
+            {
+                if ( event.active == true )
+                {
+                    /* Look for the response */
+                    if ( event.base )
+                    {
+                        dlog ( "%s calling event_base_loop \n", hostname.c_str() );
+                        event_base_loop( event.base, EVLOOP_NONBLOCK );
+                    }
+                    else
+                    {
+                        /* should not get here. event active while base is null
+                         *    try and recover from this error case. */
+                        slog ("%s active with null base", hostname.c_str() );
+                        event.active = false ;
+                    }
+                }
+            }
+            else
+            {
+                elog ( "%s timeout waiting for secret payload \n", hostname.c_str() );
+                it->second.stage = MTC_SECRET__GET_PWD_FAIL ;
+            }
+            break ;
+        }
+
+        case MTC_SECRET__GET_REF_RECV:
+        {
+            mtcTimer_reset( secret_timer );
             httpUtil_free_conn ( event );
             httpUtil_free_base ( event );
-        }
-    }
-    else if ( it->second.stage == MTC_SECRET__GET_REF_RECV ||
-              it->second.stage == MTC_SECRET__GET_PWD_FAIL )
-    {
-        if ( mtcTimer_expired ( secret_timer ) )
-        {
+
             rc = secretUtil_read_secret ( event, hostname, host_uuid );
             if (rc)
             {
-                wlog ( "%s getting secret payload failed \n", host_uuid.c_str() );
+                wlog ( "%s call to secretUtil_read_secret failed \n", hostname.c_str() );
                 it->second.stage = MTC_SECRET__GET_PWD_FAIL;
-                mtcTimer_start( secret_timer, handler, SECRET_RETRY_DELAY );
             }
             else
             {
-                mtcTimer_start( secret_timer, handler, SECRET_REPLY_DELAY );
+                dlog ("%s waiting on secret password ; timeout in %d secs\n", hostname.c_str(), SECRET_REPLY_DELAY);
+                it->second.stage = MTC_SECRET__GET_PWD ;
+                mtcTimer_start ( secret_timer, handler, SECRET_REPLY_DELAY );
             }
+            break ;
         }
-        else if ( event.base )
+
+        case MTC_SECRET__GET_REF_FAIL:
+        case MTC_SECRET__GET_PWD_FAIL:
         {
-            httpUtil_free_conn ( event );
-            httpUtil_free_base ( event );
-        }
-    }
-    else if ( it->second.stage == MTC_SECRET__GET_REF ||
-              it->second.stage == MTC_SECRET__GET_PWD )
-    {
-        if ( event.active == true )
-        {
-            /* Look for the response */
-            if ( event.base )
+            if ( it->second.stage == MTC_SECRET__GET_REF_FAIL )
             {
-                event_base_loop( event.base, EVLOOP_NONBLOCK );
+                wlog ( "%s failed to get secret reference \n", hostname.c_str() );
             }
             else
             {
-                /* should not get here. event active while base is null
-                 *    try and recover from this error case. */
-                event.active = false ;
+                wlog ( "%s failed to get secret payload \n", hostname.c_str() );
             }
-        }
-        else if ( event.base )
-        {
-            if ( it->second.stage == MTC_SECRET__GET_REF )
-            {
-                wlog ( "%s getting secret reference timeout \n", host_uuid.c_str() );
-                it->second.stage = MTC_SECRET__GET_REF_FAIL ;
-                mtcTimer_reset( secret_timer );
-                mtcTimer_start( secret_timer, handler, SECRET_RETRY_DELAY );
-
-            }
-            if ( it->second.stage == MTC_SECRET__GET_PWD )
-            {
-                wlog ( "%s getting secret payload timeout \n", host_uuid.c_str() );
-                it->second.stage = MTC_SECRET__GET_PWD_FAIL ;
-                mtcTimer_reset( secret_timer );
-                mtcTimer_start( secret_timer, handler, SECRET_RETRY_DELAY );
-            }
-
+            it->second.stage = MTC_SECRET__START ;
+            mtcTimer_reset ( secret_timer );
+            mtcTimer_start ( secret_timer, handler, SECRET_RETRY_DELAY );
             httpUtil_free_conn ( event );
             httpUtil_free_base ( event );
+            break ;
         }
-    }
+
+        default:
+        {
+            it->second.stage = MTC_SECRET__START ;
+        }
+    } // switch
+
     return & it->second ;
 }
 
@@ -174,6 +285,7 @@ int secretUtil_get_secret ( libEvent & event,
                             string & hostname,
                             string & host_uuid )
 {
+    dlog ("%s get secret", hostname.c_str());
     httpUtil_event_init ( &event,
                           host_uuid,
                           "secretUtil_get_secret",
@@ -230,6 +342,7 @@ int secretUtil_read_secret ( libEvent & event,
                              string & hostname,
                              string & host_uuid )
 {
+    dlog ("%s read secret", hostname.c_str());
     httpUtil_event_init ( &event,
                           host_uuid,
                           "secretUtil_read_secret",
@@ -292,48 +405,53 @@ int secretUtil_handler ( libEvent & event )
     jsonUtil_secret_type json_info ;
 
     string hn = event.hostname ;
-    int    rc = event.status   ;
+
+    /* handler called */
+    event.active = false ;
 
     std::map<string, barbicanSecret_type>::iterator it;
     it = secretList.find( event.uuid );
     if ( it == secretList.end() )
     {
-        elog ("%s failed to find secret record\n", hn.c_str());
-        return ( rc ) ;
+        return 0 ;
     }
 
     if ( event.request == BARBICAN_GET_SECRET )
     {
         if ( event.status )
         {
-            elog ("%s failed to get secret - error code (%d) \n", hn.c_str(), event.status );
             it->second.stage = MTC_SECRET__GET_REF_FAIL;
-            return ( rc ) ;
+            elog ("%s failed to get secret ; %d\n", hn.c_str(), event.status) ;
+            return 0 ;
         }
-        rc = jsonUtil_secret_load ( event.uuid,
-                                    (char*)event.response.data(),
+        int rc = jsonUtil_secret_load ( event.uuid,
+                             (char*)event.response.data(),
                                     json_info );
         if ( rc != PASS )
         {
-            elog ( "%s failed to parse secret response (%s)\n",
-                   event.hostname.c_str(),
-                   event.response.c_str() );
-            event.status = FAIL_JSON_PARSE ;
             it->second.stage = MTC_SECRET__GET_REF_FAIL;
+            elog ("%s failed to parse secret response : %s (%d:%d)\n",
+                      hn.c_str(),
+                      event.response.c_str(),
+                      rc, event.status );
         }
         else
         {
             size_t pos = json_info.secret_ref.find_last_of( '/' );
             it->second.reference = json_info.secret_ref.substr( pos+1 );
+
             if ( it->second.reference.empty() )
             {
-                wlog ("%s no barbican secret reference found \n", hn.c_str() );
-                it->second.stage = MTC_SECRET__GET_PWD_RECV;
+                it->second.stage = MTC_SECRET__GET_REF_FAIL;
+                elog ("%s no barbican secret reference found : %s (%d)\n",
+                          hn.c_str(),
+                          event.response.c_str(),
+                          FAIL_OPERATION ) ;
             }
             else
             {
-                dlog ("%s barbican secret reference found \n", hn.c_str() );
                 it->second.stage = MTC_SECRET__GET_REF_RECV;
+                dlog ("%s barbican secret reference found\n", hn.c_str() ) ;
             }
         }
     }
@@ -341,22 +459,38 @@ int secretUtil_handler ( libEvent & event )
     {
         if ( event.status == HTTP_NOTFOUND )
         {
-            wlog ("%s no barbican secret payload found \n", hn.c_str() );
+            it->second.stage = MTC_SECRET__GET_PWD_FAIL;
+            elog ("%s no barbican secret payload found : %s (rc:%d:%d)\n",
+                      hn.c_str(),
+                      event.response.c_str(),
+                      event.status, FAIL_NOT_FOUND );
         }
         else if ( event.status != PASS )
         {
-            elog ("%s failed to read secret - error code (%d) \n", hn.c_str(), event.status );
-            it->second.stage = MTC_SECRET__GET_REF_FAIL;
-            return ( rc ) ;
+            it->second.stage = MTC_SECRET__GET_PWD_FAIL;
+            elog ("%s failed to read secret : %s (rc:%d)\n",
+                      hn.c_str(),
+                      event.response.c_str(),
+                      event.status );
         }
-
-        dlog ("%s barbican secret payload found \n", hn.c_str() );
-        it->second.payload = event.response;
-        it->second.stage = MTC_SECRET__GET_PWD_RECV;
+        else if ( event.response.empty() )
+        {
+            it->second.stage = MTC_SECRET__GET_PWD_FAIL;
+            wlog ("%s secret payload is empty (rc:%d)\n",
+                      hn.c_str(),
+                      FAIL_OPERATION ) ;
+        }
+        else
+        {
+            it->second.stage = MTC_SECRET__GET_PWD_RECV;
+            it->second.payload = event.response;
+            dlog ("%s secret payload : %s\n", hn.c_str(), event.response.c_str() );
+        }
     }
     else
     {
-        elog ("%s unsupported secret request (%d)\n", hn.c_str(), event.request );
+        slog ("%s unsupported secret request (rc:%d)\n", hn.c_str(), FAIL_BAD_CASE );
     }
-    return ( rc ) ;
+
+    return ( 0 ) ;
 }

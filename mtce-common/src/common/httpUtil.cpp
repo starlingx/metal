@@ -593,9 +593,16 @@ void httpUtil_handler ( struct evhttp_request *req, void *arg )
         goto httpUtil_handler_done ;
     }
 
+httpUtil_handler_done:
+
+    /* Some handlers perform state transitions even in failure path.
+     * Allow the service handler to run during done stage if only
+     * for fault handling.
+     * Failing to allow a handler to detect its faults can be problematic.
+     */
+
     if ( event_ptr->handler )
     {
-        // ilog ("%s calling event specific handler\n", event_ptr->log_prefix.c_str() );
         rc = event_ptr->handler ( (*event_ptr) ) ;
     }
     else
@@ -603,10 +610,6 @@ void httpUtil_handler ( struct evhttp_request *req, void *arg )
         slog ("%s no event handler bound in\n", event_ptr->log_prefix.c_str() );
         rc = event_ptr->status = FAIL_NULL_POINTER ;
     }
-
-httpUtil_handler_done:
-
-    // hlog2 ("%s Base:%p:%p Event:%p\n", event_ptr->log_prefix.c_str(), event_ptr->base, arg, event_ptr );
 
     keyValObject.del_key ((unsigned long)arg );
     event_ptr->active = false ;

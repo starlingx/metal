@@ -1232,11 +1232,11 @@ int hwmonHostClass::bmc_sensor_monitor ( struct hwmonHostClass::hwmon_host * hos
                         /* NOTE: This parsing method is not leaking memory ; verified ! */
 
                         json_bool status ;
-                        struct json_object * req_obj = (struct json_object *)(NULL) ;
                         struct json_object * raw_obj = json_tokener_parse( host_ptr->bmc_thread_info.data.data() );
                         if ( raw_obj )
                         {
                             /* Look for ... BMC_JSON__SENSOR_DATA_MESSAGE_HEADER */
+                            struct json_object * req_obj = (struct json_object *)(NULL) ;
                             status = json_object_object_get_ex ( raw_obj, BMC_JSON__SENSOR_DATA_MESSAGE_HEADER, &req_obj );
                             if (( status == true ) && req_obj )
                             {
@@ -1286,7 +1286,6 @@ int hwmonHostClass::bmc_sensor_monitor ( struct hwmonHostClass::hwmon_host * hos
                         }
 
                         if (raw_obj) json_object_put(raw_obj);
-                        if (req_obj) json_object_put(req_obj);
                     }
 
                     if ( host_ptr->bmc_thread_info.status )

@@ -96,6 +96,7 @@ void daemon_healthcheck ( const char * sig );
 void daemon_health_test ( void );
 
 bool daemon_is_file_present ( const char * filename );
+bool daemon_is_os_debian    ( void );
 int  daemon_get_rmem_max    ( void );
 
 typedef struct
