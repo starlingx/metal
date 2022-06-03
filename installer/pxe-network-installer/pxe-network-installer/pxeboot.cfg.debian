@@ -1,0 +1,40 @@
+serial 0 115200
+timeout 50
+default 4
+
+# Menu Configuration
+MENU WIDTH 80
+MENU MARGIN 10
+MENU PASSWORDMARGIN 3
+MENU ROWS 12
+MENU TABMSGROW 18
+MENU CMDLINEROW 18
+MENU ENDROW 24
+MENU PASSWORDROW 11
+MENU TIMEOUTROW 20
+MENU TITLE StarlingX Debian LAT / Kickstart Boot Menu
+
+label 0
+  menu label ^0) Boot from hard drive
+  menu default
+  COM32 chain.c32
+  APPEND hd0
+
+label 1
+  menu label ^1) Debian Controller Install
+  kernel xxxLAB_PXExxx/bzImage-std
+  append initrd=xxxLAB_PXExxx/initrd rdinit=/install defaultkernel=vmlinuz-*[!t]-amd64 instname=debian instbr=starlingx instab=0 traits=controller instdev=/dev/sda ks=xxxBASE_URLxxx/xxxLAB_FEEDxxx/kickstart.cfg insturl=xxxBASE_URLxxx/xxxLAB_FEEDxxx/ostree_repo console=ttyS0,115200 console=tty1 biosdevname=0 biosplusefi=1
+  ipappend 2
+
+label 2
+  menu label ^2) Debian All-in-one Install
+  kernel xxxLAB_PXExxx/bzImage-std
+  append initrd=xxxLAB_PXExxx/initrd rdinit=/install defaultkernel=vmlinuz-*[!t]-amd64 instname=debian instbr=starlingx instab=0 traits=controller,worker instdev=/dev/sda ks=xxxBASE_URLxxx/xxxLAB_FEEDxxx/kickstart.cfg insturl=xxxBASE_URLxxx/xxxLAB_FEEDxxx/ostree_repo console=ttyS0,115200 console=tty1 biosdevname=0 biosplusefi=1
+  ipappend 2
+
+label 3
+  menu label ^2) Debian All-in-one (lowlatency) Install
+  kernel xxxLAB_PXExxx/bzImage-rt
+  append initrd=xxxLAB_PATHxxx/initrd rdinit=/install defaultkernel=vmlinuz-*-rt-amd64 instname=debian instbr=starlingx instab=0 traits=controller,worker,lowlatency instdev=/dev/sda ks=xxxBASE_URLxxx/xxxLAB_FEEDxxx/kickstart.cfg insturl=xxxBASE_URLxxx/xxxLAB_FEEDxxx/ostree_repo console=ttyS0,115200 console=tty1 biosdevname=0 biosplusefi=1
+  ipappend 2
+
