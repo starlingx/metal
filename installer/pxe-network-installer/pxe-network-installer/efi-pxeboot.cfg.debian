@@ -15,17 +15,17 @@ menuentry '1) UEFI Boot from hard drive' {
 }
 
 menuentry '2) UEFI Debian Controller Install' {
-  linuxefi xxxLAB_PXExxx/bzImage-std rdinit=/install defaultkernel=vmlinuz-*[!t]-amd64 instname=debian instbr=starlingx instab=0 traits=controller BOOTIF=$net_default_mac instdev=/dev/sda ks=xxxBASE_URLxxx/xxxLAB_FEEDxxx/kickstart.cfg insturl=xxxBASE_URLxxx/xxxLAB_FEEDxxx/ostree_repo console=ttyS0,115200 console=tty1 biosdevname=0 biosplusefi=1
+  linuxefi xxxLAB_PXExxx/bzImage-std rdinit=/install defaultkernel=vmlinuz-*[!t]-amd64 instname=debian instbr=starlingx instab=0 traits=controller BOOTIF=$net_default_mac instdev=/dev/sda ks=xxxBASE_URLxxx/xxxLAB_FEEDxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/xxxLAB_FEEDxxx/ostree_repo console=ttyS0,115200 console=tty1 biosdevname=0 biosplusefi=1
   initrdefi xxxLAB_PXExxx/initrd
 }
 
 menuentry '3) UEFI Debian All-in-one Install' {
-  linuxefi xxxLAB_PXExxx/bzImage-std rdinit=/install defaultkernel=vmlinuz-*[!t]-amd64 instname=debian instbr=starlingx instab=0 traits=controller,worker BOOTIF=$net_default_mac instdev=/dev/sda ks=xxxBASE_URLxxx/xxxLAB_FEEDxxx/kickstart.cfg insturl=xxxBASE_URLxxx/xxxLAB_FEEDxxx/ostree_repo console=ttyS0,115200 console=tty1 biosdevname=0 biosplusefi=1
+  linuxefi xxxLAB_PXExxx/bzImage-std rdinit=/install defaultkernel=vmlinuz-*[!t]-amd64 instname=debian instbr=starlingx instab=0 traits=controller,worker BOOTIF=$net_default_mac instdev=/dev/sda ks=xxxBASE_URLxxx/xxxLAB_FEEDxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/xxxLAB_FEEDxxx/ostree_repo console=ttyS0,115200 console=tty1 biosdevname=0 biosplusefi=1
   initrdefi xxxLAB_PXExxx/initrd
 }
 
 menuentry '4) UEFI Debian All-in-one (lowlatency) Install' {
-  linuxefi xxxLAB_PXExxx/bzImage-rt rdinit=/install defaultkernel=vmlinuz-*-rt-amd64 instname=debian instbr=starlingx instab=0 traits=controller,worker,lowlatency efi=runtime BOOTIF=$net_default_mac instdev=/dev/sda ks=xxxBASE_URLxxx/xxxLAB_FEEDxxx/kickstart.cfg insturl=xxxBASE_URLxxx/xxxLAB_FEEDxxx/ostree_repo console=ttyS0,115200 console=tty1 biosdevname=0 biosplusefi=1
+  linuxefi xxxLAB_PXExxx/bzImage-rt rdinit=/install defaultkernel=vmlinuz-*-rt-amd64 instname=debian instbr=starlingx instab=0 traits=controller,worker,lowlatency efi=runtime BOOTIF=$net_default_mac instdev=/dev/sda ks=xxxBASE_URLxxx/xxxLAB_FEEDxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/xxxLAB_FEEDxxx/ostree_repo console=ttyS0,115200 console=tty1 biosdevname=0 biosplusefi=1
   initrdefi xxxLAB_PXExxx/initrd
 }
 
