@@ -1,6 +1,7 @@
+# default 20 second timout
+timeout 200
 serial 0 115200
-timeout 50
-default 4
+default xxxSYSTEMxxx
 
 # Menu Configuration
 MENU WIDTH 80
@@ -15,26 +16,48 @@ MENU TIMEOUTROW 20
 MENU TITLE StarlingX Debian LAT / Kickstart Boot Menu
 
 label 0
-  menu label ^0) Boot from hard drive
-  menu default
+  menu label Boot from hard drive
   COM32 chain.c32
   APPEND hd0
 
-label 1
-  menu label ^1) Debian Controller Install
-  kernel xxxLAB_PXExxx/bzImage-std
-  append initrd=xxxLAB_PXExxx/initrd rdinit=/install defaultkernel=vmlinuz-*[!t]-amd64 instname=debian instbr=starlingx instab=0 traits=controller instdev=/dev/sda ks=xxxBASE_URLxxx/xxxLAB_FEEDxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/xxxLAB_FEEDxxx/ostree_repo console=ttyS0,115200 console=tty1 biosdevname=0 biosplusefi=1
-  ipappend 2
+menu begin
+  menu title Debian Controller Install
+  label 1
+    menu label Serial Console
+    kernel xxxPXEBOOTxxx/bzImage-std
+    append initrd=xxxPXEBOOTxxx/initrd rdinit=/install defaultkernel=vmlinuz-*[!t]-amd64 instname=debian instbr=starlingx instab=0 traits=controller instdev=xxxINSTDEVxxx ks=xxxBASE_URLxxx/xxxFEEDxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/xxxFEEDxxx/ostree_repo console=ttyS0,115200 biosdevname=0 biosplusefi=1
+    ipappend 2
+  label 2
+    menu label Graphical Console
+    kernel xxxPXEBOOTxxx/bzImage-std
+    append initrd=xxxPXEBOOTxxx/initrd rdinit=/install defaultkernel=vmlinuz-*[!t]-amd64 instname=debian instbr=starlingx instab=0 traits=controller instdev=xxxINSTDEVxxx ks=xxxBASE_URLxxx/xxxFEEDxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/xxxFEEDxxx/ostree_repo console=tty1 biosdevname=0 biosplusefi=1
+    ipappend 2
+menu end
 
-label 2
-  menu label ^2) Debian All-in-one Install
-  kernel xxxLAB_PXExxx/bzImage-std
-  append initrd=xxxLAB_PXExxx/initrd rdinit=/install defaultkernel=vmlinuz-*[!t]-amd64 instname=debian instbr=starlingx instab=0 traits=controller,worker instdev=/dev/sda ks=xxxBASE_URLxxx/xxxLAB_FEEDxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/xxxLAB_FEEDxxx/ostree_repo console=ttyS0,115200 console=tty1 biosdevname=0 biosplusefi=1
-  ipappend 2
+menu begin
+  menu title Debian All-in-one Install
+  label 3
+    menu label Serial Console
+    kernel xxxPXEBOOTxxx/bzImage-std
+    append initrd=xxxPXEBOOTxxx/initrd rdinit=/install defaultkernel=vmlinuz-*[!t]-amd64 instname=debian instbr=starlingx instab=0 traits=controller,worker instdev=xxxINSTDEVxxx ks=xxxBASE_URLxxx/xxxFEEDxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/xxxFEEDxxx/ostree_repo console=ttyS0,115200 biosdevname=0 biosplusefi=1
+    ipappend 2
+  label 4
+    menu label Graphical Console
+    kernel xxxPXEBOOTxxx/bzImage-std
+    append initrd=xxxPXEBOOTxxx/initrd rdinit=/install defaultkernel=vmlinuz-*[!t]-amd64 instname=debian instbr=starlingx instab=0 traits=controller,worker instdev=xxxINSTDEVxxx ks=xxxBASE_URLxxx/xxxFEEDxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/xxxFEEDxxx/ostree_repo console=tty1 biosdevname=0 biosplusefi=1
+    ipappend 2
+menu end
 
-label 3
-  menu label ^2) Debian All-in-one (lowlatency) Install
-  kernel xxxLAB_PXExxx/bzImage-rt
-  append initrd=xxxLAB_PXExxx/initrd rdinit=/install defaultkernel=vmlinuz-*-rt-amd64 instname=debian instbr=starlingx instab=0 traits=controller,worker,lowlatency instdev=/dev/sda ks=xxxBASE_URLxxx/xxxLAB_FEEDxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/xxxLAB_FEEDxxx/ostree_repo console=ttyS0,115200 console=tty1 biosdevname=0 biosplusefi=1
-  ipappend 2
-
+menu begin
+  menu title Debian All-in-one (lowlatency) Install
+  label 5
+    menu label Serial Console
+    kernel xxxPXEBOOTxxx/bzImage-rt
+    append initrd=xxxPXEBOOTxxx/initrd rdinit=/install defaultkernel=vmlinuz-*-rt-amd64 instname=debian instbr=starlingx instab=0 traits=controller,worker,lowlatency instdev=xxxINSTDEVxxx ks=xxxBASE_URLxxx/xxxFEEDxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/xxxFEEDxxx/ostree_repo console=ttyS0,115200 biosdevname=0 biosplusefi=1
+    ipappend 2
+  label 6
+    menu label Graphical Console
+    kernel xxxPXEBOOTxxx/bzImage-rt
+    append initrd=xxxPXEBOOTxxx/initrd rdinit=/install defaultkernel=vmlinuz-*-rt-amd64 instname=debian instbr=starlingx instab=0 traits=controller,worker,lowlatency instdev=xxxINSTDEVxxx ks=xxxBASE_URLxxx/xxxFEEDxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/xxxFEEDxxx/ostree_repo console=tty1 biosdevname=0 biosplusefi=1
+    ipappend 2
+menu end
