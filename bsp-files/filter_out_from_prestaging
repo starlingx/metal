@@ -587,7 +587,6 @@ stx-snmp-helm
 stx-ssl
 stx-vault-helm
 stx-vault-helm-fluxcd
-sysinv-fpga-agent
 syslog-ng-config
 sysstat
 systemd
