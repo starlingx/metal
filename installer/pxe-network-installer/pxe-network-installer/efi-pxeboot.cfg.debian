@@ -1,31 +1,53 @@
+# default 20 second timeout
 timeout=20
-default=2
+default='xxxSYSTEMxxx'
 
 GRUB_HIDDEN_TIMEOUT=0
 GRUB_TIMEOUT_STYLE='countdown'
 
 menuentry 'StarlingX Debian LAT / Kickstart Boot Menu' {
-
    echo " "
-
 }
-menuentry '1) UEFI Boot from hard drive' {
+
+# Create a space in the menu
+menuentry ' ' {
+    echo " "
+}
+
+menuentry 'UEFI Boot from hard drive' --id=disk {
   search --set=root --label otaefi
   configfile /EFI/BOOT/grub.cfg
 }
 
-menuentry '2) UEFI Debian Controller Install' {
-  linuxefi xxxLAB_PXExxx/bzImage-std rdinit=/install defaultkernel=vmlinuz-*[!t]-amd64 instname=debian instbr=starlingx instab=0 traits=controller BOOTIF=$net_default_mac instdev=/dev/sda ks=xxxBASE_URLxxx/xxxLAB_FEEDxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/xxxLAB_FEEDxxx/ostree_repo console=ttyS0,115200 console=tty1 biosdevname=0 biosplusefi=1
-  initrdefi xxxLAB_PXExxx/initrd
+submenu 'UEFI Debian Controller Install' --id=standard {
+ menuentry 'Serial Console' --id=serial {
+    linuxefi xxxPXEBOOTxxx/bzImage-std rdinit=/install defaultkernel=vmlinuz-*[!t]-amd64 instname=debian instbr=starlingx instab=0 traits=controller BOOTIF=$net_default_mac instdev=xxxINSTDEVxxx ks=xxxBASE_URLxxx/xxxFEEDxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/xxxFEEDxxx/ostree_repo console=ttyS0,115200 biosdevname=0 biosplusefi=1
+    initrdefi xxxPXEBOOTxxx/initrd
+  }
+  menuentry 'Graphical Console' --id=graphical {
+    linuxefi xxxPXEBOOTxxx/bzImage-std rdinit=/install defaultkernel=vmlinuz-*[!t]-amd64 instname=debian instbr=starlingx instab=0 traits=controller BOOTIF=$net_default_mac instdev=xxxINSTDEVxxx ks=xxxBASE_URLxxx/xxxFEEDxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/xxxFEEDxxx/ostree_repo console=tty1 biosdevname=0 biosplusefi=1
+    initrdefi xxxPXEBOOTxxx/initrd
+  }
 }
 
-menuentry '3) UEFI Debian All-in-one Install' {
-  linuxefi xxxLAB_PXExxx/bzImage-std rdinit=/install defaultkernel=vmlinuz-*[!t]-amd64 instname=debian instbr=starlingx instab=0 traits=controller,worker BOOTIF=$net_default_mac instdev=/dev/sda ks=xxxBASE_URLxxx/xxxLAB_FEEDxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/xxxLAB_FEEDxxx/ostree_repo console=ttyS0,115200 console=tty1 biosdevname=0 biosplusefi=1
-  initrdefi xxxLAB_PXExxx/initrd
+submenu 'UEFI Debian All-in-one Install' --id=aio {
+  menuentry 'Serial Console' --id=serial {
+    linuxefi xxxPXEBOOTxxx/bzImage-std rdinit=/install defaultkernel=vmlinuz-*[!t]-amd64 instname=debian instbr=starlingx instab=0 traits=controller,worker BOOTIF=$net_default_mac instdev=xxxINSTDEVxxx ks=xxxBASE_URLxxx/xxxFEEDxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/xxxFEEDxxx/ostree_repo console=ttyS0,115200 biosdevname=0 biosplusefi=1
+    initrdefi xxxPXEBOOTxxx/initrd
+  }
+  menuentry 'Graphical Console' --id=graphical {
+    linuxefi xxxPXEBOOTxxx/bzImage-std rdinit=/install defaultkernel=vmlinuz-*[!t]-amd64 instname=debian instbr=starlingx instab=0 traits=controller,worker BOOTIF=$net_default_mac instdev=xxxINSTDEVxxx ks=xxxBASE_URLxxx/xxxFEEDxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/xxxFEEDxxx/ostree_repo console=tty1 biosdevname=0 biosplusefi=1
+    initrdefi xxxPXEBOOTxxx/initrd
+  }
 }
 
-menuentry '4) UEFI Debian All-in-one (lowlatency) Install' {
-  linuxefi xxxLAB_PXExxx/bzImage-rt rdinit=/install defaultkernel=vmlinuz-*-rt-amd64 instname=debian instbr=starlingx instab=0 traits=controller,worker,lowlatency efi=runtime BOOTIF=$net_default_mac instdev=/dev/sda ks=xxxBASE_URLxxx/xxxLAB_FEEDxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/xxxLAB_FEEDxxx/ostree_repo console=ttyS0,115200 console=tty1 biosdevname=0 biosplusefi=1
-  initrdefi xxxLAB_PXExxx/initrd
+submenu 'UEFI Debian All-in-one (lowlatency) Install' --id=aio-lowlat {
+  menuentry 'Serial Console' --id=serial {
+    linuxefi xxxPXEBOOTxxx/bzImage-rt rdinit=/install defaultkernel=vmlinuz-*-rt-amd64 instname=debian instbr=starlingx instab=0 traits=controller,worker,lowlatency efi=runtime BOOTIF=$net_default_mac instdev=xxxINSTDEVxxx ks=xxxBASE_URLxxx/xxxFEEDxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/xxxFEEDxxx/ostree_repo console=ttyS0,115200 biosdevname=0 biosplusefi=1
+    initrdefi xxxPXEBOOTxxx/initrd
+  }
+  menuentry 'Graphical Console' --id=graphical {
+    linuxefi xxxPXEBOOTxxx/bzImage-rt rdinit=/install defaultkernel=vmlinuz-*-rt-amd64 instname=debian instbr=starlingx instab=0 traits=controller,worker,lowlatency efi=runtime BOOTIF=$net_default_mac instdev=xxxINSTDEVxxx ks=xxxBASE_URLxxx/xxxFEEDxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/xxxFEEDxxx/ostree_repo console=tty1 biosdevname=0 biosplusefi=1
+    initrdefi xxxPXEBOOTxxx/initrd
+  }
 }
-
