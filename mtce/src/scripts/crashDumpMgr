@@ -1,16 +1,18 @@
 #!/bin/bash
 #
-# Copyright (c) 2020 Wind River Systems, Inc.
+# Copyright (c) 2022 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
+# Modify it that is to support the debian coredump file.
+# coredump files are dmesg.202206101633 and dump.202206101633 in Debian.
 
 CRASHDUMPMGR_TAG=${CRASHDUMPMGR_TAG:-"crashDumpMgr"}
 
 RETVAL=0
 
-max_size=3221225472       # "3GiB" in human readable
-min_remainder=1073741824  # "1GiB" in human readable
+max_size=3221225472       # "3GiB"
+min_remainder=1073741824  # "1GiB"
 
 # number format to/from human readable commands.
 NUMFMT_TO_HR="/usr/bin/numfmt --to=iec"
@@ -63,6 +65,7 @@ function manage_crash_dumps()
     FIRST_BUNDLE="${CRASH_BUNDLE_DIR}/vmcore_first.tar"
     FIRST_BUNDLE_ROTATED="${CRASH_BUNDLE_DIR}/vmcore_first.tar.1.gz"
     CRASH_BUNDLE_SUMMARY="vmcore-dmesg.txt"
+    CRASH_BUNDLE_SUMMARY_DEB="dmesg."
 
     # tar command and nice levels
     TAR_CMD="tar -cf"
@@ -81,16 +84,27 @@ function manage_crash_dumps()
     do
         remove_entry=false
         if [ -d "${entry}" ] ; then
+            time=${entry##*/}
+            if [ -e "${entry}/${CRASH_BUNDLE_SUMMARY_DEB}${time}" ] ; then
+                log "saving summary: ${CRASH_DIR}/$(basename ${time})_${CRASH_BUNDLE_SUMMARY_DEB}${time}"
+
+                # save the crash dump dmesg.<date> for debian for all crash dumps
+                cp -a ${entry}/${CRASH_BUNDLE_SUMMARY_DEB}${time} ${CRASH_DIR}/$(basename ${time})_${CRASH_BUNDLE_SUMMARY_DEB}${time}
+            fi
             if [ -e "${entry}/${CRASH_BUNDLE_SUMMARY}" ] ; then
                 log "saving summary: ${CRASH_DIR}/$(basename ${entry})_${CRASH_BUNDLE_SUMMARY}"
 
                 # save the crash dump vmcore summary for all crash dumps
                 cp -a ${entry}/${CRASH_BUNDLE_SUMMARY} ${CRASH_DIR}/$(basename ${entry})_${CRASH_BUNDLE_SUMMARY}
             fi
-            if [ -e "${entry}/vmcore" ] ; then
+            if [ -e "${entry}/dump.${time}" ] || [ -e "${entry}/vmcore" ] ; then
 
                 # get the size of this vmcore file ; raw and human readable
-                vmcore_size=$(stat --format='%s' ${entry}/vmcore)
+                if [ -e "${entry}/dump.${time}" ] ; then
+                    vmcore_size=$(stat --format='%s' ${entry}/dump.${time})
+                else
+                    vmcore_size=$(stat --format='%s' ${entry}/vmcore)
+                fi
                 vmcore_size_hr=$(${NUMFMT_TO_HR} ${vmcore_size})
 
                 # get available ${CRASH_BUNDLE_DIR} fs space in 1k blocks and convert that to bytes
@@ -133,14 +147,14 @@ function manage_crash_dumps()
                     log "deleting oversize (${vmcore_size_hr}) vmcore file $(basename ${entry})"
                     remove_entry=true
                 fi
-            elif [[ "$entry" == *"_vmcore-dmesg.txt"* ]] ; then
+            elif [[ "$entry" == *"_dmesg."* ]] || [[ "$entry" == *"_vmcore-dmesg.txt"* ]] ; then
                 log "saved old $entry summary"
             elif [[ "$entry" != "$CRASH_DIR/*"  ]] ; then
                 # removes vmcore files not named properly
                 # i.e vmcore.incomplete
                 remove_entry=true
             fi
-        elif [[ "$entry" != *"_vmcore-dmesg.txt"* ]] ; then
+        elif [[ "$entry" != *"_dmesg."* ]] && [[ "$entry" != *"_vmcore-dmesg.txt"* ]] ; then
             # removes files in /var/crash that are not crash dumps related
             remove_entry=true
         fi
