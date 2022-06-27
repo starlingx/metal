@@ -19,8 +19,8 @@ NOCOMPLETE 1
 ALLOWOPTIONS 0
 
 LABEL 1
-  MENU LABEL ^1) Worker
+  MENU LABEL Worker
   MENU DEFAULT
-  KERNEL rel-xxxSW_VERSIONxxx/installer-bzImage
-  APPEND initrd=rel-xxxSW_VERSIONxxx/installer-initrd rdinit=/install traits=worker instname=debian instsh=0 instab=0 instw=10 instbr=starlingx ks=xxxBASE_URLxxx/feed/rel-xxxSW_VERSIONxxx/kickstart.cfg insturl=xxxBASE_URLxxx/feed/rel-xxxSW_VERSIONxxx/ostree_repo console=ttyS0,115200 console=tty1 biosdevname=0 net.ifnames=0 biosplusefi=1 xxxAPPEND_OPTIONSxxx
+  KERNEL rel-xxxSW_VERSIONxxx/bzImage-std
+  APPEND initrd=rel-xxxSW_VERSIONxxx/initrd rdinit=/install defaultkernel=vmlinuz-*[!t]-amd64 traits=worker instname=debian instbr=starlingx instsh=0 instab=0 ks=xxxBASE_URLxxx/feed/rel-xxxSW_VERSIONxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/feed/rel-xxxSW_VERSIONxxx/ostree_repo console=ttyS0,115200 console=tty1 biosdevname=0 biosplusefi=1 xxxAPPEND_OPTIONSxxx
   IPAPPEND 2
