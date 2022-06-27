@@ -3,7 +3,10 @@
     <version>xxxSW_VERSIONxxx</version>
     <supported_upgrades>
         <upgrade>
-            <version>21.12</version>
+            <!-- either add multiple <version> elements or
+                 use comma separated version list in version
+                 element for multiple upgrade from versions -->
+            <version>22.06</version>
         </upgrade>
     </supported_upgrades>
 </build>
