@@ -9,6 +9,7 @@ export platform_release="$(shell grep SW_VERSION /usr/include/build_info.h | cut
 
 override_dh_auto_configure:
 	sed -i s/xxxPLATFORM_RELEASExxx/$(platform_release)/g kickstart.cfg
+	sed -i s/xxxPLATFORM_RELEASExxx/$(platform_release)/g miniboot.cfg
 	dh_auto_configure
 
 override_dh_install:
@@ -16,4 +17,5 @@ override_dh_install:
 	install -p -D -m 700 kickstart.cfg $(ROOT)/var/www/pages/feed/rel-${platform_release}
 	install -d -m 755 $(ROOT)/var/pxeboot
 	install -p -D -m 700 menu.c32 $(ROOT)/var/pxeboot
+	install -p -D -m 700 miniboot.cfg $(ROOT)/var/www/pages/feed/rel-${platform_release}
 	dh_install
