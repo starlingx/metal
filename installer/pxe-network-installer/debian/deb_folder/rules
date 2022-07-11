@@ -17,11 +17,6 @@ override_dh_install:
 	install -v -d -m 755 $(ROOT)/var/pxeboot/rel-${platform_release}
 	install -v -d -m 755 $(ROOT)/usr/share/licenses/pxe-network-installer-1.0.0
 
-	# Review Note: The actual kernel and initrd files will be added later
-	# Pull in the kernel and initrd and add installer links.
-	ln -sf bzImage $(ROOT)/var/pxeboot/rel-${platform_release}/installer-bzImage
-	ln -sf initrd $(ROOT)/var/pxeboot/rel-${platform_release}/installer-initrd
-
 	# Add grub links
 	install -v -m 644 default              $(ROOT)/var/pxeboot/pxelinux.cfg.files/default
 	install -v -m 644 default.static       $(ROOT)/var/pxeboot/pxelinux.cfg.files/default.static
