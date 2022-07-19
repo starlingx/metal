@@ -1,0 +1,15 @@
+#!/usr/bin/make -f
+
+# export DH_VERBOSE = 1
+export ROOT=$(CURDIR)/debian/tmp
+
+%:
+	dh $@
+
+override_dh_install:
+	install -v -d -m 755 $(ROOT)/opt/upgrades
+
+	install -p -D -m 700 import.sh $(ROOT)/opt/upgrades/import.sh
+	install -p -D -m 600 metadata.xml $(ROOT)/opt/upgrades/metadata.xml
+
+	dh_install
