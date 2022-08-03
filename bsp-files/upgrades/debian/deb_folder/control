@@ -1,0 +1,15 @@
+Source: platform-upgrades
+Section: admin
+Priority: optional
+Maintainer: StarlingX Developers <starlingx-discuss@lists.starlingx.io>
+Build-Depends: debhelper-compat (= 13),
+ expect,
+Standards-Version: 4.5.1
+Homepage: https://www.starlingx.io
+
+Package: platform-upgrades
+Architecture: any
+Depends: ${misc:Depends}, ${shlibs:Depends}
+Description: StarlingX Platform Upgrades Package
+ The StarlingX platform upgrades package contains upgrade metadata files and utility scripts.
+
