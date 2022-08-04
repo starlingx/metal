@@ -82,12 +82,12 @@ else
     cp -p ${CURRENT_FEED_DIR}/install_uuid ${FEED_DIR}/
 
     if [ -d ${ISO_DIR}/patches ]; then
-        mkdir -p /www/pages/updates/rel-${VERSION}
-        cp -r ${ISO_DIR}/patches/Packages ${ISO_DIR}/patches/repodata /www/pages/updates/rel-${VERSION}/
+        mkdir -p /var/www/pages/updates/rel-${VERSION}
+        cp -r ${ISO_DIR}/patches/Packages ${ISO_DIR}/patches/repodata /var/www/pages/updates/rel-${VERSION}/
         rsync -ac ${ISO_DIR}/patches/metadata/ /opt/patching/metadata/
         mkdir -p /opt/patching/packages/${VERSION}
 
-        find /www/pages/updates/rel-${VERSION}/Packages -name '*.rpm' \
+        find /var/www/pages/updates/rel-${VERSION}/Packages -name '*.rpm' \
             | xargs --no-run-if-empty -I files cp --preserve=all files /opt/patching/packages/${VERSION}/
     fi
 
