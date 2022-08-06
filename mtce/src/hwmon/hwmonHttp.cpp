@@ -1660,14 +1660,11 @@ int hwmonHttp_add_sensor (    string & hostname,
     event.payload.append ("\",\"audit_interval\":") ;
     event.payload.append ("0");
 
-    if ( daemon_is_os_debian () == false )
-    {
-        event.payload.append (",\"suppress\":\"") ;
-        if ( sensor.suppress == true )
-            event.payload.append ("True\"");
-        else
-            event.payload.append ("False\"");
-    }
+    event.payload.append (",\"suppress\":\"") ;
+    if ( sensor.suppress == true )
+        event.payload.append ("True\"");
+    else
+        event.payload.append ("False\"");
 
     event.payload.append ("}");
 
@@ -1846,14 +1843,11 @@ int hwmonHttp_add_group ( string & hostname,
     event.payload.append ("\",\"audit_interval_group\":") ;
     event.payload.append (itos(sensor_group.group_interval));
 
-    if ( daemon_is_os_debian () == false )
-    {
-        event.payload.append (",\"suppress\":\"") ;
-        if ( sensor_group.suppress == true )
-            event.payload.append ("True\"");
-        else
-            event.payload.append ("False\"");
-    }
+    event.payload.append (",\"suppress\":\"") ;
+    if ( sensor_group.suppress == true )
+        event.payload.append ("True\"");
+    else
+        event.payload.append ("False\"");
 
     event.payload.append ("}");
 
