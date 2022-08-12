@@ -464,7 +464,6 @@ python2-pankoclient
 python2-pecan
 python2-rsa
 python2-ruamel-yaml
-python2-ryu
 python2-setuptools
 python2-six
 python2-uwiftclient
@@ -535,7 +534,6 @@ python-pycurl
 python-pytz
 python-pyudev
 python-pyudev
-python-ryu-common
 python-slip
 python-slip-dbus
 python-swiftclient
