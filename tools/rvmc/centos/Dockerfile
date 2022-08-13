@@ -7,4 +7,3 @@ COPY rvmc.py /usr/local/bin
 ENV debug=0
 ENV target=None
 ENTRYPOINT /usr/local/bin/rvmc.py --target $target --debug $debug
-
