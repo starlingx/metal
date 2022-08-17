@@ -112,7 +112,7 @@ override_dh_auto_install:
 	install -m 644 -p -D pmon/scripts/acpid.conf $(PMONDIR)/acpid.conf
 	install -m 644 -p -D pmon/scripts/sshd.conf $(PMONDIR)/sshd.conf
 	install -m 644 -p -D pmon/scripts/syslog-ng.conf $(PMONDIR)/syslog-ng.conf
-	install -m 644 -p -D pmon/scripts/nslcd.conf $(PMONDIR)/nslcd.conf
+	install -m 644 -p -D pmon/scripts/sssd.conf $(PMONDIR)/sssd.conf
 	install -m 644 -p -D fsmon/scripts/fsmon.conf $(PMONDIR)/fsmon.conf
 	install -m 644 -p -D scripts/mtclogd.conf $(PMONDIR)/mtclogd.conf
 	install -m 644 -p -D alarm/scripts/mtcalarm.pmon.conf $(PMONDIR)/mtcalarm.conf
