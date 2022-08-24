@@ -1,5 +1,6 @@
+debian/systemd/00-mtce-control.preset etc/systemd/system-preset
+lib/systemd/system/hbsAgent.service
 etc/init.d/goenabledControl
 etc/init.d/hbsAgent
 etc/pmon.d/hbsAgent.conf
-lib/systemd/system/hbsAgent.service
-debian/systemd/00-mtce-control.preset etc/systemd/system-preset
+usr/share/starlingx/pmon.d/hbsAgent.conf

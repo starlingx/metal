@@ -3,3 +3,4 @@ etc/logrotate.d/lmon.logrotate
 etc/mtc/lmond.conf
 etc/pmon.d/lmon.conf
 usr/local/bin/lmond
+usr/share/starlingx/pmon.d/lmon.conf

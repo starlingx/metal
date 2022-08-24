@@ -44,3 +44,12 @@ usr/sbin/dmemchk.sh
 usr/sbin/fsync
 usr/share/mtce/hwclock.service
 usr/share/mtce/hwclock.sh
+usr/share/starlingx/pmon.d/acpid.conf
+usr/share/starlingx/pmon.d/fsmon.conf
+usr/share/starlingx/pmon.d/hbsClient.conf
+usr/share/starlingx/pmon.d/mtcClient.conf
+usr/share/starlingx/pmon.d/mtcalarm.conf
+usr/share/starlingx/pmon.d/mtclogd.conf
+usr/share/starlingx/pmon.d/sssd.conf
+usr/share/starlingx/pmon.d/sshd.conf
+usr/share/starlingx/pmon.d/syslog-ng.conf

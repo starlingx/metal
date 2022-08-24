@@ -2,6 +2,7 @@
 # export DH_VERBOSE = 1
 
 export ROOT = debian/tmp
+export PMONDIR = usr/share/starlingx/pmon.d
 
 %:
 	dh $@
@@ -12,6 +13,9 @@ override_dh_auto_install:
 		_unitdir=/lib/systemd/system \
 		_datarootdir=/usr/share \
 		install
+
+	install -m 644 -p -D scripts/hbsAgent.conf $(ROOT)/$(PMONDIR)/hbsAgent.conf
+
 	dh_install
 
 override_dh_installsystemd:
