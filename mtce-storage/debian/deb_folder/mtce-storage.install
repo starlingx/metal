@@ -1,3 +1,2 @@
 etc/init.d/goenabledStorage
 lib/systemd/system/goenabled-storage.service
-debian/systemd/00-mtce-storage.preset etc/systemd/systemd-preset
