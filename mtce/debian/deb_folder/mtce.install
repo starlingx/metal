@@ -24,7 +24,7 @@ etc/pmon.d/hbsClient.conf
 etc/pmon.d/mtcClient.conf
 etc/pmon.d/mtcalarm.conf
 etc/pmon.d/mtclogd.conf
-etc/pmon.d/nslcd.conf
+etc/pmon.d/sssd.conf
 etc/pmon.d/sshd.conf
 etc/pmon.d/syslog-ng.conf
 etc/services.d/controller/mtcTest
