@@ -42,7 +42,6 @@
 # sm-api                          restart PASSED [8896]:[8460]
 # skipping 'sm' process
 # sm-eru                          restart PASSED [8904]:[10993]
-# sm-watchdog                     restart PASSED [8695]:[14621]
 # skipping 'sshd' process
 # sw-patch-agent                  restart PASSED [2740]:[17461]
 # sw-patch-controller-daemon      restart PASSED [2558]:[21336]
