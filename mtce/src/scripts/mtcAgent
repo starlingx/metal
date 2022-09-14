@@ -337,12 +337,6 @@ mtcAgent_start () {
         RUN_OPT_DEBUG=""
     fi
 
-    if [ ${OCF_RESKEY_mode} = "passive" ] ; then
-        RUN_OPT_MODE="-p"
-    else
-        RUN_OPT_MODE=""
-    fi
-
     if [ ${OCF_RESKEY_logging} = "true" ] ; then
         RUN_OPT_LOG="-l"
     else
@@ -353,7 +347,7 @@ mtcAgent_start () {
     pid=""
 
     # Try to Start the daemon
-    ${mydaemon} ${RUN_OPT_STATE} ${RUN_OPT_LOG} ${RUN_OPT_MODE} ${RUN_OPT_DEBUG}
+    ${mydaemon} ${RUN_OPT_STATE} ${RUN_OPT_LOG} ${RUN_OPT_DEBUG}
     rc=$?
 
     # verify it was started and set return code appropriately
