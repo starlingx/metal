@@ -9,14 +9,13 @@ export OCFPLATFORMDIR = $(ROOT)/usr/lib/ocf/resource.d/platform
 export SBINDIR = $(ROOT)/usr/sbin
 export LOCAL_SBINDIR = $(ROOT)/usr/local/sbin
 export UNITDIR = $(ROOT)/lib/systemd/system
-export PMONDIR_1 = $(ROOT)/usr/share/starlingx/pmon.d
+export PMONDIR = $(ROOT)/usr/share/starlingx/pmon.d
 
 export SYSCONFDIR = $(ROOT)/etc
 export BMCCONFDIR = $(SYSCONFDIR)/bmc/server_profiles.d
 export COLLECTDIR = $(SYSCONFDIR)/collect.d
 export INITDIR =$(SYSCONFDIR)/init.d
 export LOGDIR = $(SYSCONFDIR)/logrotate.d
-export PMONDIR_2 = $(SYSCONFDIR)/pmon.d
 export SERVICESDIR = $(SYSCONFDIR)/services.d
 
 export DEB_VERSION = $(shell dpkg-parsechangelog | egrep '^Version:' | cut -f 2 -d ' ')
@@ -107,30 +106,17 @@ override_dh_auto_install:
 	install -m 755 -p -D scripts/dmemchk.sh $(SBINDIR)
 
 	# Process monitor config files
-	install -m 755 -d $(PMONDIR_1)
-	install -m 644 -p -D scripts/mtcClient.conf $(PMONDIR_1)/mtcClient.conf
-	install -m 644 -p -D scripts/hbsClient.conf $(PMONDIR_1)/hbsClient.conf
-	install -m 644 -p -D pmon/scripts/acpid.conf $(PMONDIR_1)/acpid.conf
-	install -m 644 -p -D pmon/scripts/sshd.conf $(PMONDIR_1)/sshd.conf
-	install -m 644 -p -D pmon/scripts/syslog-ng.conf $(PMONDIR_1)/syslog-ng.conf
-	install -m 644 -p -D pmon/scripts/sssd.conf $(PMONDIR_1)/sssd.conf
-	install -m 644 -p -D fsmon/scripts/fsmon.conf $(PMONDIR_1)/fsmon.conf
-	install -m 644 -p -D scripts/mtclogd.conf $(PMONDIR_1)/mtclogd.conf
-	install -m 644 -p -D alarm/scripts/mtcalarm.pmon.conf $(PMONDIR_1)/mtcalarm.conf
-	install -m 644 -p -D lmon/scripts/lmon.pmon.conf $(PMONDIR_1)/lmon.conf
-
-	# Process monitor config files - temporary duplicate of pmon.d files
-	install -m 755 -d $(PMONDIR_2)
-	install -m 644 -p -D scripts/mtcClient.conf $(PMONDIR_2)/mtcClient.conf
-	install -m 644 -p -D scripts/hbsClient.conf $(PMONDIR_2)/hbsClient.conf
-	install -m 644 -p -D pmon/scripts/acpid.conf $(PMONDIR_2)/acpid.conf
-	install -m 644 -p -D pmon/scripts/sshd.conf $(PMONDIR_2)/sshd.conf
-	install -m 644 -p -D pmon/scripts/syslog-ng.conf $(PMONDIR_2)/syslog-ng.conf
-	install -m 644 -p -D pmon/scripts/sssd.conf $(PMONDIR_2)/sssd.conf
-	install -m 644 -p -D fsmon/scripts/fsmon.conf $(PMONDIR_2)/fsmon.conf
-	install -m 644 -p -D scripts/mtclogd.conf $(PMONDIR_2)/mtclogd.conf
-	install -m 644 -p -D alarm/scripts/mtcalarm.pmon.conf $(PMONDIR_2)/mtcalarm.conf
-	install -m 644 -p -D lmon/scripts/lmon.pmon.conf $(PMONDIR_2)/lmon.conf
+	install -m 755 -d $(PMONDIR)
+	install -m 644 -p -D scripts/mtcClient.conf $(PMONDIR)/mtcClient.conf
+	install -m 644 -p -D scripts/hbsClient.conf $(PMONDIR)/hbsClient.conf
+	install -m 644 -p -D pmon/scripts/acpid.conf $(PMONDIR)/acpid.conf
+	install -m 644 -p -D pmon/scripts/sshd.conf $(PMONDIR)/sshd.conf
+	install -m 644 -p -D pmon/scripts/syslog-ng.conf $(PMONDIR)/syslog-ng.conf
+	install -m 644 -p -D pmon/scripts/sssd.conf $(PMONDIR)/sssd.conf
+	install -m 644 -p -D fsmon/scripts/fsmon.conf $(PMONDIR)/fsmon.conf
+	install -m 644 -p -D scripts/mtclogd.conf $(PMONDIR)/mtclogd.conf
+	install -m 644 -p -D alarm/scripts/mtcalarm.pmon.conf $(PMONDIR)/mtcalarm.conf
+	install -m 644 -p -D lmon/scripts/lmon.pmon.conf $(PMONDIR)/lmon.conf
 
 	# Log rotation
 	install -m 755 -d $(LOGDIR)

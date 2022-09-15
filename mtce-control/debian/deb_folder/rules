@@ -12,9 +12,8 @@ override_dh_auto_install:
 		_sysconfdir=/etc \
 		_unitdir=/lib/systemd/system \
 		_datarootdir=/usr/share \
+		PMONDIR=$(PMONDIR) \
 		install
-
-	install -m 644 -p -D scripts/hbsAgent.conf $(ROOT)/$(PMONDIR)/hbsAgent.conf
 
 	dh_install
 
