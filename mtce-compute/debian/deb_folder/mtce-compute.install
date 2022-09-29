@@ -1,4 +1,3 @@
 etc/goenabled.d/virt-support-goenabled.sh
 etc/init.d/goenabledWorker
 lib/systemd/system/goenabled-worker.service
-debian/systemd/00-mtce-compute.preset etc/systemd/system-preset
