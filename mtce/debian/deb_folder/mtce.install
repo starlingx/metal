@@ -18,15 +18,6 @@ etc/mtc.conf
 etc/mtc.ini
 etc/mtc/fsmond.conf
 etc/mtc/tmp
-etc/pmon.d/acpid.conf
-etc/pmon.d/fsmon.conf
-etc/pmon.d/hbsClient.conf
-etc/pmon.d/mtcClient.conf
-etc/pmon.d/mtcalarm.conf
-etc/pmon.d/mtclogd.conf
-etc/pmon.d/sssd.conf
-etc/pmon.d/sshd.conf
-etc/pmon.d/syslog-ng.conf
 etc/services.d/controller/mtcTest
 etc/services.d/storage/mtcTest
 etc/services.d/worker/mtcTest

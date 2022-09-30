@@ -4,7 +4,7 @@ SOURCE3 = hbsAgent
 SOURCE4 = hbsAgent.conf
 SOURCE5 = hbsAgent.service
 
-local_etc_pmond = $(_sysconfdir)/pmon.d
+PMONDIR ?= $(_sysconfdir)/pmon.d
 local_etc_goenabledd = $(_sysconfdir)/goenabled.d
 
 .PHONY: default
@@ -21,12 +21,11 @@ install:
 	install -m 755 -p -D scripts/$(SOURCE3) $(buildroot)/$(_sysconfdir)/init.d/hbsAgent
 
 	# Controller-Only Process Monitor Config files
-	install -m 755 -d $(buildroot)/$(local_etc_pmond)
-	install -m 644 -p -D scripts/$(SOURCE4) $(buildroot)/$(local_etc_pmond)/hbsAgent.conf
+	install -m 755 -d $(buildroot)/$(PMONDIR)
+	install -m 644 -p -D scripts/$(SOURCE4) $(buildroot)/$(PMONDIR)/hbsAgent.conf
 
 	# Controller-Only Heartbeat Service file
 	install -m 644 -p -D scripts/$(SOURCE5) $(buildroot)/$(_unitdir)/hbsAgent.service
 
 	# Controller-Only Go Enabled Test
 	install -m 755 -d $(buildroot)/$(local_etc_goenabledd)
-
