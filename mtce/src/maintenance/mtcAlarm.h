@@ -29,7 +29,6 @@ typedef enum
     MTC_ALARM_ID__CONFIG,
     MTC_ALARM_ID__ENABLE,
     MTC_ALARM_ID__BM,
-    MTC_ALARM_ID__CH_CONT, /* Combo Host Controller Failure - with Active Compute */
     MTC_ALARM_ID__CH_COMP, /* Combo Host Compute Failure - on last Controller     */
 
     MTC_LOG_ID__EVENT,

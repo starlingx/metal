@@ -36,7 +36,6 @@
 #define CLSTR_HB_ALARM_ID    ((const char *)"200.009")
 #define BM_ALARM_ID          ((const char *)"200.010")
 #define CONFIG_ALARM_ID      ((const char *)"200.011")
-#define CH_CONT_ALARM_ID     ((const char *)"200.012") /* Combo Host Controller Failure - with Active Compute */
 #define CH_COMP_ALARM_ID     ((const char *)"200.013") /* Combo Host Compute Failure - on last Controller     */
 #define SENSORCFG_ALARM_ID   ((const char *)"200.014") /* Sensor configuration alarm ; i.e. could not add     */
 #define SENSORGROUP_ALARM_ID ((const char *)"200.015") /* Sensor Group Read Error                             */
