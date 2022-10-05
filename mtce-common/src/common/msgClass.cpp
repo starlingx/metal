@@ -1129,3 +1129,51 @@ int msgClassTx::initSocket()
     }
     return PASS;
 }
+
+/**
+ * Used to validate and distinguish between IPV4 and IPV6 addresses.
+ *
+ * @return PF_UNSPEC for unknown IP address format
+ *         AF_INET for IPV4 addresses
+ *         AF_INET6 for IPV6 addresses
+ */
+int get_address_ai_family ( const char * addr_ptr )
+{
+    if ( addr_ptr == NULL )
+    {
+        slog ("null string pointer");
+        return ( PF_UNSPEC );
+    }
+
+    struct addrinfo *res = NULL;
+    struct addrinfo hint ;
+    MEMSET_ZERO ( hint);
+
+    hint.ai_family = PF_UNSPEC;
+    hint.ai_flags = AI_NUMERICHOST;
+
+    if ( getaddrinfo(addr_ptr, NULL, &hint, &res) )
+    {
+        wlog ("Invalid address: %s", addr_ptr );
+        return ( PF_UNSPEC );
+    }
+
+    int ai_family = res->ai_family ;
+    freeaddrinfo(res);
+
+    if ( ai_family == AF_INET )
+    {
+        dlog1 ("%s is an ipv4 address\n", addr_ptr );
+    }
+    else if ( ai_family == AF_INET6 )
+    {
+        dlog1 ("%s is an ipv6 address\n", addr_ptr );
+    }
+    else
+    {
+        slog ("unknown address format: %s ; ai_family:%d\n",
+               addr_ptr, ai_family );
+        ai_family = PF_UNSPEC ;
+    }
+    return (ai_family) ;
+}

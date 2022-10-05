@@ -160,7 +160,7 @@ using namespace std;
 
 #define THREAD_INIT_SIG     (0xbabef00d)
 #define MAX_PTHREADS                 (1) /* max number concurrent pthreads  */
-#define DEFAULT_THREAD_TIMEOUT_SECS (60) /* default pthread exec timout     */
+#define DEFAULT_THREAD_TIMEOUT_SECS (100) /* default pthread exec timout     */
 #define MAX_LOG_PREFIX_LEN          (MAX_CHARS_ON_LINE)
 #define THREAD_POST_KILL_WAIT       (10) /* wait time between KILL and IDLE */
 

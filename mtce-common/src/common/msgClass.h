@@ -213,4 +213,7 @@ private:
     int initSocket();
 };
 
+/* Used to validate and distinguish between IPV4 and IPV6 addresses */
+int get_address_ai_family ( const char * addr_ptr );
+
 #endif /* __INCLUDE_MSGCLASS_H__ */
