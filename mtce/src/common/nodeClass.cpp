@@ -9133,12 +9133,11 @@ void nodeLinkClass::mem_log_mtcalive ( struct nodeLinkClass::node * node_ptr )
 void nodeLinkClass::mem_log_alarm1 ( struct nodeLinkClass::node * node_ptr )
 {
     char str[MAX_MEM_LOG_DATA] ;
-    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tAlarm List:%s%s%s%s%s%s\n",
+    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tAlarm List:%s%s%s%s%s\n",
                node_ptr->hostname.c_str(),
                node_ptr->alarms[MTC_ALARM_ID__LOCK    ] ? " Locked"   : " .",
                node_ptr->alarms[MTC_ALARM_ID__CONFIG  ] ? " Config"   : " .",
                node_ptr->alarms[MTC_ALARM_ID__ENABLE  ] ? " Enable"   : " .",
-               node_ptr->alarms[MTC_ALARM_ID__CH_CONT ] ? " Control"  : " .",
                node_ptr->alarms[MTC_ALARM_ID__CH_COMP ] ? " Compute"  : " .",
                node_ptr->alarms[MTC_ALARM_ID__BM      ] ? " Brd Mgmt" : " .");
     mem_log (str);

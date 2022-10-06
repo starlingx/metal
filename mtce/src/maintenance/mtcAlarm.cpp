@@ -155,36 +155,6 @@ void mtcAlarm_init ( void )
     snprintf( ptr->alarm.proposed_repair_action, FM_MAX_BUFFER_LENGTH,
               "Check Host's board management config and connectivity.");
 
-    /** Init Controller Failure Alarm Entry **********************************/
-
-    ptr = &alarm_list[MTC_ALARM_ID__CH_CONT];
-    memset  (&ptr->alarm, 0, (sizeof(SFmAlarmDataT)));
-    snprintf(&ptr->alarm.alarm_id[0], FM_MAX_BUFFER_LENGTH, "%s", CH_CONT_ALARM_ID);
-
-    ptr->name = "Controller Function" ;
-    ptr->instc_prefix = "" ;
-
-    ptr->critl_reason =
-    ptr->major_reason =
-    ptr->minor_reason = "controller function has in-service failure while compute services "
-                        "remain healthy.";
-    ptr->clear_reason = "controller function has recovered";
-
-    ptr->alarm.alarm_type         = FM_ALARM_OPERATIONAL;
-    ptr->alarm.probable_cause     = FM_ALARM_APP_SUBSYS_FAILURE ;
-    ptr->alarm.inhibit_alarms     = FM_FALSE ;
-    ptr->alarm.service_affecting  = FM_TRUE  ;
-    ptr->alarm.suppression        = FM_TRUE  ;
-
-    ptr->alarm.severity           = FM_ALARM_SEVERITY_CLEAR ; /* Dynamic */
-    ptr->alarm.alarm_state        = FM_ALARM_STATE_CLEAR    ; /* Dynamic */
-
-    snprintf (ptr->alarm.proposed_repair_action, FM_MAX_BUFFER_LENGTH,
-              "Lock and then Unlock host to recover. "
-              "Avoid using 'Force Lock' action as that will impact compute services "
-              "running on this host. If lock action fails then contact next level "
-              "of support to investigate and recover.");
-
     /** Init Compute Failure Alarm Entry *************************************/
 
     ptr = &alarm_list[MTC_ALARM_ID__CH_COMP];
@@ -344,7 +314,6 @@ string _getIdentity ( mtc_alarm_id_enum id )
         case MTC_ALARM_ID__CONFIG:    return (CONFIG_ALARM_ID);
         case MTC_ALARM_ID__ENABLE:    return (ENABLE_ALARM_ID);
         case MTC_ALARM_ID__BM:        return (BM_ALARM_ID);
-        case MTC_ALARM_ID__CH_CONT:   return (CH_CONT_ALARM_ID);
         case MTC_ALARM_ID__CH_COMP:   return (CH_COMP_ALARM_ID);
         case MTC_LOG_ID__EVENT:       return (EVENT_LOG_ID);
         case MTC_LOG_ID__COMMAND:     return (COMMAND_LOG_ID);
@@ -466,7 +435,6 @@ void nodeLinkClass::mtcAlarm_audit ( struct nodeLinkClass::node * node_ptr )
         else if (( id == MTC_ALARM_ID__CONFIG ) ||
                  ( id == MTC_ALARM_ID__ENABLE ) ||
                  ( id == MTC_ALARM_ID__BM     ) ||
-                 ( id == MTC_ALARM_ID__CH_CONT) ||
                  ( id == MTC_ALARM_ID__CH_COMP))
         {
             EFmAlarmSeverityT severity = mtcAlarm_state ( node_ptr->hostname, id);
