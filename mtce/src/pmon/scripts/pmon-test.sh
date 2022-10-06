@@ -151,7 +151,7 @@ do
         debounce=1
         startuptime=1
         factor=1
-         # Not all processes can be stopped
+        # Not all processes can be stopped
         if [ "$process" == "pmond" -o "$process" == "sm" ] ; then
             echo "${process} stop not supported ... skipping"
             continue
