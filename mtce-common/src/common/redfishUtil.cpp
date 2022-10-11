@@ -16,6 +16,7 @@
 using namespace std;
 
 #include "nodeBase.h"      /* for ... mtce node common definitions     */
+#include "msgClass.h"      /* for ... get_address_ai_family            */
 #include "nodeUtil.h"      /* for ... tolowercase                      */
 #include "hostUtil.h"      /* for ... mtce host common definitions     */
 #include "jsonUtil.h"      /* for ...      */
@@ -353,10 +354,21 @@ string redfishUtil_create_request ( string   cmd,
      * defaulting to 20 sec timeout */
     command_request.append(" -T 30");
 
-    /* specify the bmc ip address */
-    command_request.append(" -r [");
-    command_request.append(ip);
-    command_request.append("]");
+    /* The square brackets around the ip address in Debian
+     * cause the redfishtool request to fail */
+    if ( daemon_is_os_debian() && get_address_ai_family(ip.data()) == AF_INET )
+    {
+        /* add the bmc ip address option */
+        command_request.append(" -r ");
+        command_request.append(ip);
+    }
+    else
+    {
+        /* specify the bmc ip address option with square brackets */
+        command_request.append(" -r [");
+        command_request.append(ip);
+        command_request.append("]");
+    }
 
 #ifdef WANT_INLINE_CREDS
     if ( daemon_is_file_present ( MTC_CMD_FIT__INLINE_CREDS ) )
