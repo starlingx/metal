@@ -689,6 +689,10 @@ private:
 
         bool   power_status_query_active ;
         bool   power_status_query_done   ;
+
+        bool   bmc_actions_query_active ;
+        bool   bmc_actions_query_done   ;
+
         bool   power_on = false ;
 
         /* a timer used in the bmc_handler to query
@@ -1160,6 +1164,8 @@ private:
 
     int  set_bm_prov                ( struct nodeLinkClass::node * node_ptr, bool state );
     void bmc_load_protocol          ( struct nodeLinkClass::node * node_ptr );
+    void bmc_default_query_controls ( struct nodeLinkClass::node * node_ptr );
+    int  bmc_default_to_ipmi        ( struct nodeLinkClass::node * node_ptr );
 
     void set_uptime ( struct nodeLinkClass::node * node_ptr, unsigned int uptime, bool force );
 

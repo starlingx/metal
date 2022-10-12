@@ -109,6 +109,12 @@ void * mtcThread_bmc ( void * arg )
                     suffix  = BMC_QUERY_FILE_SUFFIX ;
                     break ;
                 }
+                case BMC_THREAD_CMD__RAW_GET:
+                {
+                    command = extra_ptr->bm_cmd ;
+                    suffix  = BMC_RAW_GET_FILE_SUFFIX ;
+                    break ;
+                }
                 case BMC_THREAD_CMD__BMC_INFO:
                 case BMC_THREAD_CMD__POWER_STATUS:
                 {

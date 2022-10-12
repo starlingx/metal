@@ -76,11 +76,28 @@ int nodeLinkClass::bmc_command_send ( struct nodeLinkClass::node * node_ptr,
 
     if ( node_ptr->bmc_thread_info.proto == BMC_PROTOCOL__REDFISHTOOL )
     {
-        node_ptr->bm_cmd = REDFISHTOOL_POWER_RESET_CMD ;
+        /* set the command specific redfishtool base command string */
+        if ( command == BMC_THREAD_CMD__RAW_GET )
+            node_ptr->bm_cmd = REDFISHTOOL_RAW_GET_CMD ;
+        else
+            node_ptr->bm_cmd = REDFISHTOOL_POWER_RESET_CMD ;
 
-        /* build the reset/power control command */
+        /* append to the reset/power control or raw get command string */
         switch (command)
         {
+            case BMC_THREAD_CMD__RAW_GET:
+            {
+                if ( ! node_ptr->bmc_info.power_ctrl.raw_target_path.empty() )
+                {
+                    node_ptr->bm_cmd.append(node_ptr->bmc_info.power_ctrl.raw_target_path);
+                }
+                else
+                {
+                    elog("%s is missing the raw get target", node_ptr->hostname.c_str());
+                    return(FAIL_NOT_SUPPORTED);
+                }
+                break ;
+            }
             case BMC_THREAD_CMD__POWER_RESET:
             {
                 /* use immediate for all retries if server supports an immediate command */
@@ -457,13 +474,15 @@ bmc_command_recv_cleanup:
 
     if ( rc != RETRY )
     {
-        ilog ("%s %s recv '%s' command (%s) (rc:%d)",
-                  node_ptr->hostname.c_str(),
-                  node_ptr->bmc_thread_ctrl.name.c_str(),
-                  bmcUtil_getCmd_str(node_ptr->bmc_thread_info.command).c_str(),
-                  bmcUtil_getProtocol_str(node_ptr->bmc_protocol).c_str(),
-                  rc);
-
+        if ( rc != PASS )
+        {
+            ilog ("%s %s recv '%s' command (%s) (rc:%d)",
+                      node_ptr->hostname.c_str(),
+                      node_ptr->bmc_thread_ctrl.name.c_str(),
+                      bmcUtil_getCmd_str(node_ptr->bmc_thread_info.command).c_str(),
+                      bmcUtil_getProtocol_str(node_ptr->bmc_protocol).c_str(),
+                      rc);
+        }
         node_ptr->bmc_thread_ctrl.done = true ;
         node_ptr->bmc_thread_ctrl.retries = 0 ;
         node_ptr->bmc_thread_ctrl.id = 0 ;

@@ -108,7 +108,7 @@ static struct json_object * _json_verify_object ( struct json_object * obj,
     {
         return (req_obj);
     }
-    wlog ("Specified label '%s' not found in response\n", label );
+    jlog ("Specified label '%s' not found in response\n", label );
     status = json_object_object_get_ex (obj, "error", &req_obj );
     if (( status == true ) && ( req_obj ))
     {

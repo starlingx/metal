@@ -4414,6 +4414,38 @@ void nodeLinkClass::bmc_load_protocol ( struct nodeLinkClass::node * node_ptr )
     mtcInvApi_update_mtcInfo ( node_ptr );
 }
 
+/* Default the bmc handler query control variables */
+void nodeLinkClass::bmc_default_query_controls ( struct nodeLinkClass::node * node_ptr )
+{
+    node_ptr->bmc_info_query_active = false ;
+    node_ptr->bmc_info_query_done   = false ;
+
+    node_ptr->reset_cause_query_active = false ;
+    node_ptr->reset_cause_query_done   = false ;
+
+    node_ptr->power_status_query_active = false ;
+    node_ptr->power_status_query_done   = false ;
+
+    node_ptr->bmc_actions_query_active = false ;
+    node_ptr->bmc_actions_query_done   = false ;
+}
+
+/* Force bmc access protocol to IPMI */
+int nodeLinkClass::bmc_default_to_ipmi ( struct nodeLinkClass::node * node_ptr )
+{
+    ilog ("%s defaulting to ipmi", node_ptr->hostname.c_str());
+
+    /* reset all control variables */
+    bmc_default_query_controls ( node_ptr );
+
+    node_ptr->bmc_protocol_learning = false ;
+    node_ptr->bmc_protocol = BMC_PROTOCOL__IPMITOOL ;
+    mtcInfo_set ( node_ptr, MTCE_INFO_KEY__BMC_PROTOCOL, BMC_PROTOCOL__IPMI_STR );
+    mtcInvApi_update_mtcInfo ( node_ptr );
+    return (PASS);
+}
+
+
 void nodeLinkClass::bmc_access_data_init ( struct nodeLinkClass::node * node_ptr )
 {
     if ( node_ptr )
@@ -4421,12 +4453,9 @@ void nodeLinkClass::bmc_access_data_init ( struct nodeLinkClass::node * node_ptr
         node_ptr->bm_pw.clear();
         node_ptr->bmc_accessible              = false ;
         node_ptr->bm_ping_info.ok             = false ;
-        node_ptr->bmc_info_query_active       = false ;
-        node_ptr->bmc_info_query_done         = false ;
-        node_ptr->reset_cause_query_active    = false ;
-        node_ptr->reset_cause_query_done      = false ;
-        node_ptr->power_status_query_active   = false ;
-        node_ptr->power_status_query_done     = false ;
+
+        /* default bmc handler query controlo variables */
+        bmc_default_query_controls ( node_ptr );
 
         node_ptr->bm_ping_info.stage = PINGUTIL_MONITOR_STAGE__OPEN ;
         mtcTimer_reset ( node_ptr->bm_ping_info.timer );

@@ -154,6 +154,7 @@ int bmcUtil_init ( void )
     bmcUtil_request_str_array[BMC_THREAD_CMD__POWER_STATUS]  = "Query Power Status";
     bmcUtil_request_str_array[BMC_THREAD_CMD__RESTART_CAUSE] = "Query Reset Reason";
     bmcUtil_request_str_array[BMC_THREAD_CMD__BOOTDEV_PXE]   = "Netboot";
+    bmcUtil_request_str_array[BMC_THREAD_CMD__RAW_GET]       = "Raw Get";
     bmcUtil_request_str_array[BMC_THREAD_CMD__READ_SENSORS]  = "Read Sensors";
     bmcUtil_request_str_array[BMC_THREAD_CMD__LAST]          = "unknown";
 
@@ -203,6 +204,8 @@ void bmcUtil_info_init ( bmc_info_type & bmc_info )
     bmc_info.power_ctrl.poweron.immediate  = "" ;
     bmc_info.power_ctrl.poweroff.graceful  = "" ;
     bmc_info.power_ctrl.poweroff.immediate = "" ;
+
+    bmc_info.power_ctrl.raw_target_path    = "" ;
 }
 
 /*************************************************************************

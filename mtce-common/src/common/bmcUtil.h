@@ -38,6 +38,8 @@ typedef struct
 
 typedef struct
 {
+    /* Set to next level url to query if required */
+    string raw_target_path       ;
     bmc_power_ctrl_type reset    ;
     bmc_power_ctrl_type poweron  ;
     bmc_power_ctrl_type poweroff ;
@@ -101,6 +103,7 @@ typedef enum
     BMC_THREAD_CMD__POWER_OFF,
     BMC_THREAD_CMD__POWER_CYCLE,
 
+    BMC_THREAD_CMD__RAW_GET,
     BMC_THREAD_CMD__BMC_INFO,
     BMC_THREAD_CMD__POWER_STATUS,
     BMC_THREAD_CMD__RESTART_CAUSE,
@@ -114,6 +117,7 @@ typedef enum
 
 #define BMC_QUERY_FILE_SUFFIX          ((const char *)("_root_query"))
 #define BMC_INFO_FILE_SUFFIX           ((const char *)("_bmc_info"))
+#define BMC_RAW_GET_FILE_SUFFIX        ((const char *)("_raw_get"))
 #define BMC_POWER_CMD_FILE_SUFFIX      ((const char *)("_power_cmd_result"))
 #define BMC_RESET_CMD_FILE_SUFFIX      ((const char *)("_reset"))
 #define BMC_BOOTDEV_CMD_FILE_SUFFIX    ((const char *)("_bootdev"))

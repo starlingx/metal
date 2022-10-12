@@ -78,7 +78,7 @@ int redfishUtil_init ( void )
 
 /*************************************************************************
  *
- * Name       : _load_action_lists
+ * Name       : redfishUtil_load_actions
  *
  * Purpose    : Load supported host actions.
  *
@@ -92,9 +92,9 @@ int redfishUtil_init ( void )
  *
  *************************************************************************/
 
-void _load_action_lists (        string & hostname,
-                          bmc_info_type & bmc_info,
-                      std::list<string> & host_action_list)
+void redfishUtil_load_actions ( string & hostname,
+                                bmc_info_type & bmc_info,
+                                std::list<string> & host_action_list)
 {
     /* Walk through the host action list looking for and updating
      * this host's bmc_info supported actions lists */
@@ -131,7 +131,7 @@ void _load_action_lists (        string & hostname,
         if (( bmc_info.power_ctrl.reset.graceful.empty() ) &&
             ( bmc_info.power_ctrl.reset.immediate.empty() ))
         {
-            elog("%s bmc offers no 'Reset' commands (%s:%s)",
+            wlog("%s bmc offers no 'Reset' commands (%s:%s)",
                      hostname.c_str(),
                      REDFISHTOOL_RESET__GRACEFUL_RESTART,
                      REDFISHTOOL_RESET__FORCE_RESTART);
@@ -156,7 +156,7 @@ void _load_action_lists (        string & hostname,
         if (( bmc_info.power_ctrl.poweron.graceful.empty() ) &&
             ( bmc_info.power_ctrl.poweron.immediate.empty() ))
         {
-            elog("%s bmc offers no 'Power-On' commands (%s:%s)",
+            wlog("%s bmc offers no 'Power-On' commands (%s:%s)",
                      hostname.c_str(),
                      REDFISHTOOL_POWER_ON__ON,
                      REDFISHTOOL_POWER_ON__FORCE_ON);
@@ -181,7 +181,7 @@ void _load_action_lists (        string & hostname,
         if (( bmc_info.power_ctrl.poweroff.graceful.empty() ) &&
             ( bmc_info.power_ctrl.poweroff.immediate.empty() ))
         {
-            elog("%s bmc offers no 'Power-Off' commands (%s:%s)",
+            wlog("%s bmc offers no 'Power-Off' commands (%s:%s)",
                      hostname.c_str(),
                      REDFISHTOOL_POWER_OFF__GRACEFUL_SHUTDOWN,
                      REDFISHTOOL_POWER_OFF__FORCE_OFF);
@@ -548,22 +548,77 @@ int redfishUtil_get_bmc_info ( string & hostname,
         std::list<string> action_list ;
 
         /* get the first level reset action label content */
-        string json_actions =
-        jsonUtil_get_key_value_string (json_obj_actions,
-                                       REDFISHTOOL_RESET_ACTIONS_LABEL);
-
-        if ( jsonUtil_get_list ((char*)json_actions.data(), REDFISHTOOL_RESET_ACTIONS_ALLOWED_LABEL, action_list ) == PASS )
+        string json_actions = jsonUtil_get_key_value_string (json_obj_actions,
+                                             REDFISH_LABEL__ACTION_RESET);
+        if ( !json_actions.empty() && json_actions.compare("none") )
         {
-             _load_action_lists ( hostname, bmc_info, action_list);
+            if ( jsonUtil_get_list ((char*)json_actions.data(),
+                                    REDFISH_LABEL__ACTION_RESET_ALLOWED,
+                                    action_list ) == PASS )
+            {
+                redfishUtil_load_actions ( hostname, bmc_info, action_list);
+            }
+            else
+            {
+                /************************************************************
+                 * If the REDFISH_LABEL__ACTION_RESET does not contain
+                 * the REDFISH_LABEL__ACTION_RESET_ALLOWED then tell the
+                 * bmc_handler FSM to query the action list through the
+                 * REDFISH_LABEL__ACTION_INFO key value target saved to
+                 * the bmc_info.power_ctrl.raw_target_path.
+                 ************************************************************/
+                blog ("%s bmc not offering action list through %s",
+                          hostname.c_str(),
+                          REDFISH_LABEL__ACTION_RESET_ALLOWED );
+
+                struct json_object *json_actions_obj =
+                json_tokener_parse((char*)json_actions.data());
+                if ( json_actions_obj )
+                {
+                    string json_actions_target =
+                    jsonUtil_get_key_value_string(json_actions_obj,
+                                                  REDFISH_LABEL__ACTION_INFO);
+                    if ( !json_actions_target.empty() && json_actions_target.compare("none") )
+                    {
+                        blog ("%s posting %s target %s to bmc handler",
+                                  hostname.c_str(),
+                                  REDFISH_LABEL__ACTION_INFO,
+                                  json_actions_target.c_str());
+
+                        /* Post the target to the bmc handler to query
+                         * using redfishtool raw GET mode */
+                        bmc_info.power_ctrl.raw_target_path = json_actions_target ;
+                    }
+                    else
+                    {
+                        wlog ("%s failed to get %s target",
+                                  hostname.c_str(),
+                                  REDFISH_LABEL__ACTION_INFO);
+                        return ( FAIL_STRING_EMPTY );
+                    }
+                }
+                else
+                {
+                    wlog ("%s null json object from %s using label %s",
+                              hostname.c_str(),
+                              json_actions.c_str(),
+                              REDFISH_LABEL__ACTION_RESET_ALLOWED);
+                    return ( FAIL_JSON_PARSE );
+                }
+            }
         }
         else
         {
-             elog ("%s actions list get failed ; [%s]", hostname.c_str(), json_actions.c_str());
+            wlog ("%s failed parse string from %s object",
+                      hostname.c_str(),
+                      REDFISH_LABEL__ACTION_RESET );
+            return ( FAIL_JSON_PARSE );
         }
     }
     else
     {
-        elog ("%s action object get failed", hostname.c_str());
+        wlog ("%s action object get failed", hostname.c_str());
+        return ( FAIL_JSON_PARSE );
     }
 
     /* get number of processors */
