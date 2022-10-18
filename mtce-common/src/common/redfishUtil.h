@@ -46,6 +46,16 @@ typedef struct
 
 } redfish_entity_status ;
 
+/*
+ *
+ * Redfish Data Model Specification:
+ * https://www.dmtf.org/sites/default/files/standards/documents/DSP0268_2022.2.pdf
+ *
+ * Redfish Resource and Schema Guide:
+ * https://www.dmtf.org/sites/default/files/standards/documents/DSP2046_2022.2.pdf
+ *
+ */
+
 /* Redfish version format is #.#.# or major.minor.revision
  * This feature does not care about revision.
  * The following are the minimum version numbers for major and minor
@@ -76,25 +86,14 @@ typedef struct
 #define REDFISHTOOL_BMC_INFO_CMD       ((const char *)("Systems get"))
 
 
-/* supported actions */
-#define REDFISH_LABEL__ACTIONS         ((const char *)("Actions"))
-#define REDFISH_LABEL__ACTION_RESET    ((const char *)("#ComputerSystem.Reset"))
-#define REDFISH_LABEL__ACTION_RESET_ALLOWED ((const char *)("ResetType@Redfish.AllowableValues"))
+/***********  supported reset/power command actions queries **************
 
-/* Redfish Reset Types:
- *
- * https://www.dmtf.org/sites/default/files/standards/documents/DSP0268_2019.1a.pdf */
+Method 1: Single level query through root query 'Actions'
 
-#define REDFISHTOOL_POWER_RESET_CMD    ((const char *)("Systems reset "))
+    #ComputerSystem.Reset
+        ResetType@Redfish.AllowableValues [list]
 
-typedef enum
-{
-    REDFISH_ACTION__RESET,
-    REDFISH_ACTION__POWER_ON,
-    REDFISH_ACTION__POWER_OFF,
-} redfish_action_enum ;
-
-/* Reset actions allows json block
+Method 1: payload response ( level 1 )
 
     "Actions": {
         "#ComputerSystem.Reset": {
@@ -109,10 +108,70 @@ typedef enum
         }
     },
 
-*/
-#define REDFISHTOOL_RESET_ACTIONS_LABEL          ((const char *)("#ComputerSystem.Reset"))             /* level 1 label */
-#define REDFISHTOOL_RESET_ACTIONS_ALLOWED_LABEL  ((const char *)("ResetType@Redfish.AllowableValues")) /* level 2 label */
+               -----or-----
 
+Method 2: Double level query through root query 'Actions'
+
+    #ComputerSystem.Reset
+        @Redfish.ActionInfo -> /redfish/v1/Systems/1/ResetActionInfo
+            arameters
+               AllowableValues [list]
+
+Method 2 level 1 payload response
+
+    "Actions": {
+        "#ComputerSystem.Reset": {
+            "target": "/redfish/v1/Systems/1/Actions/ComputerSystem.Reset",
+            "@Redfish.ActionInfo": "/redfish/v1/Systems/1/ResetActionInfo"
+        }
+    },
+
+Method 2 level 2 payload response through @Redfish.ActionInfo target
+
+    GET: /redfish/v1/Systems/1/ResetActionInfo
+
+    "@odata.type": "#ActionInfo.v1_1_2.ActionInfo",
+    "Name": "Reset Action Info",
+    "Parameters": [
+        {
+            "DataType": "String",
+            "AllowableValues": [
+                "On",
+                "ForceOff",
+                "GracefulShutdown",
+                "GracefulRestart",
+                "ForceRestart",
+                "Nmi",
+                "ForceOn"
+            ],
+            "Required": true,
+            "Name": "ResetType"
+        }
+    ],
+    "@odata.id": "/redfish/v1/Systems/1/ResetActionInfo",
+    "Oem": {},
+    "Id": "ResetActionInfo"
+} */
+
+/* First level reset/power control GET labels */
+#define REDFISH_LABEL__ACTIONS              ((const char *)("Actions"))                           /* level 0 */
+#define REDFISH_LABEL__ACTION_RESET         ((const char *)("#ComputerSystem.Reset"))             /* level 1 */
+#define REDFISH_LABEL__ACTION_RESET_ALLOWED ((const char *)("ResetType@Redfish.AllowableValues")) /* level 2 */
+
+/* Second level reset/power control GET labels */
+#define REDFISH_LABEL__ACTION_INFO      ((const char *)("@Redfish.ActionInfo"))
+#define REDFISH_LABEL__PARAMETERS       ((const char *)("Parameters"))
+#define REDFISH_LABEL__ALLOWABLE_VALUES ((const char *)("AllowableValues"))
+
+#define REDFISHTOOL_RAW_GET_CMD        ((const char *)("raw GET "))
+#define REDFISHTOOL_POWER_RESET_CMD    ((const char *)("Systems reset "))
+
+typedef enum
+{
+    REDFISH_ACTION__RESET,
+    REDFISH_ACTION__POWER_ON,
+    REDFISH_ACTION__POWER_OFF,
+} redfish_action_enum ;
 
 /* Reset sub-commands */
 #define REDFISHTOOL_RESET__GRACEFUL_RESTART      ((const char *)("GracefulRestart"))  /* Perform a graceful shutdown followed by a restart of the system. */
@@ -164,5 +223,10 @@ int redfishUtil_get_bmc_info ( string & hostname,
                                bmc_info_type & bmc_info );
 
 string redfishUtil_get_cmd_option ( redfish_action_enum action,
-                                     std::list<string>  host_action_list );
+                                    std::list<string>  host_action_list );
+
+void redfishUtil_load_actions ( string & hostname,
+                                bmc_info_type & bmc_info,
+                                std::list<string> & host_action_list);
+
 #endif // __INCLUDE_REDFISHUTIL_H__

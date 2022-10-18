@@ -6578,13 +6578,10 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
                 /* send the BMC Query request ; redfish 'root' request */
                 if ( bmc_command_send ( node_ptr, BMC_THREAD_CMD__BMC_QUERY ) != PASS )
                 {
-                    wlog ("%s %s send failed ; defaulting to ipmi",
+                    wlog ("%s %s send failed",
                               node_ptr->hostname.c_str(),
                               bmcUtil_getCmd_str(node_ptr->bmc_thread_info.command).c_str());
-                    node_ptr->bmc_protocol_learning = false ;
-                    node_ptr->bmc_protocol = BMC_PROTOCOL__IPMITOOL ;
-                    mtcInfo_set ( node_ptr, MTCE_INFO_KEY__BMC_PROTOCOL, BMC_PROTOCOL__IPMI_STR );
-                    mtcInvApi_update_mtcInfo ( node_ptr );
+                    return ( bmc_default_to_ipmi ( node_ptr ) );
                 }
                 else
                 {
@@ -6613,26 +6610,21 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
                     if (( node_ptr->bmc_thread_info.command == BMC_THREAD_CMD__BMC_QUERY ) &&
                         (( rc == FAIL_SYSTEM_CALL ) || ( rc == FAIL_NOT_ACTIVE )))
                     {
-                        ilog("%s BMC REe-Connect End ; ipmi", node_ptr->hostname.c_str());
+                        ilog("%s BMC Re-Connect End ; ipmi", node_ptr->hostname.c_str());
                         /* TODO: may need retries */
-                        plog ("%s bmc does not support Redfish ; " \
-                                  "defaulting to ipmi",
+                        plog ("%s bmc does not support Redfish",
                                   node_ptr->hostname.c_str());
                     }
                     else
                     {
-                        wlog ("%s %s recv failed (rc:%d:%d:%s); defaulting to ipmi",
+                        wlog ("%s %s recv failed (rc:%d:%d:%s)",
                                   node_ptr->hostname.c_str(),
                                   bmcUtil_getCmd_str(node_ptr->bmc_thread_info.command).c_str(),
                                   rc,
                                   node_ptr->bmc_thread_info.status,
-                                 node_ptr->bmc_thread_info.status_string.c_str());
+                                  node_ptr->bmc_thread_info.status_string.c_str());
                     }
-                    node_ptr->bmc_protocol = BMC_PROTOCOL__IPMITOOL ;
-                    mtcInfo_set ( node_ptr, MTCE_INFO_KEY__BMC_PROTOCOL, BMC_PROTOCOL__IPMI_STR );
-                    mtcInvApi_update_mtcInfo ( node_ptr );
-                    node_ptr->bmc_protocol_learning = false ;
-                    node_ptr->bmc_thread_ctrl.done = true ;
+                    return ( bmc_default_to_ipmi ( node_ptr ) );
                 }
                 else
                 {
@@ -6691,9 +6683,10 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
                               node_ptr->hostname.c_str(),
                               bmcUtil_getCmd_str(
                               node_ptr->bmc_thread_info.command).c_str());
-                    node_ptr->bmc_protocol = BMC_PROTOCOL__IPMITOOL ;
-                    mtcInfo_set ( node_ptr, MTCE_INFO_KEY__BMC_PROTOCOL, BMC_PROTOCOL__IPMI_STR );
-                    mtcInvApi_update_mtcInfo ( node_ptr );
+                    if ( node_ptr->bmc_protocol_learning )
+                    {
+                        return ( bmc_default_to_ipmi ( node_ptr ) );
+                    }
                 }
                 else
                 {
@@ -6704,7 +6697,7 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
                     mtcTimer_start ( node_ptr->bm_timer, mtcTimer_handler, MTC_FIRST_WAIT );
                 }
             }
-            else if ( node_ptr->bmc_info_query_active == true )
+            else
             {
                 int rc ;
                 if ( ( rc = bmc_command_recv ( node_ptr ) ) == RETRY )
@@ -6713,10 +6706,16 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
                 }
                 else if ( rc != PASS )
                 {
-                    /* this error is reported by the receive driver */
-                    node_ptr->bmc_info_query_active = false ;
-                    node_ptr->bmc_thread_ctrl.done = true ;
-                    mtcTimer_start ( node_ptr->bm_timer, mtcTimer_handler, MTC_BMC_REQUEST_DELAY );
+                    if ( node_ptr->bmc_protocol_learning )
+                        bmc_default_to_ipmi ( node_ptr );
+                    else
+                    {
+                        /* If not in learning mode then force the retry
+                         * from start in MTC_BMC_REQUEST_DELAY seconds */
+                        bmc_default_query_controls ( node_ptr );
+                        node_ptr->bmc_thread_ctrl.done = true ;
+                        mtcTimer_start ( node_ptr->bm_timer, mtcTimer_handler, MTC_BMC_REQUEST_DELAY );
+                    }
                 }
                 else
                 {
@@ -6728,64 +6727,226 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
                                 node_ptr->bmc_thread_info.data,
                                 node_ptr->bmc_info ) != PASS )
                     {
-                        elog ("%s bmc %s failed ; defaulting to ipmi",
+                        elog ("%s bmc redfish %s or get bmc info failed",
                                   node_ptr->hostname.c_str(),
                                   bmcUtil_getCmd_str(
                                   node_ptr->bmc_thread_info.command).c_str());
-
-                        node_ptr->bmc_info_query_active = false ;
-                        node_ptr->bmc_info_query_done   = false ;
-                        node_ptr->bmc_protocol = BMC_PROTOCOL__IPMITOOL ;
-                        mtcInfo_set ( node_ptr, MTCE_INFO_KEY__BMC_PROTOCOL, BMC_PROTOCOL__IPMI_STR );
+                        if ( node_ptr->bmc_protocol_learning )
+                            bmc_default_to_ipmi ( node_ptr );
+                        else
+                        {
+                            /* If not in learning mode then force the retry
+                             * from start in MTC_BMC_REQUEST_DELAY seconds */
+                            bmc_default_query_controls ( node_ptr );
+                            mtcTimer_start ( node_ptr->bm_timer, mtcTimer_handler, MTC_BMC_REQUEST_DELAY );
+                        }
                     }
                     else
                     {
-                        mtcTimer_reset ( node_ptr->bm_timer );
-                        mtcTimer_reset ( node_ptr->bmc_audit_timer );
-
-                        int bmc_audit_period = daemon_get_cfg_ptr()->bmc_audit_period ;
-                        if ( bmc_audit_period )
-                        {
-                            /* the time for the first audit is twice the configured period */
-                            mtcTimer_start ( node_ptr->bmc_audit_timer, mtcTimer_handler, bmc_audit_period*2 );
-                            plog ("%s bmc audit timer started (%d secs)", node_ptr->hostname.c_str(), bmc_audit_period*2);
-                        }
-                        else
-                        {
-                            ilog("%s bmc audit disabled", node_ptr->hostname.c_str());
-                        }
-
-                        /* success path */
-                        node_ptr->bmc_accessible = true ;
                         node_ptr->bmc_info_query_done = true ;
                         node_ptr->bmc_info_query_active = false ;
-                        node_ptr->bmc_protocol_learning = false ;
-
-                        mtcInfo_set ( node_ptr, MTCE_INFO_KEY__BMC_PROTOCOL, BMC_PROTOCOL__REDFISH_STR );
-
-                        mtcTimer_reset ( node_ptr->bmc_access_timer );
-
-                        /* save the host's power state */
-                        node_ptr->power_on = node_ptr->bmc_info.power_on ;
-
-                        plog ("%s bmc is accessible using redfish",
-                                  node_ptr->hostname.c_str());
-
-                        node_ptr->bmc_thread_ctrl.done = true  ;
-                        node_ptr->bmc_thread_info.command = 0  ;
                     }
-                    /* store mtcInfo, which specifies the selected BMC protocol,
-                     * into the sysinv database */
-                    mtcInvApi_update_mtcInfo ( node_ptr );
-
-                    /* push the BMC access info out to the mtcClient when
-                     * a controller's BMC connection is established/verified */
-                    if ( node_ptr->nodetype & CONTROLLER_TYPE )
-                        this->want_mtcInfo_push = true ;
-
-                    send_hwmon_command ( node_ptr->hostname, MTC_CMD_ADD_HOST );
-                    send_hwmon_command ( node_ptr->hostname, MTC_CMD_START_HOST );
                 }
+            }
+        }
+
+        /* Handle Redfish BMC reset/power command query using the redfishtool
+         * raw GET command.
+         * This is the last operation before declaring the BMC accessible */
+        else if (( node_ptr->bmc_protocol == BMC_PROTOCOL__REDFISHTOOL ) &&
+                 ( node_ptr->bmc_accessible == false ) &&
+                 ( node_ptr->bm_ping_info.ok == true ) &&
+                 ( node_ptr->bmc_info_query_done == true ) &&
+                 ( node_ptr->bmc_actions_query_done == false ) &&
+                 ( mtcTimer_expired (node_ptr->bm_timer ) == true ))
+        {
+            if ( node_ptr->bmc_info.power_ctrl.raw_target_path.empty() )
+            {
+                node_ptr->bmc_actions_query_done = true ;
+            }
+            else if ( node_ptr->bmc_actions_query_active == false )
+            {
+                blog ("%s bmc action info target: %s",
+                          node_ptr->hostname.c_str(),
+                          node_ptr->bmc_info.power_ctrl.raw_target_path.c_str());
+
+                if ( bmc_command_send ( node_ptr, BMC_THREAD_CMD__RAW_GET ) != PASS )
+                {
+                    elog ("%s bmc redfish '%s' send failed\n",
+                              node_ptr->hostname.c_str(),
+                              bmcUtil_getCmd_str(
+                              node_ptr->bmc_thread_info.command).c_str());
+                    if ( node_ptr->bmc_protocol_learning )
+                        bmc_default_to_ipmi ( node_ptr );
+                    else
+                    {
+                        /* If not in learning mode then force the retry
+                         * from start in MTC_BMC_REQUEST_DELAY seconds */
+                        bmc_default_query_controls ( node_ptr );
+                        mtcTimer_start ( node_ptr->bm_timer, mtcTimer_handler, MTC_BMC_REQUEST_DELAY );
+                    }
+                }
+                else
+                {
+                    node_ptr->bmc_actions_query_active = true ;
+                    blog ("%s bmc redfish '%s' in progress",
+                              node_ptr->hostname.c_str(),
+                              bmcUtil_getCmd_str(node_ptr->bmc_thread_info.command).c_str());
+                    mtcTimer_start ( node_ptr->bm_timer, mtcTimer_handler, MTC_FIRST_WAIT );
+                }
+            }
+            else
+            {
+                int rc ;
+                bool default_to_ipmi = false ;
+                if ( ( rc = bmc_command_recv ( node_ptr ) ) == RETRY )
+                {
+                    mtcTimer_start ( node_ptr->bm_timer, mtcTimer_handler, MTC_RETRY_WAIT );
+                }
+                else if ( rc != PASS )
+                {
+                    if ( node_ptr->bmc_protocol_learning )
+                        bmc_default_to_ipmi ( node_ptr );
+                    else
+                    {
+                        /* If not in learning mode then force the retry
+                         * from start in MTC_BMC_REQUEST_DELAY seconds */
+                        bmc_default_query_controls ( node_ptr );
+                        node_ptr->bmc_thread_ctrl.done = true ;
+                        mtcTimer_start ( node_ptr->bm_timer, mtcTimer_handler, MTC_BMC_REQUEST_DELAY );
+                    }
+                }
+                else
+                {
+                    node_ptr->bmc_thread_ctrl.done = true ;
+
+                    blog ("%s bmc thread info cmd: %s data:\n%s",
+                              node_ptr->hostname.c_str(),
+                              bmcUtil_getCmd_str(
+                              node_ptr->bmc_thread_info.command).c_str(),
+                              node_ptr->bmc_thread_info.data.c_str() );
+
+                    /* Look for Parameters as list */
+                    std::list<string> param_list ;
+                    if ( jsonUtil_get_list ((char*)node_ptr->bmc_thread_info.data.data(),
+                                            REDFISH_LABEL__PARAMETERS,
+                                            param_list ) == PASS )
+                    {
+                        /* Walk through the host action list looking for and updating
+                         * this host's bmc_info supported actions lists */
+                        int index = 0 ;
+                        bool actions_found = false ;
+                        std::list<string>::iterator param_list_ptr ;
+                        for ( param_list_ptr  = param_list.begin();
+                              param_list_ptr != param_list.end() ;
+                              param_list_ptr++, ++index )
+                        {
+                            std::list<string> action_list ;
+                            string param_list_str = *param_list_ptr ;
+                            blog ("%s %s element %d:%s",
+                                       node_ptr->hostname.c_str(),
+                                       REDFISH_LABEL__PARAMETERS,
+                                       index, param_list_str.c_str());
+
+                            if ( jsonUtil_get_list ((char*)param_list_str.data(),
+                                                    REDFISH_LABEL__ALLOWABLE_VALUES,
+                                                    action_list ) == PASS )
+                            {
+                                actions_found = true ;
+                                redfishUtil_load_actions ( node_ptr->hostname,
+                                                           node_ptr->bmc_info,
+                                                           action_list );
+                                break ;
+                            }
+                        }
+                        if ( actions_found == false )
+                        {
+                            elog ("%s failed to find '%s' in:\n%s",
+                                      node_ptr->hostname.c_str(),
+                                      REDFISH_LABEL__ALLOWABLE_VALUES,
+                                      node_ptr->bmc_thread_info.data.c_str());
+                            default_to_ipmi = true ;
+                        }
+                    }
+                    else
+                    {
+                        elog ("%s failed to get Action '%s' list from %s",
+                                  node_ptr->hostname.c_str(),
+                                  REDFISH_LABEL__PARAMETERS,
+                                  node_ptr->bmc_thread_info.data.c_str());
+                        default_to_ipmi = true ;
+                    }
+
+                    /* force failover to use IPMI */
+                    if ( default_to_ipmi == true )
+                    {
+                        if ( node_ptr->bmc_protocol_learning )
+                            bmc_default_to_ipmi ( node_ptr );
+                        else
+                        {
+                            bmc_default_query_controls ( node_ptr );
+                            node_ptr->bmc_thread_ctrl.done = true ;
+                            mtcTimer_start ( node_ptr->bm_timer, mtcTimer_handler, MTC_BMC_REQUEST_DELAY );
+                        }
+                    }
+                    else
+                    {
+                        node_ptr->bmc_actions_query_done = true ;
+                        node_ptr->bmc_actions_query_active = false ;
+                    }
+                }
+            }
+
+            /* finish up when the actions query is done */
+            if ( node_ptr->bmc_actions_query_done == true )
+            {
+                mtcTimer_reset ( node_ptr->bm_timer );
+                mtcTimer_reset ( node_ptr->bmc_audit_timer );
+
+                int bmc_audit_period = daemon_get_cfg_ptr()->bmc_audit_period ;
+                if ( bmc_audit_period )
+                {
+                    /* the time for the first audit is twice the configured period */
+                    mtcTimer_start ( node_ptr->bmc_audit_timer, mtcTimer_handler, bmc_audit_period*2 );
+                    plog ("%s bmc audit timer started (%d secs)", node_ptr->hostname.c_str(), bmc_audit_period*2);
+                }
+                else
+                {
+                    ilog("%s bmc audit disabled", node_ptr->hostname.c_str());
+                }
+
+                /* success path */
+                node_ptr->bmc_accessible = true ;
+                node_ptr->bmc_info_query_done = true ;
+                node_ptr->bmc_info_query_active = false ;
+                node_ptr->bmc_actions_query_done = true ;
+                node_ptr->bmc_actions_query_active = false ;
+                node_ptr->bmc_protocol_learning = false ;
+
+                mtcInfo_set ( node_ptr, MTCE_INFO_KEY__BMC_PROTOCOL, BMC_PROTOCOL__REDFISH_STR );
+
+                mtcTimer_reset ( node_ptr->bmc_access_timer );
+
+                /* save the host's power state */
+                node_ptr->power_on = node_ptr->bmc_info.power_on ;
+
+                plog ("%s bmc is accessible using redfish",
+                          node_ptr->hostname.c_str());
+
+                node_ptr->bmc_thread_ctrl.done = true  ;
+                node_ptr->bmc_thread_info.command = 0  ;
+
+                /* store mtcInfo, which specifies the selected BMC protocol,
+                 * into the sysinv database */
+                mtcInvApi_update_mtcInfo ( node_ptr );
+
+                /* push the BMC access info out to the mtcClient when
+                 * a controller's BMC connection is established/verified */
+                if ( node_ptr->nodetype & CONTROLLER_TYPE )
+                    this->want_mtcInfo_push = true ;
+
+                send_hwmon_command ( node_ptr->hostname, MTC_CMD_ADD_HOST );
+                send_hwmon_command ( node_ptr->hostname, MTC_CMD_START_HOST );
             }
         }
 
