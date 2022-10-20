@@ -454,7 +454,7 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
                 }
                 else
                 {
-                    int delay = (((offline_period*offline_threshold)/1000)+3);
+                    int delay = (((offline_period*offline_threshold)/1000)*3);
                     ilog ("%s searching for offline ; next reboot attempt in %d seconds\n",
                               node_ptr->hostname.c_str(), delay);
 
@@ -507,7 +507,7 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
                     wlog ("%s Board Management Interface not accessible\n", node_ptr->hostname.c_str());
                 }
            }
-            int delay = (((offline_period*offline_threshold)/1000)+3);
+            int delay = (((offline_period*offline_threshold)/1000)*3);
             mtcTimer_start ( node_ptr->mtcCmd_timer, mtcTimer_handler, delay );
             node_ptr->mtcCmd_work_fifo_ptr->stage = MTC_CMD_STAGE__OFFLINE_CHECK ;
             break ;
@@ -516,7 +516,7 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
         {
              if ( node_ptr->mtcCmd_timer.ring == true )
              {
-                  int delay = (((offline_period*offline_threshold)/1000)+3);
+                  int delay = (((offline_period*offline_threshold)/1000)*3);
 
                   /* bmc power control reset by bmc */
                      rc = bmc_command_recv ( node_ptr );

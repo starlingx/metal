@@ -151,7 +151,7 @@ EFmAlarmSeverityT alarmUtil_query ( string & hostname,
                     ENTITY_PREFIX, hostname.data(), instance.data());
     }
 
-    alog ("entity_instance:%s\n", alarm_filter.entity_instance_id );
+    alog1 ("entity_instance:%s\n", alarm_filter.entity_instance_id );
     if (( rc = fm_get_fault ( &alarm_filter, &alarm_query )) == FM_ERR_OK )
     {
         dlog ("Found with Severity: %d\n", alarm_query.severity );
@@ -183,7 +183,7 @@ int alarmUtil_query_identity ( string identity, SFmAlarmDataT * alarm_list_ptr, 
         memset(&alarm_filter, 0, sizeof(alarm_filter));
         snprintf ( alarm_filter.alarm_id, FM_MAX_BUFFER_LENGTH, "%s", identity.data());
         rc = fm_get_faults_by_id ( &alarm_filter.alarm_id, alarm_list_ptr, &max_alarms );
-        alog ("%s fm_get_faults_by_id rc = %d\n", alarm_filter.alarm_id, rc );
+        alog1 ("%s fm_get_faults_by_id rc = %d\n", alarm_filter.alarm_id, rc );
         if ( rc == FM_ERR_OK )
         {
             return (PASS);
@@ -242,7 +242,7 @@ int alarmUtil ( string & hostname,
     if (( alarm.alarm_state != FM_ALARM_STATE_MSG ) && 
         ( curr_sev == alarm.severity ))
     {
-        alog ("%s %s %s already at desired (%s) severity level\n", 
+        alog1 ("%s %s %s already at desired (%s) severity level\n",
                   hostname.c_str(),
                   identity.c_str(), 
                   instance.c_str(),
@@ -259,18 +259,18 @@ int alarmUtil ( string & hostname,
     {
         if ( alarm.alarm_state == FM_ALARM_STATE_SET )
         {
-            alog ("%s setting %s %s alarm\n", hostname.c_str(), alarm.alarm_id, alarm.entity_instance_id );
+            alog1 ("%s setting %s %s alarm\n", hostname.c_str(), alarm.alarm_id, alarm.entity_instance_id );
         }
         else
         {
-            alog ("%s creating %s %s log\n", hostname.c_str(), alarm.alarm_id, alarm.entity_instance_id );
+            alog1 ("%s creating %s %s log\n", hostname.c_str(), alarm.alarm_id, alarm.entity_instance_id );
         }
 
         /* Debug Logs */
-        alog ("%s Alarm Reason: %s\n", hostname.c_str(), alarm.reason_text );
-        alog ("%s Alarm Action: %s\n", hostname.c_str(), alarm.proposed_repair_action );
-        alog ("%s Alarm Ident : %s : %s\n", hostname.c_str(), alarm.entity_type_id, alarm.entity_instance_id );
-        alog ("%s Alarm State : state:%d sev:%d type:%d cause:%d sa:%c supp:%c\n", 
+        alog1 ("%s Alarm Reason: %s\n", hostname.c_str(), alarm.reason_text );
+        alog1 ("%s Alarm Action: %s\n", hostname.c_str(), alarm.proposed_repair_action );
+        alog1 ("%s Alarm Ident : %s : %s\n", hostname.c_str(), alarm.entity_type_id, alarm.entity_instance_id );
+        alog1 ("%s Alarm State : state:%d sev:%d type:%d cause:%d sa:%c supp:%c\n",
                   hostname.c_str(),
                   alarm.alarm_state,
                   alarm.severity,
@@ -322,7 +322,7 @@ int alarmUtil ( string & hostname,
         // send_log_message ( mtclogd_ptr, hostname.data(), &__alarmObject.varlog_filename[0],
         //                                                 &__alarmObject.temp_str[0] );
 
-        alog ("%s clearing %s %s alarm\n", hostname.c_str(), alarm.alarm_id, alarm.entity_instance_id);
+        alog1 ("%s clearing %s %s alarm\n", hostname.c_str(), alarm.alarm_id, alarm.entity_instance_id);
         nodeUtil_latency_log ( hostname, NODEUTIL_LATENCY_MON_START , 0 );
         if ( ( rc = fm_clear_fault_async ( &filter )) != FM_ERR_OK )
         {

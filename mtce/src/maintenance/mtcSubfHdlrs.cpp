@@ -84,6 +84,7 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
 
             node_ptr->unknown_health_reported = false ;
             node_ptr->goEnabled_failed_subf   = false ;
+            node_ptr->hbsClient_ready         = false ;
 
             /* load worker subfunciton alarm state */
             EFmAlarmSeverityT sev = mtcAlarm_state ( node_ptr->hostname,

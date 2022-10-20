@@ -3221,6 +3221,7 @@ int nodeLinkClass::offline_handler ( struct nodeLinkClass::node * node_ptr )
         }
         case MTC_OFFLINE__START:
         {
+            node_ptr->mtcAlive_count = 0 ;
             node_ptr->mtcAlive_mgmnt = false ;
             node_ptr->mtcAlive_clstr = false ;
             node_ptr->offline_log_throttle = 0 ;
@@ -3245,6 +3246,27 @@ int nodeLinkClass::offline_handler ( struct nodeLinkClass::node * node_ptr )
                       availStatus_enum_to_str(node_ptr->availStatus).c_str());
 
             this->ctl_mtcAlive_gate ( node_ptr, false ) ;
+
+            /**
+             * Handle the race condition case where the
+             * mtcAlive was received after the last check
+             * while in MTC_OFFLINE__WAIT below and here when
+             * the node_ptr->mtcAlive_<iface> state variables
+             * are cleared. Need to also clear the
+             * offline_search_count here as well.
+             **/
+            if (( node_ptr->mtcAlive_mgmnt || node_ptr->mtcAlive_clstr ) && node_ptr->offline_search_count )
+            {
+                node_ptr->mtcAlive_online = true ;
+                ilog ("%s still seeing mtcAlive (%d) (%c:%c) ; reset offline_search_count=%d of %d\n",
+                          node_ptr->hostname.c_str(),
+                          node_ptr->mtcAlive_count,
+                          node_ptr->mtcAlive_mgmnt ? 'Y' : 'n',
+                          node_ptr->mtcAlive_clstr ? 'Y' : 'n',
+                          node_ptr->offline_search_count,
+                          offline_threshold );
+                node_ptr->offline_search_count = 0 ; /* reset the count */
+            }
             node_ptr->mtcAlive_mgmnt = false ;
             node_ptr->mtcAlive_clstr = false ;
 
@@ -3299,24 +3321,36 @@ int nodeLinkClass::offline_handler ( struct nodeLinkClass::node * node_ptr )
                                   offline_threshold );
                     }
                 }
-                else
+                else if ( node_ptr->offline_search_count )
                 {
+                   /**
+                    * This algorithm was assuming the node is offline after
+                    * offline_search_count reached offline_threshold count.
+                    *
+                    * Note: The mtcClient sends periodic mtcAlive messages
+                    * until it is shutdown.
+                    * This algorithm also explicitely 'requests' the message.
+                    * The algorithm depends on not receving the message, even
+                    * when requested for offline_threshold counts 'in a row'.
+                    *
+                    * When shutdown is slowed or delayed, a late mtcAlive
+                    * can trick this FSM into seeing the node as recovered
+                    * when in fact its still shuttingdown.
+                    *
+                    * To maintain the intended absence of mtcAlive messages
+                    * count 'in a row', this check resets the search count
+                    * if a mtcAlive is seen during the search.
+                    **/
+
                     node_ptr->mtcAlive_online = true ;
-                    if ( node_ptr->mtcAlive_mgmnt || node_ptr->mtcAlive_clstr )
-                    {
-                        ilog_throttled ( node_ptr->offline_log_throttle, 10,
-                                         "%s still seeing mtcAlive (%c:%c)\n",
-                                         node_ptr->hostname.c_str(),
-                                         node_ptr->mtcAlive_mgmnt ? 'Y' : 'n',
-                                         node_ptr->mtcAlive_clstr ? 'Y' : 'n');
-                    }
-                    else
-                    {
-                        alog ("%s still seeing mtcAlive (%c:%c)\n",
-                                  node_ptr->hostname.c_str(),
-                                  node_ptr->mtcAlive_mgmnt ? 'Y' : 'n',
-                                  node_ptr->mtcAlive_clstr ? 'Y' : 'n');
-                    }
+                    ilog ("%s still seeing mtcAlive (%d) (%c:%c) ; reset offline_search_count=%d of %d\n",
+                              node_ptr->hostname.c_str(),
+                              node_ptr->mtcAlive_count,
+                              node_ptr->mtcAlive_mgmnt ? 'Y' : 'n',
+                              node_ptr->mtcAlive_clstr ? 'Y' : 'n',
+                              node_ptr->offline_search_count,
+                              offline_threshold );
+                    node_ptr->offline_search_count = 0 ; /* reset the search count */
                 }
 
                 if ( node_ptr->offlineStage == MTC_OFFLINE__IDLE )
