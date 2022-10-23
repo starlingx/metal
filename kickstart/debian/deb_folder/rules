@@ -15,7 +15,5 @@ override_dh_auto_configure:
 override_dh_install:
 	install -d -m 755 $(ROOT)/var/www/pages/feed/rel-${platform_release}
 	install -p -D -m 700 kickstart.cfg $(ROOT)/var/www/pages/feed/rel-${platform_release}
-	install -d -m 755 $(ROOT)/var/pxeboot
-	install -p -D -m 700 menu.c32 $(ROOT)/var/pxeboot
 	install -p -D -m 700 miniboot.cfg $(ROOT)/var/www/pages/feed/rel-${platform_release}
 	dh_install

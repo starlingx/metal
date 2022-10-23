@@ -28,7 +28,7 @@ override_dh_install:
 	install -p -D -m 644 pxeboot.cfg.debian $(ROOT)/var/pxeboot/pxelinux.cfg.files/pxeboot.cfg.debian
 	install -p -D -m 644 efi-pxeboot.cfg.debian $(ROOT)/var/pxeboot/pxelinux.cfg.files/efi-pxeboot.cfg.debian
 	install -p -D -m 755 pxeboot_setup.sh  $(ROOT)/usr/sbin/pxeboot_setup.sh
-	install -p -D -m 755 pxeboot-update.sh %{ROOT}/usr/sbin/pxeboot-update-%{platform_release}.sh
+	install -p -D -m 755 pxeboot-update.sh ${ROOT}/usr/sbin/pxeboot-update-${platform_release}.sh
 
 	# Legacy BIOS System Node Install grub menus
 	install -p -D -m 700     debian-pxe-controller-install  $(ROOT)/var/pxeboot/pxelinux.cfg.files/pxe-controller-install-${platform_release}
@@ -45,4 +45,15 @@ override_dh_install:
 	install -p -D -m 700 efi-debian-pxe-worker-install      $(ROOT)/var/pxeboot/pxelinux.cfg.files/efi-pxe-worker-install-${platform_release}
 	install -p -D -m 700 efi-debian-pxe-worker_lowlatency-install $(ROOT)/var/pxeboot/pxelinux.cfg.files/efi-pxe-worker_lowlatency-install-${platform_release}
 	install -p -D -m 700 efi-debian-pxe-smallsystem_lowlatency-install $(ROOT)/var/pxeboot/pxelinux.cfg.files/efi-pxe-smallsystem_lowlatency-install-${platform_release}
+
+	# Package pxeboot utilities in /var/pxeboot
+	install -d -m 755 $(ROOT)/var/pxeboot
+	install -p -D -m 700 pxeboot/grubx64.efi $(ROOT)/var/pxeboot
+	install -p -D -m 700 pxeboot/menu.c32 $(ROOT)/var/pxeboot
+	install -p -D -m 700 pxeboot/ldlinux.c32 $(ROOT)/var/pxeboot
+	install -p -D -m 700 pxeboot/libcom32.c32 $(ROOT)/var/pxeboot
+	install -p -D -m 700 pxeboot/libutil.c32 $(ROOT)/var/pxeboot
+	install -p -D -m 700 pxeboot/pxelinux.0 $(ROOT)/var/pxeboot
+	install -p -D -m 700 pxeboot/vesamenu.c32 $(ROOT)/var/pxeboot
+
 	dh_install
