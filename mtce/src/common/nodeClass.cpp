@@ -3902,7 +3902,7 @@ void nodeLinkClass::set_mtcAlive ( struct nodeLinkClass::node * node_ptr, int in
             {
                 if ( node_ptr->mtcAlive_clstr == false )
                 {
-                    alog2 ("%s %s mtcAlive received",
+                    alog ("%s %s mtcAlive received",
                               node_ptr->hostname.c_str(),
                               get_iface_name_str(interface));
                     node_ptr->mtcAlive_clstr = true ;
@@ -3912,7 +3912,7 @@ void nodeLinkClass::set_mtcAlive ( struct nodeLinkClass::node * node_ptr, int in
             {
                 if ( node_ptr->mtcAlive_mgmnt == false )
                 {
-                    alog2 ("%s %s mtcAlive received",
+                    alog ("%s %s mtcAlive received",
                               node_ptr->hostname.c_str(),
                               get_iface_name_str(interface));
                     node_ptr->mtcAlive_mgmnt = true ;
