@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 ###############################################################################
 #
-# Copyright (c) 2019-2020 Wind River Systems, Inc.
+# Copyright (c) 2019-2022 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -126,6 +126,7 @@ import yaml
 # Import Redfish Python Library
 # Module: https://pypi.org/project/redfish/
 import redfish
+from redfish.rest.v1 import InvalidCredentialsError
 
 
 FEATURE_NAME = 'Redfish Virtual Media Controller'
@@ -175,6 +176,14 @@ def ilog(string):
     """
 
     sys.stdout.write("\n%s Info  : %s" % (t(), string))
+
+
+def wlog(string):
+    """
+    Warning Log Utility
+    """
+
+    sys.stdout.write("\n%s Warn  : %s" % (t(), string))
 
 
 def elog(string):
@@ -273,6 +282,21 @@ MAX_POLL_COUNT = 200
 RETRY_DELAY_SECS = 10
 # 2 second delay constant
 DELAY_2_SECS = 2
+
+# max number of establishing BMC connection attempts
+MAX_CONNECTION_ATTEMPTS = 3
+# interval in seconds between BMC connection attempts
+CONNECTION_RETRY_INTERVAL = 15
+
+# max number of session creation attempts
+MAX_SESSION_CREATION_ATTEMPTS = 3
+# interval in seconds between session creation attempts
+SESSION_CREATION_RETRY_INTERVAL = 15
+
+# max number of retries for http transient error (e.g. response status: 500)
+MAX_HTTP_TRANSIENT_ERROR_RETRIES = 5
+# interval in seconds between http request retries
+HTTP_REQUEST_RETRY_INTERVAL = 10
 
 
 def is_ipv6_address(address):
@@ -454,7 +478,7 @@ class VmcObject(object):
         dlog1("Password    : %s" % self.pw_encoded)
         dlog1("Image       : %s" % self.img)
 
-    def make_request(self, operation=None, path=None, payload=None):
+    def make_request(self, operation=None, path=None, payload=None, retry=-1):
         """
         Issue a Redfish http request,
         Check response,
@@ -467,6 +491,10 @@ class VmcObject(object):
         :type path: str
         :param payload: POST or PATCH payload data
         :type payload: dictionary
+        :param retry: The number of retries. The default value -1 means
+         disabling retry. If the number in
+         [0 .. MAX_HTTP_TRANSIENT_ERROR_RETRIES), the retry will be executed.
+        :type retry: int
         :returns True if request succeeded (200,202(accepted),204(no content)
         """
 
@@ -477,27 +505,33 @@ class VmcObject(object):
             url = self.url
 
         before_request_time = datetime.datetime.now().replace(microsecond=0)
+        request_log = "Request     : %s %s" % (operation, url)
         try:
-            dlog3("Request     : %s %s" % (operation, url))
             if operation == GET:
-                dlog3("Headers     : %s : %s" % (operation, GET_HEADERS))
+                request_log += "\nHeaders     : %s : %s" % \
+                               (operation, GET_HEADERS)
                 self.response = self.redfish_obj.get(url, headers=GET_HEADERS)
 
             elif operation == POST:
-                dlog3("Headers     : %s : %s" % (operation, POST_HEADERS))
-                dlog3("Payload     : %s" % payload)
+                request_log += "\nHeaders     : %s : %s" % \
+                               (operation, POST_HEADERS)
+                request_log += "\nPayload     : %s" % payload
                 self.response = self.redfish_obj.post(url,
                                                       body=payload,
                                                       headers=POST_HEADERS)
             elif operation == PATCH:
-                dlog3("Headers     : %s : %s" % (operation, PATCH_HEADERS))
-                dlog3("Payload     : %s" % payload)
+                request_log += "\nHeaders     : %s : %s" % \
+                               (operation, PATCH_HEADERS)
+                request_log += "\nPayload     : %s" % payload
                 self.response = self.redfish_obj.patch(url,
                                                        body=payload,
                                                        headers=PATCH_HEADERS)
             else:
+                dlog3(request_log)
                 elog("Unsupported operation: %s" % operation)
                 return False
+
+            dlog3(request_log)
 
         except Exception as ex:
             elog("Failed operation on '%s' (%s)" % (url, ex))
@@ -507,7 +541,20 @@ class VmcObject(object):
             delta = after_request_time - before_request_time
             # if we got a response, check its status
             if self.check_ok_status(url, operation, delta.seconds) is False:
-                self._exit(1)
+                if retry < 0 or retry >= MAX_HTTP_TRANSIENT_ERROR_RETRIES:
+                    elog("Failed in an error response:\n%s" % self.response)
+                    self._exit(1)
+                else:
+                    retry += 1
+                    wlog("Got an error response for: \n%s" % request_log)
+                    ilog("Make request: retry (%i of %i) in %i secs." %
+                         (retry, MAX_HTTP_TRANSIENT_ERROR_RETRIES,
+                          HTTP_REQUEST_RETRY_INTERVAL))
+                    time.sleep(HTTP_REQUEST_RETRY_INTERVAL)
+                    self.make_request(operation=operation,
+                                      path=path,
+                                      payload=payload,
+                                      retry=retry)
 
             # handle 204 success with no content ; clear last response
             if self.response.status == 204:
@@ -725,26 +772,34 @@ class VmcObject(object):
             ilog("BMC Ping Ok : %s (%i)" % (self.ip, ping_count))
 
         # try to connect
-        connect_error = False
-        try:
-            # One time Redfish Client Object Create
-            self.redfish_obj = \
-                redfish.redfish_client(base_url=self.uri,
-                                       username=self.un,
-                                       password=self.pw,
-                                       default_prefix=REDFISH_ROOT_PATH)
-            if self.redfish_obj is None:
-                connect_error = True
-                elog("Unable to establish %s to BMC at %s" %
-                     (stage, self.uri))
-        except Exception as ex:
-            connect_error = True
-            elog("Unable to establish %s to BMC at %s (%s)" %
-                 (stage, self.uri, ex))
+        fail_counter = 0
+        err_msg = "Unable to establish %s to BMC at %s." % (stage, self.uri)
+        while fail_counter < MAX_CONNECTION_ATTEMPTS:
+            ex_log = ""
+            try:
+                # One time Redfish Client Object Create
+                self.redfish_obj = \
+                    redfish.redfish_client(base_url=self.uri,
+                                           username=self.un,
+                                           password=self.pw,
+                                           default_prefix=REDFISH_ROOT_PATH)
+                if self.redfish_obj is None:
+                    fail_counter += 1
+                else:
+                    return
+            except Exception as ex:
+                fail_counter += 1
+                ex_log = " (%s)" % str(ex)
 
-        if connect_error is True:
-            alog("Check BMC ip address is pingable and supports Redfish")
-            self._exit(1)
+            if fail_counter < MAX_CONNECTION_ATTEMPTS:
+                wlog(err_msg + " Retry (%i/%i) in %i secs." %
+                     (fail_counter, MAX_CONNECTION_ATTEMPTS - 1,
+                      CONNECTION_RETRY_INTERVAL) + ex_log)
+                time.sleep(CONNECTION_RETRY_INTERVAL)
+
+        elog(err_msg)
+        alog("Check BMC ip address is pingable and supports Redfish")
+        self._exit(1)
 
     ###########################################################################
     # Redfish Root Query
@@ -784,14 +839,27 @@ class VmcObject(object):
         stage = 'Create Communication Session'
         slog(stage)
 
-        try:
-            self.redfish_obj.login(auth="session")
-            dlog1("Session     : Open")
-            self.session = True
-
-        except Exception as ex:
-            elog("Failed to Create session ; %s" % ex)
-            self._exit(1)
+        fail_counter = 0
+        while fail_counter < MAX_SESSION_CREATION_ATTEMPTS:
+            try:
+                self.redfish_obj.login(auth="session")
+                dlog1("Session     : Open")
+                self.session = True
+                return
+            except InvalidCredentialsError:
+                elog("Failed to Create session due to invalid credentials.")
+                alog("Check BMC username and password in config file")
+                self._exit(1)
+            except Exception as ex:
+                err_msg = "Failed to Create session ; %s." % str(ex)
+                fail_counter += 1
+                if fail_counter >= MAX_SESSION_CREATION_ATTEMPTS:
+                    elog(err_msg)
+                    self._exit(1)
+                wlog(err_msg + " Retry (%i/%i) in %i secs."
+                     % (fail_counter, MAX_SESSION_CREATION_ATTEMPTS - 1,
+                        CONNECTION_RETRY_INTERVAL))
+                time.sleep(SESSION_CREATION_RETRY_INTERVAL)
 
     ###########################################################################
     # Query Redfish Managers
@@ -911,7 +979,8 @@ class VmcObject(object):
                 self._exit(1)
 
             if self.make_request(operation=GET,
-                                 path=self.systems_member_url) is False:
+                                 path=self.systems_member_url,
+                                 retry=0) is False:
                 elog("Unable to get %s from %s" %
                      (info, self.systems_member_url))
                 self._exit(1)
@@ -1048,7 +1117,7 @@ class VmcObject(object):
         poll_count = 0
         MAX_STATE_POLL_COUNT = 60  # some servers take longer than 10 seconds
         while poll_count < MAX_STATE_POLL_COUNT and self.power_state != state:
-            time.sleep(1)
+            time.sleep(3)
             poll_count = poll_count + 1
 
             # get systems info
@@ -1307,7 +1376,6 @@ class VmcObject(object):
                 while poll_count < MAX_POLL_COUNT and ejecting:
                     # verify the image is not in inserted
                     poll_count = poll_count + 1
-                    vm_eject = self.vm_actions.get(eject_media_label)
                     if self.make_request(operation=GET,
                                          path=self.vm_url) is True:
                         if self.get_key_value('Inserted') is False:
