@@ -22,6 +22,7 @@ override_dh_install:
 	install -v -m 644 default.static       $(ROOT)/var/pxeboot/pxelinux.cfg.files/default.static
 	install -v -m 644 pxe-grub.cfg         $(ROOT)/var/pxeboot/pxelinux.cfg.files/grub.cfg
 	install -v -m 644 pxe-grub.cfg.static  $(ROOT)/var/pxeboot/pxelinux.cfg.files/grub.cfg.static
+	install -v -m 644 grub.cfg.stx         $(ROOT)/var/pxeboot/pxelinux.cfg.files/grub.cfg.stx
 	install -p -D -m 700 pxeboot-update.sh $(ROOT)/usr/sbin/pxeboot-update-${platform_release}.sh
 
 	# Add controller-0 pxeboot install grub menus and setup utility

@@ -1,0 +1,124 @@
+set default="0"
+set timeout=3
+set color_normal='light-gray/black'
+set color_highlight='light-green/blue'
+
+set boot_part="otaboot"
+set root_part="otaroot"
+set flux_part="fluxdata"
+set rollback_part="_b"
+set ab="1"
+set ostree_console="console=ttyS0,115200"
+set kernel=vmlinuz
+set kernel_rollback=vmlinuz
+set kernel_params=""
+set kernel_params_ext=""
+
+if [ "${legacy_bios}" != "1" ]; then
+    set boot_env_path=${prefix}
+fi
+
+if [ -e ${boot_env_path}/boot.env ]; then
+  load_env -s -f ${boot_env_path}/boot.env
+
+  if [ "${boot_tried_count}" -eq "0" ]; then
+    set boot_tried_count="1"
+  elif [ "${boot_tried_count}" -eq "1" ]; then
+    set boot_tried_count="2"
+  elif [ "${boot_tried_count}" -eq "2" ]; then
+    set boot_tried_count="3"
+  elif [ "${boot_tried_count}" -eq "3" ]; then
+    if [ "${default}" -eq "1" ]; then
+       set default="0"
+    else
+       set default="1"
+    fi
+    save_env -f ${boot_env_path}/boot.env default
+    set boot_tried_count="0"
+  fi
+  save_env -f ${boot_env_path}/boot.env boot_tried_count
+fi
+
+search --no-floppy --label --set=avol ${boot_part}${boot_mode}
+if [ -e ($avol)/1/kernel.env ] ; then
+  load_env -s -f ($avol)/1/kernel.env kernel
+fi
+if [ "$ab" = "1" ] ; then
+  search --no-floppy --label --set=bvol ${boot_part}${rollback_part}
+  if [ -e ($avol)/1/kernel.env ] ; then
+    load_env -s -f ($avol)/1/kernel.env kernel_rollback
+  fi
+else
+  if [ -e ($avol)/2/kernel.env ] ; then
+    load_env -s -f ($avol)/2/kernel.env kernel_rollback
+  fi
+fi
+
+get_efivar -f uint8 -s secured SecureBoot
+if [ "${secured}" = "1" ]; then
+    # Enable user authentication to make grub unlockable
+    set superusers="root"
+    password_pbkdf2 root grub.pbkdf2.sha512.10000.7C392DD2FFEA15F1E050CF88DB414F128724C55039614BFCF22D9F3AA775E534BEC0A0A2E6C49FE3CBBC7A1A9CE7546D11FD198197A375044EF96D189EC22141.712E252EC3009DD64C5157615DF84F46B3D4A7C6F40DF941CB62C8965B25AA3D62B0D2080545FCB7801A62A72244F87DC13FF26D740A32D96D5F85017BB4AB03
+else
+    get_efivar -f uint8 -s unprovisioned SetupMode
+    if [ "${unprovisioned}" = "1" ]; then
+        set timeout=0
+
+        menuentry "Automatic Certificate Provision" --unrestricted {
+            chainloader ${prefix}/LockDown.efi
+        }
+    fi
+fi
+
+menuentry "StarlingX ostree${boot_mode} ${kernel}" --unrestricted {
+    set fallback=1
+    if [ "${legacy_bios}" != "1" ]; then
+        efi-watchdog enable 0 180
+    fi
+    search --no-floppy --label --set=root ${boot_part}${boot_mode}
+    if [ -e /1/kernel.env ] ; then
+        load_env -s -f /1/kernel.env kernel_params_ext
+    fi
+    linux /1/${kernel} rw rootwait ostree_boot=LABEL=${boot_part}${boot_mode} ostree_root=LABEL=${root_part}${boot_mode} flux=${flux_part} ostree=/ostree/1 $ostree_console $kernel_params $kernel_params_ext
+    initrd /1/initramfs
+}
+
+if [ "$ab" = "1" ] ; then
+menuentry "StarlingX ostree ${kernel_rollback} rollback${rollback_part}" --unrestricted {
+    search --no-floppy --label --set=root ${boot_part}${rollback_part}
+    if [ -e /1/kernel.env ] ; then
+        load_env -s -f /1/kernel.env kernel_params_ext
+    fi
+    linux /1/${kernel_rollback} rw rootwait ostree_boot=LABEL=${boot_part}${rollback_part}  ostree_root=LABEL=${root_part}${rollback_part} flux=${flux_part} ostree=/ostree/1 $ostree_console $kernel_params $kernel_params_ext
+    initrd /1/initramfs
+}
+else
+menuentry "StarlingX ostree${boot_mode} ${kernel_rollback} rollback" --unrestricted {
+    set fallback=1
+    if [ "${legacy_bios}" != "1" ]; then
+        efi-watchdog enable 0 180
+    fi
+    search --no-floppy --label --set=root ${boot_part}${boot_mode}
+    if [ -e /2/kernel.env ] ; then
+        load_env -s -f /2/kernel.env kernel_params_ext
+    fi
+    linux /2/${kernel_rollback} rw rootwait ostree_boot=LABEL=${boot_part}${boot_mode} ostree_root=LABEL=${root_part}${boot_mode} flux=${flux_part} ostree=/ostree/2 $ostree_console $kernel_params $kernel_params_ext
+    initrd /2/initramfs
+}
+fi
+
+if [ -s ${prefix}/igrub.cfg ] ; then
+   source ${prefix}/igrub.cfg
+   search --no-floppy --label --set=avol ${boot_part}${boot_mode}
+   if [ "$ab" = "1" ] ; then
+     search --no-floppy --label --set=bvol ${boot_part}${rollback_part}
+     if [ ! -s ($avol)/1/${kernel} -a ! -s ($bvol)/1/${kernel_rollback} ] ; then
+       set default="2"
+     fi
+   else
+     if [ ! -s ($avol)/1/${kernel} -a ! -s ($avol)/2/${kernel_rollback} ] ; then
+       set default="2"
+     fi
+   fi
+fi
+
