@@ -9,10 +9,12 @@ export platform_release="$(shell grep SW_VERSION /usr/include/build_info.h | cut
 
 override_dh_auto_configure:
 	sed -i "s/xxxSW_VERSIONxxx/${platform_release}/g" debian-pxe-* efi-debian-pxe-*
+	sed -i "s/xxxSW_VERSIONxxx/${platform_release}/g" pxeboot_feed.sh
 	dh_auto_configure
 
 override_dh_install:
 	install -v -d -m 755 $(ROOT)/usr/bin
+	install -v -d -m 755 $(ROOT)/lib/systemd/system
 	install -v -d -m 755 $(ROOT)/var/pxeboot/pxelinux.cfg.files
 	install -v -d -m 755 $(ROOT)/var/pxeboot/rel-${platform_release}
 	install -v -d -m 755 $(ROOT)/usr/share/licenses/pxe-network-installer-1.0.0
@@ -30,6 +32,8 @@ override_dh_install:
 	install -p -D -m 644 efi-pxeboot.cfg.debian $(ROOT)/var/pxeboot/pxelinux.cfg.files/efi-pxeboot.cfg.debian
 	install -p -D -m 755 pxeboot_setup.sh  $(ROOT)/usr/sbin/pxeboot_setup.sh
 	install -p -D -m 755 pxeboot-update.sh ${ROOT}/usr/sbin/pxeboot-update-${platform_release}.sh
+	install -p -D -m 644 pxeboot-feed.service $(ROOT)/lib/systemd/system/pxeboot-feed.service
+	install -p -D -m 755 pxeboot_feed.sh  $(ROOT)/etc/init.d/pxeboot_feed
 
 	# Legacy BIOS System Node Install grub menus
 	install -p -D -m 700     debian-pxe-controller-install  $(ROOT)/var/pxeboot/pxelinux.cfg.files/pxe-controller-install-${platform_release}
@@ -58,3 +62,6 @@ override_dh_install:
 	install -p -D -m 700 pxeboot/vesamenu.c32 $(ROOT)/var/pxeboot
 
 	dh_install
+
+override_dh_installsystemd:
+	dh_installsystemd -ppxe-network-installer pxeboot-feed.service
