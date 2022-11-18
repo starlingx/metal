@@ -39,86 +39,130 @@ if [ -e ${boot_env_path}/boot.env ]; then
   save_env -f ${boot_env_path}/boot.env boot_tried_count
 fi
 
-search --no-floppy --label --set=avol ${boot_part}${boot_mode}
-if [ -e ($avol)/1/kernel.env ] ; then
-  load_env -s -f ($avol)/1/kernel.env kernel
-fi
-if [ "$ab" = "1" ] ; then
-  search --no-floppy --label --set=bvol ${boot_part}${rollback_part}
+set partition_based_root="0"
+if [ "$partition_based_root" = "1" ] ; then
+
+  search --no-floppy --label --set=avol ${boot_part}${boot_mode}
   if [ -e ($avol)/1/kernel.env ] ; then
-    load_env -s -f ($avol)/1/kernel.env kernel_rollback
+    load_env -s -f ($avol)/1/kernel.env kernel
   fi
-else
-  if [ -e ($avol)/2/kernel.env ] ; then
-    load_env -s -f ($avol)/2/kernel.env kernel_rollback
+  if [ "$ab" = "1" ] ; then
+    search --no-floppy --label --set=bvol ${boot_part}${rollback_part}
+    if [ -e ($avol)/1/kernel.env ] ; then
+      load_env -s -f ($avol)/1/kernel.env kernel_rollback
+    fi
+  else
+    if [ -e ($avol)/2/kernel.env ] ; then
+      load_env -s -f ($avol)/2/kernel.env kernel_rollback
+    fi
   fi
-fi
 
-get_efivar -f uint8 -s secured SecureBoot
-if [ "${secured}" = "1" ]; then
-    # Enable user authentication to make grub unlockable
-    set superusers="root"
-    password_pbkdf2 root grub.pbkdf2.sha512.10000.7C392DD2FFEA15F1E050CF88DB414F128724C55039614BFCF22D9F3AA775E534BEC0A0A2E6C49FE3CBBC7A1A9CE7546D11FD198197A375044EF96D189EC22141.712E252EC3009DD64C5157615DF84F46B3D4A7C6F40DF941CB62C8965B25AA3D62B0D2080545FCB7801A62A72244F87DC13FF26D740A32D96D5F85017BB4AB03
-else
-    get_efivar -f uint8 -s unprovisioned SetupMode
-    if [ "${unprovisioned}" = "1" ]; then
-        set timeout=0
+  get_efivar -f uint8 -s secured SecureBoot
+  if [ "${secured}" = "1" ]; then
+      # Enable user authentication to make grub unlockable
+      set superusers="root"
+      password_pbkdf2 root grub.pbkdf2.sha512.10000.7C392DD2FFEA15F1E050CF88DB414F128724C55039614BFCF22D9F3AA775E534BEC0A0A2E6C49FE3CBBC7A1A9CE7546D11FD198197A375044EF96D189EC22141.712E252EC3009DD64C5157615DF84F46B3D4A7C6F40DF941CB62C8965B25AA3D62B0D2080545FCB7801A62A72244F87DC13FF26D740A32D96D5F85017BB4AB03
+  else
+      get_efivar -f uint8 -s unprovisioned SetupMode
+      if [ "${unprovisioned}" = "1" ]; then
+          set timeout=0
 
-        menuentry "Automatic Certificate Provision" --unrestricted {
-            chainloader ${prefix}/LockDown.efi
-        }
-    fi
-fi
+          menuentry "Automatic Certificate Provision" --unrestricted {
+              chainloader ${prefix}/LockDown.efi
+          }
+      fi
+  fi
 
-menuentry "StarlingX ostree${boot_mode} ${kernel}" --unrestricted {
-    set fallback=1
-    if [ "${legacy_bios}" != "1" ]; then
-        efi-watchdog enable 0 180
-    fi
-    search --no-floppy --label --set=root ${boot_part}${boot_mode}
-    if [ -e /1/kernel.env ] ; then
-        load_env -s -f /1/kernel.env kernel_params_ext
-    fi
-    linux /1/${kernel} rw rootwait ostree_boot=LABEL=${boot_part}${boot_mode} ostree_root=LABEL=${root_part}${boot_mode} flux=${flux_part} ostree=/ostree/1 $ostree_console $kernel_params $kernel_params_ext
-    initrd /1/initramfs
-}
+  menuentry "StarlingX ostree${boot_mode} ${kernel}" --unrestricted {
+      set fallback=1
+      if [ "${legacy_bios}" != "1" ]; then
+          efi-watchdog enable 0 180
+      fi
+      search --no-floppy --label --set=root ${boot_part}${boot_mode}
+      if [ -e /1/kernel.env ] ; then
+          load_env -s -f /1/kernel.env kernel_params_ext
+      fi
+      linux /1/${kernel} rw rootwait ostree_boot=LABEL=${boot_part}${boot_mode} ostree_root=/dev/mapper/cgts--vg-root--lv rd.lvm.lv=cgts/root-lv flux=${flux_part} ostree=/ostree/1 $ostree_console $kernel_params $kernel_params_ext
+      initrd /1/initramfs
+  }
 
-if [ "$ab" = "1" ] ; then
-menuentry "StarlingX ostree ${kernel_rollback} rollback${rollback_part}" --unrestricted {
-    search --no-floppy --label --set=root ${boot_part}${rollback_part}
-    if [ -e /1/kernel.env ] ; then
-        load_env -s -f /1/kernel.env kernel_params_ext
-    fi
-    linux /1/${kernel_rollback} rw rootwait ostree_boot=LABEL=${boot_part}${rollback_part}  ostree_root=LABEL=${root_part}${rollback_part} flux=${flux_part} ostree=/ostree/1 $ostree_console $kernel_params $kernel_params_ext
-    initrd /1/initramfs
-}
-else
-menuentry "StarlingX ostree${boot_mode} ${kernel_rollback} rollback" --unrestricted {
-    set fallback=1
-    if [ "${legacy_bios}" != "1" ]; then
-        efi-watchdog enable 0 180
-    fi
-    search --no-floppy --label --set=root ${boot_part}${boot_mode}
-    if [ -e /2/kernel.env ] ; then
-        load_env -s -f /2/kernel.env kernel_params_ext
-    fi
-    linux /2/${kernel_rollback} rw rootwait ostree_boot=LABEL=${boot_part}${boot_mode} ostree_root=LABEL=${root_part}${boot_mode} flux=${flux_part} ostree=/ostree/2 $ostree_console $kernel_params $kernel_params_ext
-    initrd /2/initramfs
-}
-fi
+  if [ "$ab" = "1" ] ; then
+  menuentry "StarlingX ostree ${kernel_rollback} rollback${rollback_part}" --unrestricted {
+      search --no-floppy --label --set=root ${boot_part}${rollback_part}
+      if [ -e /1/kernel.env ] ; then
+          load_env -s -f /1/kernel.env kernel_params_ext
+      fi
+      linux /1/${kernel_rollback} rw rootwait ostree_boot=LABEL=${boot_part}${rollback_part}  ostree_root=LABEL=${root_part}${rollback_part} flux=${flux_part} ostree=/ostree/1 $ostree_console $kernel_params $kernel_params_ext
+      initrd /1/initramfs
+  }
+  else
+  menuentry "StarlingX ostree${boot_mode} ${kernel_rollback} rollback" --unrestricted {
+      set fallback=1
+      if [ "${legacy_bios}" != "1" ]; then
+          efi-watchdog enable 0 180
+      fi
+      search --no-floppy --label --set=root ${boot_part}${boot_mode}
+      if [ -e /2/kernel.env ] ; then
+          load_env -s -f /2/kernel.env kernel_params_ext
+      fi
+      linux /2/${kernel_rollback} rw rootwait ostree_boot=LABEL=${boot_part}${boot_mode} ostree_root=/dev/mapper/cgts--vg-root--lv rd.lvm.lv=cgts/root-lv flux=${flux_part} ostree=/ostree/2 $ostree_console $kernel_params $kernel_params_ext
+      initrd /2/initramfs
+  }
+  fi
 
-if [ -s ${prefix}/igrub.cfg ] ; then
-   source ${prefix}/igrub.cfg
-   search --no-floppy --label --set=avol ${boot_part}${boot_mode}
-   if [ "$ab" = "1" ] ; then
-     search --no-floppy --label --set=bvol ${boot_part}${rollback_part}
-     if [ ! -s ($avol)/1/${kernel} -a ! -s ($bvol)/1/${kernel_rollback} ] ; then
-       set default="2"
+  if [ -s ${prefix}/igrub.cfg ] ; then
+     source ${prefix}/igrub.cfg
+     search --no-floppy --label --set=avol ${boot_part}${boot_mode}
+     if [ "$ab" = "1" ] ; then
+       search --no-floppy --label --set=bvol ${boot_part}${rollback_part}
+       if [ ! -s ($avol)/1/${kernel} -a ! -s ($bvol)/1/${kernel_rollback} ] ; then
+         set default="2"
+       fi
+     else
+       if [ ! -s ($avol)/1/${kernel} -a ! -s ($avol)/2/${kernel_rollback} ] ; then
+         set default="2"
+       fi
      fi
-   else
-     if [ ! -s ($avol)/1/${kernel} -a ! -s ($avol)/2/${kernel_rollback} ] ; then
-       set default="2"
-     fi
-   fi
-fi
+  fi
 
+else
+
+  set ostree_root_lv='/dev/mapper/cgts--vg-root--lv'
+  set ostree_var_lv='/dev/mapper/cgts--vg-var--lv'
+  set kernel_root_lv='cgts/root-lv'
+
+  search --no-floppy --label --set=avol ${boot_part}${boot_mode}
+  if [ -e ($avol)/1/kernel.env ] ; then
+    load_env -s -f ($avol)/1/kernel.env kernel
+  fi
+
+  get_efivar -f uint8 -s secured SecureBoot
+  if [ "${secured}" = "1" ]; then
+      # Enable user authentication to make grub unlockable
+      set superusers="root"
+      password_pbkdf2 root grub.pbkdf2.sha512.10000.7C392DD2FFEA15F1E050CF88DB414F128724C55039614BFCF22D9F3AA775E534BEC0A0A2E6C49FE3CBBC7A1A9CE7546D11FD198197A375044EF96D189EC22141.712E252EC3009DD64C5157615DF84F46B3D4A7C6F40DF941CB62C8965B25AA3D62B0D2080545FCB7801A62A72244F87DC13FF26D740A32D96D5F85017BB4AB03
+  else
+      get_efivar -f uint8 -s unprovisioned SetupMode
+      if [ "${unprovisioned}" = "1" ]; then
+          set timeout=0
+
+          menuentry "Automatic Certificate Provision" --unrestricted {
+              chainloader ${prefix}/LockDown.efi
+          }
+      fi
+  fi
+
+  menuentry "StarlingX ostree${boot_mode} ${kernel}" --unrestricted {
+      set fallback=1
+      if [ "${legacy_bios}" != "1" ]; then
+          efi-watchdog enable 0 180
+      fi
+      search --no-floppy --label --set=root ${boot_part}${boot_mode}
+      if [ -e /1/kernel.env ] ; then
+          load_env -s -f /1/kernel.env kernel_params_ext
+      fi
+      linux /1/${kernel} rw rootwait ostree_boot=LABEL=${boot_part}${boot_mode} ostree_root=${ostree_root_lv} rd.lvm.lv=${kernel_root_lv} ostree_var=${ostree_var_lv} ostree=/ostree/1 $ostree_console $kernel_params $kernel_params_ext
+      initrd /1/initramfs
+  }
+
+fi
