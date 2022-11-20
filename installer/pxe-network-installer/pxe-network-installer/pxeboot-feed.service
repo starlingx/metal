@@ -1,0 +1,13 @@
+[Unit]
+Description=StarlingX Pxeboot Feed Refresh
+After=config.service
+Before=pmon.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/etc/init.d/pxeboot_feed
+
+[Install]
+WantedBy=multi-user.target
+
