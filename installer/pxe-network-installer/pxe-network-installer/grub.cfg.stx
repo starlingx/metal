@@ -20,23 +20,8 @@ fi
 
 if [ -e ${boot_env_path}/boot.env ]; then
   load_env -s -f ${boot_env_path}/boot.env
-
-  if [ "${boot_tried_count}" -eq "0" ]; then
-    set boot_tried_count="1"
-  elif [ "${boot_tried_count}" -eq "1" ]; then
-    set boot_tried_count="2"
-  elif [ "${boot_tried_count}" -eq "2" ]; then
-    set boot_tried_count="3"
-  elif [ "${boot_tried_count}" -eq "3" ]; then
-    if [ "${default}" -eq "1" ]; then
-       set default="0"
-    else
-       set default="1"
-    fi
-    save_env -f ${boot_env_path}/boot.env default
-    set boot_tried_count="0"
-  fi
-  save_env -f ${boot_env_path}/boot.env boot_tried_count
+  set default="0"
+  save_env -f ${boot_env_path}/boot.env default
 fi
 
 search --no-floppy --label --set=avol ${boot_part}${boot_mode}
