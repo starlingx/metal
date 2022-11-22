@@ -22,5 +22,5 @@ LABEL 1
   MENU LABEL All-in-one
   MENU DEFAULT
   KERNEL rel-xxxSW_VERSIONxxx/bzImage-std
-  APPEND initrd=rel-xxxSW_VERSIONxxx/initrd rdinit=/install defaultkernel=vmlinuz-*[!t]-amd64 traits=controller,worker instname=debian instbr=starlingx instsh=0 instab=0 ks=xxxBASE_URLxxx/feed/rel-xxxSW_VERSIONxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/feed/rel-xxxSW_VERSIONxxx/ostree_repo console=ttyS0,115200 console=tty1 biosdevname=0 biosplusefi=1 xxxAPPEND_OPTIONSxxx
+  APPEND initrd=rel-xxxSW_VERSIONxxx/initrd rdinit=/install defaultkernel=vmlinuz-*[!t]-amd64 traits=controller,worker instname=debian instbr=starlingx instsh=0 instab=0 inst_ostree_root=/dev/mapper/cgts--vg-root--lv inst_ostree_var=/dev/mapper/cgts--vg-var--lv ks=xxxBASE_URLxxx/feed/rel-xxxSW_VERSIONxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/feed/rel-xxxSW_VERSIONxxx/ostree_repo console=ttyS0,115200 console=tty1 biosdevname=0 biosplusefi=1 xxxAPPEND_OPTIONSxxx
   IPAPPEND 2

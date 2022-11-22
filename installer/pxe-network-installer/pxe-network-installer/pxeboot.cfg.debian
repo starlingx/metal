@@ -25,12 +25,12 @@ menu begin
   label 1
     menu label Serial Console
     kernel xxxPXEBOOTxxx/bzImage-std
-    append initrd=xxxPXEBOOTxxx/initrd rdinit=/install defaultkernel=vmlinuz-*[!t]-amd64 instname=debian instbr=starlingx instab=0 traits=controller instdev=xxxINSTDEVxxx ks=xxxBASE_URLxxx/xxxFEEDxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/xxxFEEDxxx/ostree_repo console=ttyS0,115200 biosdevname=0 biosplusefi=1
+    append initrd=xxxPXEBOOTxxx/initrd rdinit=/install defaultkernel=vmlinuz-*[!t]-amd64 instname=debian instbr=starlingx instab=0 traits=controller instdev=xxxINSTDEVxxx inst_ostree_root=/dev/mapper/cgts--vg-root--lv inst_ostree_var=/dev/mapper/cgts--vg-var--lv ks=xxxBASE_URLxxx/xxxFEEDxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/xxxFEEDxxx/ostree_repo console=ttyS0,115200 biosdevname=0 biosplusefi=1
     ipappend 2
   label 2
     menu label Graphical Console
     kernel xxxPXEBOOTxxx/bzImage-std
-    append initrd=xxxPXEBOOTxxx/initrd rdinit=/install defaultkernel=vmlinuz-*[!t]-amd64 instname=debian instbr=starlingx instab=0 traits=controller instdev=xxxINSTDEVxxx ks=xxxBASE_URLxxx/xxxFEEDxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/xxxFEEDxxx/ostree_repo console=tty1 biosdevname=0 biosplusefi=1
+    append initrd=xxxPXEBOOTxxx/initrd rdinit=/install defaultkernel=vmlinuz-*[!t]-amd64 instname=debian instbr=starlingx instab=0 traits=controller instdev=xxxINSTDEVxxx inst_ostree_root=/dev/mapper/cgts--vg-root--lv inst_ostree_var=/dev/mapper/cgts--vg-var--lv ks=xxxBASE_URLxxx/xxxFEEDxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/xxxFEEDxxx/ostree_repo console=tty1 biosdevname=0 biosplusefi=1
     ipappend 2
 menu end
 
@@ -39,12 +39,12 @@ menu begin
   label 3
     menu label Serial Console
     kernel xxxPXEBOOTxxx/bzImage-std
-    append initrd=xxxPXEBOOTxxx/initrd rdinit=/install defaultkernel=vmlinuz-*[!t]-amd64 instname=debian instbr=starlingx instab=0 traits=controller,worker instdev=xxxINSTDEVxxx ks=xxxBASE_URLxxx/xxxFEEDxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/xxxFEEDxxx/ostree_repo console=ttyS0,115200 biosdevname=0 biosplusefi=1
+    append initrd=xxxPXEBOOTxxx/initrd rdinit=/install defaultkernel=vmlinuz-*[!t]-amd64 instname=debian instbr=starlingx instab=0 traits=controller,worker instdev=xxxINSTDEVxxx inst_ostree_root=/dev/mapper/cgts--vg-root--lv inst_ostree_var=/dev/mapper/cgts--vg-var--lv ks=xxxBASE_URLxxx/xxxFEEDxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/xxxFEEDxxx/ostree_repo console=ttyS0,115200 biosdevname=0 biosplusefi=1
     ipappend 2
   label 4
     menu label Graphical Console
     kernel xxxPXEBOOTxxx/bzImage-std
-    append initrd=xxxPXEBOOTxxx/initrd rdinit=/install defaultkernel=vmlinuz-*[!t]-amd64 instname=debian instbr=starlingx instab=0 traits=controller,worker instdev=xxxINSTDEVxxx ks=xxxBASE_URLxxx/xxxFEEDxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/xxxFEEDxxx/ostree_repo console=tty1 biosdevname=0 biosplusefi=1
+    append initrd=xxxPXEBOOTxxx/initrd rdinit=/install defaultkernel=vmlinuz-*[!t]-amd64 instname=debian instbr=starlingx instab=0 traits=controller,worker instdev=xxxINSTDEVxxx inst_ostree_root=/dev/mapper/cgts--vg-root--lv inst_ostree_var=/dev/mapper/cgts--vg-var--lv ks=xxxBASE_URLxxx/xxxFEEDxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/xxxFEEDxxx/ostree_repo console=tty1 biosdevname=0 biosplusefi=1
     ipappend 2
 menu end
 
@@ -53,11 +53,11 @@ menu begin
   label 5
     menu label Serial Console
     kernel xxxPXEBOOTxxx/bzImage-rt
-    append initrd=xxxPXEBOOTxxx/initrd rdinit=/install defaultkernel=vmlinuz-*-rt-amd64 instname=debian instbr=starlingx instab=0 traits=controller,worker,lowlatency instdev=xxxINSTDEVxxx ks=xxxBASE_URLxxx/xxxFEEDxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/xxxFEEDxxx/ostree_repo console=ttyS0,115200 biosdevname=0 biosplusefi=1
+    append initrd=xxxPXEBOOTxxx/initrd rdinit=/install defaultkernel=vmlinuz-*-rt-amd64 instname=debian instbr=starlingx instab=0 traits=controller,worker,lowlatency instdev=xxxINSTDEVxxx inst_ostree_root=/dev/mapper/cgts--vg-root--lv inst_ostree_var=/dev/mapper/cgts--vg-var--lv ks=xxxBASE_URLxxx/xxxFEEDxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/xxxFEEDxxx/ostree_repo console=ttyS0,115200 biosdevname=0 biosplusefi=1
     ipappend 2
   label 6
     menu label Graphical Console
     kernel xxxPXEBOOTxxx/bzImage-rt
-    append initrd=xxxPXEBOOTxxx/initrd rdinit=/install defaultkernel=vmlinuz-*-rt-amd64 instname=debian instbr=starlingx instab=0 traits=controller,worker,lowlatency instdev=xxxINSTDEVxxx ks=xxxBASE_URLxxx/xxxFEEDxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/xxxFEEDxxx/ostree_repo console=tty1 biosdevname=0 biosplusefi=1
+    append initrd=xxxPXEBOOTxxx/initrd rdinit=/install defaultkernel=vmlinuz-*-rt-amd64 instname=debian instbr=starlingx instab=0 traits=controller,worker,lowlatency instdev=xxxINSTDEVxxx inst_ostree_root=/dev/mapper/cgts--vg-root--lv inst_ostree_var=/dev/mapper/cgts--vg-var--lv ks=xxxBASE_URLxxx/xxxFEEDxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/xxxFEEDxxx/ostree_repo console=tty1 biosdevname=0 biosplusefi=1
     ipappend 2
 menu end
