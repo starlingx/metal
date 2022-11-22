@@ -39,7 +39,13 @@ source $SCRIPT_DIR/version
 source /etc/build.info
 
 FEED_DIR=/var/www/pages/feed/rel-${VERSION}
+
+# Feed directory is different in 21.12 vs. 22.06
 CURRENT_FEED_DIR=/var/www/pages/feed/rel-${SW_VERSION}
+if [ ${SW_VERSION} == "21.12" ]; then
+    CURRENT_FEED_DIR=/www/pages/feed/rel-${SW_VERSION}
+    FEED_DIR=/www/pages/feed/rel-${VERSION}
+fi
 
 rm -rf ${FEED_DIR}
 mkdir -p ${FEED_DIR}
