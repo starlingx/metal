@@ -1,6 +1,6 @@
-#! /bin/bash
+#!/bin/bash
 #
-# Copyright (c) 2013-2017 Wind River Systems, Inc.
+# Copyright (c) 2013-2022 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -15,7 +15,7 @@ usage ()
     echo "Options:"
     echo "  -h                  display this help"
     echo "  --force             do not ask for confirmation"
-    echo "  --include-backup    also removes data from platform backup directory"
+    echo "  --include-backup    removes data from platform backup directory"
     exit 1
 }
 
@@ -24,26 +24,25 @@ usage ()
 # because remounting deleted filesystems at shutdown will throw errors
 unmount_fs()
 {
-  local fs=$1
-  local ret_code=0
-  echo "Trying to unmount $fs"
-  if findmnt $fs > /dev/null 2>&1 ; then
-      if umount -f $fs ; then
-         echo "$fs has been successfully unmounted"
-      else
-         echo "Error! Failed to unmount $fs"
-         ret_code=1
-      fi
-  else
-      echo "Warning! $fs is not mounted"
-      ret_code=2
-  fi
-  return $ret_code
+    local fs=$1
+    local ret_code=0
+    echo "Trying to unmount $fs"
+    if findmnt $fs > /dev/null 2>&1 ; then
+        if umount -f $fs ; then
+            echo "$fs has been successfully unmounted"
+        else
+            echo "Error! Failed to unmount $fs"
+            ret_code=1
+        fi
+    else
+        echo "Warning! $fs is not mounted"
+        ret_code=2
+    fi
+    return $ret_code
 }
 
 OPTS=`getopt -o h -l force,include-backup -- "$@"`
-if [ $? != 0 ]
-then
+if [ $? != 0 ] ; then
     exit 1
 fi
 
@@ -58,61 +57,54 @@ while true ; do
     esac
 done
 
-if [ $# != 0 ]
-then
+if [ $# != 0 ] ; then
     echo "Invalid argument. Use -h for help."
     exit 1
 fi
 
 declare WIPE_HDD=
 
-# Only wipe the rootfs and boot device disks
-rootfs_part=$(df --output=source / | tail -1)
-rootfs=$(readlink -f $(find -L /dev/disk/by-path/ -samefile $rootfs_part | sed 's/-part[0-9]*'//))
-
+# Only wipe the boot device disks
 boot_disk_part=$(df --output=source /boot | tail -1)
 boot_disk=$(readlink -f $(find -L /dev/disk/by-path/ -samefile $boot_disk_part | sed 's/-part[0-9]*'//))
 
-WIPE_HDD=$rootfs
-if [ "$rootfs" != "$boot_disk" ]
-then
-    WIPE_HDD="$WIPE_HDD $boot_disk"
+if [ -z "$boot_disk" ] ; then
+    echo "Boot disk not found. Failed to wipe disk."
+    exit 1
+else
+    WIPE_HDD="$boot_disk"
 fi
 
 # Due to dynamic partitioning, volume groups can have PVs across multiple disks.
-# When deleting the rootfs, we should also delete all PVs (across all disks) that
-# are part of volume groups that are also present on the rootfs.
-rootfs_vgs=$(pvdisplay -C --separator '  |  ' -o pv_name,vg_name | grep $rootfs | awk '{print $3}' | sort -u)
+# When deleting the boot disk volume groups, we should also delete all PVs
+# (across all disks) that are part of volume groups that are also present on the
+# boot disk.
+boot_disk_vgs=$(pvdisplay -C --separator '  |  ' -o pv_name,vg_name | grep $boot_disk | awk '{print $3}' | sort -u)
 
 pvs_to_delete=""
 
-for vg in $rootfs_vgs
-do
+for vg in $boot_disk_vgs ; do
     pv=$(pvdisplay --select "vg_name=$vg" | awk '/PV Name/{print $3}')
     pvs_to_delete="$pvs_to_delete $pv"
 done
 
 WIPE_HDD="$pvs_to_delete $WIPE_HDD"
 
-if [ ! $FORCE ]
-then
+if [ ! $FORCE ] ; then
     echo "This will result in the loss of all data on the hard drives and"
     echo "will require this node to be re-installed."
     echo "The following disks will be wiped:"
-    for dev in $WIPE_HDD
-    do
+    for dev in $WIPE_HDD ; do
         echo "    $dev"
     done | sort
     echo
     read -p "Are you absolutely sure? [y/n] " -r
-    if [[ ! $REPLY =~ ^[Yy]$ ]]
-    then
+    if [[ ! $REPLY =~ ^[Yy]$ ]] ; then
         echo "Aborted"
         exit 1
     fi
     read -p "Type 'wipediskscompletely' to confirm: " -r
-    if [[ ! $REPLY = "wipediskscompletely" ]]
-    then
+    if [[ ! $REPLY = "wipediskscompletely" ]] ; then
         echo "Aborted"
         exit 1
     fi
@@ -127,14 +119,11 @@ part_type_guid_str="Partition GUID code"
 # get the nodetype variable to check later if this node is a controller
 . /etc/platform/platform.conf
 
-for dev in $WIPE_HDD
-do
-    if [[ -e $dev ]]
-    then
-        if [[ "$dev" == "$rootfs" && "${nodetype}" == "controller" ]]
-        then
+for dev in $WIPE_HDD ; do
+    if [[ -e $dev ]] ; then
+        if [[ "$dev" == "$boot_disk" && "${nodetype}" == "controller" ]] ; then
             part_numbers=( $(parted -s $dev print | awk '$1 == "Number" {i=1; next}; i {print $1}') )
-            for part_number in "${part_numbers[@]}"; do
+            for part_number in "${part_numbers[@]}" ; do
                 part=$dev$part_number
                 case $part in
                     *"nvme"*)
@@ -143,7 +132,7 @@ do
                 esac
                 sgdisk_part_info=$(flock $dev sgdisk -i $part_number $dev)
                 part_type_guid=$(echo "$sgdisk_part_info" | grep "$part_type_guid_str" | awk '{print $4;}')
-                if [[ "$part_type_guid" == $BACKUP_PART_GUID && ! $INCLUDE_BACKUP ]]; then
+                if [[ "$part_type_guid" == $BACKUP_PART_GUID && ! $INCLUDE_BACKUP ]] ; then
                     echo "Skipping wipe backup partition $part..."
                     continue
                 fi
@@ -153,8 +142,7 @@ do
                 # Delete the first few bytes at the start and end of the partition. This is required with
                 # GPT partitions, they save partition info at the start and the end of the block.
                 # Skip / or we will lose access to the tools on the system.
-                if [[ $part != $rootfs_part ]]
-                then
+                if [[ $part != $boot_disk_part ]] ; then
                     unmount_fs $part
                     dd if=/dev/zero of=$part bs=512 count=34
                     dd if=/dev/zero of=$part bs=512 count=34 seek=$((`blockdev --getsz $part` - 34))
@@ -180,8 +168,7 @@ do
     fi
 done
 
-if [[ -z $WIPE_HDD ]]
-then
+if [[ -z $WIPE_HDD ]] ; then
     echo "No disks were detected."
 else
     sync
