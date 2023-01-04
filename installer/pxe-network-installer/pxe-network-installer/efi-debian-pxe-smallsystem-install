@@ -4,6 +4,6 @@ GRUB_HIDDEN_TIMEOUT=0
 GRUB_TIMEOUT_STYLE='countdown'
 
 menuentry 'UEFI All-in-one' {
-      linux rel-xxxSW_VERSIONxxx/bzImage-std rdinit=/install defaultkernel=vmlinuz-*[!t]-amd64 traits=controller,worker instname=debian instbr=starlingx instsh=0 instab=0 BOOTIF=$net_default_mac inst_ostree_root=/dev/mapper/cgts--vg-root--lv inst_ostree_var=/dev/mapper/cgts--vg-var--lv ks=xxxBASE_URLxxx/feed/rel-xxxSW_VERSIONxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/feed/rel-xxxSW_VERSIONxxx/ostree_repo console=ttyS0,115200 console=tty1 biosdevname=0 biosplusefi=1 xxxAPPEND_OPTIONSxxx
+      linux rel-xxxSW_VERSIONxxx/bzImage-std rdinit=/install defaultkernel=vmlinuz-*[!t]-amd64 traits=controller,worker instname=debian instbr=starlingx instsh=0 instab=0 BOOTIF=$net_default_mac inst_ostree_root=/dev/mapper/cgts--vg-root--lv inst_ostree_var=/dev/mapper/cgts--vg-var--lv ks=xxxBASE_URLxxx/feed/rel-xxxSW_VERSIONxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/feed/rel-xxxSW_VERSIONxxx/ostree_repo console=tty1 biosdevname=0 biosplusefi=1 xxxAPPEND_OPTIONSxxx
       initrd rel-xxxSW_VERSIONxxx/initrd
 }
