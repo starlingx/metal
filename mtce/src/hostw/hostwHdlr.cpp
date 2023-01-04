@@ -83,7 +83,7 @@ void hostwTimer_handler ( int sig, siginfo_t *si, void *uc)
 void get_kdump_support ( void )
 {
     char pipe_cmd_output [PIPE_COMMAND_RESPON_LEN] ;
-    execute_pipe_cmd ( "/usr/bin/systemctl is-active kdump",
+    execute_pipe_cmd ( "/usr/bin/systemctl is-active kdump-tools",
                        &pipe_cmd_output[0],
                        PIPE_COMMAND_RESPON_LEN );
     if ( strnlen ( pipe_cmd_output, PIPE_COMMAND_RESPON_LEN ) > 0 )
