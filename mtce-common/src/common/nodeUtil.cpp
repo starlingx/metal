@@ -1021,16 +1021,16 @@ void fork_sysreq_reboot ( int delay_in_secs )
     {
         elog ("failed to fork fail-safe (backup) sysreq reboot\n");
         return ;
-    } 
+    }
     else if( 0 == parent ) /* we're the child */
     {
         int sysrq_handler_fd;
         int sysrq_tigger_fd ;
         size_t temp ;
-        
-        setup_child ( false ) ; 
 
-        ilog ("*** Failsafe Reset Thread ***\n");
+        setup_child ( false ) ;
+
+        dlog ("*** Failsafe Reset Thread ***\n");
 
         /* Commented this out because blocking SIGTERM in systemd environment
          * causes any processes that spawn this sysreq will stall shutdown
@@ -1046,7 +1046,7 @@ void fork_sysreq_reboot ( int delay_in_secs )
         sysrq_handler_fd = open( "/proc/sys/kernel/sysrq", O_RDWR | O_CLOEXEC );
         if( 0 > sysrq_handler_fd )
         {
-            ilog ( "failed sysrq_handler open\n");
+            elog ( "failed sysrq_handler open\n");
             return ;
         }
 
@@ -1059,7 +1059,7 @@ void fork_sysreq_reboot ( int delay_in_secs )
             {
                 if ( 0 == (i % 5) )
                 {
-                    ilog ( "sysrq reset in %d seconds\n", i );
+                    dlog ( "sysrq reset in %d seconds\n", i );
                 }
             }
         }
@@ -1068,19 +1068,19 @@ void fork_sysreq_reboot ( int delay_in_secs )
         sysrq_tigger_fd = open( "/proc/sysrq-trigger", O_RDWR | O_CLOEXEC );
         if( 0 > sysrq_tigger_fd )
         {
-            ilog ( "failed sysrq_trigger open\n");
+            elog ( "failed sysrq_trigger open\n");
             return ;
         }
 
-        temp = write( sysrq_tigger_fd, "b", 1 ); 
+        temp = write( sysrq_tigger_fd, "b", 1 );
         close( sysrq_tigger_fd );
-                                
-        ilog ( "sysreq rc:%ld\n", temp );
+
+        dlog ( "sysreq rc:%ld\n", temp );
 
         UNUSED(temp);
 
-        sleep (10); 
-    
+        sleep (10);
+
         // Shouldn't get this far, else there was an error.
         exit(-1);
     }
