@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2016 Wind River Systems, Inc.
+ * Copyright (c) 2015-2016,2023 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -14,31 +14,65 @@
 #include <linux/watchdog.h>
 #include <fcntl.h>
 #include <unistd.h>       /* for execve */
+#include <string.h>
+#include <stdio.h>
+
+/**********************************************************
+ * Name: EMERG_PREFIX
+ *
+ * Description: Add a log priority bit mask to the emergency logs.
+ *
+ * Priority logging is set by prefixing a log written to /dev/kmsg
+ * with a <#>. See description and links below.
+ *
+ * Currently using 8 (bitfield)
+ *
+ * #define LOG_KERN        (0<<3)  // kernel messages
+ * #define LOG_USER        (1<<3)  // random user-level messages
+ *
+ * "According to syslog.h priorities/facilities are encoded into
+ * a single 32-bit quantity, where the bottom 3 bits are the
+ * priority (0-7) and the top 28 bits are the facility (0-big number).
+ * Both the priorities and the facilities map roughly one-to-one
+ * to strings in the syslogd(8) source code."
+ *
+ * Priorities:
+ * https://github.com/openbsd/src/blob/master/sys/sys/syslog.h#L44-L60
+ *
+ * Facilities
+ * https://github.com/openbsd/src/blob/master/sys/sys/syslog.h#L92-L104
+ *
+ */
+#define EMERG_PREFIX ((const char *)("<8>hostwd:"))
 
 /* In addition to logging to wherever elog messages go,
  * this function does its best to log output to the console
  * (for the purpose of capturing data when the system is
  * about to go down)
  *
- * The path we log to is defined in the config file, exepected to
- * be something like "/dev/console", "/dev/pts/0" or "/dev/ttyS0"
+ * The path we log to is defined in the config file, expected
+ * to be something like /dev/console
+ *                      /dev/pts/0
+ *                      /dev/ttyS0
+ *                      /dev/kmsg
  */
 #define emergency_log(...)                                    \
 {                                                             \
     daemon_config_type *cfg = daemon_get_cfg_ptr ();          \
-    elog(__VA_ARGS__)                                         \
+    elog(__VA_ARGS__);                                        \
     if (cfg->hostwd_console_path) {                           \
-        FILE* console = fopen(cfg->hostwd_console_path, "a"); \
-        if (NULL != console) {                                \
-            fprintf(console, __VA_ARGS__);                    \
-            fclose (console);                                 \
+        int console = open(cfg->hostwd_console_path, O_RDWR); \
+        if (console > 0) {                                    \
+            char message[MAX_MSG];                            \
+            snprintf(message, MAX_MSG-1, __VA_ARGS__);        \
+            write(console, message, strlen(message));         \
+            close (console);                                  \
         }                                                     \
     }                                                         \
 }
 
 int hostw_service_command ( hostw_socket_type * hostw_socket );
 
-void fork_hostwd_logger ( void );
 char   my_hostname [MAX_HOST_NAME_SIZE+1];
 
 /* Push daemon state to log file */
@@ -130,11 +164,12 @@ void force_crashdump ( void )
     if (( daemon_get_cfg_ptr()->hostwd_kdump_on_stall == 0 ) ||
         ( ctrl_ptr->kdump_supported == false ))
     {
-        /* crash dump is disabled or not supported */
+        wlog ("Crash dump is disabled or not supported");
         return ;
     }
 
     /* Go for the crash dump */
+    emergency_log ("%s forcing a crashdump", EMERG_PREFIX);
 
     /* Enable all functions of sysrq */
     static char sysrq_enable_cmd = '1' ;
@@ -320,12 +355,8 @@ void hostw_service ( void )
                 }
                 else
                 {
-                    /* force a crash dump if that feature is enabled */
-                    force_crashdump();
-
-                    emergency_log( "*** Host watchdog (hostwd) not receiving messages "
-                                   "from PMON ***\n");
-
+                    emergency_log( "%s *** Host watchdog not receiving messages "
+                                   "from PMON ***\n", EMERG_PREFIX);
                     hostw_log_and_reboot();
                 }
             }
@@ -376,11 +407,7 @@ int hostw_service_command ( hostw_socket_type * hostw_socket)
                 }
                 else
                 {
-                    emergency_log( "*** PMON reports unrecoverable system - message '%s' ***\n", msg[0].buf);
-
-                    /* force a crash dump if that feature is enabled */
-                    force_crashdump();
-
+                    emergency_log( "%s *** PMON reports unrecoverable system - %s ***\n", EMERG_PREFIX, msg[0].buf);
                     hostw_log_and_reboot();
                     return FAIL;
                 }
@@ -406,16 +433,13 @@ void hostw_log_and_reboot()
 {
     daemon_config_type* config = daemon_get_cfg_ptr ();
 
-    emergency_log ("*** Host Watchdog declaring system unhealthy ***\n");
+    emergency_log ("%s *** Host Watchdog declaring system unhealthy ***\n", EMERG_PREFIX);
 
-    /* Start the process to log as much data as possible */
-
-    /* NOTE: This function currently does not do anything so its commented
-     * out for now. Uncomment when actual value add logging is implemented.
-    fork_hostwd_logger (); */
+    /* force a crashdump if enabled */
+    force_crashdump();
 
     if (config->hostwd_reboot_on_err) {
-        emergency_log ("*** Initiating reboot ***\n");
+        emergency_log ("%s *** Initiating reboot ***\n", EMERG_PREFIX );
 
         /* start the process that will perform an ungraceful reboot, if
          * the graceful reboot fails */
@@ -425,32 +449,3 @@ void hostw_log_and_reboot()
         fork_graceful_reboot ( GRACEFUL_REBOOT_DELAY );
     }
 }
-
-/**
- * Initiate the thread which logs as much information about the system
- * as possible.
- */
-void fork_hostwd_logger ( void )
-{
-    int parent = double_fork ();
-    if (0 > parent) /* problem forking */
-    {
-        elog ("failed to fork hostwd logging process\n");
-        return ;
-    }
-    else if (0 == parent) /* if we're the child */
-    {
-        sigset_t mask , mask_orig ;
-
-        setup_child(false); /* initialize the process group, etc */
-        ilog ("*** Host Watchdog Logging Thread ***\n");
-
-        sigemptyset (&mask);
-        sigaddset (&mask, SIGTERM );
-        sigprocmask (SIG_BLOCK, &mask, &mask_orig );
-
-        /* TODO - log data here */
-        exit (0);
-    }
-}
-
