@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Copyright (c) 2016-2017 Wind River Systems, Inc.
+# Copyright (c) 2016-2023 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -26,6 +26,7 @@ Arguments:
     -c <console>        : Specify serial console (optional)
     -b <boot device>    : Specify boot device
     -r <rootfs device>  : Specify rootfs device
+    -H <hwsettle>       : Delay at init waiting for H/W to be ready (optional)
     -u <tisnotify url>  : Base url for TIS install progress notification
     -s <mode>           : Specify Security Profile mode (optional)
     -T <tboot value>    : Specify whether or not to use tboot (optional)
@@ -70,7 +71,7 @@ parms=$@
 logger -t $0 " $parms"
 debian_menus=false
 
-while getopts "i:o:tgc:b:r:u:s:T:k:l:h:d" opt
+while getopts "i:o:tgc:b:r:H:u:s:T:k:l:h:d" opt
 do
     case $opt in
         i)
@@ -101,6 +102,9 @@ do
             ;;
         r)
             rootfs_device=$OPTARG
+            ;;
+        H)
+            hwsettle=$OPTARG
             ;;
         u)
             tisnotify=$OPTARG
@@ -165,6 +169,11 @@ fi
 
 if [ "${debian_menus}" = true ] ; then
     APPEND_OPTIONS="instdev=$instdev"
+
+    if [ -n "$hwsettle" ]; then
+        APPEND_OPTIONS="$APPEND_OPTIONS insthwsettle=$hwsettle"
+    fi
+
 else
     APPEND_OPTIONS="boot_device=$boot_device rootfs_device=$rootfs_device"
 
