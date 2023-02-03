@@ -6379,23 +6379,6 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
         }
         case MTC_ADD__MTC_SERVICES:
         {
-            if ( node_ptr->operState == MTC_OPER_STATE__ENABLED )
-            {
-                /* Inform the VIM that this host is enabled */
-                mtcVimApi_state_change ( node_ptr, VIM_HOST_ENABLED, 3 );
-            }
-            else
-            {
-                if ( node_ptr->availStatus == MTC_AVAIL_STATUS__FAILED )
-                {
-                    mtcVimApi_state_change ( node_ptr, VIM_HOST_FAILED, 3 );
-                }
-                else
-                {
-                    mtcVimApi_state_change ( node_ptr, VIM_HOST_DISABLED, 3 );
-                }
-            }
-
             send_hbs_command   ( node_ptr->hostname, MTC_CMD_ADD_HOST );
 
             if ( ( AIO_SYSTEM ) || ( is_worker (node_ptr) == true ))
@@ -7939,6 +7922,27 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
                 {
                     node_ptr->health_threshold_counter = 0 ;
                 }
+            }
+
+            if ( node_ptr->vim_notified == false )
+            {
+                if ( node_ptr->operState == MTC_OPER_STATE__ENABLED )
+                {
+                    /* Inform the VIM that this host is enabled */
+                    mtcVimApi_state_change ( node_ptr, VIM_HOST_ENABLED, 3 );
+                }
+                else
+                {
+                    if ( node_ptr->availStatus == MTC_AVAIL_STATUS__FAILED )
+                    {
+                        mtcVimApi_state_change ( node_ptr, VIM_HOST_FAILED, 3 );
+                    }
+                    else
+                    {
+                        mtcVimApi_state_change ( node_ptr, VIM_HOST_DISABLED, 3 );
+                    }
+                }
+                node_ptr->vim_notified = true ;
             }
 
             node_ptr->insv_test_count++ ;

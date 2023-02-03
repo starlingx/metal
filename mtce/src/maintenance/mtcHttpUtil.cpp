@@ -443,7 +443,7 @@ int mtcHttpUtil_status ( libEvent & event )
         }
         case 0:
         {
-            elog ("%s connection loss (%s:%d)\n",
+            wlog ("%s connection loss (%s:%d)\n",
                       event.log_prefix.c_str(), event.ip.c_str(), event.port );
             event.status = FAIL_HTTP_ZERO_STATUS ;
             rc = FAIL_HTTP_ZERO_STATUS ;

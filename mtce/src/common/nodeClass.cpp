@@ -564,6 +564,8 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
     ptr->was_dor_recovery_mode= false ;
     ptr->dor_recovery_time    = 0     ;
 
+    ptr->vim_notified = false ;
+
     ptr->ar_disabled = false ;
     ptr->ar_cause = MTC_AR_DISABLE_CAUSE__NONE ;
     memset (&ptr->ar_count, 0, sizeof(ptr->ar_count));

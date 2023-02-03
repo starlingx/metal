@@ -157,6 +157,8 @@ private:
         /** set true if the BMC is provisioned */
         bool bmc_provisioned ;
 
+        /** set true upon first successful vim notification */
+        bool vim_notified ;
 
         /** general retry counter */
         int    retries   ;
