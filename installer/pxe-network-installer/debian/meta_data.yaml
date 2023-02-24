@@ -5,3 +5,5 @@ src_path: pxe-network-installer
 revision:
   dist: $STX_DIST
   PKG_GITREVCOUNT: true
+  SRC_GITREVCOUNT:
+    SRC_BASE_SRCREV: cddb4fc6dd208520893fac57dac411d39f969618
