@@ -5,7 +5,7 @@
         <upgrade>
             <!-- use comma separated version list in version
                  element for multiple upgrade from versions -->
-            <version>22.06</version>
+            <version>22.12</version>
         </upgrade>
     </supported_upgrades>
 </build>
