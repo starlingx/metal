@@ -66,7 +66,11 @@ declare WIPE_HDD=
 
 # Only wipe the boot device disks
 boot_disk_part=$(df --output=source /boot | tail -1)
-boot_disk=$(readlink -f $(find -L /dev/disk/by-path/ -samefile $boot_disk_part | sed 's/-part[0-9]*'//))
+boot_disk_path=$(find -L /dev/disk/by-path/ -samefile ${boot_disk_part} | sed 's/-part[0-9]*'//)
+if [ -z "${boot_disk_path}" ] ; then
+    boot_disk_path=$(find -L /dev/disk/by-id/ -samefile ${boot_disk_part} | grep wwn | sed 's/-part[0-9]*'//)
+fi
+boot_disk=$(readlink -f ${boot_disk_path})
 
 if [ -z "$boot_disk" ] ; then
     echo "Boot disk not found. Failed to wipe disk."
@@ -128,6 +132,14 @@ for dev in $WIPE_HDD ; do
                 case $part in
                     *"nvme"*)
                         part=${dev}p${part_number}
+                    ;;
+                    *"dm-"*)
+                        for p in /dev/disk/by-id/wwn-*; do
+                            if [ "${dev}" = "$(readlink -f ${p})" ]; then
+                                part=${p}-part${part_number}
+                                break
+                            fi
+                        done
                     ;;
                 esac
                 sgdisk_part_info=$(flock $dev sgdisk -i $part_number $dev)
