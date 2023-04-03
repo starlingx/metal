@@ -75,6 +75,13 @@ if [ -d ${ISO_DIR}/ostree_repo ]; then
     echo "Copy efi.img to ${FEED_DIR}"
     cp ${ISO_DIR}/efi.img ${FEED_DIR}/
     # for upgrade from 22.06 to Debian 22.12, patch during upgrade is not supported
+    # only copy the patch meta is enough
+    if [ -d ${ISO_DIR}/patches ]; then
+        rsync -ac ${ISO_DIR}/patches/ /opt/patching/metadata/committed/
+        # copy patch metadata to feed, so to be picked up by kickstart to copy to release N+1
+        mkdir ${FEED_DIR}/patches -p
+        cp -a ${ISO_DIR}/patches/* ${FEED_DIR}/patches/
+    fi
 else
     # this is a Centos iso
     trap cleanup 0
