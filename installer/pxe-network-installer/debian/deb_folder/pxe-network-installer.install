@@ -2,3 +2,4 @@ var/pxeboot
 usr/sbin
 etc/init.d/pxeboot_feed
 lib/systemd/system/pxeboot-feed.service
+etc/pxeboot-update*
