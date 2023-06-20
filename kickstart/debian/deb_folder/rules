@@ -14,6 +14,11 @@ override_dh_auto_configure:
 
 override_dh_install:
 	install -d -m 755 $(ROOT)/var/www/pages/feed/rel-${platform_release}/kickstart
+	install -d -m 755 $(ROOT)/var/www/pages/feed/rel-${platform_release}/kickstart/centos
 	install -p -D -m 700 kickstart.cfg $(ROOT)/var/www/pages/feed/rel-${platform_release}/kickstart
 	install -p -D -m 700 miniboot.cfg $(ROOT)/var/www/pages/feed/rel-${platform_release}/kickstart
+	install -p -D -m 700 centos/miniboot_controller_ks.cfg $(ROOT)/var/www/pages/feed/rel-${platform_release}/kickstart/centos
+	install -p -D -m 700 centos/miniboot_smallsystem_ks.cfg $(ROOT)/var/www/pages/feed/rel-${platform_release}/kickstart/centos
+	install -p -D -m 700 centos/miniboot_smallsystem_lowlatency_ks.cfg $(ROOT)/var/www/pages/feed/rel-${platform_release}/kickstart/centos
+	install -p -D -m 700 centos/prestaged_installer_ks.cfg $(ROOT)/var/www/pages/feed/rel-${platform_release}/kickstart/centos
 	dh_install
