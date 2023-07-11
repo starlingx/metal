@@ -19,20 +19,21 @@ function usage {
 $0: This utility is used to generate a node-specific pxeboot.cfg file
 
 Arguments:
-    -i <input template> : Specify template to use
-    -o <output file>    : Specify output filename
-    -t                  : Use text install (optional)
-    -g                  : Use graphical install (optional)
-    -c <console>        : Specify serial console (optional)
-    -b <boot device>    : Specify boot device
-    -r <rootfs device>  : Specify rootfs device
-    -H <hwsettle>       : Delay at init waiting for H/W to be ready (optional)
-    -u <tisnotify url>  : Base url for TIS install progress notification
-    -s <mode>           : Specify Security Profile mode (optional)
-    -T <tboot value>    : Specify whether or not to use tboot (optional)
-    -k <kernel args>    : Specify any extra kernel boot arguments (optional)
-    -l <base url>       : Specify installer base URL
-    -d                  : Update Debian grub menus ; rather than centos menus
+    -i <input template>   : Specify template to use
+    -o <output file>      : Specify output filename
+    -t                    : Use text install (optional)
+    -g                    : Use graphical install (optional)
+    -c <console>          : Specify serial console (optional)
+    -b <boot device>      : Specify boot device
+    -r <rootfs device>    : Specify rootfs device
+    -H <hwsettle>         : Delay at init waiting for H/W to be ready (optional)
+    -u <tisnotify url>    : Base url for TIS install progress notification
+    -s <mode>             : Specify Security Profile mode (optional)
+    -T <tboot value>      : Specify whether or not to use tboot (optional)
+    -k <kernel args>      : Specify any extra kernel boot arguments (optional)
+    -l <base url>         : Specify installer base URL
+    -v <intel driver ver> : Specify intel driver ver to load
+    -d                    : Update Debian grub menus ; rather than centos menus
 
 EOF
 }
@@ -71,7 +72,7 @@ parms=$@
 logger -t $0 " $parms"
 debian_menus=false
 
-while getopts "i:o:tgc:b:r:H:u:s:T:k:l:h:d" opt
+while getopts "i:o:tgc:b:r:H:u:s:T:k:l:v:h:d" opt
 do
     case $opt in
         i)
@@ -120,6 +121,9 @@ do
             ;;
         l)
             base_url=$OPTARG
+            ;;
+        v)
+            driver_ver=$OPTARG
             ;;
         h)
             usage
@@ -198,6 +202,10 @@ APPEND_OPTIONS="$APPEND_OPTIONS user_namespace.enable=1"
 
 if [ -n "$kernal_extra_args" ]; then
     APPEND_OPTIONS="$APPEND_OPTIONS $kernal_extra_args"
+fi
+
+if [ -n "$driver_ver" ]; then
+    APPEND_OPTIONS="$APPEND_OPTIONS multi-drivers-switch=$driver_ver"
 fi
 
 BASE_URL=$base_url
