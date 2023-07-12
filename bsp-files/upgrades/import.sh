@@ -32,10 +32,17 @@ error() {
 
 trap 'error ${LINENO} $?' ERR
 
-SCRIPT_DIR=$(dirname $0)
-ISO_DIR=$(dirname $SCRIPT_DIR)
+if [ -n "$1" ]; then
+    # mount point of the ISO to be imported.
+    # This is to import inactive load (an older load)
+    ISO_DIR=$1
+    UPGRADES_DIR="${ISO_DIR}/upgrades"
+else
+    UPGRADES_DIR=$(dirname $0)
+    ISO_DIR=$(dirname ${UPGRADES_DIR})
+fi
 
-source $SCRIPT_DIR/version
+source ${UPGRADES_DIR}/version
 source /etc/build.info
 
 FEED_DIR=/var/www/pages/feed/rel-${VERSION}
