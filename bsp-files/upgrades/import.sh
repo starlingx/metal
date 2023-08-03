@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2015-2022 Wind River Systems, Inc.
+# Copyright (c) 2015-2023 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -89,5 +89,12 @@ echo "Copy pxelinux.cfg.files directory to ${CURRENT_FEED_DIR}"
 mkdir -p ${CURRENT_FEED_DIR}/pxeboot/pxelinux.cfg.files/
 find /var/pxeboot/pxelinux.cfg.files -type f ! -name "*${VERSION}" \
 -exec cp -p {} ${CURRENT_FEED_DIR}/pxeboot/pxelinux.cfg.files/ \;
+
+if [ -d ${ISO_DIR}/patches ]; then
+    rsync --mkpath -ac ${ISO_DIR}/patches/ /opt/patching/metadata/committed/
+    # copy patch metadata to feed, so to be picked up by kickstart to copy to release N+1
+    mkdir ${CURRENT_FEED_DIR}/patches -p
+    cp -a ${ISO_DIR}/patches/* ${CURRENT_FEED_DIR}/patches/
+fi
 
 echo 'import has completed'
