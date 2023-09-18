@@ -1,9 +1,9 @@
 
 /*
- * Copyright (c) 2016-2017 Wind River Systems, Inc.
-*
-* SPDX-License-Identifier: Apache-2.0
-*
+ * Copyright (c) 2016-2023 Wind River Systems, Inc.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  */
 
 /**
@@ -316,7 +316,7 @@ void * mtcThread_bmc ( void * arg )
             {
                 string chopped_request = bmcUtil_chop_system_req(request);
                 daemon_remove_file ( datafile.data() ) ;
-                blog_t("%s %s", info_ptr->hostname.c_str(), chopped_request.c_str());
+                ilog_t("%s %s", info_ptr->hostname.c_str(), chopped_request.c_str());
 
                 /****** Make the system call ******/
                 rc =

@@ -187,6 +187,7 @@ typedef enum
 #define DEFAULT_GOENABLE_TIMEOUT     (300)
 #define DEFAULT_DOR_MODE_TIMEOUT      (20)
 #define DEFAULT_DOR_MODE_AIO_TIMEOUT (600)
+#define DEFAULT_POWER_OFF_RETRY_WAIT  (30)
 
 /** TODO: Convert names to omit JSON part */
 #define MTC_JSON_INV_LABEL     "ihosts"
@@ -323,9 +324,14 @@ typedef enum
 #define COMMAND_RETRY_DELAY         (8)      /* from sshUtil.h */
 #define COMMAND_DELAY               (2)      /* from sshUtil.h */
 
-#define MTC_POWER_ACTION_RETRY_DELAY     (20)
-#define MTC_POWER_ACTION_RETRY_COUNT     (10)
-#define MTC_RESET_ACTION_RETRY_COUNT     (5)
+/* Define Reset and Power Action retry controls ; delay, count and switch threshold */
+#define MTC_POWER_ACTION_QUERY_WAIT       (30)
+#define MTC_POWER_ACTION_RETRY_DELAY      (20)
+#define MTC_POWER_ACTION_RETRY_COUNT      (10)
+#define MTC_POWER_ACTION_SWITCH_THRESHOLD (MTC_POWER_ACTION_RETRY_COUNT/2)
+#define MTC_RESET_ACTION_RETRY_DELAY      (20)
+#define MTC_RESET_ACTION_RETRY_COUNT      (10)
+#define MTC_RESET_ACTION_SWITCH_THRESHOLD (MTC_RESET_ACTION_RETRY_COUNT/2)
 
 /* number of calls to the bmc_handler while bm_access is not confirmed */
 #define MTC_MAX_B2B_BM_ACCESS_FAIL_COUNT_B4_ALARM (5)

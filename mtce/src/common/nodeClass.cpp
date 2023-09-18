@@ -244,6 +244,7 @@ nodeLinkClass::nodeLinkClass()
     memory_used   = 0 ;
     hosts = 0 ;
     host_deleted = false ;
+    power_off_retry_wait = DEFAULT_POWER_OFF_RETRY_WAIT ;
 
     /* Init the base level pulse info and pointers for all interfaces */
     pulse_ptr = NULL ;
