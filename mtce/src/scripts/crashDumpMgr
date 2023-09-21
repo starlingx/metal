@@ -1,18 +1,21 @@
 #!/bin/bash
 #
-# Copyright (c) 2022 Wind River Systems, Inc.
+# Copyright (c) 2020-2023 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
-# Modify it that is to support the debian coredump file.
-# coredump files are dmesg.202206101633 and dump.202206101633 in Debian.
 
 CRASHDUMPMGR_TAG=${CRASHDUMPMGR_TAG:-"crashDumpMgr"}
 
 RETVAL=0
 
-max_size=3221225472       # "3GiB"
-min_remainder=1073741824  # "1GiB"
+# Default values and constants
+DEFAULT_MAX_SIZE=5368709120 # "5GiB"
+DEFAULT_MAX_FILES=4
+UNLIMITED="unlimited"
+DEFAULT_MAX_USED="${UNLIMITED}"  # Assign UNLIMITED to DEFAULT_MAX_USED
+DEFAULT_MIN_REMAINDER_PERCENT=10
+MIN_REMAINDER_MINIMUM=1073741824  # 1GiB in bytes
 
 # number format to/from human readable commands.
 NUMFMT_TO_HR="/usr/bin/numfmt --to=iec"
@@ -38,34 +41,64 @@ function log()
 # bundles are quite large and, if too many occur,
 # can fill up its target filesystem.
 #
-# This function nicely tars a crash bundle found in /var/crash
-# to /var/log/crash.
+# This function manages the crash dump bundles, creating tar archives for
+# storage, handling maximum file count and storage limits, and preserving
+# summaries of the crash dumps.
 #
 # The first bundle is tar'ed as vmcore_first.tar and preserved.
-# Subsequent crash bundles are nicely tar'ed as vmcore.tar
+# Subsequent crash bundles are nicely tar'ed as vmcore_<date>.tar.
 #
 # Save the crash dump vmcore summary for all crash dumps.
 #
-# Assumptions: logration is used to compress these bundles in the background
+# Assumptions: log rotation is used to compress these bundles in the background
 #
-# Parameters : $1 = max_size ; maximum vmcore size to keep
+# Parameters:
+#   $1 = max_size ; maximum vmcore size to keep (human-readable size or "unlimited")
+#   $2 = max_files ; maximum number of crash dump files to keep
+#   $3 = max_used ; maximum used storage size (human-readable size or "unlimited")
+#   $4 = min_available ; minimum available storage size (human-readable size)
 #
 ############################################################################
 
+
 function manage_crash_dumps()
 {
-    if [ "${1}" != "" ] ; then
-        max_size=${1}
-        log "max_size=$max_size"
-    fi
-
     CRASH_DIR="/var/crash"
     CRASH_BUNDLE_DIR="/var/log/crash"
-    OTHER_BUNDLE="${CRASH_BUNDLE_DIR}/vmcore.tar"
+    OTHER_BUNDLE="${CRASH_BUNDLE_DIR}/vmcore"
     FIRST_BUNDLE="${CRASH_BUNDLE_DIR}/vmcore_first.tar"
     FIRST_BUNDLE_ROTATED="${CRASH_BUNDLE_DIR}/vmcore_first.tar.1.gz"
     CRASH_BUNDLE_SUMMARY="vmcore-dmesg.txt"
     CRASH_BUNDLE_SUMMARY_DEB="dmesg."
+
+    if [ "${4}" = "" ] ; then
+        # Get the size of the filesystem assigned to /var/log/crash in bytes
+        fs_size=$(df -B1 ${CRASH_BUNDLE_DIR} | awk 'NR==2 {print $2}')
+        # Calculate min_available as the percentage of the filesystem size
+        min_available=$((${fs_size} * ${DEFAULT_MIN_REMAINDER_PERCENT} / 100))
+    else
+        min_available=${4}
+    fi
+
+    # Set a minimum value for min_available
+    if [ ${min_available} -lt ${MIN_REMAINDER_MINIMUM} ]; then
+        min_available=${MIN_REMAINDER_MINIMUM}
+    fi
+
+    max_size_hr=""
+    max_used_hr=""
+    if [ "${max_size}" != "${UNLIMITED}" ]; then
+        max_size_hr="($(${NUMFMT_TO_HR} ${max_size}))"
+    fi
+    if [ "${max_used}" != "${UNLIMITED}" ]; then
+        max_used_hr="($(${NUMFMT_TO_HR} ${max_used}))"
+    fi
+    min_available_hr=$(${NUMFMT_TO_HR} ${min_available})
+
+    log "max crash dump files set to ${max_files}"
+    log "max crash dump vmcore size is ${max_size} ${max_size_hr}"
+    log "max used storage size is ${max_used} ${max_used_hr}"
+    log "minimum available storage size is ${min_available} (${min_available_hr})"
 
     # tar command and nice levels
     TAR_CMD="tar -cf"
@@ -73,16 +106,16 @@ function manage_crash_dumps()
     IONICE_CMD="/usr/bin/ionice -c2 -n7"
 
     log "managing ${CRASH_DIR}"
-    cleanup=false
 
     # create dir if it does not exist
     if [ ! -d ${CRASH_BUNDLE_DIR} ] ; then
         mkdir ${CRASH_BUNDLE_DIR}
     fi
-
-    for entry in ${CRASH_DIR}/*
+    for entry in $(ls -rt ${CRASH_DIR}/);
     do
+        entry=${CRASH_DIR}/${entry}
         remove_entry=false
+        max_files_saved=false
         if [ -d "${entry}" ] ; then
             time=${entry##*/}
             if [ -e "${entry}/${CRASH_BUNDLE_SUMMARY_DEB}${time}" ] ; then
@@ -107,10 +140,28 @@ function manage_crash_dumps()
                 fi
                 vmcore_size_hr=$(${NUMFMT_TO_HR} ${vmcore_size})
 
-                # get available ${CRASH_BUNDLE_DIR} fs space in 1k blocks and convert that to bytes
-                available=$(($(df -k ${CRASH_BUNDLE_DIR}  | grep -v Available | awk '{ print $4 }')*1000))
+                # Manage max number of files
+                if [ "$(ls -A ${CRASH_BUNDLE_DIR} | wc -l)" -ge "${max_files}" ]; then
+                    oldest_vmcore=$(ls -t ${CRASH_BUNDLE_DIR} | tail -2 | head -1)
+                    oldest_vmcore_size=$(stat --format='%s' ${oldest_vmcore})
+                    max_files_saved=true
+                fi
+
+                # get available ${CRASH_BUNDLE_DIR} fs space in bytes
+                available=$(df -B1 ${CRASH_BUNDLE_DIR} | grep -v Available | awk '{ print $4 }')
+
+                # get the current used space in the ${CRASH_BUNDLE_DIR} fs
+                used_space=$(du -sb ${CRASH_BUNDLE_DIR} | awk '{print $1}')
+
+                # if the ${CRASH_BUNDLE_DIR} contains the maximum number of files, the available and used_space
+                # need to be updated to the value after deleting the oldest crash dump file.
+                if [ "${max_files_saved}" = true ] ; then
+                    available=$((available+oldest_vmcore_size))
+                    used_space=$((used_space-oldest_vmcore_size))
+                fi
                 available_hr=$(${NUMFMT_TO_HR} ${available})
-                log "new vmcore detected (size:${vmcore_size}:${vmcore_size_hr}) ; ${CRASH_BUNDLE_DIR} avail:${available}:${available_hr}"
+                log "new vmcore detected (size:${vmcore_size}:${vmcore_size_hr}) ;" \
+                "${CRASH_BUNDLE_DIR} avail:${available}:${available_hr}"
 
                 # Don't save this crash dump if it would leave the
                 # ${CRASH_BUNDLE_DIR} filesystem with less than 1GiB.
@@ -120,27 +171,35 @@ function manage_crash_dumps()
                     remaining=0
                 fi
 
-                if [ "${cleanup}" = true ] ; then
-                    log "... remove ${entry} ; cleanup"
+                # Check if adding the file would exceed the maximum used space limit
+                total_used_space=$((used_space + file_size))
+                if [ "${max_used}" != "$UNLIMITED" ] && [ ${total_used_space} -gt ${max_used} ]; then
+
+                     log "The last crash dump is not saved because it would exceed the maximum" \
+                     "used space limit specified in the max_used parameter (${max_used} bytes)."
                     remove_entry=true
 
                 # check for min required 'remaining' ${CRASH_BUNDLE_DIR} filesystem space
-                elif [ ${remaining} -lt ${min_remainder} ] ; then
-                    log "insufficient space in ${CRASH_BUNDLE_DIR} for ${vmcore_size_hr} ${entry}; would leave only ${remaining} bytes"
+                elif [ ${remaining} -lt ${min_available} ] ; then
+                    log "insufficient space in ${CRASH_BUNDLE_DIR} for ${vmcore_size_hr} ${entry};" \
+                    "would leave only ${remaining} bytes"
                     remove_entry=true
 
                 # create a new crash bundle if the vmcore file isn't oversized
-                elif [ ${vmcore_size} -lt ${max_size} ] ; then
-                    if [ -e ${FIRST_BUNDLE} -o -e ${FIRST_BUNDLE_ROTATED} ] ; then
-                        if [ ! -e ${OTHER_BUNDLE} ] ; then
-                            log "creating bundle from ${entry}"
-                            ${IONICE_CMD} ${NICE_CMD} ${TAR_CMD} ${OTHER_BUNDLE} -C ${CRASH_DIR} $(basename ${entry})
-                            cleanup=true
-                        fi
-                    else
+                elif [ ${vmcore_size} -lt ${max_size} ] || [ "${max_size}" = "${UNLIMITED}" ] ; then
+
+                    if [ ! -e "${FIRST_BUNDLE}" ] && [ ! -e "${FIRST_BUNDLE_ROTATED}" ]; then
                         log "creating first bundle from ${entry}"
                         ${IONICE_CMD} ${NICE_CMD} ${TAR_CMD} ${FIRST_BUNDLE} -C ${CRASH_DIR} $(basename ${entry})
-                        cleanup=true
+
+                    else
+                        if [ "${max_files_saved}" = true ] ; then
+                            # delete oldest vmcore file
+                            log "removing oldest vmcore file: ${oldest_vmcore}"
+                            rm -rf "${CRASH_BUNDLE_DIR}/${oldest_vmcore}"
+                        fi
+                        log "creating bundle from ${entry}"
+                        ${IONICE_CMD} ${NICE_CMD} ${TAR_CMD} ${OTHER_BUNDLE}_${time}.tar -C ${CRASH_DIR} $(basename ${entry})
                     fi
                     remove_entry=true
                 else
@@ -166,36 +225,81 @@ function manage_crash_dumps()
     done
 }
 
-
-function print_help()
-{
-    echo "$(basename $0) { --max-size <human-readable-size> }"
+function print_help() {
+    echo "Usage: $(basename "$0") [OPTIONS]"
+    echo "Options:"
+    echo "  --max-size <size>     Set maximum vmcore size (human-readable size or \"$UNLIMITED\")"
+    echo "  --max-files <number>  Set maximum number of crash dump files"
+    echo "  --max-used <size>     Set maximum used storage size (human-readable size or \"$UNLIMITED\")"
+    echo "  --min-available <size> Set minimum available storage size (human-readable size)"
 }
 
+normalize_size_format() {
+    echo "$1" | tr ',' '.'
+}
+
+# Initialize default values
+max_size="${DEFAULT_MAX_SIZE}"
+max_files="${DEFAULT_MAX_FILES}"
+max_used="${DEFAULT_MAX_USED}"
+min_available=""
+
+# Initialize a flag to indicate if help has been shown
+help_shown=false
+
 # Parse the command line
-while [[ ${#} -gt 0 ]] ; do
-
-    key="${1}"
-
-    case $key in
-
+while [[ $# -gt 0 ]]; do
+    case "${1}" in
         -h|--help)
             print_help
+            help_shown=true
+            shift
             ;;
 
         --max-size)
-            max_size=$(echo "$2" | ${NUMFMT_FROM_HR})
-            log "max crash dump vmcore size is ${2} (${max_size})"
+            shift
+            if [ "${1}" = "${UNLIMITED}" ]; then
+                max_size=${UNLIMITED}
+            else
+                max_size=$(${NUMFMT_FROM_HR} "$(normalize_size_format "${1}")")
+            fi
+            shift
+            ;;
+
+        --max-files)
+            shift
+            max_files="${1}"
+            shift
+            ;;
+
+        --max-used)
+            shift
+            if [ "${1}" = "${UNLIMITED}" ]; then
+                max_used=${UNLIMITED}
+            else
+                max_used=$(${NUMFMT_FROM_HR} "$(normalize_size_format "${1}")")
+            fi
+            shift
+            ;;
+
+        --min-available)
+            shift
+            min_available=$(${NUMFMT_FROM_HR} "$(normalize_size_format "${1}")")
             shift
             ;;
 
         *)
-            print_help
+            if [ "${help_shown}" = false ]; then
+                print_help
+                help_shown=true
+            else
+                # Handle unknown options or arguments
+                shift
+            fi
             ;;
     esac
-    shift
 done
 
-manage_crash_dumps $max_size
+manage_crash_dumps ${max_size} ${max_files} ${max_used} ${min_available}
 
 exit $RETVAL
