@@ -1,1 +1,3 @@
 var/www/pages/feed/*
+usr/share/platform-kickstarts/*
+usr/lib/tmpfiles.d/platform-kickstarts.conf
