@@ -10,21 +10,15 @@ export platform_release="$(shell grep SW_VERSION /usr/include/build_info.h | cut
 override_dh_auto_configure:
 	sed -i s/xxxPLATFORM_RELEASExxx/$(platform_release)/g kickstart.cfg
 	sed -i s/xxxPLATFORM_RELEASExxx/$(platform_release)/g miniboot.cfg
-	sed -i s/xxxPLATFORM_RELEASExxx/$(platform_release)/g debian/tmpfiles.conf
 	dh_auto_configure
 
 override_dh_install:
 	install -d -m 755 $(ROOT)/var/www/pages/feed/rel-${platform_release}/kickstart
 	install -d -m 755 $(ROOT)/var/www/pages/feed/rel-${platform_release}/kickstart/centos
-	install -d -m 755 $(ROOT)/usr/share/platform-kickstarts/rel-${platform_release}/centos
-	# kickstart.cfg must be copied to /var/../kickstarts for system installation.
-	# It's eventually symlinked from /usr/../platform-kickstarts.
 	install -p -D -m 700 kickstart.cfg $(ROOT)/var/www/pages/feed/rel-${platform_release}/kickstart
-	install -p -D -m 700 kickstart.cfg $(ROOT)/usr/share/platform-kickstarts/rel-${platform_release}
-	install -p -D -m 700 miniboot.cfg $(ROOT)/usr/share/platform-kickstarts/rel-${platform_release}
-	install -p -D -m 700 centos/miniboot_controller_ks.cfg $(ROOT)/usr/share/platform-kickstarts/rel-${platform_release}/centos
-	install -p -D -m 700 centos/miniboot_smallsystem_ks.cfg $(ROOT)/usr/share/platform-kickstarts/rel-${platform_release}/centos
-	install -p -D -m 700 centos/miniboot_smallsystem_lowlatency_ks.cfg $(ROOT)/usr/share/platform-kickstarts/rel-${platform_release}/centos
-	install -p -D -m 700 centos/prestaged_installer_ks.cfg $(ROOT)/usr/share/platform-kickstarts/rel-${platform_release}/centos
-	install -p -D -m 644 debian/tmpfiles.conf $(ROOT)/usr/lib/tmpfiles.d/platform-kickstarts.conf
+	install -p -D -m 700 miniboot.cfg $(ROOT)/var/www/pages/feed/rel-${platform_release}/kickstart
+	install -p -D -m 700 centos/miniboot_controller_ks.cfg $(ROOT)/var/www/pages/feed/rel-${platform_release}/kickstart/centos
+	install -p -D -m 700 centos/miniboot_smallsystem_ks.cfg $(ROOT)/var/www/pages/feed/rel-${platform_release}/kickstart/centos
+	install -p -D -m 700 centos/miniboot_smallsystem_lowlatency_ks.cfg $(ROOT)/var/www/pages/feed/rel-${platform_release}/kickstart/centos
+	install -p -D -m 700 centos/prestaged_installer_ks.cfg $(ROOT)/var/www/pages/feed/rel-${platform_release}/kickstart/centos
 	dh_install
