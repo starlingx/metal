@@ -11,6 +11,9 @@
 #
 # ... with the kernel, initrd and other images and signature files from /boot
 #
+# This utility is also used to sync the /var/www/pages/feed/rel-xx.xx/kickstart
+# directory with the kickstart directory from /ostree.
+#
 #############################################################################
 #
 # chkconfig: 2345 98 2
@@ -214,6 +217,18 @@ done
 
 # rsync efi.img file
 rsync_if_not_equal "${pxeboot}/efi.img" "${feed}/efi.img"
+
+# Refresh the kickstarts feed
+kickstarts_feed="${feed}/kickstart"
+kickstarts_deploy="/ostree/1""${kickstarts_feed}"
+
+if [ ! -d "${kickstarts_deploy}" ] ; then
+    ilog "Error: deploy path '${kickstarts_deploy}' does not exist"
+    exit ${RETVAL}
+fi
+
+ilog "syncing ${kickstarts_deploy} to ${kickstarts_feed}"
+rsync -a --delete "${kickstarts_deploy}/" "${kickstarts_feed}"
 
 RETVAL=0
 exit ${RETVAL}
