@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 ###############################################################################
 #
-# Copyright (c) 2019-2022 Wind River Systems, Inc.
+# Copyright (c) 2019-2023 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -131,7 +131,7 @@ from redfish.rest.v1 import InvalidCredentialsError
 
 FEATURE_NAME = 'Redfish Virtual Media Controller'
 VERSION_MAJOR = 2
-VERSION_MINOR = 1
+VERSION_MINOR = 2
 
 POWER_ON = 'On'
 POWER_OFF = "Off"
@@ -1073,7 +1073,7 @@ class VmcObject(object):
             elog("BMC is not publishing any %s" % info)
             self._exit(1)
 
-        dlog3("ResetActions: %s" % reset_command_list)
+        ilog("ResetActions: %s" % reset_command_list)
 
         # load the appropriate acceptable command list
         if state == POWER_OFF:
@@ -1088,6 +1088,7 @@ class VmcObject(object):
         for acceptable_command in acceptable_commands:
             for reset_command in reset_command_list:
                 if reset_command == acceptable_command:
+                    ilog("Selected Command: %s" % reset_command)
                     command = reset_command
                     break
             else:
@@ -1113,30 +1114,41 @@ class VmcObject(object):
             # this was not a power command
             return
 
+        # Set the timeout in seconds (14 minutes = 840 seconds)
+        timeout = int(os.environ.get('RVMC_POWER_ACTION_TIMEOUT', 840))
+        ilog("%s timeout is %d seconds" % (stage, timeout))
+
+        # Get the start time
+        start_time = time.time()
+
+        # init wait duration
+        duration = 0
+
         # poll for requested power state.
-        poll_count = 0
-        MAX_STATE_POLL_COUNT = 60  # some servers take longer than 10 seconds
-        while poll_count < MAX_STATE_POLL_COUNT and self.power_state != state:
-            time.sleep(3)
-            poll_count = poll_count + 1
+        while time.time() - start_time < timeout and self.power_state != state:
+            time.sleep(10)
+
+            # update wait duration
+            duration = int(time.time() - start_time)
 
             # get systems info
             if self.make_request(operation=GET,
                                  path=self.systems_member_url) is False:
-                elog("Failed to Get System State (%i of %i)" %
-                     (poll_count, MAX_STATE_POLL_COUNT))
+                elog("Failed to Get System State (after %d secs)" %
+                     (duration))
             else:
                 # get powerState
                 self.power_state = self.get_key_value('PowerState')
                 if self.power_state != state:
-                    dlog1("waiting for power %s (%s) (%d)" %
-                          (state, self.power_state, poll_count))
+                    dlog1("Waiting for Power %s (currently %s) (%d secs)" %
+                          (state, self.power_state, duration))
+
         if self.power_state != state:
-            elog("Failed to Set System Power State to %s (%s)" %
-                 (self.power_state, self.systems_member_url))
+            elog("Failed to Set System Power State to %s after %d secs (%s)" %
+                 (state, duration, self.systems_member_url))
             self._exit(1)
         else:
-            ilog("%s verified (%d)" % (stage, poll_count))
+            ilog("%s verified (after %d seconds)" % (stage, duration))
 
     ######################################################################
     # Get CD/DVD Virtual Media URL
