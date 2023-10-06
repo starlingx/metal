@@ -36,6 +36,7 @@ override_dh_auto_install:
 
 	# Configuration files
 	install -m 600 -p -D scripts/mtc.ini $(SYSCONFDIR)/mtc.ini
+	install -m 600 -p -D scripts/crash-dump-manager_envfile $(SYSCONFDIR)/default/crash-dump-manager
 	install -m 600 -p -D scripts/mtc.conf $(SYSCONFDIR)/mtc.conf
 	install -m 600 -p -D fsmon/scripts/fsmond.conf $(SYSCONFDIR)/mtc/fsmond.conf
 	install -m 600 -p -D hwmon/scripts/hwmond.conf $(SYSCONFDIR)/mtc/hwmond.conf
@@ -65,13 +66,13 @@ override_dh_auto_install:
 	install -m 755 -d $(SBINDIR)
 	install -m 700 -p -D fsync/fsync $(SBINDIR)/fsync
 	install -m 755 -d $(SBINDIR)
+	install -m 755 -p -D scripts/crash-dump-manager $(SBINDIR)/crash-dump-manager
 	install -m 700 -p -D pmon/scripts/pmon-restart $(LOCAL_SBINDIR)/pmon-restart
 	install -m 700 -p -D pmon/scripts/pmon-start $(LOCAL_SBINDIR)/pmon-start
 	install -m 700 -p -D pmon/scripts/pmon-stop $(LOCAL_SBINDIR)/pmon-stop
 
 	# init script files
 	install -m 755 -d $(INITDIR)
-	install -m 755 -p -D scripts/crashDumpMgr $(INITDIR)/crashDumpMgr
 	install -m 700 -p -D scripts/mtcClient $(INITDIR)/mtcClient
 	install -m 700 -p -D scripts/hbsClient $(INITDIR)/hbsClient
 	install -m 700 -p -D hwmon/scripts/lsb/hwmon $(INITDIR)/hwmon
@@ -148,8 +149,12 @@ override_dh_auto_install:
 	install -m 755 -d $(ROOT)/var
 	install -m 755 -d $(ROOT)/var/run
 
+	# Presets
+	install -d $(SYSCONFDIR)/systemd/system-preset
+	install -m 544 scripts/55-crash-dump-manager.preset $(SYSCONFDIR)/systemd/system-preset
+
 override_dh_installsystemd:
-	dh_installsystemd --name crashDumpMgr
+	dh_installsystemd --name crash-dump-manager
 	dh_installsystemd --name fsmon
 	dh_installsystemd --name goenabled
 	dh_installsystemd --name hbsClient

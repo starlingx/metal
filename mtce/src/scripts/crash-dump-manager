@@ -5,7 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-CRASHDUMPMGR_TAG=${CRASHDUMPMGR_TAG:-"crashDumpMgr"}
+CRASHDUMPMGR_TAG=${CRASHDUMPMGR_TAG:-"crash-dump-manager"}
 
 RETVAL=0
 
@@ -13,6 +13,7 @@ RETVAL=0
 DEFAULT_MAX_SIZE=5368709120 # "5GiB"
 DEFAULT_MAX_FILES=4
 UNLIMITED="unlimited"
+DEFAULT="default"
 DEFAULT_MAX_USED="${UNLIMITED}"  # Assign UNLIMITED to DEFAULT_MAX_USED
 DEFAULT_MIN_REMAINDER_PERCENT=10
 MIN_REMAINDER_MINIMUM=1073741824  # 1GiB in bytes
@@ -141,9 +142,15 @@ function manage_crash_dumps()
                 vmcore_size_hr=$(${NUMFMT_TO_HR} ${vmcore_size})
 
                 # Manage max number of files
-                if [ "$(ls -A ${CRASH_BUNDLE_DIR} | wc -l)" -ge "${max_files}" ]; then
-                    oldest_vmcore=$(ls -t ${CRASH_BUNDLE_DIR} | tail -2 | head -1)
-                    oldest_vmcore_size=$(stat --format='%s' ${oldest_vmcore})
+                files_in_crash_bundle_dir=$(ls -A ${CRASH_BUNDLE_DIR} | wc -l)
+                num_files_to_remove=$((files_in_crash_bundle_dir-max_files+1))
+
+                if [ "${num_files_to_remove}" -ge 1 ]; then
+                    files_to_remove=$(ls -t ${CRASH_BUNDLE_DIR} | tail -$((num_files_to_remove+1)) | head -$((num_files_to_remove)))
+                    files_to_remove_size=0
+                    for file in ${files_to_remove}; do
+                        files_to_remove_size+=$(stat --format='%s' ${file})
+                    done
                     max_files_saved=true
                 fi
 
@@ -156,8 +163,8 @@ function manage_crash_dumps()
                 # if the ${CRASH_BUNDLE_DIR} contains the maximum number of files, the available and used_space
                 # need to be updated to the value after deleting the oldest crash dump file.
                 if [ "${max_files_saved}" = true ] ; then
-                    available=$((available+oldest_vmcore_size))
-                    used_space=$((used_space-oldest_vmcore_size))
+                    available=$((available+files_to_remove_size))
+                    used_space=$((used_space-files_to_remove_size))
                 fi
                 available_hr=$(${NUMFMT_TO_HR} ${available})
                 log "new vmcore detected (size:${vmcore_size}:${vmcore_size_hr}) ;" \
@@ -194,9 +201,11 @@ function manage_crash_dumps()
 
                     else
                         if [ "${max_files_saved}" = true ] ; then
-                            # delete oldest vmcore file
-                            log "removing oldest vmcore file: ${oldest_vmcore}"
-                            rm -rf "${CRASH_BUNDLE_DIR}/${oldest_vmcore}"
+                            for file in ${files_to_remove}; do
+                                # delete old vmcore file
+                                log "removing old vmcore file: ${file}"
+                                rm -rf "${CRASH_BUNDLE_DIR}/${file}"
+                            done
                         fi
                         log "creating bundle from ${entry}"
                         ${IONICE_CMD} ${NICE_CMD} ${TAR_CMD} ${OTHER_BUNDLE}_${time}.tar -C ${CRASH_DIR} $(basename ${entry})
@@ -284,7 +293,11 @@ while [[ $# -gt 0 ]]; do
 
         --min-available)
             shift
-            min_available=$(${NUMFMT_FROM_HR} "$(normalize_size_format "${1}")")
+            if [ "${1}" = "${DEFAULT}" ]; then
+                min_available=""
+            else
+                min_available=$(${NUMFMT_FROM_HR} "$(normalize_size_format "${1}")")
+            fi
             shift
             ;;
 
