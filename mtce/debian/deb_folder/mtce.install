@@ -2,7 +2,7 @@ etc/bmc/server_profiles.d/sensor_hp360_v1_ilo_v4.profile
 etc/bmc/server_profiles.d/sensor_hp380_v1_ilo_v4.profile
 etc/bmc/server_profiles.d/sensor_quanta_v1_ilo_v4.profile
 etc/collect.d/collect_bmc
-etc/init.d/crashDumpMgr
+etc/default/crash-dump-manager
 etc/init.d/fsmon
 etc/init.d/goenabled
 etc/init.d/hbsClient
@@ -22,6 +22,7 @@ etc/services.d/controller/mtcTest
 etc/services.d/storage/mtcTest
 etc/services.d/worker/mtcTest
 etc/syslog-ng/conf.d/mtce.conf
+etc/systemd/system-preset/
 usr/lib/ocf/resource.d/platform/mtcAgent
 usr/local/bin/fsmond
 usr/local/bin/hbsAgent
@@ -31,6 +32,7 @@ usr/local/bin/mtcClient
 usr/local/bin/mtcalarmd
 usr/local/bin/mtclogd
 usr/local/bin/wipedisk
+usr/sbin/crash-dump-manager
 usr/sbin/dmemchk.sh
 usr/sbin/fsync
 usr/share/mtce/hwclock.service

@@ -1,0 +1,13 @@
+[Unit]
+Description=Crash Dump Manager
+After=network.target config.target
+Before=sshd.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=no
+EnvironmentFile=/etc/default/crash-dump-manager
+ExecStart=/usr/sbin/crash-dump-manager --max-size $MAX_SIZE --max-files $MAX_FILES --max-used $MAX_USED --min-available $MIN_AVAILABLE
+
+[Install]
+WantedBy=multi-user.target

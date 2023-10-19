@@ -350,8 +350,8 @@ install -m 700 -p -D %{_buildsubdir}/alarm/scripts/mtcalarm.init %{buildroot}%{_
 # TODO: Init hack. Should move to proper module
 install -m 755 -p -D %{_buildsubdir}/scripts/hwclock.sh %{buildroot}%{_sysconfdir}/init.d/hwclock.sh
 install -m 644 -p -D %{_buildsubdir}/scripts/hwclock.service %{buildroot}%{_unitdir}/hwclock.service
-install -m 755 -p -D %{_buildsubdir}/scripts/crashDumpMgr %{buildroot}%{_sysconfdir}/init.d/crashDumpMgr
-install -m 644 -p -D %{_buildsubdir}/scripts/crashDumpMgr.service %{buildroot}%{_unitdir}/crashDumpMgr.service
+install -m 755 -p -D %{_buildsubdir}/scripts/crash-dump-manager %{buildroot}%{_sysconfdir}/init.d/crash-dump-manager
+install -m 644 -p -D %{_buildsubdir}/scripts/crash-dump-manager.service %{buildroot}%{_unitdir}/crash-dump-manager.service
 
 # systemd service files
 install -m 644 -p -D %{_buildsubdir}/fsmon/scripts/fsmon.service %{buildroot}%{_unitdir}/fsmon.service
@@ -435,7 +435,7 @@ install -m 755 -d %{buildroot}/var/run
 /bin/systemctl enable rsyncd.service
 /bin/systemctl enable goenabled.service
 /bin/systemctl enable mtcalarm.service
-/bin/systemctl enable crashDumpMgr.service
+/bin/systemctl enable crash-dump-manager.service
 
 %post -n mtce-hostw
 /bin/systemctl enable hostw.service
@@ -509,7 +509,7 @@ install -m 755 -d %{buildroot}/var/run
 %{_sysconfdir}/init.d/mtcClient
 %{_sysconfdir}/init.d/mtcalarm
 %{_sysconfdir}/init.d/hwclock.sh
-%{_sysconfdir}/init.d/crashDumpMgr
+%{_sysconfdir}/init.d/crash-dump-manager
 
 %{_unitdir}/runservices.service
 %{_unitdir}/goenabled.service
@@ -519,7 +519,7 @@ install -m 755 -d %{buildroot}/var/run
 %{_unitdir}/mtcClient.service
 %{_unitdir}/hbsClient.service
 %{_unitdir}/hwclock.service
-%{_unitdir}/crashDumpMgr.service
+%{_unitdir}/crash-dump-manager.service
 
 # Binaries
 %{local_bindir}/mtcAgent

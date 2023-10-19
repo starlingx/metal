@@ -1,0 +1,4 @@
+MAX_FILES=4
+MAX_SIZE=5Gi
+MAX_USED=unlimited
+MIN_AVAILABLE=default
