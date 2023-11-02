@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016 Wind River Systems, Inc.
+ * Copyright (c) 2013, 2016, 2023 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -371,6 +371,11 @@ static int mtc_config_handler ( void * user,
         config_ptr->mask |= CONFIG_AGENT_API_RETRIES ;
         mtcInv.api_retries = config_ptr->api_retries ;
     }
+    else if (MATCH("agent", "bmc_reset_delay"))
+    {
+        config_ptr->bmc_reset_delay = atoi(value);
+        mtcInv.bmc_reset_delay = config_ptr->bmc_reset_delay ;
+    }
     else if (MATCH("timeouts", "failsafe_shutdown_delay"))
     {
         config_ptr->failsafe_shutdown_delay = atoi(value);
@@ -682,6 +687,7 @@ int daemon_configure ( void )
 
     ilog ("TokenRefresh: %3d secs\n" , mtcInv.token_refresh_rate);
     ilog ("API Retries : %3d secs\n" , mtcInv.api_retries);
+    ilog ("Reset Delay : %3d secs\n" , mtcInv.bmc_reset_delay);
 
     /* Verify loaded config against an expected mask
      * as an ini file fault detection method */

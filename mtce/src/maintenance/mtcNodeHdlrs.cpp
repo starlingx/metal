@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2020 Wind River Systems, Inc.
+ * Copyright (c) 2013-2020, 2023 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -70,6 +70,9 @@ using namespace std;
  *
  * Purpose : Calculate the overall reset progression timeout
  *
+ * Note    : Needs to take into account the bmc_reset_delay
+ *           for nodes that have the bmc provisioned.
+ *
  * ***********************************************************/
 int nodeLinkClass::calc_reset_prog_timeout ( struct nodeLinkClass::node * node_ptr,
                                                                     int   retries )
@@ -83,6 +86,9 @@ int nodeLinkClass::calc_reset_prog_timeout ( struct nodeLinkClass::node * node_p
 
     /* add a small buffer */
     to += (MTC_ENABLED_TIMER*4) ;
+
+    /* factor in the bmc reset delay */
+    to += nodeLinkClass::bmc_reset_delay ;
 
     /* factor in the number of retries */
     to *= (retries+1) ;
@@ -970,7 +976,8 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
             mtcCmd_init ( node_ptr->cmd );
             node_ptr->cmd.stage = MTC_CMD_STAGE__START ;
             node_ptr->cmd.cmd   = MTC_OPER__RESET_PROGRESSION ;
-            node_ptr->cmd.parm1 = 0    ; /* retries */
+            node_ptr->cmd_retries = 0  ; /* init fsm retries count */
+            node_ptr->cmd.parm1 = 0    ; /* set progression retries */
             node_ptr->cmd.task  = true ; /* send task updates */
             node_ptr->mtcCmd_work_fifo.push_front(node_ptr->cmd);
 
@@ -1922,34 +1929,35 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
              * NOT in Dead Office Recovery (DOR) mode. */
             if ( node_ptr->dor_recovery_mode == false )
             {
+                ilog ("%s issuing one time graceful recovery reboot over management network\n",
+                          node_ptr->hostname.c_str());
+                node_ptr->reboot_cmd_ack_mgmnt = false ;
+                node_ptr->reboot_cmd_ack_clstr = false ;
+                send_mtc_cmd ( node_ptr->hostname, MTC_CMD_REBOOT, MGMNT_INTERFACE ) ;
+
                 /* If the cluster-host network is provisioned then try
                  * and issue a reset over it to expedite the recovery
                  * for the case where the management heartbeat has
                  * failed but the cluster-host has not.
                  * Keeping it simple by just issuing the command and not looping on it */
-                if (( node_ptr->clstr_ip.length () > 5 ) &&
-                    ( node_ptr->heartbeat_failed[MGMNT_IFACE] == true ) &&
-                    ( node_ptr->heartbeat_failed[CLSTR_IFACE] == false ))
+                if ( node_ptr->clstr_ip.length () > 5 )
                 {
-                    ilog ("%s issuing one time graceful recovery reboot over cluster-host network\n", node_ptr->hostname.c_str());
+                    ilog ("%s issuing one time graceful recovery reboot over cluster-host network\n",
+                              node_ptr->hostname.c_str());
                     send_mtc_cmd ( node_ptr->hostname, MTC_CMD_REBOOT, CLSTR_INTERFACE ) ;
                 }
 
-                if ((node_ptr->bmc_provisioned) && (node_ptr->bmc_accessible))
+                if ( node_ptr->bmc_provisioned )
                 {
-                    ilog ("%s issuing one time board management graceful recovery reset\n", node_ptr->hostname.c_str());
-
-                    rc = bmc_command_send ( node_ptr, BMC_THREAD_CMD__POWER_RESET );
-                    if ( rc )
-                    {
-                        wlog ("%s board management reset failed\n", node_ptr->hostname.c_str());
-                    }
-                    else
-                    {
-                        mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_POWER_ACTION_RETRY_DELAY );
-                        recoveryStageChange ( node_ptr, MTC_RECOVERY__RESET_RECV_WAIT );
-                        break ;
-                    }
+                    ilog ("%s posting one time board management graceful recovery reset",
+                              node_ptr->hostname.c_str());
+                    ilog ("%s ... node may be rebooting or running kdump",
+                              node_ptr->hostname.c_str());
+                    ilog ("%s ... give kdump time to complete ; reset in %d secs",
+                              node_ptr->hostname.c_str(), bmc_reset_delay );
+                    mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, bmc_reset_delay );
+                    recoveryStageChange ( node_ptr, MTC_RECOVERY__RESET_SEND_WAIT );
+                    break ;
                 }
                 else
                 {
@@ -1980,6 +1988,69 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
             clear_service_readies ( node_ptr );
 
             recoveryStageChange ( node_ptr, MTC_RECOVERY__MTCALIVE_WAIT );
+            break ;
+        }
+        case MTC_RECOVERY__RESET_SEND_WAIT:
+        {
+            bool reset_aborted = false ;
+
+            /* Abort the reset if we got an acknowledgment from
+             * either the mgmnt or clstr reboot requests.
+             */
+            if ( node_ptr->reboot_cmd_ack_mgmnt )
+            {
+                reset_aborted = true ;
+                ilog ("%s backup bmc reset aborted due to management network reboot request ACK",
+                          node_ptr->hostname.c_str());
+            }
+            else if ( node_ptr->reboot_cmd_ack_clstr )
+            {
+                reset_aborted = true ;
+                ilog ("%s backup bmc reset aborted due to cluster-host network reboot request ACK",
+                          node_ptr->hostname.c_str());
+
+            }
+            else if ( mtcTimer_expired ( node_ptr->mtcTimer ))
+            {
+                if ( node_ptr->bmc_accessible )
+                {
+                    rc = bmc_command_send ( node_ptr, BMC_THREAD_CMD__POWER_RESET );
+                    if ( rc )
+                    {
+                        wlog ("%s board management reset failed\n", node_ptr->hostname.c_str());
+                        wlog ("%s ... aborting one time reset", node_ptr->hostname.c_str());
+                        reset_aborted = true ;
+                    }
+                    else
+                    {
+                        mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_POWER_ACTION_RETRY_DELAY );
+                        recoveryStageChange ( node_ptr, MTC_RECOVERY__RESET_RECV_WAIT );
+                        break ;
+                    }
+                }
+                else
+                {
+                    reset_aborted = true ;
+                    wlog ("%s bmc is not accessible ; aborting one time reset",
+                              node_ptr->hostname.c_str());
+                }
+            }
+            if ( reset_aborted )
+            {
+                int timeout = node_ptr->mtcalive_timeout ;
+                /* start the timer that waits for MTCALIVE */
+                mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, timeout );
+
+                plog ("%s %s (%d secs)%s(uptime was %d) \n",
+                          node_ptr->hostname.c_str(),
+                          MTC_TASK_RECOVERY_WAIT,
+                          timeout,
+                          node_ptr->dor_recovery_mode ? " (DOR) " : " " ,
+                          node_ptr->uptime_save );
+
+                clear_service_readies ( node_ptr );
+                recoveryStageChange ( node_ptr, MTC_RECOVERY__MTCALIVE_WAIT );
+            }
             break ;
         }
 
@@ -2926,6 +2997,7 @@ int nodeLinkClass::disable_handler  ( struct nodeLinkClass::node * node_ptr )
 
                 ilog ("%s Issuing Force-Lock Reset\n", node_ptr->hostname.c_str());
                 mtcCmd_init ( node_ptr->cmd );
+                node_ptr->cmd_retries = 0 ;
                 node_ptr->cmd.stage = MTC_CMD_STAGE__START ;
                 node_ptr->cmd.cmd   = MTC_OPER__RESET_PROGRESSION ;
                 node_ptr->cmd.parm1 = 2 ; /* 2 retries */
@@ -3258,11 +3330,13 @@ int nodeLinkClass::offline_handler ( struct nodeLinkClass::node * node_ptr )
             if (( node_ptr->mtcAlive_mgmnt || node_ptr->mtcAlive_clstr ) && node_ptr->offline_search_count )
             {
                 node_ptr->mtcAlive_online = true ;
-                ilog ("%s still seeing mtcAlive (%d) (%c:%c) ; reset offline_search_count=%d of %d\n",
+                ilog ("%s still seeing mtcAlive (%d) (Mgmt:%c:%d Clstr:%c:%d) ; restart offline_search_count=%d of %d\n",
                           node_ptr->hostname.c_str(),
                           node_ptr->mtcAlive_count,
                           node_ptr->mtcAlive_mgmnt ? 'Y' : 'n',
+                          node_ptr->mtcAlive_mgmnt_count,
                           node_ptr->mtcAlive_clstr ? 'Y' : 'n',
+                          node_ptr->mtcAlive_clstr_count,
                           node_ptr->offline_search_count,
                           offline_threshold );
                 node_ptr->offline_search_count = 0 ; /* reset the count */
@@ -3343,11 +3417,13 @@ int nodeLinkClass::offline_handler ( struct nodeLinkClass::node * node_ptr )
                     **/
 
                     node_ptr->mtcAlive_online = true ;
-                    ilog ("%s still seeing mtcAlive (%d) (%c:%c) ; reset offline_search_count=%d of %d\n",
+                    ilog ("%s still seeing mtcAlive (%d) (Mgmt:%c:%d Clstr:%c:%d) ; restart offline_search_count=%d of %d\n",
                               node_ptr->hostname.c_str(),
                               node_ptr->mtcAlive_count,
                               node_ptr->mtcAlive_mgmnt ? 'Y' : 'n',
+                              node_ptr->mtcAlive_mgmnt_count,
                               node_ptr->mtcAlive_clstr ? 'Y' : 'n',
+                              node_ptr->mtcAlive_clstr_count,
                               node_ptr->offline_search_count,
                               offline_threshold );
                     node_ptr->offline_search_count = 0 ; /* reset the search count */
@@ -4723,6 +4799,7 @@ int nodeLinkClass::reboot_handler ( struct nodeLinkClass::node * node_ptr )
         case MTC_RESETPROG__REBOOT:
         {
             #define REBOOT_RETRIES (0)
+            node_ptr->cmd_retries = 0 ;
             node_ptr->mtcCmd_work_fifo.clear();
             mtcCmd_init ( node_ptr->cmd );
             node_ptr->cmd.stage = MTC_CMD_STAGE__START ;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016 Wind River Systems, Inc.
+ * Copyright (c) 2013, 2016, 2023 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -248,7 +248,7 @@ int nodeLinkClass::mtcVimApi_state_change ( struct nodeLinkClass::node * node_pt
 
     if (( request == VIM_HOST_FAILED ) || ( request == VIM_DPORT_FAILED ))
     {
-        elog ("%s %s\n", node_ptr->hostname.c_str(), node_ptr->httpReq.payload.c_str());
+        wlog ("%s %s\n", node_ptr->hostname.c_str(), node_ptr->httpReq.payload.c_str());
     }
     else
     {

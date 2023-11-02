@@ -1,7 +1,7 @@
 #ifndef __INCLUDE_NODECLASS_H__
 #define __INCLUDE_NODECLASS_H__
 /*
- * Copyright (c) 2013-2016 Wind River Systems, Inc.
+ * Copyright (c) 2013-2016, 2023 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -315,8 +315,14 @@ private:
         int mtcAlive_hits      ;
         int mtcAlive_purge     ;
 
+        int mtcAlive_mgmnt_count ; /* count the mgmnt network mtcAlive messages   */
+        int mtcAlive_clstr_count ; /* count the clstr network mtcAlive messages   */
         bool mtcAlive_mgmnt ; /* set true when mtcAlive is rx'd from mgmnt network */
         bool mtcAlive_clstr ; /* set true when mtcAlive is rx'd from clstr network */
+
+        /* used to log time leading up to reset */
+        int bmc_reset_pending_log_throttle ;
+        time_debug_type reset_delay_start_time ;
 
         /* Both of these booleans are set true upon receipt of a mtcAlive message. */
         bool mtcAlive_online  ; /* this is consumed by online and offline handler  */
@@ -854,6 +860,7 @@ private:
     int calc_reset_prog_timeout ( struct nodeLinkClass::node * node_ptr, int retries );
 
     /* These interfaces will start and stop the offline FSM if not already active */
+    int  offline_timeout_secs  ( void );
     void start_offline_handler ( struct nodeLinkClass::node * node_ptr );
     void stop_offline_handler  ( struct nodeLinkClass::node * node_ptr );
 
@@ -1760,7 +1767,7 @@ public:
     struct mtc_timer mtcTimer_dor     ;
 
     unsigned int get_cmd_resp ( string & hostname );
-    void         set_cmd_resp ( string & hostname, mtc_message_type & msg );
+    void         set_cmd_resp ( string & hostname, mtc_message_type & msg, int iface );
 
     void         set_uptime ( string & hostname, unsigned int uptime, bool force );
     unsigned int get_uptime ( string & hostname );
@@ -1847,6 +1854,11 @@ public:
      * Number of hosts simultaneously failing heartbeat
      * upon which feature will activate */
     int mnfa_threshold ;
+
+    /* seconds to wait before issuing a bmc reset of a failed node
+     * that does not ACK reboot requests. The delay gives
+     * time for crashdumps to complete. */
+    int bmc_reset_delay ;
 
     /* collectd event handler */
     int collectd_notify_handler ( string & hostname,

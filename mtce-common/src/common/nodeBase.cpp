@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016 Wind River Systems, Inc.
+ * Copyright (c) 2013, 2016, 2023 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -9,7 +9,7 @@
   * @file
   * Wind River CGTS Platform "Node Base" Utility
   */
-  
+
 #include <iostream>
 #include <string.h>
 #include <stdio.h>
@@ -382,6 +382,7 @@ void mtc_stages_init ( void )
    recoveryStages_str[MTC_RECOVERY__RETRY_WAIT         ] = "Req-Retry-Wait";
    recoveryStages_str[MTC_RECOVERY__REQ_MTCALIVE       ] = "Req-MtcAlive";
    recoveryStages_str[MTC_RECOVERY__REQ_MTCALIVE_WAIT  ] = "Req-MtcAlive-Wait";
+   recoveryStages_str[MTC_RECOVERY__RESET_SEND_WAIT    ] = "Reset-Send-Wait";
    recoveryStages_str[MTC_RECOVERY__RESET_RECV_WAIT    ] = "Reset-Recv-Wait";
    recoveryStages_str[MTC_RECOVERY__MTCALIVE_TIMER     ] = "MtcAlive-Timer";
    recoveryStages_str[MTC_RECOVERY__MTCALIVE_WAIT      ] = "MtcAlive-Wait";

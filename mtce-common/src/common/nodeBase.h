@@ -1,7 +1,7 @@
 #ifndef __INCLUDE_NODEBASE_HH__
 #define __INCLUDE_NODEBASE_HH__
 /*
- * Copyright (c) 2013-2020 Wind River Systems, Inc.
+ * Copyright (c) 2013-2020, 2023 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -556,7 +556,7 @@ typedef struct
    unsigned short rev ; /* minor revision number */
    unsigned int   res ; /*     a reserved field  */
    unsigned int   cmd ;
-   unsigned int   num ; 
+   unsigned int   num ;
    unsigned int   parm[5] ;
    char buf[BUF_SIZE] ;
 } ALIGN_PACK(mtc_message_type);
@@ -613,7 +613,7 @@ typedef struct
 /* Generic Monitor Service ready event */
 #define MTC_EVENT_MONITOR_READY         (0xf0f0f0f0)
 
-/** Process Monitor Event codes */ 
+/** Process Monitor Event codes */
 #define MTC_EVENT_PMON_CLEAR            (0x02020202) /**< Clear Action         */
 #define MTC_EVENT_PMON_CRIT             (0x04040404) /**< Crit Failed Action   */
 #define MTC_EVENT_PMON_MAJOR            (0x05050505) /**< Major Degrade Action */
@@ -633,7 +633,7 @@ typedef struct
 #define MTC_EVENT_AVS_CRITICAL          (0x12340002)
 #define MTC_EVENT_AVS_OFFLINE           (0x12340003)
 
-/** Hardware Monitor (hwmond) Action Request Codes 
+/** Hardware Monitor (hwmond) Action Request Codes
  *  Action based event messages that hwmond sends to maintenance              */
 #define MTC_EVENT_HWMON_CONFIG          (0x11110000) /* Sensor Config Log     */
 #define MTC_EVENT_HWMON_CLEAR           (0x11110001) /* Clear Event           */
@@ -956,8 +956,8 @@ typedef enum
     MTC_RECOVERY__RETRY_WAIT,
     MTC_RECOVERY__REQ_MTCALIVE,
     MTC_RECOVERY__REQ_MTCALIVE_WAIT,
+    MTC_RECOVERY__RESET_SEND_WAIT,
     MTC_RECOVERY__RESET_RECV_WAIT,
-    MTC_RECOVERY__RESET_WAIT,
     MTC_RECOVERY__MTCALIVE_TIMER,
     MTC_RECOVERY__MTCALIVE_WAIT,
     MTC_RECOVERY__GOENABLED_TIMER,
@@ -1138,7 +1138,7 @@ typedef enum
 /** Return the string representing the specified 'powercycle' stage */
 string get_powercycleStages_str ( mtc_powercycleStages_enum stage );
 
-typedef enum 
+typedef enum
 {
     MTC_SUBSTAGE__START  = 0,
     MTC_SUBSTAGE__SEND   = 1,

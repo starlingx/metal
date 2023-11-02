@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2018 Wind River Systems, Inc.
+ * Copyright (c) 2013-2018, 2023 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -243,7 +243,7 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
     /* Check for response messages */
     else if ( strstr ( &msg.hdr[0], get_cmd_rsp_msg_header() ) )
     {
-        obj_ptr->set_cmd_resp ( hostname , msg ) ;
+        obj_ptr->set_cmd_resp ( hostname , msg, iface ) ;
         if ( msg.num > 0 )
         {
             /* log if not locked message, not start host services result

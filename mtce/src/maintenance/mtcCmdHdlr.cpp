@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2017 Wind River Systems, Inc.
+ * Copyright (c) 2013-2017, 2023 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -342,7 +342,6 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
          * *************************************************************************/
         case MTC_CMD_STAGE__RESET_PROGRESSION_START:
         {
-            node_ptr->cmd_retries = 0 ;
             if ( node_ptr->cmd.task == true )
             {
                 /* Management Reboot Failed */
@@ -384,7 +383,7 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
                                           MTC_CMD_REBOOT,
                                           CLSTR_INTERFACE )) != PASS )
                 {
-                    wlog ("%s 'reboot' request failed (%s) (rc:%d)\n",
+                    wlog ("%s reboot request failed (%s) (rc:%d)\n",
                         node_ptr->hostname.c_str(),
                         get_iface_name_str(CLSTR_INTERFACE), rc);
                 }
@@ -400,16 +399,20 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
                 mtcTimer_reset ( node_ptr->mtcCmd_timer );
                 mtcTimer_start ( node_ptr->mtcCmd_timer, mtcTimer_handler, MTC_CMD_RSP_TIMEOUT );
 
-                ilog ("%s waiting for REBOOT ACK\n", node_ptr->hostname.c_str() );
+                ilog ("%s waiting for reboot ACK\n", node_ptr->hostname.c_str() );
             }
             else
             {
+                /* This means that the mtcAgent can't send commands.
+                 * Very unlikely case. Fail the operation.
+                 */
                 if ( node_ptr->cmd.task == true )
                 {
                     /* Reboot Failed */
                     mtcInvApi_update_task ( node_ptr, MTC_TASK_REBOOT_FAIL );
                 }
-                node_ptr->mtcCmd_work_fifo_ptr->stage = MTC_CMD_STAGE__RESET ;
+                node_ptr->mtcCmd_work_fifo_ptr->status = FAIL_SOCKET_SENDTO  ;
+                node_ptr->mtcCmd_work_fifo_ptr->stage  = MTC_CMD_STAGE__DONE ;
             }
             break ;
         }
@@ -420,21 +423,60 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
             {
                 if ( node_ptr->mtcCmd_timer.ring == true )
                 {
-                    if ( node_ptr->cmd.task == true )
+                    if (( node_ptr->cmd.task == true ) && ( node_ptr->cmd_retries == 0 ))
                     {
+                        /* no need to repost task on retries */
                         mtcInvApi_update_task ( node_ptr, MTC_TASK_REBOOT_FAIL );
                     }
-                    wlog ("%s REBOOT ACK Timeout\n", node_ptr->hostname.c_str());
-
                     node_ptr->mtcCmd_timer.ring = false ;
 
-                    node_ptr->mtcCmd_work_fifo_ptr->stage = MTC_CMD_STAGE__RESET ;
+                    /* progress to RESET if we have tried
+                     * RESET_PROG_MAX_REBOOTS_B4_RESET times already */
+                    if ( ++node_ptr->cmd_retries >= RESET_PROG_MAX_REBOOTS_B4_RESET )
+                    {
+                        wlog ("%s reboot ACK timeout ; max reboot retries reached",
+                                  node_ptr->hostname.c_str());
+                        if ( node_ptr->bmc_provisioned )
+                        {
+                            int reset_delay = bmc_reset_delay - (RESET_PROG_MAX_REBOOTS_B4_RESET * MTC_CMD_RSP_TIMEOUT);
+                            node_ptr->bmc_reset_pending_log_throttle = 0 ;
+                            gettime ( node_ptr->reset_delay_start_time );
+
+                            /* Clear the counts so we can tell if we have been getting mtcAlive
+                             * messages from the remote host during the reset delay window */
+                            node_ptr->mtcAlive_mgmnt_count = 0 ;
+                            node_ptr->mtcAlive_clstr_count = 0 ;
+
+                            wlog ("%s ... bmc reset in %d secs", node_ptr->hostname.c_str(), reset_delay);
+                            mtcTimer_start ( node_ptr->mtcCmd_timer, mtcTimer_handler, reset_delay );
+                            node_ptr->mtcCmd_work_fifo_ptr->stage = MTC_CMD_STAGE__RESET ;
+                        }
+                        else
+                        {
+                            ilog ("%s bmc not provisioned ; search for offline", node_ptr->hostname.c_str());
+                            mtcTimer_start ( node_ptr->mtcCmd_timer, mtcTimer_handler, offline_timeout_secs());
+                            node_ptr->mtcCmd_work_fifo_ptr->stage = MTC_CMD_STAGE__OFFLINE_CHECK ;
+                        }
+                    }
+                    else
+                    {
+                        int retry_delay = MTC_CMD_RSP_TIMEOUT ;
+                        wlog ("%s reboot ACK timeout ; reboot retry (%d of %d) in %d secs",
+                                      node_ptr->hostname.c_str(),
+                                      node_ptr->cmd_retries,
+                                      RESET_PROG_MAX_REBOOTS_B4_RESET-1,
+                                      retry_delay);
+                        mtcTimer_start ( node_ptr->mtcCmd_timer, mtcTimer_handler, retry_delay );
+                    }
                 }
             }
             else
             {
                 /* declare successful reboot */
-                plog ("%s REBOOT Request Succeeded\n", node_ptr->hostname.c_str());
+                plog ("%s reboot request succeeded (%s %s)",
+                          node_ptr->hostname.c_str(),
+                          node_ptr->reboot_cmd_ack_mgmnt ? get_iface_name_str(MGMNT_INTERFACE) : "",
+                          node_ptr->reboot_cmd_ack_clstr ? get_iface_name_str(CLSTR_INTERFACE) : "");
 
                 if ( node_ptr->cmd.task == true )
                 {
@@ -447,21 +489,31 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
                 mtcTimer_reset ( node_ptr->mtcCmd_timer );
 
                 /* progress to RESET if we have tried 5 times already */
-                if ( node_ptr->cmd_retries >= RESET_PROG_MAX_REBOOTS_B4_RESET )
+                if ( ++node_ptr->cmd_retries >= RESET_PROG_MAX_REBOOTS_B4_RESET )
                 {
-                    elog ("%s still not offline ; trying reset\n", node_ptr->hostname.c_str());
+                    int reset_delay = bmc_reset_delay - (RESET_PROG_MAX_REBOOTS_B4_RESET * MTC_CMD_RSP_TIMEOUT) ;
+                    node_ptr->bmc_reset_pending_log_throttle = 0 ;
+                    gettime ( node_ptr->reset_delay_start_time );
+
+                    /* Clear the counts so we can tell if we have been getting mtcAlive
+                     * messages from the remote host during the reset delay window */
+                    node_ptr->mtcAlive_mgmnt_count = 0 ;
+                    node_ptr->mtcAlive_clstr_count = 0 ;
+
+                    wlog ("%s max reboot retries reached ; still not offline ; reset in %3d secs",
+                                  node_ptr->hostname.c_str(), reset_delay);
+                    mtcTimer_start ( node_ptr->mtcCmd_timer, mtcTimer_handler, reset_delay );
                     node_ptr->mtcCmd_work_fifo_ptr->stage = MTC_CMD_STAGE__RESET ;
                 }
                 else
                 {
-                    int delay = (((offline_period*offline_threshold)/1000)*3);
                     ilog ("%s searching for offline ; next reboot attempt in %d seconds\n",
-                              node_ptr->hostname.c_str(), delay);
+                              node_ptr->hostname.c_str(), offline_timeout_secs());
 
                     /* After the host is reset we need to wait for it to stop sending mtcAlive messages
                      * Delay the time fo the offline handler to run to completion at least once before
                      * timing out and retrying the reset again */
-                    mtcTimer_start ( node_ptr->mtcCmd_timer, mtcTimer_handler, delay );
+                    mtcTimer_start ( node_ptr->mtcCmd_timer, mtcTimer_handler, offline_timeout_secs());
 
                     /* Wait for the host to go offline */
                     node_ptr->mtcCmd_work_fifo_ptr->stage = MTC_CMD_STAGE__OFFLINE_CHECK ;
@@ -471,94 +523,155 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
         }
         case MTC_CMD_STAGE__RESET:
         {
-            if (( node_ptr->bmc_provisioned == true ) && ( node_ptr->bmc_accessible == true ))
+            if ( node_ptr->bmc_provisioned == true )
             {
-                plog ("%s Performing RESET over Board Management Interface\n", node_ptr->hostname.c_str());
-                if ( node_ptr->cmd.task == true )
+                if ( node_ptr->mtcCmd_timer.ring == true )
                 {
-                    mtcInvApi_update_task ( node_ptr, MTC_TASK_RESET_REQUEST);
-                }
+                    if ( node_ptr->bmc_accessible == true )
+                    {
+                        plog ("%s issuing reset over bmc", node_ptr->hostname.c_str());
+                        if ( node_ptr->cmd.task == true )
+                        {
+                            mtcInvApi_update_task ( node_ptr, MTC_TASK_RESET_REQUEST);
+                        }
 
-                /* bmc power control reset by bmc */
-                    rc = bmc_command_send ( node_ptr, BMC_THREAD_CMD__POWER_RESET );
-
-                if ( rc == PASS )
-                {
-                    dlog ("%s Board Management Interface RESET Requested\n", node_ptr->hostname.c_str());
-
-                    mtcTimer_start ( node_ptr->mtcCmd_timer, mtcTimer_handler, MTC_BMC_REQUEST_DELAY );
-                    node_ptr->mtcCmd_work_fifo_ptr->stage = MTC_CMD_STAGE__RESET_ACK;
-                    break ;
+                        /* bmc power control reset by bmc */
+                        rc = bmc_command_send ( node_ptr, BMC_THREAD_CMD__POWER_RESET );
+                        if ( rc == PASS )
+                        {
+                             ilog ("%s bmc reset requested", node_ptr->hostname.c_str());
+                             mtcTimer_start ( node_ptr->mtcCmd_timer, mtcTimer_handler, MTC_BMC_REQUEST_DELAY );
+                             node_ptr->mtcCmd_work_fifo_ptr->stage = MTC_CMD_STAGE__RESET_ACK;
+                             break ;
+                         }
+                         else
+                         {
+                             node_ptr->mtcCmd_work_fifo_ptr->status = rc ;
+                             wlog ("%s bmc reset command request failed (%d)", node_ptr->hostname.c_str(), rc );
+                         }
+                    }
+                    else
+                    {
+                        wlog ("%s bmc not accessible ; unable to reset", node_ptr->hostname.c_str());
+                    }
                 }
                 else
                 {
-                    node_ptr->mtcCmd_work_fifo_ptr->status = rc ;
-                    wlog ("%s 'reset' command request failed (%d)\n", node_ptr->hostname.c_str(), rc );
+                    /* To handle potentially large bmc_reset_delay values that could
+                     * be longer than a boot time this check cancels the reset once the
+                     * node goes online. Maybe the reset did get through or the node
+                     * rebooted quite fast.
+                     *
+                     * However, don't allow momentary heartbeat loss recovery handling
+                     * or the failure of just one (mgmnt or clstr) networks to mistakenly
+                     * cancel the reset. Prevent the cancel if
+                     * - the node uptime is high and
+                     * - not receiving mtcAlive both mgmnt and clstr networks.
+                     *
+                     * Note: online does not mean both networks are receiving mtcAlive,
+                     *       Currently just mgmnt needs to see mtcAlive for the node to
+                     *       go online.
+                     * TODO: Fix this in the future so both are required.
+                     *       It came from the days when the cluster-host was named the
+                     *       infrastructure network where at that time it was optional.
+                     *       Cluster-host is no longer optional. */
+                    if (( node_ptr->availStatus == MTC_AVAIL_STATUS__ONLINE ) &&
+                        ( node_ptr->uptime < MTC_MINS_5 ) &&
+                        ( node_ptr->mtcAlive_mgmnt_count ) &&
+                        ( node_ptr->mtcAlive_clstr_count ))
+                    {
+                        mtcTimer_reset ( node_ptr->mtcCmd_timer );
+                        ilog ("%s cancelling reset ; host is online ; delay:%d uptime:%d mtcAlive:%d:%d ",
+                                  node_ptr->hostname.c_str(),
+                                  bmc_reset_delay,
+                                  node_ptr->uptime,
+                                  node_ptr->mtcAlive_mgmnt_count,
+                                  node_ptr->mtcAlive_clstr_count);
+                        node_ptr->mtcCmd_work_fifo_ptr->status = PASS ;
+                        node_ptr->mtcCmd_work_fifo_ptr->stage  = MTC_CMD_STAGE__DONE ;
+                    }
+                    else
+                    {
+                        time_debug_type now_time  ;
+                        time_delta_type diff_time ;
+                        int reset_delay = bmc_reset_delay - (RESET_PROG_MAX_REBOOTS_B4_RESET * MTC_CMD_RSP_TIMEOUT) ;
+                        gettime ( now_time );
+                        timedelta ( node_ptr->reset_delay_start_time, now_time, diff_time );
+                        if ( reset_delay > diff_time.secs )
+                        {
+                            #define BMC_RESET_PENDING_LOG_THROTTLE (1000)
+                            wlog_throttled ( node_ptr->bmc_reset_pending_log_throttle,
+                                             BMC_RESET_PENDING_LOG_THROTTLE,
+                                             "%s reset in %3ld secs ; delay:%d uptime:%d mtcAlive:%d:%d",
+                                             node_ptr->hostname.c_str(),
+                                             reset_delay-diff_time.secs,
+                                             bmc_reset_delay,
+                                             node_ptr->uptime,
+                                             node_ptr->mtcAlive_mgmnt_count,
+                                             node_ptr->mtcAlive_clstr_count);
+                        }
+                    }
+                    break ; /* waiting path */
                 }
             }
-            else
+            else if ( node_ptr->bmc_provisioned == false )
             {
-                if ( node_ptr->bmc_provisioned == false )
-                {
-                    wlog ("%s Board Management Interface not provisioned\n", node_ptr->hostname.c_str());
-                }
-                else if ( node_ptr->bmc_accessible == false )
-                {
-                    wlog ("%s Board Management Interface not accessible\n", node_ptr->hostname.c_str());
-                }
-           }
-            int delay = (((offline_period*offline_threshold)/1000)*3);
-            mtcTimer_start ( node_ptr->mtcCmd_timer, mtcTimer_handler, delay );
+                wlog ("%s bmc not provisioned", node_ptr->hostname.c_str());
+            }
+
+            /* if we get here then either
+             *  - the bmc is not proivisioned,
+             *  - the bmc is not accessible after the bmc_reset_delay
+             *  - the reset send command failed
+             *  So we need to just jump to the offline check which will
+             *  retry the reboot/reset if the host still does not go
+             *  offline aftrer calculated delay
+             */
+            mtcTimer_reset ( node_ptr->mtcCmd_timer );
+            mtcTimer_start ( node_ptr->mtcCmd_timer, mtcTimer_handler, offline_timeout_secs());
             node_ptr->mtcCmd_work_fifo_ptr->stage = MTC_CMD_STAGE__OFFLINE_CHECK ;
             break ;
         }
         case MTC_CMD_STAGE__RESET_ACK:
         {
-             if ( node_ptr->mtcCmd_timer.ring == true )
-             {
-                  int delay = (((offline_period*offline_threshold)/1000)*3);
-
-                  /* bmc power control reset by bmc */
-                     rc = bmc_command_recv ( node_ptr );
-                     if ( rc == RETRY )
+            if ( node_ptr->mtcCmd_timer.ring == true )
+            {
+                 /* bmc power control reset by bmc */
+                 rc = bmc_command_recv ( node_ptr );
+                 if ( rc == RETRY )
+                 {
+                     mtcTimer_start ( node_ptr->mtcCmd_timer, mtcTimer_handler, MTC_BMC_REQUEST_DELAY );
+                     break ;
+                 }
+                 else if ( rc )
+                 {
+                     elog ("%s bmc reset request failed [rc:%d]\n", node_ptr->hostname.c_str(), rc);
+                     if ( node_ptr->cmd.task == true )
                      {
-                         mtcTimer_start ( node_ptr->mtcCmd_timer, mtcTimer_handler, MTC_BMC_REQUEST_DELAY );
-                         break ;
+                        mtcInvApi_update_task ( node_ptr, MTC_TASK_RESET_FAIL);
+                     }
+                     node_ptr->mtcCmd_work_fifo_ptr->status = rc ;
+                 }
+                 else
+                 {
+                     plog ("%s bmc reset request succeeded\n", node_ptr->hostname.c_str());
+
+                     if (( node_ptr->adminAction != MTC_ADMIN_ACTION__RESET ) &&
+                         ( node_ptr->adminAction != MTC_ADMIN_ACTION__REBOOT ))
+                     {
+                         mtcAlarm_log ( node_ptr->hostname, MTC_LOG_ID__COMMAND_AUTO_RESET );
                      }
 
-                  if ( rc )
-                  {
-                      elog ("%s Board Management Interface RESET Unsuccessful\n", node_ptr->hostname.c_str());
-                      if ( node_ptr->cmd.task == true )
-                      {
-                          mtcInvApi_update_task ( node_ptr, MTC_TASK_RESET_FAIL);
-                      }
-                      mtcTimer_start ( node_ptr->mtcCmd_timer, mtcTimer_handler, delay );
-                      node_ptr->mtcCmd_work_fifo_ptr->status = rc ;
-                      node_ptr->mtcCmd_work_fifo_ptr->stage = MTC_CMD_STAGE__OFFLINE_CHECK ;
+                     set_uptime ( node_ptr, 0 , false );
+                     if ( node_ptr->cmd.task == true )
+                     {
+                         mtcInvApi_update_task ( node_ptr, MTC_TASK_RESETTING );
+                     }
                   }
-                  else
-                  {
-                      plog ("%s Board Management Interface RESET Command Succeeded\n", node_ptr->hostname.c_str());
-
-                      if (( node_ptr->adminAction != MTC_ADMIN_ACTION__RESET ) &&
-                          ( node_ptr->adminAction != MTC_ADMIN_ACTION__REBOOT ))
-                      {
-                          mtcAlarm_log ( node_ptr->hostname, MTC_LOG_ID__COMMAND_AUTO_RESET );
-                      }
-
-                      set_uptime ( node_ptr, 0 , false );
-
-                      if ( node_ptr->cmd.task == true )
-                      {
-                          mtcInvApi_update_task ( node_ptr, MTC_TASK_RESETTING );
-                      }
-                      mtcTimer_start ( node_ptr->mtcCmd_timer, mtcTimer_handler, delay );
-                      node_ptr->mtcCmd_work_fifo_ptr->stage = MTC_CMD_STAGE__OFFLINE_CHECK ;
-                      ilog ("%s waiting for host to go offline (%d secs) before retrying reset\n",
-                                node_ptr->hostname.c_str(),
-                                delay);
-                  }
+                  ilog ("%s waiting for host to go offline ; %d secs before retrying reboot/reset",
+                            node_ptr->hostname.c_str(), offline_timeout_secs());
+                  node_ptr->mtcCmd_work_fifo_ptr->stage = MTC_CMD_STAGE__OFFLINE_CHECK ;
+                  mtcTimer_start ( node_ptr->mtcCmd_timer, mtcTimer_handler, offline_timeout_secs());
              }
              break ;
         }
@@ -570,7 +683,7 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
 
                 clear_service_readies ( node_ptr );
 
-                qlog ("%s Reset Progression Complete ; host is offline (after %d retries)\n",
+                qlog ("%s reset progression complete ; host is offline (after %d retries)\n",
                           node_ptr->hostname.c_str(),
                           node_ptr->cmd_retries );
                 node_ptr->mtcCmd_work_fifo_ptr->status = PASS ;
@@ -581,7 +694,7 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
             {
                 if ( ++node_ptr->cmd_retries < RESET_PROG_MAX_REBOOTS_B4_RETRY )
                 {
-                    ilog ("%s REBOOT (retry %d of %d)\n",
+                    ilog ("%s reboot (retry %d of %d)\n",
                               node_ptr->hostname.c_str(),
                               node_ptr->cmd_retries,
                               RESET_PROG_MAX_REBOOTS_B4_RETRY );
@@ -602,13 +715,13 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
             /* Complete command if we reach max retries */
             if ( ++node_ptr->mtcCmd_work_fifo_ptr->parm2 > node_ptr->mtcCmd_work_fifo_ptr->parm1 )
             {
-                plog ("%s Reset Progression Done\n", node_ptr->hostname.c_str());
+                plog ("%s reset progression done\n", node_ptr->hostname.c_str());
                 node_ptr->mtcCmd_work_fifo_ptr->status = FAIL_RETRY ;
                 node_ptr->mtcCmd_work_fifo_ptr->stage = MTC_CMD_STAGE__DONE ;
             }
             else
             {
-                wlog ("%s Reset Progression Retry\n", node_ptr->hostname.c_str());
+                wlog ("%s reset progression retry\n", node_ptr->hostname.c_str());
                 node_ptr->mtcCmd_work_fifo_ptr->stage = MTC_CMD_STAGE__RESET_PROGRESSION_START ;
             }
 

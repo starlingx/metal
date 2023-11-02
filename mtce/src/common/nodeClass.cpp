@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2020 Wind River Systems, Inc.
+ * Copyright (c) 2013-2020, 2023 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -306,6 +306,7 @@ nodeLinkClass::nodeLinkClass()
     dor_start_time  = 0 ;
     dor_mode_active_log_throttle = 0 ;
 
+    bmc_reset_delay              = MTC_MINS_5 ;
     swact_timeout                = MTC_MINS_2 ;
     uptime_period                = MTC_UPTIME_REFRESH_TIMER ;
     online_period                = MTC_OFFLINE_TIMER ;
@@ -553,6 +554,13 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
     ptr->offline_search_count = 0 ;
     ptr->mtcAlive_mgmnt = false ;
     ptr->mtcAlive_clstr = false ;
+
+    /* These counts are incremented in the set_mtcAlive member
+     * function and cleared in the reset progression handler. */
+    ptr->mtcAlive_mgmnt_count = 0 ;
+    ptr->mtcAlive_clstr_count = 0 ;
+    ptr->bmc_reset_pending_log_throttle = 0 ;
+
     ptr->reboot_cmd_ack_mgmnt = false ;
     ptr->reboot_cmd_ack_clstr = false ;
 
@@ -2523,6 +2531,12 @@ int nodeLinkClass::mod_host ( node_inv_type & inv )
     return ( rc );
 }
 
+/* calculate and return offline timeout in secs */
+int nodeLinkClass::offline_timeout_secs ( void )
+{
+    return (((offline_period*offline_threshold)/1000)*3);
+}
+
 void nodeLinkClass::start_offline_handler ( struct nodeLinkClass::node * node_ptr )
 {
     bool already_active = false ;
@@ -3744,7 +3758,7 @@ int nodeLinkClass::num_hosts ( void )
     return ( nodeLinkClass::hosts ) ;
 }
 
-void nodeLinkClass::set_cmd_resp ( string & hostname, mtc_message_type & msg )
+void nodeLinkClass::set_cmd_resp ( string & hostname, mtc_message_type & msg, int iface )
 {
     nodeLinkClass::node* node_ptr ;
     node_ptr = nodeLinkClass::getNode ( hostname );
@@ -3808,16 +3822,21 @@ void nodeLinkClass::set_cmd_resp ( string & hostname, mtc_message_type & msg )
                           "no error string" : node_ptr->host_services_req.status_string.c_str());
             }
         }
-        else
+        else if ( node_ptr->cmdRsp != msg.cmd )
         {
-            if ( node_ptr->cmdRsp != msg.cmd )
+            /* record ack's for reboot requests */
+            if ( msg.cmd == MTC_CMD_REBOOT )
             {
-                node_ptr->cmdRsp = msg.cmd ;
-                if ( msg.num > 0 )
-                    node_ptr->cmdRsp_status = msg.parm[0] ;
-                else
-                    node_ptr->cmdRsp_status = -1 ;
+                if ( iface == MGMNT_INTERFACE )
+                   node_ptr->reboot_cmd_ack_mgmnt = 1 ;
+                else if ( iface == CLSTR_INTERFACE )
+                   node_ptr->reboot_cmd_ack_clstr = 1 ;
             }
+            node_ptr->cmdRsp = msg.cmd ;
+            if ( msg.num > 0 )
+                node_ptr->cmdRsp_status = msg.parm[0] ;
+            else
+                node_ptr->cmdRsp_status = -1 ;
         }
     }
 }
@@ -3907,6 +3926,7 @@ void nodeLinkClass::set_mtcAlive ( struct nodeLinkClass::node * node_ptr, int in
                     alog ("%s %s mtcAlive received",
                               node_ptr->hostname.c_str(),
                               get_iface_name_str(interface));
+                    node_ptr->mtcAlive_clstr_count++ ;
                     node_ptr->mtcAlive_clstr = true ;
                 }
             }
@@ -3917,6 +3937,7 @@ void nodeLinkClass::set_mtcAlive ( struct nodeLinkClass::node * node_ptr, int in
                     alog ("%s %s mtcAlive received",
                               node_ptr->hostname.c_str(),
                               get_iface_name_str(interface));
+                    node_ptr->mtcAlive_mgmnt_count++ ;
                     node_ptr->mtcAlive_mgmnt = true ;
                 }
             }
