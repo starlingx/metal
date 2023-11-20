@@ -1099,8 +1099,27 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                 node_ptr->hbsClient_ready = false ;
                 mtcTimer_reset ( node_ptr->mtcTimer );
 
+                /* Check for LUKS volume availability */
+                if ( node_ptr->mtce_flags & MTC_FLAG__LUKS_VOL_FAILED )
+                {
+                    elog ("%s LUKS volume failure (oob:%x)\n",
+                              node_ptr->hostname.c_str(),
+                              node_ptr->mtce_flags)
+
+                    /* raise an alarm for the failure of the config */
+                    alarm_luks_failure ( node_ptr );
+
+                    mtcInvApi_update_task ( node_ptr, MTC_TASK_MAIN_CONFIG_FAIL );
+                    enableStageChange ( node_ptr, MTC_ENABLE__FAILURE );
+
+                    /* handle auto recovery for this failure */
+                    if ( ar_manage ( node_ptr,
+                                     MTC_AR_DISABLE_CAUSE__LUKS,
+                                     MTC_TASK_AR_DISABLED_LUKS ) != PASS )
+                        break ;
+                }
                 /* Check to see if the host is/got configured correctly */
-                if ((( !node_ptr->mtce_flags & MTC_FLAG__I_AM_CONFIGURED )) ||
+                else if ((( !node_ptr->mtce_flags & MTC_FLAG__I_AM_CONFIGURED )) ||
                     ((  node_ptr->mtce_flags & MTC_FLAG__I_AM_NOT_HEALTHY )))
                 {
                     elog ("%s configuration failed or incomplete (oob:%x)\n",
@@ -6341,7 +6360,8 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
                    (( !node_ptr->task.compare(MTC_TASK_AR_DISABLED_CONFIG))  ||
                     ( !node_ptr->task.compare(MTC_TASK_AR_DISABLED_GOENABLE))||
                     ( !node_ptr->task.compare(MTC_TASK_AR_DISABLED_SERVICES))||
-                    ( !node_ptr->task.compare(MTC_TASK_AR_DISABLED_HEARTBEAT))))
+                    ( !node_ptr->task.compare(MTC_TASK_AR_DISABLED_HEARTBEAT))||
+                    (!node_ptr->task.compare(MTC_TASK_AR_DISABLED_LUKS))))
                 {
                     if ( !node_ptr->task.compare(MTC_TASK_AR_DISABLED_CONFIG ))
                     {
@@ -6361,6 +6381,11 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
                     else if ( !node_ptr->task.compare(MTC_TASK_AR_DISABLED_HEARTBEAT ))
                     {
                         node_ptr->ar_cause = MTC_AR_DISABLE_CAUSE__HEARTBEAT ;
+                    }
+                    else if ( !node_ptr->task.compare(MTC_TASK_AR_DISABLED_LUKS ))
+                    {
+                        node_ptr->ar_cause = MTC_AR_DISABLE_CAUSE__LUKS ;
+                        alarm_luks_failure ( node_ptr );
                     }
                     node_ptr->ar_disabled = true ;
 
@@ -7949,8 +7974,17 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
                 {
                     /* clear the SM degrade flag */
                     node_ptr->degrade_mask &= ~DEGRADE_MASK_SM ;
-
                     ilog ("%s sm degrade clear\n", node_ptr->hostname.c_str());
+                }
+
+                /* In-service luks volume config failure handling */
+                if ( !(node_ptr->mtce_flags & MTC_FLAG__LUKS_VOL_FAILED))
+                {
+                    alarm_luks_clear ( node_ptr );
+                }
+                else
+                {
+                    alarm_luks_failure ( node_ptr );
                 }
 
                 /*

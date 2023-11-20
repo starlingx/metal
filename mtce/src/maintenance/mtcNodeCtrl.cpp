@@ -406,6 +406,8 @@ static int mtc_config_handler ( void * user,
         mtcInv.ar_threshold[MTC_AR_DISABLE_CAUSE__HOST_SERVICES] = atoi(value);
     else if (MATCH("agent", "ar_heartbeat_threshold"))
         mtcInv.ar_threshold[MTC_AR_DISABLE_CAUSE__HEARTBEAT] = atoi(value);
+    else if (MATCH("agent", "ar_luks_threshold"))
+        mtcInv.ar_threshold[MTC_AR_DISABLE_CAUSE__LUKS] = atoi(value);
 
     else if (MATCH("agent", "ar_config_interval"))
         mtcInv.ar_interval[MTC_AR_DISABLE_CAUSE__CONFIG] = atoi(value);
@@ -415,6 +417,8 @@ static int mtc_config_handler ( void * user,
         mtcInv.ar_interval[MTC_AR_DISABLE_CAUSE__HOST_SERVICES] = atoi(value);
     else if (MATCH("agent", "ar_heartbeat_interval"))
         mtcInv.ar_interval[MTC_AR_DISABLE_CAUSE__HEARTBEAT] = atoi(value);
+    else if (MATCH("agent", "ar_luks_interval"))
+        mtcInv.ar_interval[MTC_AR_DISABLE_CAUSE__LUKS] = atoi(value);
 
 
     else
@@ -757,6 +761,9 @@ int daemon_configure ( void )
     ilog("AR Heartbeat: %d (threshold) %d sec (retry interval)",
           mtcInv.ar_threshold[MTC_AR_DISABLE_CAUSE__HEARTBEAT],
           mtcInv.ar_interval [MTC_AR_DISABLE_CAUSE__HEARTBEAT]);
+    ilog("AR luks     : %d (threshold) %d sec (retry interval)",
+          mtcInv.ar_threshold[MTC_AR_DISABLE_CAUSE__LUKS],
+          mtcInv.ar_interval [MTC_AR_DISABLE_CAUSE__LUKS]);
 
     /* Get this Controller Activity State */
     mtc_config.active = daemon_get_run_option ("active") ;

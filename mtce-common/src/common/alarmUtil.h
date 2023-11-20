@@ -41,6 +41,7 @@
 #define CH_COMP_ALARM_ID     ((const char *)"200.013") /* Combo Host Compute Failure - on last Controller     */
 #define SENSORCFG_ALARM_ID   ((const char *)"200.014") /* Sensor configuration alarm ; i.e. could not add     */
 #define SENSORGROUP_ALARM_ID ((const char *)"200.015") /* Sensor Group Read Error                             */
+#define LUKS_ALARM_ID        ((const char *)"200.016") /* LUKS volume failure alarm                           */
 
 #define EVENT_LOG_ID         ((const char *)"200.020")
 #define COMMAND_LOG_ID       ((const char *)"200.021")

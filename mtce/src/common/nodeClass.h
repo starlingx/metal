@@ -1106,6 +1106,9 @@ private:
     int alarm_config_clear    ( struct nodeLinkClass::node * node_ptr );
     int alarm_config_failure  ( struct nodeLinkClass::node * node_ptr );
 
+    int alarm_luks_clear    ( struct nodeLinkClass::node * node_ptr );
+    int alarm_luks_failure  ( struct nodeLinkClass::node * node_ptr );
+
     int alarm_compute_clear   ( struct nodeLinkClass::node * node_ptr, bool force );
     int alarm_compute_failure ( struct nodeLinkClass::node * node_ptr , EFmAlarmSeverityT sev );
 
