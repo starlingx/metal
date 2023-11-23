@@ -501,7 +501,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                 {
                     if ( daemon_is_file_present(UNLOCK_READY_FILE) == false )
                     {
-                        mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_MINS_5 );
+                        mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_MINS_8 );
                         mtcInvApi_update_task_now   ( node_ptr, MTC_TASK_MANIFEST_APPLY );
                         this->unlock_ready_wait = true ;
                         return (PASS);

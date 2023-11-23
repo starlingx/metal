@@ -43,6 +43,7 @@
 #define MTC_MINS_3  (180)
 #define MTC_MINS_4  (240)
 #define MTC_MINS_5  (300)
+#define MTC_MINS_8  (480)
 #define MTC_MINS_10 (600)
 #define MTC_MINS_15 (900)
 #define MTC_MINS_20 (1200)
