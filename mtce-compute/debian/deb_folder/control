@@ -8,7 +8,7 @@ Homepage: https://www.starlingx.io
 
 Package: mtce-compute
 Architecture: any
-Depends: ${misc:Depends}, qemu
+Depends: ${misc:Depends}
 Description: StarlingX Compute Node Maintenance Package
  This package contains maintenance support files for the compute-only
  node type.
