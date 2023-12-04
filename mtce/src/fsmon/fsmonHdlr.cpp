@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016 Wind River Systems, Inc.
+ * Copyright (c) 2013, 2016, 2023 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -30,7 +30,7 @@ using namespace std;
 typedef char FileNameT[PATH_MAX];
 
 static FileNameT _files[] =
-{ "/.fs-test",
+{ "/sysroot/.fs_test",
   "/scratch/.fs_test",
   "/var/log/.fs_test",
   "/var/run/.fs_test",
