@@ -771,6 +771,11 @@ int create_mtcAlive_msg ( mtc_message_type & msg, int cmd, string identity, int 
 
     /* Insert the mtce flags */
     msg.parm[MTC_PARM_FLAGS_IDX] = 0 ;
+
+    //Check if LUKS FS manager service is active
+    int exitstatus = system("cryptsetup status luks_encrypted_vault");
+    if ( 0 != exitstatus )
+        msg.parm[MTC_PARM_FLAGS_IDX] |= MTC_FLAG__LUKS_VOL_FAILED ;
     if ( daemon_is_file_present ( CONFIG_COMPLETE_FILE ) )
         msg.parm[MTC_PARM_FLAGS_IDX] |= MTC_FLAG__I_AM_CONFIGURED ;
     if ( daemon_is_file_present ( CONFIG_FAIL_FILE ) )

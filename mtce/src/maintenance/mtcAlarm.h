@@ -30,6 +30,7 @@ typedef enum
     MTC_ALARM_ID__ENABLE,
     MTC_ALARM_ID__BM,
     MTC_ALARM_ID__CH_COMP, /* Combo Host Compute Failure - on last Controller     */
+    MTC_ALARM_ID__LUKS,
 
     MTC_LOG_ID__EVENT,
     MTC_LOG_ID__COMMAND,

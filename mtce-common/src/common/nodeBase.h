@@ -86,6 +86,7 @@ void daemon_exit ( void );
 #define MTC_FLAG__SM_DEGRADED      (0x00000080)
 #define MTC_FLAG__PATCHING         (0x00000100) /* Patching in progress */
 #define MTC_FLAG__PATCHED          (0x00000200) /* Patched but not reset */
+#define MTC_FLAG__LUKS_VOL_FAILED  (0x00000400)
 #define MTC_FLAG__SM_UNHEALTHY     (0x00001000)
 
 #define MTC_UNHEALTHY_THRESHOLD    (3)
@@ -289,6 +290,7 @@ typedef enum
 #define MTC_TASK_AR_DISABLED_SERVICES  "Service Failure, threshold reached, Lock/Unlock to retry"
 #define MTC_TASK_AR_DISABLED_ENABLE    "Enable Failure, threshold reached, Lock/Unlock to retry"
 #define MTC_TASK_AR_DISABLED_HEARTBEAT "Heartbeat Failure, threshold reached, Lock/Unlock to retry"
+#define MTC_TASK_AR_DISABLED_LUKS      "LUKS volume failure, threshold reached, Lock/Unlock to retry"
 
 #define MTC_TASK_RESET_FAIL        "Reset Failed"
 #define MTC_TASK_RESET_QUEUE       "Reset Failed, retrying (%d of %d)"
@@ -1020,7 +1022,7 @@ string get_configStages_str ( mtc_configStages_enum stage );
 #define DEGRADE_MASK_CONFIG           0x00000400
 #define DEGRADE_MASK_COLLECTD         0x00000800
 #define DEGRADE_MASK_ENABLE           0x00001000
-#define DEGRADE_MASK_RES4             0x00002000
+#define DEGRADE_MASK_LUKS             0x00002000
 #define DEGRADE_MASK_RES5             0x00004000
 #define DEGRADE_MASK_RES6             0x00008000
 
@@ -1261,6 +1263,7 @@ typedef enum
     MTC_AR_DISABLE_CAUSE__GOENABLE,
     MTC_AR_DISABLE_CAUSE__HOST_SERVICES,
     MTC_AR_DISABLE_CAUSE__HEARTBEAT,
+    MTC_AR_DISABLE_CAUSE__LUKS,
     MTC_AR_DISABLE_CAUSE__LAST,
     MTC_AR_DISABLE_CAUSE__NONE,
 } autorecovery_disable_cause_enum ;

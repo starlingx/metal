@@ -184,6 +184,34 @@ void mtcAlarm_init ( void )
               "and Switch Activity (Swact) to it as soon as possible. If the alarm "
               "persists then Lock/Unlock host to recover its local compute service.");
 
+    /** LUKS volume config failure Alarm Entry *************************************/
+
+    ptr = &alarm_list[MTC_ALARM_ID__LUKS];
+    memset  (&ptr->alarm, 0, (sizeof(SFmAlarmDataT)));
+    snprintf(&ptr->alarm.alarm_id[0], FM_MAX_BUFFER_LENGTH, "%s", LUKS_ALARM_ID);
+
+    ptr->name = "LUKS volume failure" ;
+    ptr->instc_prefix = "" ;
+
+    ptr->minor_reason =
+    ptr->major_reason =
+    ptr->critl_reason = "LUKS volume is not active or functioning properly.";
+    ptr->clear_reason = "'LUKS volume' has been successfully unsealed and service is functioning properly.";
+
+    ptr->alarm.alarm_type         = FM_ALARM_OPERATIONAL;
+    ptr->alarm.probable_cause     = FM_ALARM_APP_SUBSYS_FAILURE ;
+    ptr->alarm.inhibit_alarms     = FM_FALSE ;
+    ptr->alarm.service_affecting  = FM_FALSE  ;
+    ptr->alarm.suppression        = FM_TRUE  ;
+
+    ptr->alarm.severity           = FM_ALARM_SEVERITY_CLEAR ; /* Dynamic */
+    ptr->alarm.alarm_state        = FM_ALARM_STATE_CLEAR    ; /* Dynamic */
+
+    snprintf (ptr->alarm.proposed_repair_action, FM_MAX_BUFFER_LENGTH,
+              "If this alarm does not automatically clear after some time and "
+              "continues to be asserted after Host is locked and unlocked then "
+              "contact next level of support for root cause analysis and recovery.");
+
     /** Init Event Log Entry *************************************************/
 
     ptr = &alarm_list[MTC_LOG_ID__EVENT];
@@ -315,6 +343,7 @@ string _getIdentity ( mtc_alarm_id_enum id )
         case MTC_ALARM_ID__ENABLE:    return (ENABLE_ALARM_ID);
         case MTC_ALARM_ID__BM:        return (BM_ALARM_ID);
         case MTC_ALARM_ID__CH_COMP:   return (CH_COMP_ALARM_ID);
+        case MTC_ALARM_ID__LUKS:      return (LUKS_ALARM_ID);
         case MTC_LOG_ID__EVENT:       return (EVENT_LOG_ID);
         case MTC_LOG_ID__COMMAND:     return (COMMAND_LOG_ID);
         case MTC_LOG_ID__STATECHANGE: return (STATECHANGE_LOG_ID);

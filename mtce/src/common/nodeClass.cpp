@@ -1640,6 +1640,41 @@ int nodeLinkClass::lazy_graceful_fs_reboot ( struct nodeLinkClass::node * node_p
     return (FAIL);
 }
 
+/* Generate a log and a critical alarm if the LUKS volume config failed */
+int nodeLinkClass::alarm_luks_failure (  struct nodeLinkClass::node * node_ptr )
+{
+    if ( (node_ptr->degrade_mask & DEGRADE_MASK_LUKS) == 0 )
+    {
+        node_ptr->degrade_mask |= DEGRADE_MASK_LUKS ;
+    }
+
+    if ( node_ptr->alarms[MTC_ALARM_ID__LUKS] != FM_ALARM_SEVERITY_CRITICAL )
+    {
+        elog ("%s critical luks filesystem config failure\n", node_ptr->hostname.c_str());
+
+        mtcAlarm_critical ( node_ptr->hostname, MTC_ALARM_ID__LUKS );
+        node_ptr->alarms[MTC_ALARM_ID__LUKS] = FM_ALARM_SEVERITY_CRITICAL ;
+    }
+    return (PASS);
+}
+
+/* Clear the luks alarm and degrade flag */
+int nodeLinkClass::alarm_luks_clear ( struct nodeLinkClass::node * node_ptr )
+{
+    if ( node_ptr->degrade_mask & DEGRADE_MASK_LUKS )
+    {
+        node_ptr->degrade_mask &= ~DEGRADE_MASK_LUKS ;
+    }
+
+    if ( node_ptr->alarms[MTC_ALARM_ID__LUKS] != FM_ALARM_SEVERITY_CLEAR )
+    {
+        ilog ("%s luks config alarm clear\n", node_ptr->hostname.c_str());
+
+        mtcAlarm_clear ( node_ptr->hostname, MTC_ALARM_ID__LUKS );
+        node_ptr->alarms[MTC_ALARM_ID__LUKS] = FM_ALARM_SEVERITY_CLEAR ;
+    }
+    return (PASS);
+}
 
 /* Generate a log and a critical alarm if the node config failed */
 int nodeLinkClass::alarm_config_failure (  struct nodeLinkClass::node * node_ptr )
