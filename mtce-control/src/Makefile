@@ -3,6 +3,7 @@ SOURCE2 = goenabled
 SOURCE3 = hbsAgent
 SOURCE4 = hbsAgent.conf
 SOURCE5 = hbsAgent.service
+SOURCE6 = ipsec-server.conf
 
 PMONDIR ?= $(_sysconfdir)/pmon.d
 local_etc_goenabledd = $(_sysconfdir)/goenabled.d
@@ -23,6 +24,7 @@ install:
 	# Controller-Only Process Monitor Config files
 	install -m 755 -d $(buildroot)/$(PMONDIR)
 	install -m 644 -p -D scripts/$(SOURCE4) $(buildroot)/$(PMONDIR)/hbsAgent.conf
+	install -m 644 -p -D scripts/$(SOURCE6) $(buildroot)/$(PMONDIR)/ipsec-server.conf
 
 	# Controller-Only Heartbeat Service file
 	install -m 644 -p -D scripts/$(SOURCE5) $(buildroot)/$(_unitdir)/hbsAgent.service
