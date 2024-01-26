@@ -1508,6 +1508,9 @@ public:
     /** Host has been deleted */
     bool host_deleted ;
 
+    /** seconds to wait between power-off retries */
+    int power_off_retry_wait ;
+
     /** Host Administrative State Change public member function */
     int admin_state_change ( string hostname,
                              string newAdminState );

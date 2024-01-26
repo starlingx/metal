@@ -100,16 +100,18 @@ int nodeLinkClass::bmc_command_send ( struct nodeLinkClass::node * node_ptr,
             }
             case BMC_THREAD_CMD__POWER_RESET:
             {
-                /* use immediate for all retries if server supports an immediate command */
-                if ( ( node_ptr->power_action_retries < MTC_RESET_ACTION_RETRY_COUNT ) && ( ! node_ptr->bmc_info.power_ctrl.reset.immediate.empty() ))
+                /* Use graceful for the first half of the retry countdown
+                 * and immediate for the remaining retries. */
+                if ((!node_ptr->bmc_info.power_ctrl.reset.immediate.empty()) &&
+                    ( node_ptr->power_action_retries < MTC_RESET_ACTION_SWITCH_THRESHOLD))
                     node_ptr->bm_cmd.append(node_ptr->bmc_info.power_ctrl.reset.immediate);
 
-                /* unfaulted graceful if it exists */
-                else if ( ! node_ptr->bmc_info.power_ctrl.reset.graceful.empty() )
+                /* Unfaulted graceful if it exists */
+                else if (!node_ptr->bmc_info.power_ctrl.reset.graceful.empty())
                     node_ptr->bm_cmd.append(node_ptr->bmc_info.power_ctrl.reset.graceful);
 
-                /* unfaulted immediate if graceful does not exist */
-                else if ( ! node_ptr->bmc_info.power_ctrl.reset.immediate.empty())
+                /* Unfaulted immediate if graceful does not exist */
+                else if (!node_ptr->bmc_info.power_ctrl.reset.immediate.empty())
                     node_ptr->bm_cmd.append(node_ptr->bmc_info.power_ctrl.reset.immediate);
                 else
                 {
@@ -120,18 +122,19 @@ int nodeLinkClass::bmc_command_send ( struct nodeLinkClass::node * node_ptr,
             }
             case BMC_THREAD_CMD__POWER_ON:
             {
-                /* use immediate for all retries if server supports an immediate command */
-                if ( ( node_ptr->power_action_retries < MTC_RESET_ACTION_RETRY_COUNT) && ( ! node_ptr->bmc_info.power_ctrl.poweron.immediate.empty() ))
+                /* Use graceful for the first half of the retry countdown
+                 * and immediate for the remaining retries. */
+                if ((!node_ptr->bmc_info.power_ctrl.poweron.immediate.empty()) &&
+                    ( node_ptr->power_action_retries < MTC_POWER_ACTION_SWITCH_THRESHOLD))
                     node_ptr->bm_cmd.append(node_ptr->bmc_info.power_ctrl.poweron.immediate);
 
-                /* unfaulted graceful if it exists */
-                else if ( ! node_ptr->bmc_info.power_ctrl.poweron.graceful.empty() )
+                /* Unfaulted graceful if it exists */
+                else if (!node_ptr->bmc_info.power_ctrl.poweron.graceful.empty())
                     node_ptr->bm_cmd.append(node_ptr->bmc_info.power_ctrl.poweron.graceful);
 
-                /* unfaulted immediate if graceful does not exist */
-                else if ( ! node_ptr->bmc_info.power_ctrl.poweron.immediate.empty())
+                /* Unfaulted immediate if graceful does not exist */
+                else if (!node_ptr->bmc_info.power_ctrl.poweron.immediate.empty())
                     node_ptr->bm_cmd.append(node_ptr->bmc_info.power_ctrl.poweron.immediate);
-
                 else
                 {
                     elog("%s offers no supported poweron commands", node_ptr->hostname.c_str());
@@ -141,16 +144,18 @@ int nodeLinkClass::bmc_command_send ( struct nodeLinkClass::node * node_ptr,
             }
             case BMC_THREAD_CMD__POWER_OFF:
             {
-                /* use immediate for all retries if server supports an immediate command */
-                if ( ( node_ptr->power_action_retries < MTC_RESET_ACTION_RETRY_COUNT ) && ( ! node_ptr->bmc_info.power_ctrl.poweroff.immediate.empty() ))
+                /* Use graceful for the first half of the retry countdown
+                 * and immediate for the remaining retries. */
+                if ((!node_ptr->bmc_info.power_ctrl.poweroff.immediate.empty() ) &&
+                    ( node_ptr->power_action_retries < MTC_POWER_ACTION_SWITCH_THRESHOLD))
                     node_ptr->bm_cmd.append(node_ptr->bmc_info.power_ctrl.poweroff.immediate);
 
-                /* unfaulted graceful if it exists */
-                else if ( ! node_ptr->bmc_info.power_ctrl.poweroff.graceful.empty() )
+                /* Unfaulted graceful if it exists */
+                else if (!node_ptr->bmc_info.power_ctrl.poweroff.graceful.empty() )
                     node_ptr->bm_cmd.append(node_ptr->bmc_info.power_ctrl.poweroff.graceful);
 
-                /* unfaulted immediate if graceful does not exist */
-                else if ( ! node_ptr->bmc_info.power_ctrl.poweroff.immediate.empty())
+                /* Unfaulted immediate if graceful does not exist */
+                else if (!node_ptr->bmc_info.power_ctrl.poweroff.immediate.empty())
                     node_ptr->bm_cmd.append(node_ptr->bmc_info.power_ctrl.poweroff.immediate);
                 else
                 {
@@ -193,10 +198,22 @@ int nodeLinkClass::bmc_command_send ( struct nodeLinkClass::node * node_ptr,
         {
             want_fit = true ;
         }
+        else if (( command == BMC_THREAD_CMD__POWER_ON ) &&
+                 ( daemon_want_fit ( fit, node_ptr->hostname, "power_none" ) == true ))
+        {
+            /* Just change the command to query status */
+            command = BMC_THREAD_CMD__POWER_STATUS ;
+        }
         else if (( command == BMC_THREAD_CMD__POWER_OFF ) &&
                  ( daemon_want_fit ( fit, node_ptr->hostname, "power_off" ) == true ))
         {
             want_fit = true ;
+        }
+        else if (( command == BMC_THREAD_CMD__POWER_OFF ) &&
+                 ( daemon_want_fit ( fit, node_ptr->hostname, "power_none" ) == true ))
+        {
+            /* Just change the command to query status */
+            command = BMC_THREAD_CMD__POWER_STATUS ;
         }
         else if (( command == BMC_THREAD_CMD__POWER_CYCLE ) &&
                  ( daemon_want_fit ( fit, node_ptr->hostname, "power_cycle" ) == true ))

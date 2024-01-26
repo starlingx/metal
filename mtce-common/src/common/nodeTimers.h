@@ -2,10 +2,10 @@
 #define __INCLUDE_NODETIMERS_HH__
 
 /*
- * Copyright (c) 2013-2016 Wind River Systems, Inc.
-*
-* SPDX-License-Identifier: Apache-2.0
-*
+ * Copyright (c) 2013-2023 Wind River Systems, Inc.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  */
 
 /**
@@ -93,6 +93,9 @@
 #define MTC_FIRST_WAIT                  (3)
 #define MTC_AGENT_TIMEOUT_EXTENSION     (5)
 #define MTC_LOCK_CEPH_DELAY             (90)
+
+#define MTC_RECV_RETRY_WAIT (MTC_RETRY_WAIT)
+#define MTC_RECV_WAIT       (MTC_RETRY_WAIT)
 
 /** Host must stay enabled for this long for the
  *  failed_recovery_counter to get cleared */
