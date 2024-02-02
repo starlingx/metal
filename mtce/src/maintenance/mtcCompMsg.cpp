@@ -1,8 +1,8 @@
 /*
- * Copyright (c) 2013-2018 Wind River Systems, Inc.
-*
-* SPDX-License-Identifier: Apache-2.0
-*
+ * Copyright (c) 2013-2018, 2024 Wind River Systems, Inc.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  */
 
 /**
@@ -228,17 +228,36 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
         }
         else if ( msg.cmd == MTC_MSG_LOCKED )
         {
+            log_ack = false ;
+
             /* Only recreate the file if its not already present */
             if ( daemon_is_file_present ( NODE_LOCKED_FILE ) == false )
             {
-                log_ack = true ;
                 ilog ("%s locked (%s)", get_hostname().c_str(), interface_name.c_str() );
-                daemon_log ( NODE_LOCKED_FILE,
-                        "This node is currently in the administratively locked state" );
+                daemon_log ( NODE_LOCKED_FILE, ADMIN_LOCKED_STR);
             }
-            else
+
+            /* Preserve the node locked state in a non-volatile backup
+             * file that persists over reboot.
+             * Maintaining the legacy NODE_LOCKED_FILE as other sw looks at it. */
+            if ( daemon_is_file_present ( NODE_LOCKED_FILE_BACKUP ) == false )
             {
-                log_ack = false ;
+                daemon_log ( NODE_LOCKED_FILE_BACKUP, ADMIN_LOCKED_STR );
+            }
+        }
+        else if ( msg.cmd == MTC_MSG_UNLOCKED )
+        {
+            ilog ("%s unlocked (%s)", get_hostname().c_str(), interface_name.c_str() );
+
+            /* Only remove the file if it is present */
+            if ( daemon_is_file_present ( NODE_LOCKED_FILE ) == true )
+            {
+                daemon_remove_file ( NODE_LOCKED_FILE );
+            }
+            if ( daemon_is_file_present ( NODE_LOCKED_FILE_BACKUP ) == true )
+            {
+                daemon_remove_file ( NODE_LOCKED_FILE_BACKUP );
+                ilog ("cleared node locked backup flag (%s)", interface_name.c_str() );
             }
         }
         else if ( msg.cmd == MTC_MSG_SUBF_GOENABLED_FAILED )

@@ -1,10 +1,10 @@
 #ifndef __INCLUDE_NODECLASS_H__
 #define __INCLUDE_NODECLASS_H__
 /*
- * Copyright (c) 2013-2016, 2023 Wind River Systems, Inc.
-*
-* SPDX-License-Identifier: Apache-2.0
-*
+ * Copyright (c) 2013-2016, 2023-2024 Wind River Systems, Inc.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  */
 
 /**
@@ -452,14 +452,13 @@ private:
         /**  Command Response Data - typically an error details string */
         string       cmdRsp_status_string  ;
 
+        /* Mtce command acknowledgements */
+        bool unlock_cmd_ack       ; /* set true when a unlocked command ack is rx'ed */
         bool reboot_cmd_ack_mgmnt ;
         bool reboot_cmd_ack_clstr ;
 
         /** Tracks back to back Fast Fault Recovery counts */
         int  graceful_recovery_counter;
-
-        /** Reboot acknowledge */
-        mtc_client_enum activeClient ;
 
         /** @} private_Maintenance_variables */
 
@@ -1660,14 +1659,6 @@ public:
 
     /** Remove a host from Node list */
     int rem_host ( string & hostname );
-
-    /* Returns the active client. */
-    mtc_client_enum get_activeClient ( string hostname );
-
-    /* Sets the active client for this particular host. The first use of this
-     * is or reset/reboot acknowledge to the VIm over an evacuate reset request
-     * from within the reboot handler. */
-    int set_activeClient ( string hostname, mtc_client_enum client );
 
     /** Get the number of worker hosts that are operationally 'enabled' */
     int enabled_compute_nodes ( void );

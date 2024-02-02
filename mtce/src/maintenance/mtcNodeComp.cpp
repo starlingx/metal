@@ -1,8 +1,8 @@
 /*
- * Copyright (c) 2013-2016 Wind River Systems, Inc.
-*
-* SPDX-License-Identifier: Apache-2.0
-*
+ * Copyright (c) 2013-2016, 2024 Wind River Systems, Inc.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  */
 
  /**
@@ -1153,6 +1153,23 @@ void daemon_service_run ( void )
         }
     }
 
+    /* If the mtcClient starts up and finds that its persistent node
+     * locked backup file is present then make sure the volatile one
+     * is also present. */
+    if ( daemon_is_file_present ( NODE_LOCKED_FILE_BACKUP ))
+    {
+        if ( daemon_is_file_present ( NODE_LOCKED_FILE ) == false )
+        {
+            ilog ("restoring %s from %s backup", NODE_LOCKED_FILE,
+                                                 NODE_LOCKED_FILE_BACKUP);
+            daemon_log ( NODE_LOCKED_FILE, ADMIN_LOCKED_STR );
+        }
+    }
+    /* otherwise if the backup file is not there remove volatile file */
+    else if ( daemon_is_file_present ( NODE_LOCKED_FILE ))
+    {
+        daemon_remove_file ( NODE_LOCKED_FILE );
+    }
 
     /* Start mtcAlive message timer */
     /* Send first mtcAlive ASAP */

@@ -1,10 +1,10 @@
 #ifndef __INCLUDE_NODEBASE_HH__
 #define __INCLUDE_NODEBASE_HH__
 /*
- * Copyright (c) 2013-2020, 2023 Wind River Systems, Inc.
-*
-* SPDX-License-Identifier: Apache-2.0
-*
+ * Copyright (c) 2013-2020, 2023-2024 Wind River Systems, Inc.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  */
 
  /**
@@ -105,6 +105,7 @@ void daemon_exit ( void );
 #define CONFIG_PASS_FILE        ((const char *)"/var/run/.config_pass")
 #define CONFIG_FAIL_FILE        ((const char *)"/var/run/.config_fail")
 #define NODE_LOCKED_FILE        ((const char *)"/var/run/.node_locked")
+#define NODE_LOCKED_FILE_BACKUP ((const char *)"/etc/mtc/tmp/.node_locked")
 #define NODE_RESET_FILE         ((const char *)"/var/run/.node_reset")
 #define SMGMT_DEGRADED_FILE     ((const char *)"/var/run/.sm_degraded")
 #define SMGMT_UNHEALTHY_FILE    ((const char *)"/var/run/.sm_node_unhealthy")
@@ -762,7 +763,10 @@ typedef struct
 #define MTC_CMD_HOST_SVCS_RESULT      21  /*   to host */
 #define MTC_MSG_INFO                  22  /*   to host */
 #define MTC_CMD_SYNC                  23  /*   to host */
-#define MTC_CMD_LAST                  24
+#define MTC_MSG_UNLOCKED              24  /*   to host */
+#define MTC_CMD_LAST                  25
+
+#define ADMIN_LOCKED_STR ((const char *)"This node is currently in the administratively locked state")
 
 #define RESET_PROG_MAX_REBOOTS_B4_RESET (5)
 #define RESET_PROG_MAX_REBOOTS_B4_RETRY (RESET_PROG_MAX_REBOOTS_B4_RESET+2)

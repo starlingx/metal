@@ -1,8 +1,8 @@
 /*
- * Copyright (c) 2013, 2016, 2023 Wind River Systems, Inc.
-*
-* SPDX-License-Identifier: Apache-2.0
-*
+ * Copyright (c) 2013, 2016, 2023-2024 Wind River Systems, Inc.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  */
 
  /**
@@ -148,6 +148,7 @@ const char * get_mtcNodeCommand_str ( int cmd )
         case MTC_MSG_MTCALIVE:    return ("mtcAlive msg");
         case MTC_REQ_MTCALIVE:    return ("mtcAlive req");
         case MTC_MSG_LOCKED:      return ("locked msg");
+        case MTC_MSG_UNLOCKED:    return ("unlocked msg");
         case MTC_CMD_LAZY_REBOOT: return ("lazy reboot");
         case MTC_MSG_INFO:        return ("info msg");
         case MTC_CMD_SYNC:        return ("sync");

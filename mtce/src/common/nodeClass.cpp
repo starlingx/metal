@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2020, 2023 Wind River Systems, Inc.
+ * Copyright (c) 2013-2020, 2023-2024 Wind River Systems, Inc.
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -538,9 +538,6 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
     /* Default timeout values */
     ptr->mtcalive_timeout  = HOST_MTCALIVE_TIMEOUT  ;
 
-    /* no ned to send a reboot response back to any client */
-    ptr->activeClient = CLIENT_NONE ;
-
     ptr->task   = "none" ;
     ptr->action = "none" ;
     ptr->clear_task = false ;
@@ -565,7 +562,7 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
 
     ptr->reboot_cmd_ack_mgmnt = false ;
     ptr->reboot_cmd_ack_clstr = false ;
-
+    ptr->unlock_cmd_ack       = false ;
     ptr->offline_log_throttle = 0     ;
     ptr->offline_log_reported = true  ;
     ptr->online_log_reported  = false ;
@@ -1402,6 +1399,12 @@ int nodeLinkClass::admin_state_change ( string hostname,
         {
             clog ("%s %s (from %s)\n", hostname.c_str(), newAdminState.c_str(), adminState_enum_to_str (node_ptr->adminState).c_str());
             node_ptr->adminState = adminState_str_to_enum ( newAdminState.data() );
+            if ( node_ptr->adminState == MTC_ADMIN_STATE__UNLOCKED )
+            {
+                /* Tell the node it is unlocked now */
+                node_ptr->unlock_cmd_ack = false ;
+                send_mtc_cmd ( node_ptr->hostname , MTC_MSG_UNLOCKED, MGMNT_INTERFACE );
+            }
             rc = PASS ;
         }
         else
@@ -3861,13 +3864,40 @@ void nodeLinkClass::set_cmd_resp ( string & hostname, mtc_message_type & msg, in
         }
         else if ( node_ptr->cmdRsp != msg.cmd )
         {
-            /* record ack's for reboot requests */
-            if ( msg.cmd == MTC_CMD_REBOOT )
+            if ( msg.cmd == MTC_MSG_UNLOCKED )
             {
+                ilog ("%s %s ACK (%s)",
+                          node_ptr->hostname.c_str(),
+                          get_mtcNodeCommand_str(msg.cmd),
+                          get_iface_name_str(iface));
+                node_ptr->unlock_cmd_ack = true ;
+            }
+            else if ( msg.cmd == MTC_MSG_LOCKED )
+            {
+                mlog ("%s %s ACK (%s)",
+                          node_ptr->hostname.c_str(),
+                          get_mtcNodeCommand_str(msg.cmd),
+                          get_iface_name_str(iface));
+            }
+            /* record ack's for reboot requests */
+            else if ( msg.cmd == MTC_CMD_REBOOT )
+            {
+                ilog ("%s %s ACK (%s)",
+                          node_ptr->hostname.c_str(),
+                          get_mtcNodeCommand_str(msg.cmd),
+                          get_iface_name_str(iface));
+
                 if ( iface == MGMNT_INTERFACE )
                    node_ptr->reboot_cmd_ack_mgmnt = 1 ;
                 else if ( iface == CLSTR_INTERFACE )
                    node_ptr->reboot_cmd_ack_clstr = 1 ;
+            }
+            else
+            {
+                ilog ("%s %s ACK (%s)",
+                          node_ptr->hostname.c_str(),
+                          get_mtcNodeCommand_str(msg.cmd),
+                          get_iface_name_str(iface));
             }
             node_ptr->cmdRsp = msg.cmd ;
             if ( msg.num > 0 )
@@ -3887,35 +3917,6 @@ unsigned int nodeLinkClass::get_cmd_resp ( string & hostname )
         return ( node_ptr->cmdRsp ) ;
     }
     return (-1);
-}
-
-mtc_client_enum nodeLinkClass::get_activeClient ( string hostname )
-{
-    nodeLinkClass::node* node_ptr = nodeLinkClass::getNode ( hostname );
-    if ( node_ptr != NULL )
-    {
-        return ( node_ptr->activeClient ) ;
-    }
-    else
-    {
-        slog ("Host lookup failed for '%s'\n", hostname.c_str());
-    }
-    return (CLIENT_NONE);
-}
-
-int nodeLinkClass::set_activeClient ( string hostname, mtc_client_enum client )
-{
-    nodeLinkClass::node* node_ptr = nodeLinkClass::getNode ( hostname );
-    if ( node_ptr != NULL )
-    {
-        node_ptr->activeClient = client ;
-        return (PASS);
-    }
-    else
-    {
-        slog ("Host lookup failed for '%s'\n", hostname.c_str());
-    }
-    return (FAIL_HOSTNAME_LOOKUP);
 }
 
 /*****************************************************************************
@@ -4281,6 +4282,31 @@ void nodeLinkClass::set_mtce_flags ( string hostname, int flags, int iface )
             node_ptr->patched = false ;
         }
 
+
+        /* Manage the remote locked/unlocked state of the host */
+        if ( flags & MTC_FLAG__I_AM_LOCKED )
+        {
+            /* Don't auto correct while we are going through the unlock sequence */
+            if (( node_ptr->adminState  == MTC_ADMIN_STATE__UNLOCKED ) &&
+                ((node_ptr->adminAction != MTC_ADMIN_ACTION__ENABLE ) &&
+                 (node_ptr->adminAction != MTC_ADMIN_ACTION__UNLOCK )))
+            {
+                wlog ("%s mtcAlive reporting locked while unlocked ; correcting", node_ptr->hostname.c_str());
+                send_mtc_cmd ( node_ptr->hostname , MTC_MSG_UNLOCKED, MGMNT_INTERFACE );
+                send_mtc_cmd ( node_ptr->hostname , MTC_MSG_UNLOCKED, CLSTR_INTERFACE );
+            }
+        }
+        else
+        {
+            /* Don't auto correct while we are going through the unlock sequence */
+            if (( node_ptr->adminState  == MTC_ADMIN_STATE__LOCKED ) &&
+                ( node_ptr->adminAction != MTC_ADMIN_ACTION__LOCK ))
+            {
+                wlog ("%s mtcAlive reporting unlocked while locked ; correcting", node_ptr->hostname.c_str());
+                send_mtc_cmd ( node_ptr->hostname , MTC_MSG_LOCKED, MGMNT_INTERFACE );
+                send_mtc_cmd ( node_ptr->hostname , MTC_MSG_LOCKED, CLSTR_INTERFACE );
+            }
+        }
 
         /* Deal with sub-function if AIO controller host */
         if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))

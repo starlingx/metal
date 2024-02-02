@@ -1,8 +1,8 @@
 /*
- * Copyright (c) 2013-2020, 2023 Wind River Systems, Inc.
-*
-* SPDX-License-Identifier: Apache-2.0
-*
+ * Copyright (c) 2013-2020, 2023-2024 Wind River Systems, Inc.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  */
 
 /****************************************************************************
@@ -530,6 +530,8 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                     }
                 }
             }
+
+            daemon_remove_file (NODE_LOCKED_FILE_BACKUP);
             mtcInvApi_update_states_now ( node_ptr, "unlocked", "disabled" , "offline", "disabled", "offline" );
             mtcInvApi_update_task_now   ( node_ptr, aio ? MTC_TASK_AIO_SX_UNLOCK_MSG : MTC_TASK_SELF_UNLOCK_MSG );
 
@@ -1174,6 +1176,11 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                     node_ptr->offline_log_reported = false ;
                     node_ptr->online_log_reported  = true ;
 
+                    /* This is a redundant / backup message to the call in
+                     * admin_state_change telling the node it is unlocked. */
+                    node_ptr->unlock_cmd_ack = false ;
+                    send_mtc_cmd ( node_ptr->hostname , MTC_MSG_UNLOCKED, MGMNT_INTERFACE );
+
                     /* Request Out-Of--Service test execution */
                     send_mtc_cmd ( node_ptr->hostname, MTC_REQ_MAIN_GOENABLED, MGMNT_INTERFACE );
 
@@ -1460,6 +1467,15 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
         {
             /* Check the work queue complete and done status's */
             mtcInvApi_force_task ( node_ptr, "" );
+
+            if ( node_ptr->unlock_cmd_ack )
+            {
+                ilog ("%s acknowledged unlock", node_ptr->hostname.c_str());
+            }
+            else
+            {
+                wlog ("%s has not acknowledged unlock", node_ptr->hostname.c_str());
+            }
 
             if ( node_ptr->degrade_mask )
             {

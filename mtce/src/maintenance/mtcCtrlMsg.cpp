@@ -1,8 +1,8 @@
 /*
- * Copyright (c) 2013-2018, 2023 Wind River Systems, Inc.
-*
-* SPDX-License-Identifier: Apache-2.0
-*
+ * Copyright (c) 2013-2018, 2023-2024 Wind River Systems, Inc.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  */
 
 /**
@@ -665,7 +665,10 @@ int send_mtc_cmd ( string & hostname, int cmd , int interface, string json_dict 
         case MTC_CMD_WIPEDISK:
         case MTC_CMD_LAZY_REBOOT:
         {
-            ilog ("%s sending '%s' request (%s network)\n", hostname.c_str(), get_mtcNodeCommand_str(cmd), get_iface_name_str(interface));
+            ilog ("%s sending '%s' request (%s)",
+                      hostname.c_str(),
+                      get_mtcNodeCommand_str(cmd),
+                      get_iface_name_str(interface));
             snprintf ( &mtc_cmd.hdr[0], MSG_HEADER_SIZE, "%s", get_cmd_req_msg_header() );
             mtc_cmd.cmd = cmd ;
             mtc_cmd.num = 0 ;
@@ -682,7 +685,10 @@ int send_mtc_cmd ( string & hostname, int cmd , int interface, string json_dict 
         case MTC_MSG_SUBF_GOENABLED_FAILED:
         {
             force = true ;
-            ilog ("%s sending '%s' request (%s network)\n", hostname.c_str(), get_mtcNodeCommand_str(cmd), get_iface_name_str(interface));
+            ilog ("%s sending '%s' request (%s)",
+                      hostname.c_str(),
+                      get_mtcNodeCommand_str(cmd),
+                      get_iface_name_str(interface));
             snprintf ( &mtc_cmd.hdr[0], MSG_HEADER_SIZE, "%s", get_cmd_req_msg_header() );
             mtc_cmd.cmd = cmd ;
             mtc_cmd.num = 0 ;
@@ -705,7 +711,20 @@ int send_mtc_cmd ( string & hostname, int cmd , int interface, string json_dict 
         }
         case MTC_MSG_LOCKED:
         {
-            mlog ("%s sending 'Locked' notification (%s network)\n", hostname.c_str(), get_iface_name_str(interface));
+            mlog ("%s sending 'Locked' notification (%s)",
+                      hostname.c_str(),
+                      get_iface_name_str(interface));
+            snprintf ( &mtc_cmd.hdr[0], MSG_HEADER_SIZE, "%s", get_cmd_req_msg_header() );
+            mtc_cmd.cmd = cmd ;
+            mtc_cmd.num = 0 ;
+            rc = PASS ;
+            break ;
+        }
+        case MTC_MSG_UNLOCKED:
+        {
+            ilog ("%s sending 'UnLocked' notification (%s)",
+                      hostname.c_str(),
+                      get_iface_name_str(interface));
             snprintf ( &mtc_cmd.hdr[0], MSG_HEADER_SIZE, "%s", get_cmd_req_msg_header() );
             mtc_cmd.cmd = cmd ;
             mtc_cmd.num = 0 ;
