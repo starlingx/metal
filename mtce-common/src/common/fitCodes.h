@@ -131,6 +131,11 @@
 #define FIT_CODE__STOP_HOST_SERVICES                 (71)
 
 #define FIT_CODE__SOCKET_SETUP                       (72)
+#define FIT_CODE__READ_JSON_FROM_FILE                (73)
+
+#define FIT_CODE__HTTP_WORKQUEUE_OPERATION_FAILED    (75)
+#define FIT_CODE__HTTP_WORKQUEUE_REQUEST_TIMEOUT     (76)
+#define FIT_CODE__HTTP_WORKQUEUE_CONNECTION_LOSS     (77)
 
 /*****************      Process Fit Codes     ********************************/
 

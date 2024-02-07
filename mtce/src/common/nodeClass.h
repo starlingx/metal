@@ -1866,6 +1866,9 @@ public:
      * time for crashdumps to complete. */
     int bmc_reset_delay ;
 
+    /** seconds to wait between http request retries */
+    int http_retry_wait ;
+
     /* collectd event handler */
     int collectd_notify_handler ( string & hostname,
                                   string & resource,

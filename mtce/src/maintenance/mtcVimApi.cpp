@@ -69,6 +69,23 @@ string nodeLinkClass::mtcVimApi_state_get ( string hostname, int & http_status_c
         http_status_code = HTTP_NOTFOUND ;
         return ( payload );
     }
+    #ifdef WANT_FIT_TESTING
+    static const char * fit_file = "/var/run/fit/mtcVimApi_state_get";
+    if ( daemon_want_fit ( FIT_CODE__READ_JSON_FROM_FILE, hostname, "mtcVimApi_state_get"))
+    {
+        if ( daemon_is_file_present (fit_file) )
+        {
+            payload = daemon_read_file(fit_file);
+            ilog("%s FIT Json: %s", hostname.c_str(), payload.c_str());
+            return (payload);
+        }
+        else
+        {
+            slog("%s FIT file %s not found ; aborting fit", hostname.c_str(), fit_file);
+        }
+    }
+    #endif
+
     payload = ("{\"") ;
     payload.append (MTC_JSON_INV_ADMIN);
     payload.append ("\":\"");
@@ -245,6 +262,22 @@ int nodeLinkClass::mtcVimApi_state_change ( struct nodeLinkClass::node * node_pt
 
     node_ptr->httpReq.payload = "{\"state-change\": " ;
     node_ptr->httpReq.payload.append (mtcVimApi_state_get ( node_ptr->hostname , http_status_code ));
+
+    #ifdef WANT_FIT_TESTING
+    static const char * fit_file = "/var/run/fit/mtcVimApi_state_change";
+    if ( daemon_want_fit ( FIT_CODE__READ_JSON_FROM_FILE, node_ptr->hostname, "mtcVimApi_state_change" ))
+    {
+        if ( daemon_is_file_present (fit_file) )
+        {
+            node_ptr->httpReq.payload = daemon_read_file(fit_file);
+            ilog("%s FIT Json: %s", node_ptr->hostname.c_str(), node_ptr->httpReq.payload.c_str());
+        }
+        else
+        {
+            slog("%s FIT file %s not found ; aborting fit", node_ptr->hostname.c_str(), fit_file);
+        }
+    }
+    #endif
 
     if (( request == VIM_HOST_FAILED ) || ( request == VIM_DPORT_FAILED ))
     {
