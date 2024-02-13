@@ -1,8 +1,8 @@
 /*
  * Copyright (c) 2013-2020, 2023 Wind River Systems, Inc.
-*
-* SPDX-License-Identifier: Apache-2.0
-*
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  */
 
  /**
@@ -314,6 +314,7 @@ nodeLinkClass::nodeLinkClass()
     sysinv_timeout               = HTTP_SYSINV_CRIT_TIMEOUT ;
     sysinv_noncrit_timeout       = HTTP_SYSINV_NONC_TIMEOUT ;
     work_queue_timeout           = MTC_WORKQUEUE_TIMEOUT    ;
+    http_retry_wait              = HTTP_RETRY_WAIT_SECS     ;
 
     /* Init the auto recovery threshold and intervals to zero until
      * modified by daemon config */

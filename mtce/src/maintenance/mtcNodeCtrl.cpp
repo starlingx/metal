@@ -376,6 +376,11 @@ static int mtc_config_handler ( void * user,
         config_ptr->bmc_reset_delay = atoi(value);
         mtcInv.bmc_reset_delay = config_ptr->bmc_reset_delay ;
     }
+    else if (MATCH("agent", "http_retry_wait"))
+    {
+        config_ptr->http_retry_wait = atoi(value);
+        mtcInv.http_retry_wait = config_ptr->http_retry_wait ;
+    }
     else if (MATCH("timeouts", "failsafe_shutdown_delay"))
     {
         config_ptr->failsafe_shutdown_delay = atoi(value);
@@ -692,6 +697,7 @@ int daemon_configure ( void )
     ilog ("TokenRefresh: %3d secs\n" , mtcInv.token_refresh_rate);
     ilog ("API Retries : %3d secs\n" , mtcInv.api_retries);
     ilog ("Reset Delay : %3d secs\n" , mtcInv.bmc_reset_delay);
+    ilog ("HTTP Retry  : %3d secs\n" , mtcInv.http_retry_wait);
 
     /* Verify loaded config against an expected mask
      * as an ini file fault detection method */

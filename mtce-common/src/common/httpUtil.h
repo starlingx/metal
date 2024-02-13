@@ -2,10 +2,10 @@
 #define __INCLUDE_HTTPUTIL_H__
 
 /*
- * Copyright (c) 2013, 2016 Wind River Systems, Inc.
-*
-* SPDX-License-Identifier: Apache-2.0
-*
+ * Copyright (c) 2013, 2016, 2024 Wind River Systems, Inc.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  */
 
 #include <iostream>         /* for ... string               */
@@ -93,12 +93,14 @@ typedef enum {
    HTTP__RECEIVE_WAIT  = 1,
    HTTP__RECEIVE       = 2,
    HTTP__FAILURE       = 3,
-   HTTP__DONE_FAIL     = 4,
-   HTTP__DONE_PASS     = 5,
-   HTTP__STAGES        = 6
+   HTTP__RETRY_WAIT    = 4,
+   HTTP__DONE_FAIL     = 5,
+   HTTP__DONE_PASS     = 6,
+   HTTP__STAGES        = 7
 }  httpStages_enum ;
 
 #define HTTP_RECEIVE_WAIT_MSEC (10)
+#define HTTP_RETRY_WAIT_SECS   (10)
 
 typedef struct
 {
@@ -142,7 +144,7 @@ typedef enum {
 
     SYSINV_CONFIG_SHOW,
     SYSINV_CONFIG_MODIFY,
-    
+
     SYSINV_SENSOR_LOAD,
     SYSINV_SENSOR_LOAD_GROUPS,
     SYSINV_SENSOR_LOAD_GROUP,

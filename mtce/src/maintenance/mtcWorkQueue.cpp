@@ -1,8 +1,8 @@
 /*
- * Copyright (c) 2013, 2016 Wind River Systems, Inc.
-*
-* SPDX-License-Identifier: Apache-2.0
-*
+ * Copyright (c) 2013, 2016, 2023-2024 Wind River Systems, Inc.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  */
 
 /**
@@ -38,7 +38,7 @@ string _get_work_state_str ( httpStages_enum state )
     else if ( state == HTTP__RECEIVE  ) return ("  Rx");
     else if ( state == HTTP__FAILURE  ) return (" Er ");
     else if ( state == HTTP__RECEIVE_WAIT  ) return ("Wait");
-    else 
+    else
     {
         elog ("Invalid Http Work Queue State: %d\n", state );
         return ("----");
@@ -58,7 +58,7 @@ void nodeLinkClass::workQueue_dump ( struct nodeLinkClass::node * node_ptr )
               node_ptr->libEvent_work_fifo_ptr != node_ptr->libEvent_work_fifo.end();
               node_ptr->libEvent_work_fifo_ptr ++ )
         {
-            syslog ( LOG_INFO, "| %-4s | %5d | %-12s | %-7s | %-13s | %15s:%d | %s\n", 
+            syslog ( LOG_INFO, "| %-4s | %5d | %-12s | %-7s | %-13s | %15s:%d | %s\n",
                 _get_work_state_str(node_ptr->libEvent_work_fifo_ptr->state).c_str(),
                 node_ptr->libEvent_work_fifo_ptr->sequence,
                 node_ptr->libEvent_work_fifo_ptr->hostname.c_str(),
@@ -101,11 +101,11 @@ void nodeLinkClass::doneQueue_dump ( struct nodeLinkClass::node * node_ptr )
               node_ptr->libEvent_done_fifo_ptr != node_ptr->libEvent_done_fifo.end();
               node_ptr->libEvent_done_fifo_ptr ++ )
         {
-            syslog ( LOG_INFO, "%15s httpReq doneQueue:%5d - %s '%s' -> Status:%d\n", 
-                         node_ptr->libEvent_done_fifo_ptr->hostname.c_str(), 
-                         node_ptr->libEvent_done_fifo_ptr->sequence, 
-                         node_ptr->libEvent_done_fifo_ptr->service.c_str(), 
-                         node_ptr->libEvent_done_fifo_ptr->operation.c_str(), 
+            syslog ( LOG_INFO, "%15s httpReq doneQueue:%5d - %s '%s' -> Status:%d\n",
+                         node_ptr->libEvent_done_fifo_ptr->hostname.c_str(),
+                         node_ptr->libEvent_done_fifo_ptr->sequence,
+                         node_ptr->libEvent_done_fifo_ptr->service.c_str(),
+                         node_ptr->libEvent_done_fifo_ptr->operation.c_str(),
                          node_ptr->libEvent_done_fifo_ptr->status );
         }
     }
@@ -240,9 +240,9 @@ int nodeLinkClass::doneQueue_dequeue ( libEvent & event )
  * Description: This is a Per Host Finite State Machine (FSM) that
  *              processes the work queue for the supplied host's
  *              node pointer.
- *              
+ *
  * Constructs:
- * 
+ *
  * node_ptr->libEvent_work_fifo - the current work queue/fifo
  * node_ptr->libEvent_done_fifo - queue/fifo of completed requests
  *
@@ -255,17 +255,17 @@ int nodeLinkClass::doneQueue_dequeue ( libEvent & event )
  *
  * In process libEvents are copied from the callers work queue to
  * its thisReq.
- * 
+ *
  * Completed events including execution status are copied to the host's
  * done fifo.
- * 
- * Failed events may be retried up to max_retries as specified by 
+ *
+ * Failed events may be retried up to max_retries as specified by
  * the callers libEvent.
  *
  * @param event is a reference to the callers libEvent.
  *
  * @return an integer with values of PASS, FAIL, RETRY
- *  
+ *
  * ************************************************************************/
 
 int nodeLinkClass::workQueue_process ( struct nodeLinkClass::node * node_ptr )
@@ -280,18 +280,18 @@ int nodeLinkClass::workQueue_process ( struct nodeLinkClass::node * node_ptr )
          * responses */
          if ( node_ptr->libEvent_done_fifo.size() > 10 )
          {
-             qlog ("%s Done Queue has %ld elements\n", 
+             qlog ("%s Done Queue has %ld elements\n",
                        node_ptr->hostname.c_str(),
                        node_ptr->libEvent_done_fifo.size());
 
              /* TODO: look at the status of the commands and print a log of those that failed */
-             
+
              /* Remove the first 8 - its a fifo the first ones at the front are the oldest */
              for ( int i=0 ; i < 8 ; i++ )
              {
                  node_ptr->libEvent_done_fifo.pop_front();
              }
-             qlog ("%s Done Queue has %ld elements remaining\n", 
+             qlog ("%s Done Queue has %ld elements remaining\n",
                        node_ptr->hostname.c_str(),
                        node_ptr->libEvent_done_fifo.size());
          }
@@ -299,8 +299,8 @@ int nodeLinkClass::workQueue_process ( struct nodeLinkClass::node * node_ptr )
 
     if ( node_ptr->libEvent_work_fifo.empty() )
     {
-        // qlog_throttled ( node_ptr->no_work_log_throttle, 300, 
-        //                  "%s Idle ... \n", 
+        // qlog_throttled ( node_ptr->no_work_log_throttle, 300,
+        //                  "%s Idle ... \n",
         //                  node_ptr->hostname.c_str());
         node_ptr->no_work_log_throttle = 0 ;
         return (PASS);
@@ -317,7 +317,7 @@ int nodeLinkClass::workQueue_process ( struct nodeLinkClass::node * node_ptr )
               node_ptr->libEvent_work_fifo_ptr != node_ptr->libEvent_work_fifo.end();
               node_ptr->libEvent_work_fifo_ptr ++ )
         {
-            syslog ( LOG_INFO, "| %-4s | %5d | %-12s | %-7s | %-13s | %3d | %15s:%d | %s\n", 
+            syslog ( LOG_INFO, "| %-4s | %5d | %-12s | %-7s | %-13s | %3d | %15s:%d | %s\n",
                 _get_work_state_str(node_ptr->libEvent_work_fifo_ptr->state).c_str(),
                 node_ptr->libEvent_work_fifo_ptr->sequence,
                 node_ptr->libEvent_work_fifo_ptr->hostname.c_str(),
@@ -331,7 +331,6 @@ int nodeLinkClass::workQueue_process ( struct nodeLinkClass::node * node_ptr )
         syslog ( LOG_INFO, "+------+-------+--------------+---------+--------------+-----+----------------------+\n");
     }
 
-   
     int size = node_ptr->libEvent_work_fifo.size() ;
     if ( size > QUEUE_OVERLOAD )
     {
@@ -354,18 +353,18 @@ int nodeLinkClass::workQueue_process ( struct nodeLinkClass::node * node_ptr )
         case HTTP__TRANSMIT:
         {
             node_ptr->thisReq = node_ptr->libEvent_work_fifo.front();
-            
+
             qlog ("%s Transmitted\n", node_ptr->thisReq.log_prefix.c_str() );
 
             rc = mtcHttpUtil_api_request ( node_ptr->thisReq ) ;
             if ( rc )
             {
-                node_ptr->libEvent_work_fifo_ptr->state = 
+                node_ptr->libEvent_work_fifo_ptr->state =
                 node_ptr->thisReq.state = HTTP__FAILURE ;
             }
             else
             {
-                node_ptr->libEvent_work_fifo_ptr->state = 
+                node_ptr->libEvent_work_fifo_ptr->state =
                 node_ptr->thisReq.state = HTTP__RECEIVE_WAIT ;
 
                 if ( node_ptr->http_timer.tid )
@@ -374,7 +373,7 @@ int nodeLinkClass::workQueue_process ( struct nodeLinkClass::node * node_ptr )
                 if ( rc != PASS )
                 {
                     elog ("%s failed to start http command timer ; failing command\n", node_ptr->thisReq.log_prefix.c_str());
-                    node_ptr->libEvent_work_fifo_ptr->state = 
+                    node_ptr->libEvent_work_fifo_ptr->state =
                     node_ptr->thisReq.state = HTTP__FAILURE ;
                 }
             }
@@ -408,20 +407,20 @@ int nodeLinkClass::workQueue_process ( struct nodeLinkClass::node * node_ptr )
                 slog ("%s has unexpected null HTTP request base pointer\n",
                           node_ptr->thisReq.log_prefix.c_str());
 
-                node_ptr->libEvent_work_fifo_ptr->state = 
+                node_ptr->libEvent_work_fifo_ptr->state =
                 node_ptr->thisReq.state = HTTP__FAILURE ;
                 break ;
             }
-            
+
             int msec_timeout = (node_ptr->thisReq.timeout*1000);
             int wait_time = (++node_ptr->thisReq.rx_retry_cnt)*HTTP_RECEIVE_WAIT_MSEC ;
 
             rc = mtcHttpUtil_receive ( node_ptr->thisReq );
             if ( rc == RETRY )
             {
-                node_ptr->libEvent_work_fifo_ptr->state = 
+                node_ptr->libEvent_work_fifo_ptr->state =
                 node_ptr->thisReq.state = HTTP__RECEIVE_WAIT ;
-                mtcTimer_start_msec ( node_ptr->http_timer, mtcTimer_handler, HTTP_RECEIVE_WAIT_MSEC ); 
+                mtcTimer_start_msec ( node_ptr->http_timer, mtcTimer_handler, HTTP_RECEIVE_WAIT_MSEC );
 
                 if ((wait_time > (msec_timeout/4)) && ( node_ptr->thisReq.low_wm == false ) )
                 {
@@ -449,48 +448,66 @@ int nodeLinkClass::workQueue_process ( struct nodeLinkClass::node * node_ptr )
                     /* Only print every 16 starting with 2 */
                     if ( (node_ptr->thisReq.rx_retry_cnt & 0xF) == 2 )
                     {
-                        qlog ("%s rx_retry_cnt:%d\n", 
+                        qlog ("%s rx_retry_cnt:%d\n",
                                   node_ptr->thisReq.log_prefix.c_str(),
                                   node_ptr->thisReq.rx_retry_cnt );
                     }
                     break ;
                 }
             }
+            #ifdef WANT_FIT_TESTING
+            if ( daemon_want_fit ( FIT_CODE__HTTP_WORKQUEUE_OPERATION_FAILED, node_ptr->hostname, "" ))
+            {
+               ilog("%s FIT Operation Failed: %s", node_ptr->hostname.c_str(), node_ptr->httpReq.payload.c_str());
+               node_ptr->thisReq.status = FAIL_AUTHENTICATION ;
+               rc = FAIL_OPERATION ;
+            }
+            else if ( daemon_want_fit ( FIT_CODE__HTTP_WORKQUEUE_REQUEST_TIMEOUT, node_ptr->hostname, "" ))
+            {
+               ilog("%s FIT Request Timeout Failed: %s", node_ptr->hostname.c_str(), node_ptr->httpReq.payload.c_str());
+               rc = FAIL_TIMEOUT ;
+            }
+            else if ( daemon_want_fit ( FIT_CODE__HTTP_WORKQUEUE_CONNECTION_LOSS, node_ptr->hostname, "" ))
+            {
+               ilog("%s FIT Connection Loss: %s", node_ptr->hostname.c_str(), node_ptr->httpReq.payload.c_str());
+               node_ptr->thisReq.status = rc = FAIL_HTTP_ZERO_STATUS ;
+            }
+            #endif
             if ( rc != PASS )
             {
-                node_ptr->libEvent_work_fifo_ptr->state = 
+                node_ptr->libEvent_work_fifo_ptr->state =
                 node_ptr->thisReq.state = HTTP__FAILURE ;
             }
             else
             {
                 if ( node_ptr->thisReq.cur_retries )
                 {
-                    ilog ("%s Completed (after %d retries) (took %d of %d msecs)\n", 
-                              node_ptr->thisReq.log_prefix.c_str(), 
-                              node_ptr->thisReq.cur_retries, wait_time, 
+                    ilog ("%s Completed (after %d retries) (took %d of %d msecs)\n",
+                              node_ptr->thisReq.log_prefix.c_str(),
+                              node_ptr->thisReq.cur_retries, wait_time,
                               node_ptr->thisReq.timeout*1000);
                 }
                 else
                 {
-                    qlog ("%s Completed (took %d of %d msecs)\n", 
-                              node_ptr->thisReq.log_prefix.c_str(), 
-                              wait_time, 
+                    qlog ("%s Completed (took %d of %d msecs)\n",
+                              node_ptr->thisReq.log_prefix.c_str(),
+                              wait_time,
                               node_ptr->thisReq.timeout*1000);
                 }
                 node_ptr->thisReq.exec_time_msec = wait_time ;
 
                 node_ptr->thisReq.rx_retry_cnt = 0 ;
-                
+
                 mtcHttpUtil_free_conn ( node_ptr->thisReq );
                 mtcHttpUtil_free_base ( node_ptr->thisReq );
 
-                /* Don't add success responses to non-critical commands like  
+                /* Don't add success responses to non-critical commands like
                  * "update uptime" and "update task" to the done queue */
                 if ( !node_ptr->thisReq.noncritical )
                 {
                     /* Copy done event to the done queue */
                     node_ptr->libEvent_done_fifo.push_back(node_ptr->thisReq);
-            
+
                 }
                 /* Pop that done event off the work queue */
                 node_ptr->libEvent_work_fifo.pop_front();
@@ -503,21 +520,21 @@ int nodeLinkClass::workQueue_process ( struct nodeLinkClass::node * node_ptr )
 
             mtcHttpUtil_free_conn ( node_ptr->thisReq );
             mtcHttpUtil_free_base ( node_ptr->thisReq );
-                
+
             node_ptr->http_retries_cur++ ;
             node_ptr->thisReq.cur_retries++ ;
 
-            if ( node_ptr->thisReq.noncritical == true ) 
-            { 
+            if ( node_ptr->thisReq.noncritical == true )
+            {
                 if ( node_ptr->thisReq.cur_retries > node_ptr->thisReq.max_retries )
                 {
                     node_ptr->oper_failures++ ;
 
                     wlog ("%s retry conjestion abort of non-critical command (%d:%d)\n",
-                              node_ptr->thisReq.log_prefix.c_str(), 
+                              node_ptr->thisReq.log_prefix.c_str(),
                               node_ptr->thisReq.cur_retries,
                               node_ptr->thisReq.max_retries );
-                
+
                     /* Pop this aborted event off the work queue */
                     node_ptr->libEvent_work_fifo.pop_front();
                 }
@@ -561,7 +578,7 @@ int nodeLinkClass::workQueue_process ( struct nodeLinkClass::node * node_ptr )
                           node_ptr->thisReq.max_retries,
                           node_ptr->thisReq.timeout,
                           node_ptr->thisReq.noncritical ? "No" : "Yes" );
-                
+
                 node_ptr->thisReq.response.clear();
 
                 node_ptr->thisReq.status      = PASS  ;
@@ -569,10 +586,10 @@ int nodeLinkClass::workQueue_process ( struct nodeLinkClass::node * node_ptr )
                 node_ptr->thisReq.active      = false ;
                 node_ptr->thisReq.response_len= 0     ;
 
-                /* 
+                /*
                  * If this is an inventory request ...
                  *
-                 * 1. Init the inv struct 
+                 * 1. Init the inv struct
                  * 2. increase the timeout if is a critical command
                  *
                  * */
@@ -583,30 +600,42 @@ int nodeLinkClass::workQueue_process ( struct nodeLinkClass::node * node_ptr )
                     {
                         int temp = node_ptr->libEvent_work_fifo_ptr->timeout ;
 
-                        /* 
+                        /*
                          * Increase and update the timeout value for critical commands
                          * in hope that it will succeed on he next go around.
                          */
                         node_ptr->libEvent_work_fifo_ptr->timeout += get_mtcInv_ptr()->sysinv_timeout ;
-                        dlog ("%s timeout extended from %d to %d secs\n", 
+                        dlog ("%s timeout extended from %d to %d secs\n",
                                   node_ptr->thisReq.log_prefix.c_str(), temp,
                                   node_ptr->libEvent_work_fifo_ptr->timeout );
                     }
                 }
 
                 /* Save the retry count */
-                node_ptr->libEvent_work_fifo_ptr->cur_retries = 
+                node_ptr->libEvent_work_fifo_ptr->cur_retries =
                 node_ptr->thisReq.cur_retries ;
 
-                node_ptr->libEvent_work_fifo_ptr->state = 
+                mtcTimer_start ( node_ptr->http_timer, mtcTimer_handler, HTTP_RETRY_WAIT_SECS );
+                node_ptr->libEvent_work_fifo_ptr->state =
+                node_ptr->thisReq.state = HTTP__RETRY_WAIT ;
+                dlog ("%s %d sec retry wait started", node_ptr->thisReq.log_prefix.c_str(), HTTP_RETRY_WAIT_SECS);
+            }
+            break ;
+        }
+        case HTTP__RETRY_WAIT:
+        {
+            if ( node_ptr->http_timer.ring == true )
+            {
+                dlog ("%s %d sec retry wait expired", node_ptr->thisReq.log_prefix.c_str(), HTTP_RETRY_WAIT_SECS);
+                node_ptr->libEvent_work_fifo_ptr->state =
                 node_ptr->thisReq.state = HTTP__TRANSMIT ;
             }
             break ;
         }
         default:
         {
-            slog ("%s Bad libEvent work state (%d) ; clearing work/done queue\n", 
-                      node_ptr->hostname.c_str(), 
+            slog ("%s Bad libEvent work state (%d) ; clearing work/done queue\n",
+                      node_ptr->hostname.c_str(),
                       node_ptr->libEvent_work_fifo_ptr->state );
             node_ptr->libEvent_work_fifo.clear();
             node_ptr->libEvent_done_fifo.clear();
@@ -623,7 +652,7 @@ int nodeLinkClass::workQueue_process ( struct nodeLinkClass::node * node_ptr )
  * Description: To handle the pathalogical case where an event seems to
  *              have timed out at the callers level then this interface
  *              can be called to delete it from the work queue.
- *              
+ *
  * @param node_ptr so that the hosts work queue can be found
  * @param sequence to specify the specific sequence number to remove
  * @return always PASS since there is nothing the caller can or needs
@@ -660,7 +689,7 @@ int nodeLinkClass::workQueue_del_cmd ( struct nodeLinkClass::node * node_ptr, in
  *
  * Description: Removes all items from the done queue.
  *
- * Returns a failure, the sequence number of the first command 
+ * Returns a failure, the sequence number of the first command
  * in the done queue that did not PASS.
  *
  */
@@ -717,7 +746,7 @@ int nodeLinkClass::doneQueue_purge ( struct nodeLinkClass::node * node_ptr )
         {
             qlog ("%s all (%d) priority queued operations passed (qlog)\n", node_ptr->hostname.c_str(), size );
         }
-        
+
         qlog ("%s purging %d items from doneQueue\n", node_ptr->hostname.c_str(), size );
         node_ptr->libEvent_done_fifo.clear();
     }
@@ -738,7 +767,7 @@ int nodeLinkClass::workQueue_purge ( struct nodeLinkClass::node * node_ptr )
     {
         /* TODO: find out how to force close a connection.
          * Don't free the connection if it is in the receiving state or
-         * we might get a segfault 
+         * we might get a segfault
          * There is only ever one connection open at a time for a specific host
          * so its only 'thisReq' we need to worry about. */
         if ( node_ptr->libEvent_work_fifo_ptr->state != HTTP__RECEIVE )
@@ -754,12 +783,12 @@ int nodeLinkClass::workQueue_purge ( struct nodeLinkClass::node * node_ptr )
         {
             if ( node_ptr->libEvent_work_fifo_ptr->state == HTTP__TRANSMIT )
             {
-                wlog ("%s ... was not executed\n", 
+                wlog ("%s ... was not executed\n",
                            node_ptr->libEvent_work_fifo_ptr->log_prefix.c_str());
             }
             else
             {
-                wlog ("%s ... did not complete (%s)\n", 
+                wlog ("%s ... did not complete (%s)\n",
                            node_ptr->libEvent_work_fifo_ptr->log_prefix.c_str(),
                            _get_work_state_str(node_ptr->libEvent_work_fifo_ptr->state).c_str());
             }
@@ -771,7 +800,7 @@ int nodeLinkClass::workQueue_purge ( struct nodeLinkClass::node * node_ptr )
     {
         qlog ("%s all work done\n", node_ptr->hostname.c_str());
     }
-    
+
     // node_ptr->libEvent_work_fifo_ptr->state = HTTP__TRANSMIT ;
     return (PASS);
 }
@@ -793,7 +822,7 @@ int nodeLinkClass::workQueue_done ( struct nodeLinkClass::node * node_ptr )
               node_ptr->libEvent_work_fifo_ptr++ )
         {
             /* Don't report work queue timeout if there are only noncritical
-             * commands left in the work queue. Such commands might be 
+             * commands left in the work queue. Such commands might be
              * "update uptime" and "update task" */
             if ( !node_ptr->libEvent_work_fifo_ptr->noncritical )
             {
@@ -862,7 +891,6 @@ bool nodeLinkClass::workQueue_present ( libEvent & event )
             }
         }
     }
-    
     wlog ("%s ... not found in work queue\n", event.log_prefix.c_str());
     return (false);
 }

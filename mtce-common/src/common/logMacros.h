@@ -1,10 +1,10 @@
 #ifndef __INCLUDE_NODELOG_HH__
 #define __INCLUDE_NODELOG_HH__
 /*
- * Copyright (c) 2013-2017,2023 Wind River Systems, Inc.
-*
-* SPDX-License-Identifier: Apache-2.0
-*
+ * Copyright (c) 2013-2017, 2023-2024 Wind River Systems, Inc.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  */
 
  /**
@@ -116,6 +116,7 @@ typedef struct
     int   start_delay           ; /**< startup delay, added for pmon          */
     int   api_retries           ; /**< api retries before failure             */
     int   bmc_reset_delay       ; /**< secs delay before bmc reset            */
+    int   http_retry_wait       ; /**< secs to wait between http reg retries  */
     int   hostwd_failure_threshold ; /**< allowed # of missed pmon/hostwd messages */
     bool  hostwd_reboot_on_err  ; /**< should hostwd reboot on fault detected */
     bool  hostwd_kdump_on_stall ; /**< sysrq crash dump on quorum msg'ing stall */
