@@ -2,3 +2,4 @@ lib/systemd/system/hbsAgent.service
 etc/init.d/goenabledControl
 etc/init.d/hbsAgent
 usr/share/starlingx/pmon.d/hbsAgent.conf
+usr/share/starlingx/pmon.d/ipsec-server.conf
