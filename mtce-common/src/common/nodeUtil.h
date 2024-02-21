@@ -193,4 +193,19 @@ typedef enum
 system_state_enum get_system_state ( bool verbose=true );
 const char * get_system_state_str ( system_state_enum system_state );
 
+/**
+ * @brief                   execute command string using fork execv
+ *
+ * @param hostname          The hostname
+ * @param cmd               command string
+ * @param output_filename   output redirection file
+ *                          stdout and stderr will be redirected to
+ *                          this file
+ *
+ * @return int              return code, 0 (PASS) on success
+ */
+int fork_execv (const string& hostname,
+                const string& cmd,
+                const string& output_filename);
+
 #endif

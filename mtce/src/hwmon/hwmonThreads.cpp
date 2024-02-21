@@ -1,6 +1,6 @@
 
 /*
- * Copyright (c) 2016-2017 Wind River Systems, Inc.
+ * Copyright (c) 2016-2017, 2024 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -36,6 +36,7 @@ using namespace std;
 #include "hwmonThreads.h"    /* for ... BMC_THREAD_CMD__READ_SENSORS */
 #include "hwmonBmc.h"        /* for ... MAX_IPMITOOL_PARSE_ERRORS         */
 #include "hwmonClass.h"      /* for ... thread_extra_info_type            */
+#include "nodeUtil.h"        /* for ... fork_execv                        */
 
 /***************************************************************************
  *
@@ -376,8 +377,7 @@ void * hwmonThread_ipmitool ( void * arg )
             ipmiUtil_create_request ( command,
                                       extra_ptr->bm_ip,
                                       extra_ptr->bm_un,
-                                      info_ptr->password_file,
-                                      datafile );
+                                      info_ptr->password_file);
             dlog_t ("%s power status query cmd: %s\n",
                         info_ptr->log_prefix,
                         request.c_str());
@@ -390,7 +390,7 @@ void * hwmonThread_ipmitool ( void * arg )
             else
             {
                 /* Make the request */
-                rc = system ( request.data()) ;
+                rc = fork_execv ( info_ptr->hostname, request, datafile ) ;
             }
 
             unlink(info_ptr->password_file.data());
@@ -484,8 +484,7 @@ void * hwmonThread_ipmitool ( void * arg )
             ipmiUtil_create_request ( IPMITOOL_SENSOR_QUERY_CMD,
                                       extra_ptr->bm_ip,
                                       extra_ptr->bm_un,
-                                      info_ptr->password_file,
-                                      sensor_datafile );
+                                      info_ptr->password_file);
 
             dlog_t ("%s sensor query cmd:%s\n",
                   info_ptr->log_prefix,
@@ -519,7 +518,7 @@ void * hwmonThread_ipmitool ( void * arg )
             {
                 /* remove the last query */
                 // daemon_remove_file ( sensor_datafile.data() ) ;
-                rc = system ( sensor_query_request.data()) ;
+                rc = fork_execv ( info_ptr->hostname, sensor_query_request, sensor_datafile ) ;
             }
 
 #ifdef WANT_FIT_TESTING
@@ -1059,8 +1058,7 @@ static int _redfishUtil_send_request( thread_info_type * info_ptr, string & data
     /************** Create the redfishtool request **************/
     request = redfishUtil_create_request ( redfish_cmd_str,
                                            extra_ptr->bm_ip,
-                                           info_ptr->password_file,
-                                           datafile );
+                                           info_ptr->password_file);
 
     dlog_t ("%s query cmd: %s\n",
                 info_ptr->log_prefix,
@@ -1074,7 +1072,9 @@ static int _redfishUtil_send_request( thread_info_type * info_ptr, string & data
     else
     {
         daemon_remove_file ( datafile.data() ) ;
-        rc = threadUtil_bmcSystemCall (info_ptr->hostname, request,
+        rc = threadUtil_bmcSystemCall (info_ptr->hostname,
+                                       request,
+                                       datafile,
                                        DEFAULT_SYSTEM_REQUEST_LATENCY_SECS) ;
         if ( rc != PASS )
         {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2017 Wind River Systems, Inc.
+ * Copyright (c) 2016-2017, 2024 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -29,6 +29,7 @@
 #include "nodeBase.h"        /* for ... mtce node common definitions */
 #include "hostUtil.h"        /* for ... mtce host common definitions */
 #include "threadUtil.h"      /* for ... this module header           */
+#include "nodeUtil.h"        /* for ... fork_execv                   */
 
 /* Stores the parent process's timer handler */
 static void (*thread_timer_handler)(int, siginfo_t*, void*) = NULL ;
@@ -141,10 +142,11 @@ void threadUtil_fini ( void )
 
 int threadUtil_bmcSystemCall (string hostname,
                               string request,
+                              string datafile,
                               unsigned long long latency_threshold_secs)
 {
     unsigned long long before_time = gettime_monotonic_nsec () ;
-    int rc = system ( request.data()) ;
+    int rc = fork_execv ( hostname, request , datafile ) ;
     unsigned long long after_time = gettime_monotonic_nsec () ;
     unsigned long long delta_time = after_time-before_time ;
     if ( delta_time > (latency_threshold_secs*1000000000))

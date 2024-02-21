@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017 Wind River Systems, Inc.
+ * Copyright (c) 2017, 2024 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -16,6 +16,8 @@ using namespace std;
 
 #include "ipmiUtil.h"      /* for ... module header                    */
 #include "hostUtil.h"      /* for ... mtce host common definitions     */
+#include "nodeUtil.h"      /* for ... fork_execv                       */
+
 
 /***********************************************************************
  *
@@ -35,7 +37,7 @@ int ipmiUtil_init ( void )
 }
 
 /* Create the ipmi request */
-string ipmiUtil_create_request ( string cmd, string & ip, string & un, string & pw, string & out )
+string ipmiUtil_create_request ( string cmd, string & ip, string & un, string & pw)
 {
     /* ipmitool -I lanplus -H $uut_ip -U $uut_un -E */
     /* build the ipmitool command */
@@ -66,10 +68,6 @@ string ipmiUtil_create_request ( string cmd, string & ip, string & un, string & 
     /* add the command */
     ipmitool_request.append(" ");
     ipmitool_request.append(cmd);
-
-    /* output filename */
-    ipmitool_request.append (" > ");
-    ipmitool_request.append (out);
 
     return (ipmitool_request);
 }
@@ -233,8 +231,7 @@ int ipmiUtil_reset_host_now ( string hostname,
     ipmiUtil_create_request ( IPMITOOL_POWER_RESET_CMD,
                               accessInfo.bm_ip,
                               accessInfo.bm_un,
-                              info.password_file,
-                              output_filename );
+                              info.password_file);
 
     /* issue request
      *
@@ -244,7 +241,7 @@ int ipmiUtil_reset_host_now ( string hostname,
      *       UT showed that there is no stall at all. */
     unsigned long long latency_threshold_secs = DEFAULT_SYSTEM_REQUEST_LATENCY_SECS ;
     unsigned long long before_time = gettime_monotonic_nsec () ;
-    int rc = system ( request.data()) ;
+    int rc = fork_execv ( hostname, request, output_filename ) ;
     unsigned long long after_time = gettime_monotonic_nsec () ;
     unsigned long long delta_time = after_time-before_time ;
     if ( rc )

@@ -1,6 +1,6 @@
 
 /*
- * Copyright (c) 2016-2023 Wind River Systems, Inc.
+ * Copyright (c) 2016-2023, 2024 Wind River Systems, Inc.
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -287,8 +287,7 @@ void * mtcThread_bmc ( void * arg )
             string request =
                 redfishUtil_create_request (command,
                                             extra_ptr->bm_ip,
-                                            info_ptr->password_file,
-                                            datafile);
+                                            info_ptr->password_file);
 
             blog1_t ("%s %s", info_ptr->hostname.c_str(), request.c_str());
 
@@ -322,6 +321,7 @@ void * mtcThread_bmc ( void * arg )
                 rc =
                 threadUtil_bmcSystemCall (info_ptr->hostname,
                                           request,
+                                          datafile,
                                           DEFAULT_SYSTEM_REQUEST_LATENCY_SECS);
 
                 if ( rc != PASS )
@@ -437,8 +437,7 @@ void * mtcThread_bmc ( void * arg )
             string request = ipmiUtil_create_request ( command,
                                                        extra_ptr->bm_ip,
                                                        extra_ptr->bm_un,
-                                                       info_ptr->password_file,
-                                                       datafile );
+                                                       info_ptr->password_file);
 
             dlog_t ("%s %s", info_ptr->hostname.c_str(), request.c_str());
 
@@ -505,6 +504,7 @@ void * mtcThread_bmc ( void * arg )
                 rc =
                 threadUtil_bmcSystemCall (info_ptr->hostname,
                                           request,
+                                          datafile,
                                           DEFAULT_SYSTEM_REQUEST_LATENCY_SECS);
 
                 if ( rc != PASS )

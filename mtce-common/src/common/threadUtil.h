@@ -2,7 +2,7 @@
 #define __INCLUDE_THREADBASE_H__
 
 /*
- * Copyright (c) 2017 Wind River Systems, Inc.
+ * Copyright (c) 2017, 2024 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -262,6 +262,7 @@ int  threadUtil_init ( void (*handler)(int, siginfo_t*, void* ));
 #define DEFAULT_SYSTEM_REQUEST_LATENCY_SECS (unsigned long long)(15)
 int threadUtil_bmcSystemCall (string hostname,
                               string request,
+                              string datafile,
                               unsigned long long latency_threshold_secs);
 
 void threadUtil_setstack_size ( void );

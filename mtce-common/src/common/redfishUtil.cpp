@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Wind River Systems, Inc.
+ * Copyright (c) 2019, 2024 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -332,7 +332,6 @@ bool redfishUtil_is_supported (string & hostname, string & response)
  *              -r ip          - the ip address to send the request to
  *              -c config_file - the bmc cfgFile (password) filename
  *                 cmd         - the redfish command to execute
- *               > out         - the filename to where the output is directed
  *
  * Returns    : full command request as a single string
  *
@@ -340,8 +339,7 @@ bool redfishUtil_is_supported (string & hostname, string & response)
 
 string redfishUtil_create_request ( string   cmd,
                                     string & ip,
-                                    string & config_file,
-                                    string & out )
+                                    string & config_file)
 {
     /* build the command ; starting with the redfishtool binary */
     string command_request = REDFISHTOOL_PATH_AND_FILENAME ;
@@ -398,13 +396,6 @@ string redfishUtil_create_request ( string   cmd,
     /* add the command */
     command_request.append(" ");
     command_request.append(cmd);
-
-    /* output filename */
-    command_request.append (" > ");
-    command_request.append (out);
-
-    /* direct stderr to stdio */
-    command_request.append (" 2>&1");
 
     return (command_request);
 }

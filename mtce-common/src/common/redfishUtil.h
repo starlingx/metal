@@ -2,7 +2,7 @@
 #define __INCLUDE_REDFISHUTIL_H__
 
 /*
- * Copyright (c) 2017 Wind River Systems, Inc.
+ * Copyright (c) 2017, 2024 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -211,8 +211,7 @@ int redfishUtil_init ( void );
 /* create a redfish tool thread request */
 string redfishUtil_create_request ( string   cmd,
                                     string & ip,
-                                    string & config_file,
-                                    string & out );
+                                    string & config_file);
 
 /* interpret redfish root query response and check version */
 bool redfishUtil_is_supported ( string & hostname, string & root_query_response );

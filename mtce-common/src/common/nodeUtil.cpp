@@ -33,7 +33,7 @@
 #include <fstream>
 #include <stdlib.h>
 #include <stdio.h>
-
+#include <regex>
 
 using namespace std;
 
@@ -2459,4 +2459,163 @@ system_state_enum get_system_state ( bool verbose )
         }
     }
     return system_state ;
+}
+
+/**
+ * @brief Restore the stdout and stderr from copies
+ *
+ * @param stdout_copy   copy of stdout file description
+ * @param stderr_copy   copy of stderr file description
+ */
+static void restore_stdout_stderr(int& stdout_copy, int& stderr_copy)
+{
+    if(stdout_copy > 0)
+    {
+        dup2(stdout_copy, STDOUT_FILENO);
+        close(stdout_copy);
+    }
+    if(stderr_copy > 0)
+    {
+        dup2(stderr_copy, STDERR_FILENO);
+        close(stderr_copy);
+    }
+}
+
+/**
+ * @brief Redirect the stdout and stderr to the
+ *        output filename. store a copy of current
+ *        stdout & stderr file descriptions
+ *
+ * @param hostname          The hostname
+ * @param output_filename   out filename for stdout/stderr redirection
+ * @param stdout_copy       copy of stdout file description
+ * @param stderr_copy       copy of stderr file description
+ */
+static void redirect_stdout_stderr(const string& hostname,
+                                   const string& output_filename,
+                                   int& stdout_copy,
+                                   int& stderr_copy)
+{
+    // default output values
+    stdout_copy = -1;
+    stderr_copy = -1;
+
+    int redirect_fd = open(output_filename.c_str(),
+                           O_CREAT | O_WRONLY | O_TRUNC);
+    if ( redirect_fd < 0 )
+    {
+        elog ("%s failed to open output filename: [%s] - error code = %d (%s)",
+               hostname.c_str(),
+               output_filename.c_str(),
+               errno,
+               strerror(errno));
+        return;
+    }
+
+    stdout_copy = dup(STDOUT_FILENO);
+    if( stdout_copy < 0 )
+    {
+        elog ("%s could not copy STDOUT file descriptor - error code = %d (%s)",
+               hostname.c_str(),
+               errno,
+               strerror(errno));
+        return;
+    }
+
+    stderr_copy = dup(STDERR_FILENO);
+    if( stderr_copy < 0 )
+    {
+        elog ("%s could not copy STDERR file descriptor - error code = %d (%s)",
+               hostname.c_str(),
+               errno,
+               strerror(errno));
+        return;
+    }
+
+    if(dup2(redirect_fd, STDOUT_FILENO) < 0 )
+    {
+        elog ("%s could not redirect STDOUT file descriptor - error code = %d (%s)",
+               hostname.c_str(),
+               errno,
+               strerror(errno));
+        return;
+    }
+
+    if (dup2(redirect_fd, STDERR_FILENO) < 0 )
+    {
+        elog ("%s could not redirect STDERR file descriptor - error code = %d (%s)",
+               hostname.c_str(),
+               errno,
+               strerror(errno));
+        return;
+    }
+
+    close(redirect_fd);
+}
+
+int fork_execv (const string& hostname,
+                const string& cmd,
+                const string& output_filename)
+{
+    int rc = FAIL_SYSTEM_CALL;
+
+    pid_t child_pid = fork(); // fork child process in order to run cmd
+    switch(child_pid)
+    {
+        case -1:
+        {
+            // fork failed
+            rc = FAIL_FORK_HANDLING;
+            elog ("%s could not execute command - fork failed  - error code = %d (%s)",
+                   hostname.c_str(),
+                    errno,
+                    strerror(errno));
+            break;
+        }
+        case 0:
+        {
+            // child process
+            std::vector<char*> argv;
+            std::regex ws_re("[^\\s]+"); // whitespace
+            std::sregex_token_iterator first{cmd.begin(),
+                                             cmd.end(),
+                                             ws_re,
+                                             0};
+            std::sregex_token_iterator last;
+            std::vector<std::string> v(first,last);
+            for (const std::string& arg : v)
+            {
+                argv.push_back(const_cast<char*>(arg.c_str()));
+            }
+            argv.push_back(NULL); // end of argument list
+            {
+                int stdout_copy = -1, stderr_copy = -1;
+                redirect_stdout_stderr(hostname,
+                                       output_filename,
+                                       stdout_copy,
+                                       stderr_copy);
+                execv(argv[0], &argv[0]);
+                restore_stdout_stderr(stdout_copy, stderr_copy);
+            }
+            /* execv returns -1 on error, and does not return on success */
+            elog ("%s could not execute command '%s' - error code = %d (%s)",
+                   hostname.c_str(),
+                   argv[0],
+                   errno,
+                   strerror(errno));
+            exit(FAIL_SYSTEM_CALL);
+        }
+        default:
+        {
+            // parent process
+            int status = 0;
+            waitpid(child_pid , &status, 0 );
+            if( WIFEXITED(status) && WEXITSTATUS(status) == PASS )
+            {
+                rc = PASS;
+            }
+            break;
+        }
+    }
+    return (rc);
 }
