@@ -1598,11 +1598,11 @@ badMediaType (415)
      "target_load": "16.10",
      "lldp_neighbours": [
        {
-         "href": "http://10.10.10.2:6385/v1/ihosts/bed0aee2-d637-488e-ada1-c837ee503f95/lldp_neighbors",
+         "href": "http://10.10.10.2:6385/v1/ihosts/bed0aee2-d637-488e-ada1-c837ee503f95/lldp_neighbours",
          "rel": "self"
        },
        {
-         "href": "http://10.10.10.2:6385/ihosts/bed0aee2-d637-488e-ada1-c837ee503f95/lldp_neighbors",
+         "href": "http://10.10.10.2:6385/ihosts/bed0aee2-d637-488e-ada1-c837ee503f95/lldp_neighbours",
          "rel": "bookmark"
        }
      ],
@@ -1896,11 +1896,11 @@ badMediaType (415)
      "target_load": "15.12",
      "lldp_neighbours": [
        {
-         "href": "http://10.10.10.2:6385/v1/ihosts/e6c1a877-a332-46dd-821d-e5fa9e2c4ade/lldp_neighbors",
+         "href": "http://10.10.10.2:6385/v1/ihosts/e6c1a877-a332-46dd-821d-e5fa9e2c4ade/lldp_neighbours",
          "rel": "self"
        },
        {
-         "href": "http://10.10.10.2:6385/ihosts/e6c1a877-a332-46dd-821d-e5fa9e2c4ade/lldp_neighbors",
+         "href": "http://10.10.10.2:6385/ihosts/e6c1a877-a332-46dd-821d-e5fa9e2c4ade/lldp_neighbours",
          "rel": "bookmark"
        }
      ],
@@ -4226,7 +4226,7 @@ attributes.
 List the LLDP neighbors of a host
 ***********************************
 
-.. rest_method:: GET /v1/lldp_neighbors
+.. rest_method:: GET /v1/lldp_neighbours
 
 **Normal response codes**
 
@@ -4319,7 +4319,7 @@ This operation does not accept a request body.
 Shows the attributes of a specific LLDP neighbor
 **************************************************
 
-.. rest_method:: GET /v1/lldp_neighbors/​{lldp_neighbor_id}​
+.. rest_method:: GET /v1/lldp_neighbours/​{lldp_neighbor_id}​
 
 **Normal response codes**
 
