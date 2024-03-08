@@ -66,7 +66,7 @@ void daemon_exit ( void );
 #define FAIL_BM_IPADDR              (121*256)
 #define FAIL_BM_PASSWORD            (122*256)
 
-
+#define MTC_PARM_LOCK_PERSIST_IDX   (0) // node lock command
 #define MTC_PARM_UPTIME_IDX (0)
 #define MTC_PARM_HEALTH_IDX (1)
 #define MTC_PARM_FLAGS_IDX  (2)
@@ -110,6 +110,7 @@ void daemon_exit ( void );
 #define SMGMT_DEGRADED_FILE     ((const char *)"/var/run/.sm_degraded")
 #define SMGMT_UNHEALTHY_FILE    ((const char *)"/var/run/.sm_node_unhealthy")
 #define UNLOCK_READY_FILE       ((const char *)"/etc/platform/.unlock_ready")
+#define STILL_SIMPLEX_FILE      ((const char *)"/etc/platform/simplex")
 
 /** path to and module init file name */
 #define MTCE_CONF_FILE          ((const char *)"/etc/mtc.conf")
