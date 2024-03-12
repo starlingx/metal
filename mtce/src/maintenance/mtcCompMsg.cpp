@@ -237,13 +237,20 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
                 daemon_log ( NODE_LOCKED_FILE, ADMIN_LOCKED_STR);
             }
 
-            /* Preserve the node locked state in a non-volatile backup
-             * file that persists over reboot.
-             * Maintaining the legacy NODE_LOCKED_FILE as other sw looks at it. */
-            if ( daemon_is_file_present ( NODE_LOCKED_FILE_BACKUP ) == false )
+            /* Only create the non-volatile NODE_LOCKED_FILE_BACKUP file if the
+             * LOCK_PERSIST flag is present. */
+            if ( msg.num && msg.parm[MTC_PARM_LOCK_PERSIST_IDX] )
             {
-                daemon_log ( NODE_LOCKED_FILE_BACKUP, ADMIN_LOCKED_STR );
+                /* Preserve the node locked state in a non-volatile backup
+                 * file that persists over reboot.
+                 * Maintaining the legacy NODE_LOCKED_FILE as other sw looks at it. */
+                if ( daemon_is_file_present ( NODE_LOCKED_FILE_BACKUP ) == false )
+                    daemon_log ( NODE_LOCKED_FILE_BACKUP, ADMIN_LOCKED_STR );
             }
+            /* Otherwise if we get a locked message without the LOCK_PERSIST flag
+             * then remove the non-volatile NODE_LOCKED_FILE_BACKUP file if exists */
+            else if ( daemon_is_file_present ( NODE_LOCKED_FILE_BACKUP ) == true )
+                daemon_remove_file ( NODE_LOCKED_FILE_BACKUP );
         }
         else if ( msg.cmd == MTC_MSG_UNLOCKED )
         {

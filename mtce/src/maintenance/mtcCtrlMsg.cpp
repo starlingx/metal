@@ -717,6 +717,20 @@ int send_mtc_cmd ( string & hostname, int cmd , int interface, string json_dict 
             snprintf ( &mtc_cmd.hdr[0], MSG_HEADER_SIZE, "%s", get_cmd_req_msg_header() );
             mtc_cmd.cmd = cmd ;
             mtc_cmd.num = 0 ;
+            /* Only set the LOCK_PERSIST flag if the STILL_SIMPLEX_FILE
+             * is no longer present.
+             *
+             * The mtcClient will NOT create the non-volatile
+             * NODE_LOCKED_FILE_BACKUP file if the LOCK_PERSIST flag
+             * is missing.
+             *
+             * This way SM won't shutdown or prevent activating on a
+             * locked controller until the system is truely duplex. */
+            if ( daemon_is_file_present ( STILL_SIMPLEX_FILE ) == false )
+            {
+                mtc_cmd.num = 1 ;
+                mtc_cmd.parm[MTC_PARM_LOCK_PERSIST_IDX] = true ;
+            }
             rc = PASS ;
             break ;
         }
