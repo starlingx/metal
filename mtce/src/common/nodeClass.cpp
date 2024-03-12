@@ -13,6 +13,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <iostream>
+#include <fstream>
+#include <sstream>
 #include <string>
 #include <errno.h>  /* for ENODEV, EFAULT and ENXIO */
 #include <unistd.h> /* for close and usleep */
@@ -284,6 +286,9 @@ nodeLinkClass::nodeLinkClass()
     my_local_ip.clear() ;
     my_float_ip.clear() ;
     my_clstr_ip.clear() ;
+    my_pxeboot_ip.clear();
+    my_pxeboot_if.clear();
+
     active_controller_hostname.clear() ;
     inactive_controller_hostname.clear() ;
 
@@ -301,6 +306,7 @@ nodeLinkClass::nodeLinkClass()
     mgmnt_link_up_and_running = false ;
     clstr_link_up_and_running = false ;
     clstr_network_provisioned = false ;
+    pxeboot_network_provisioned=false ;
     clstr_degrade_only        = false ;
 
     dor_mode_active = false ;
@@ -492,11 +498,13 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
 
     /* init the new node */
     ptr->hostname = hostname ;
+    ptr->pxeboot_hostname = "";
 
     ptr->ip        = "" ;
     ptr->mac       = "" ;
     ptr->clstr_ip  = "" ;
     ptr->clstr_mac = "" ;
+    ptr->pxeboot_ip= "" ;
 
     /* key value dictionary */
     ptr->mtce_info = "" ;
@@ -551,18 +559,35 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
     ptr->mtcAlive_purge    = 0     ;
 
     ptr->offline_search_count = 0 ;
+
     ptr->mtcAlive_mgmnt = false ;
     ptr->mtcAlive_clstr = false ;
+    ptr->mtcAlive_pxeboot = false ;
 
     /* These counts are incremented in the set_mtcAlive member
      * function and cleared in the reset progression handler. */
     ptr->mtcAlive_mgmnt_count = 0 ;
     ptr->mtcAlive_clstr_count = 0 ;
+    ptr->mtcAlive_pxeboot_count = 0 ;
+
+    // Clear all the mtcAlive_sequence numbers and monitoring trackers
+    for (int i = 0 ; i < MTCALIVE_INTERFACES_MAX ; i++)
+    {
+        ptr->mtcAlive_sequence[i] =
+        ptr->mtcAlive_sequence_save[i] =
+        ptr->mtcAlive_sequence_miss[i] =
+        ptr->mtcAlive_log_throttle [i] = 0 ;
+    }
+    ptr->pxeboot_mtcAlive_not_seen_log_throttle = 0 ;
+    ptr->pxeboot_mtcAlive_loss_log_throttle = 0 ;
+
     ptr->bmc_reset_pending_log_throttle = 0 ;
 
     ptr->reboot_cmd_ack_mgmnt = false ;
     ptr->reboot_cmd_ack_clstr = false ;
     ptr->unlock_cmd_ack       = false ;
+    ptr->reboot_cmd_ack_pxeboot = false ;
+
     ptr->offline_log_throttle = 0     ;
     ptr->offline_log_reported = true  ;
     ptr->online_log_reported  = false ;
@@ -585,6 +610,7 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
     mtcTimer_init ( ptr->mtcCmd_timer,     hostname, "mtcCmd timer");    /* Init node's mtcCmd timer         */
     mtcTimer_init ( ptr->mtcConfig_timer,  hostname, "mtcConfig timer"); /* Init node's mtcConfig timer      */
     mtcTimer_init ( ptr->mtcAlive_timer ,  hostname, "mtcAlive timer");  /* Init node's mtcAlive timer       */
+    mtcTimer_init ( ptr->online_timer ,    hostname, "online timer");    /* Init node's online timer         */
     mtcTimer_init ( ptr->offline_timer,    hostname, "offline timer");   /* Init node's FH offline timer     */
     mtcTimer_init ( ptr->http_timer,       hostname, "http timer" );     /* Init node's http timer           */
     mtcTimer_init ( ptr->bm_timer,         hostname, "bm timer" );       /* Init node's bm timer             */
@@ -620,6 +646,7 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
     ptr->resetStage        = MTC_RESET__START    ;
     ptr->enableStage       = MTC_ENABLE__START   ;
     ptr->disableStage      = MTC_DISABLE__START  ;
+    ptr->mtcAliveStage     = MTC_MTCALIVE__START ;
 
     ptr->oos_test_count = 0 ;
     ptr->insv_test_count = 0 ;
@@ -818,6 +845,11 @@ struct nodeLinkClass::node* nodeLinkClass::getNode ( string hostname )
        {
            return ptr ;
        }
+       /* Node can be looked up by pxeboot ip */
+       if ( !hostname.compare ( ptr->pxeboot_ip ))
+       {
+           return ptr ;
+       }
 
        if (( ptr->next == NULL ) || ( ptr == tail ))
           break ;
@@ -911,6 +943,7 @@ int nodeLinkClass::remNode( string hostname )
     mtcTimer_fini ( ptr->mtcTimer );
     mtcTimer_fini ( ptr->mtcSwact_timer );
     mtcTimer_fini ( ptr->mtcAlive_timer );
+    mtcTimer_fini ( ptr->online_timer );
     mtcTimer_fini ( ptr->offline_timer );
     mtcTimer_fini ( ptr->mtcCmd_timer );
     mtcTimer_fini ( ptr->http_timer );
@@ -1559,12 +1592,12 @@ int nodeLinkClass::avail_status_change ( string hostname,
                  (           avail       != MTC_AVAIL_STATUS__ONLINE )))
             {
                 /* Free the mtc timer if in use */
-                if ( node_ptr->mtcAlive_timer.tid )
+                if ( node_ptr->online_timer.tid )
                 {
                     tlog ("%s Stopping mtcAlive timer\n", node_ptr->hostname.c_str());
-                    mtcTimer_stop ( node_ptr->mtcAlive_timer );
-                    node_ptr->mtcAlive_timer.ring = false ;
-                    node_ptr->mtcAlive_timer.tid  = NULL  ;
+                    mtcTimer_stop ( node_ptr->online_timer );
+                    node_ptr->online_timer.ring = false ;
+                    node_ptr->online_timer.tid  = NULL  ;
                 }
                 node_ptr->onlineStage = MTC_ONLINE__START ;
             }
@@ -1641,6 +1674,7 @@ int nodeLinkClass::lazy_graceful_fs_reboot ( struct nodeLinkClass::node * node_p
         /* Should never get there but if we do resend the reboot request
          * but this time not Lazy */
         send_mtc_cmd ( node_ptr->hostname, MTC_CMD_REBOOT, MGMNT_INTERFACE ) ;
+        send_mtc_cmd ( node_ptr->hostname, MTC_CMD_REBOOT, PXEBOOT_INTERFACE ) ;
     }
     return (FAIL);
 }
@@ -3448,6 +3482,137 @@ void nodeLinkClass::mtcInfo_handler ( void )
     }
 }
 
+/**************************************************************************
+ *
+ * Name       : pxebootInfo_loader
+ *
+ * Purpose    : Load node pxeboot hostnames and ip addresses.
+ *
+ * Description: For each provisioned node, this function parses the
+ *              /opt/platform/config/<sw_version>/dnsmasq.hosts file
+ *              with each node's management network mac address as the
+ *              primary search string and loads the pxeboot ip address
+ *              and pxeboot hostname where matches are found.
+ *
+ * Parameters : Optional my_mac address for initial process startup
+ *              to get just its own my_pxeboot_ip address before the
+ *              nodeLinkClass host chain is created.
+ *
+ * Updates    : this->my_pxeboot_ip if my_mac is specified.
+ *              node_ptr->pxeboot_ip for all hosts if my_mac is empty.
+ *
+ * Retruns    : Nothing
+ *
+ **************************************************************************/
+void nodeLinkClass::pxebootInfo_loader ( string my_mac )
+{
+    string dnsmasq_hosts_file = OPT_PLATFORM_CONFIG_DIR ;
+    dnsmasq_hosts_file.append("/");
+    dnsmasq_hosts_file.append(sw_version);
+    dnsmasq_hosts_file.append("/");
+    dnsmasq_hosts_file.append(DNSMASQ_HOSTS_FILE);
+
+    if ( daemon_is_file_present ( dnsmasq_hosts_file.data()) == false )
+    {
+        ilog ("%s file not present", dnsmasq_hosts_file.c_str());
+        return ;
+    }
+
+    // Open the dnsmasq_hosts_file for reading
+    ifstream filestream ( dnsmasq_hosts_file.c_str() );
+
+    // Check if the file is open
+    if (!filestream.is_open())
+    {
+        elog ("failed to open seemingly present %s file", dnsmasq_hosts_file.c_str());
+        return ;
+    }
+
+    // Read each line from the file
+    string line;
+    while (getline(filestream, line))
+    {
+        // Skip lines starting with "pxecontroller"
+        if (line.compare(0, 13, "pxecontroller") == 0)
+            continue;
+
+        // Create a stringstream to parse the comma-delimited fields
+        stringstream dnsmasq_hosts(line);
+        string mac, hostname, ip ;
+
+        // Extract fields
+        getline(dnsmasq_hosts, mac, ',');
+        getline(dnsmasq_hosts, hostname, ',');
+        getline(dnsmasq_hosts, ip, ',');
+        dlog ("pxebootInfo: %s %s %s", mac.c_str(), hostname.c_str(), ip.c_str());
+
+        if ( my_mac.empty() )
+        {
+            if ( ! head )
+            {
+                elog ("cannot read inventory ; head is null");
+                // Close the file stream
+                filestream.close();
+                return ;
+            }
+
+            // Search for the node that matches each mac address in inventory
+            bool found = false ;
+            for ( struct node * node_ptr = head ;  ; node_ptr = node_ptr->next )
+            {
+                if ( !mac.compare(node_ptr->mac) )
+                {
+                    node_ptr->pxeboot_hostname = hostname ;
+                    if ( !ip.empty() && ( ip != node_ptr->pxeboot_ip ))
+                    {
+                        // pxeboot ip address found and is different
+                        if ( node_ptr->pxeboot_ip.empty() )
+                        {
+                            ilog ("%s pxeboot hostname: %s has pxeboot ip: %s",
+                                    node_ptr->hostname.c_str(),
+                                    node_ptr->pxeboot_hostname.c_str(),
+                                    ip.c_str());
+                        }
+                        else
+                        {
+                            wlog ("%s pxeboot ip changed from %s to %s",
+                                    node_ptr->hostname.c_str(),
+                                    node_ptr->pxeboot_ip.c_str(),
+                                    ip.c_str());
+                        }
+                        node_ptr->pxeboot_ip = ip ;
+
+                        // Also load the my_pxeboot_ip at the process level for eacy access
+                        if (( node_ptr->hostname == this->my_hostname ) && ( this->my_pxeboot_ip != ip ))
+                            this->my_pxeboot_ip = ip ;
+                    }
+                    found = true ;
+                    break ;
+                }
+                if (( node_ptr->next == NULL ) || ( node_ptr == tail ))
+                    break ;
+            }
+            if ( found == false )
+            {
+                wlog ("no host found matching mac address:%s", mac.c_str());
+            }
+        }
+        else if ( !mac.compare( my_mac ) )
+        {
+            // Handle the process startup 'my mac' case
+            if ( !ip.empty() )
+                this->my_pxeboot_ip = ip ;
+            else
+            {
+                wlog ("failed to lookup pxeboot ip from mac %s", my_mac.c_str());
+            }
+        }
+    }
+
+    // Close the file stream
+    filestream.close();
+}
+
 /* Lock Rules
  *
  * 1. Cannot lock this controller
@@ -3701,6 +3866,17 @@ string nodeLinkClass::get_clstr_hostaddr ( string & hostname )
     return ( null_str );
 }
 
+string nodeLinkClass::get_pxeboot_hostaddr ( string hostname )
+{
+    nodeLinkClass::node* node_ptr ;
+    node_ptr = nodeLinkClass::getNode ( hostname );
+    if ( node_ptr != NULL )
+    {
+        return ( node_ptr->pxeboot_ip );
+    }
+    return ( null_str );
+}
+
 string nodeLinkClass::get_hostIfaceMac ( string & hostname, int iface )
 {
     nodeLinkClass::node* node_ptr ;
@@ -3726,6 +3902,30 @@ int nodeLinkClass::set_hostaddr ( string & hostname, string & ip )
     {
         node_ptr->ip = ip ;
         rc = PASS ;
+    }
+    return ( rc );
+}
+
+int nodeLinkClass::set_pxeboot_hostaddr ( string hostname, string ip )
+{
+    int rc = FAIL_HOSTNAME_LOOKUP ;
+
+    nodeLinkClass::node* node_ptr ;
+    node_ptr = nodeLinkClass::getNode ( hostname );
+    if ( node_ptr != NULL )
+    {
+        if (( hostUtil_is_valid_ip_addr(ip)) && ( node_ptr->pxeboot_ip != ip ))
+        {
+            node_ptr->pxeboot_ip = ip ;
+            ilog ("%s pxeboot ip set to %s",
+                      node_ptr->hostname.c_str(),
+                      node_ptr->pxeboot_ip.c_str());
+            rc = PASS ;
+        }
+        else
+        {
+            rc = FAIL_INVALID_IP ;
+        }
     }
     return ( rc );
 }
@@ -3759,7 +3959,8 @@ string nodeLinkClass::get_hostname ( string hostaddr )
         ( hostaddr == LOCALHOST )     ||
         ( hostaddr == my_local_ip )   ||
         ( hostaddr == my_float_ip )   ||
-        ( hostaddr == my_clstr_ip ))
+        ( hostaddr == my_clstr_ip )   ||
+        ( hostaddr == my_pxeboot_ip ))
     {
         return(this->my_hostname);
     }
@@ -3889,6 +4090,8 @@ void nodeLinkClass::set_cmd_resp ( string & hostname, mtc_message_type & msg, in
 
                 if ( iface == MGMNT_INTERFACE )
                    node_ptr->reboot_cmd_ack_mgmnt = 1 ;
+                else if ( iface == PXEBOOT_INTERFACE )
+                   node_ptr->reboot_cmd_ack_pxeboot = 1 ;
                 else if ( iface == CLSTR_INTERFACE )
                    node_ptr->reboot_cmd_ack_clstr = 1 ;
             }
@@ -3923,9 +4126,8 @@ unsigned int nodeLinkClass::get_cmd_resp ( string & hostname )
  *
  * Name       : set_mtcAlive
  *
- * Description: Set the mgmnt or clust specific mtc alive received bool.
- *
- *              Used in the offline handler to verify overall offline state.
+ * Description: Set mtcAlive driven controls and status for the
+ *              pxeboot, mgmnt and cluster networks.
  *
  * Interfaces : Public with hostname.
  *              Private by node pointer.
@@ -3933,52 +4135,108 @@ unsigned int nodeLinkClass::get_cmd_resp ( string & hostname )
  * If mtcAlive is ungated then
  *
  *  1. manage the online/offline state bools
- *  2. increment the mtcAlive count and
+ *  2. increment the mtcAlive count
  *  3. set the mtcAlive received bool for the specified interface
  *
  *****************************************************************************/
-void nodeLinkClass::set_mtcAlive ( string & hostname, int interface )
+void nodeLinkClass::set_mtcAlive ( string & hostname, unsigned int sequence, int iface )
 {
     nodeLinkClass::node* node_ptr ;
     node_ptr = nodeLinkClass::getNode ( hostname );
     if ( node_ptr != NULL )
     {
-        this->set_mtcAlive ( node_ptr, interface );
+        this->set_mtcAlive ( node_ptr, sequence, iface );
     }
 }
 
-void nodeLinkClass::set_mtcAlive ( struct nodeLinkClass::node * node_ptr, int interface )
+#define MTCALIVE_LOG_THROTTLE (1000)
+void nodeLinkClass::set_mtcAlive ( struct nodeLinkClass::node * node_ptr, unsigned int sequence, int iface)
 {
     if ( node_ptr )
     {
         if ( node_ptr->mtcAlive_gate == false )
         {
+            bool state_change = false ;
+
             node_ptr->mtcAlive_online  = true  ;
             node_ptr->mtcAlive_offline = false ;
             node_ptr->mtcAlive_count++ ;
 
-            if ( interface == CLSTR_INTERFACE )
+            if ( iface == CLSTR_INTERFACE )
             {
                 if ( node_ptr->mtcAlive_clstr == false )
                 {
-                    alog ("%s %s mtcAlive received",
-                              node_ptr->hostname.c_str(),
-                              get_iface_name_str(interface));
-                    node_ptr->mtcAlive_clstr_count++ ;
                     node_ptr->mtcAlive_clstr = true ;
+                    state_change = true ;
+                }
+                node_ptr->mtcAlive_clstr_count++ ;
+            }
+            else if ( iface == MGMNT_INTERFACE )
+            {
+                if ( node_ptr->mtcAlive_mgmnt == false )
+                {
+                    node_ptr->mtcAlive_mgmnt = true ;
+                    state_change = true ;
+                }
+                node_ptr->mtcAlive_mgmnt_count++ ;
+            }
+            else if ( iface == PXEBOOT_INTERFACE )
+            {
+                if ( node_ptr->mtcAlive_pxeboot == false )
+                {
+                    node_ptr->mtcAlive_pxeboot = true ;
+                    state_change = true ;
+                }
+                node_ptr->mtcAlive_pxeboot_count++ ;
+            }
+            else
+            {
+                wlog("%s mtcAlive received from unknown network %d",
+                         node_ptr->hostname.c_str(), iface);
+                return ;
+            }
+            if ( state_change )
+            {
+                ilog ("%s mtcAlive received from %s network with uptime:%d ; seq:%d",
+                          node_ptr->hostname.c_str(),
+                          get_iface_name_str(iface),
+                          node_ptr->uptime,
+                          sequence);
+                node_ptr->mtcAlive_log_throttle[iface] = 0 ;
+            }
+            else if ( node_ptr->mtcAlive_sequence[iface]+1 != sequence)
+            {
+                if ( sequence < node_ptr->mtcAlive_sequence[iface]+1 )
+                {
+                    wlog ("%s mtcAlive received from %s network with uptime:%d ; out-of-sequence ; expect:%d detect:%d ; correcting",
+                              node_ptr->hostname.c_str(),
+                              get_iface_name_str(iface),
+                              node_ptr->uptime,
+                              node_ptr->mtcAlive_sequence[iface]+1,
+                              sequence);
+                }
+                else
+                {
+                    wlog ("%s mtcAlive received from %s network with uptime:%d ; missed %d mtcalive msgs ; expect:%d detect:%d ; correcting",
+                              node_ptr->hostname.c_str(),
+                              get_iface_name_str(iface),
+                              node_ptr->uptime,
+                              sequence-(node_ptr->mtcAlive_sequence[iface]+1),
+                              node_ptr->mtcAlive_sequence[iface]+1,
+                              sequence);
                 }
             }
             else
             {
-                if ( node_ptr->mtcAlive_mgmnt == false )
-                {
-                    alog ("%s %s mtcAlive received",
-                              node_ptr->hostname.c_str(),
-                              get_iface_name_str(interface));
-                    node_ptr->mtcAlive_mgmnt_count++ ;
-                    node_ptr->mtcAlive_mgmnt = true ;
-                }
+                alog_throttled (node_ptr->mtcAlive_log_throttle[iface], MTCALIVE_LOG_THROTTLE,
+                               "%s mtcAlive received from %s network with uptime:%d ; seq:%d",
+                                node_ptr->hostname.c_str(),
+                                get_iface_name_str(iface),
+                                node_ptr->uptime,
+                                sequence);
             }
+            // update running sequence number for this interface
+            node_ptr->mtcAlive_sequence[iface] = sequence ;
         }
     }
 }
@@ -4291,7 +4549,6 @@ void nodeLinkClass::set_mtce_flags ( string hostname, int flags, int iface )
                 ((node_ptr->adminAction != MTC_ADMIN_ACTION__ENABLE ) &&
                  (node_ptr->adminAction != MTC_ADMIN_ACTION__UNLOCK )))
             {
-                wlog ("%s mtcAlive reporting locked while unlocked ; correcting", node_ptr->hostname.c_str());
                 send_mtc_cmd ( node_ptr->hostname , MTC_MSG_UNLOCKED, MGMNT_INTERFACE );
                 send_mtc_cmd ( node_ptr->hostname , MTC_MSG_UNLOCKED, CLSTR_INTERFACE );
             }
@@ -4302,7 +4559,13 @@ void nodeLinkClass::set_mtce_flags ( string hostname, int flags, int iface )
             if (( node_ptr->adminState  == MTC_ADMIN_STATE__LOCKED ) &&
                 ( node_ptr->adminAction != MTC_ADMIN_ACTION__LOCK ))
             {
-                wlog ("%s mtcAlive reporting unlocked while locked ; correcting", node_ptr->hostname.c_str());
+                // Avoid printing this warning log in simplex mode.
+                // The locked flag is lost over a reboot in simplex mode.
+                if ( daemon_is_file_present ( STILL_SIMPLEX_FILE ) == false )
+                {
+                    wlog ("%s mtcAlive reporting unlocked while locked ; correcting",
+                              node_ptr->hostname.c_str());
+                }
                 send_mtc_cmd ( node_ptr->hostname , MTC_MSG_LOCKED, MGMNT_INTERFACE );
                 send_mtc_cmd ( node_ptr->hostname , MTC_MSG_LOCKED, CLSTR_INTERFACE );
             }
@@ -6243,6 +6506,10 @@ int nodeLinkClass::update_host_functions ( string hostname , string functions )
         }
         rc = PASS ;
     }
+    else
+    {
+        wlog ("%s getNode lookup failed", hostname.c_str());
+    }
     return (rc);
 }
 
@@ -6930,12 +7197,12 @@ int nodeLinkClass::availStatusChange ( struct nodeLinkClass::node * node_ptr,
                  (        newAvailStatus != MTC_AVAIL_STATUS__ONLINE )))
             {
                 /* Free the mtc timer if in use */
-                if ( node_ptr->mtcAlive_timer.tid )
+                if ( node_ptr->online_timer.tid )
                 {
                     tlog ("%s Stopping mtcAlive timer\n", node_ptr->hostname.c_str());
-                    mtcTimer_stop ( node_ptr->mtcAlive_timer );
-                    node_ptr->mtcAlive_timer.ring = false ;
-                    node_ptr->mtcAlive_timer.tid  = NULL  ;
+                    mtcTimer_stop ( node_ptr->online_timer );
+                    node_ptr->online_timer.ring = false ;
+                    node_ptr->online_timer.tid  = NULL  ;
                 }
                 node_ptr->onlineStage = MTC_ONLINE__START ;
             }
@@ -7265,6 +7532,28 @@ int nodeLinkClass::subStageChange  ( struct nodeLinkClass::node * node_ptr,
     }
 }
 
+/** Host mtcAlive Stage Change member function */
+int nodeLinkClass::mtcAliveStageChange ( struct nodeLinkClass::node * node_ptr,
+                                         mtc_mtcAliveStages_enum newHdlrStage )
+{
+    if ( newHdlrStage < MTC_MTCALIVE__STAGES )
+    {
+        clog ("%s stage %s -> %s",
+               node_ptr->hostname.c_str(),
+               get_mtcAliveStages_str(node_ptr->mtcAliveStage).c_str(),
+               get_mtcAliveStages_str(newHdlrStage).c_str());
+
+        node_ptr->mtcAliveStage = newHdlrStage ;
+        return (PASS) ;
+    }
+    else
+    {
+        slog ("%s Invalid mtcAlive stage (%d)", node_ptr->hostname.c_str(), newHdlrStage );
+        node_ptr->mtcAliveStage = MTC_MTCALIVE__START ;
+        return (FAIL) ;
+    }
+}
+
 struct nodeLinkClass::node * nodeLinkClass::get_mtcTimer_timer ( timer_t tid )
 {
    /* check for empty list condition */
@@ -7537,6 +7826,23 @@ struct nodeLinkClass::node * nodeLinkClass::get_mtcAlive_timer ( timer_t tid )
     return static_cast<struct node *>(NULL);
 }   
 
+struct nodeLinkClass::node * nodeLinkClass::get_online_timer ( timer_t tid )
+{
+   /* check for empty list condition */
+   if ( tid != NULL )
+   {
+       for ( struct node * ptr = head ;  ; ptr = ptr->next )
+       {
+           if ( ptr->online_timer.tid == tid )
+           {
+               return ptr ;
+           }
+           if (( ptr->next == NULL ) || ( ptr == tail ))
+               break ;
+        }
+    }
+    return static_cast<struct node *>(NULL);
+}
 
 struct nodeLinkClass::node * nodeLinkClass::get_offline_timer ( timer_t tid )
 {
@@ -9231,17 +9537,53 @@ void nodeLinkClass::mem_log_state2 ( struct nodeLinkClass::node * node_ptr )
     mem_log (str);
 }
 
-void nodeLinkClass::mem_log_mtcalive ( struct nodeLinkClass::node * node_ptr )
+void nodeLinkClass::mem_log_mtcalive_state ( struct nodeLinkClass::node * node_ptr )
 {
     char str[MAX_MEM_LOG_DATA] ;
 
-    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tmtcAlive: online:%c offline:%c Cnt:%d Gate:%s Misses:%d\n",
+    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tmtcAlive: online:%c offline:%c Cnt:%d Gate:%s Misses:%d Net:%d:%d:%d",
                 node_ptr->hostname.c_str(),
                 node_ptr->mtcAlive_online ? 'Y' : 'N',
                 node_ptr->mtcAlive_offline ? 'Y' : 'N',
                 node_ptr->mtcAlive_count,
                 node_ptr->mtcAlive_gate ? "closed" : "open",
-                node_ptr->mtcAlive_misses);
+                node_ptr->mtcAlive_misses,
+                node_ptr->mtcAlive_mgmnt,
+                node_ptr->mtcAlive_clstr,
+                node_ptr->mtcAlive_pxeboot );
+
+    mem_log (str);
+}
+
+void nodeLinkClass::mem_log_mtcalive_data ( struct nodeLinkClass::node * node_ptr )
+{
+    char str[MAX_MEM_LOG_DATA] ;
+
+    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tmtcAlive: Pxeboot:%d seq:%d   Mgmt:%d seq:%d   Clstr:%d seq:%d",
+                node_ptr->hostname.c_str(),
+                node_ptr->mtcAlive_pxeboot_count,
+                node_ptr->mtcAlive_sequence[PXEBOOT_INTERFACE],
+                node_ptr->mtcAlive_mgmnt_count,
+                node_ptr->mtcAlive_sequence[MGMNT_INTERFACE],
+                node_ptr->mtcAlive_clstr_count,
+                node_ptr->mtcAlive_sequence[CLSTR_INTERFACE]);
+
+    mem_log (str);
+}
+
+void nodeLinkClass::mem_log_mtcalive_pxeboot ( struct nodeLinkClass::node * node_ptr )
+{
+    char str[MAX_MEM_LOG_DATA] ;
+
+    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tPxeboot mtcAlive: Prov:%c  Rxed:%c  ring:%c  miss:%d  seq:%d  save:%d  ",
+                node_ptr->hostname.c_str(),
+                this->pxeboot_network_provisioned ? 'Y' : 'N',
+                node_ptr->mtcAlive_pxeboot        ? 'Y' : 'N',
+                node_ptr->mtcAlive_timer.ring     ? 'Y' : 'N',
+                node_ptr->mtcAlive_sequence_miss  [PXEBOOT_INTERFACE],
+                node_ptr->mtcAlive_sequence       [PXEBOOT_INTERFACE],
+                node_ptr->mtcAlive_sequence_save  [PXEBOOT_INTERFACE]);
+
     mem_log (str);
 }
 
@@ -9273,7 +9615,7 @@ void nodeLinkClass::mem_log_alarm2 ( struct nodeLinkClass::node * node_ptr )
 void nodeLinkClass::mem_log_stage ( struct nodeLinkClass::node * node_ptr )
 {
     char str[MAX_MEM_LOG_DATA] ;
-    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tAdd:%d Offline:%d: Swact:%d Recovery:%d Enable:%d Disable:%d Power:%d Cycle:%d\n",
+    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tAdd:%d Offline:%d: Swact:%d Recovery:%d Enable:%d Disable:%d Power:%d Cycle:%d mtcAlive:%d\n",
                 node_ptr->hostname.c_str(),
                 node_ptr->addStage,
                 node_ptr->offlineStage,
@@ -9282,7 +9624,8 @@ void nodeLinkClass::mem_log_stage ( struct nodeLinkClass::node * node_ptr )
                 node_ptr->enableStage,
                 node_ptr->disableStage,
                 node_ptr->powerStage,
-                node_ptr->powercycleStage);
+                node_ptr->powercycleStage,
+                node_ptr->mtcAliveStage);
     mem_log (str);
 }
 
@@ -9319,11 +9662,13 @@ void nodeLinkClass::mem_log_reset_info ( struct nodeLinkClass::node * node_ptr )
 void nodeLinkClass::mem_log_network ( struct nodeLinkClass::node * node_ptr )
 {
     char str[MAX_MEM_LOG_DATA] ;
-    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\t%s %s cluster_host_ip: %s Uptime: %u\n",
+    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\t mac:%s mgmt:%s clstr: %s pxeboot:%s:%s Uptime: %u\n",
                 node_ptr->hostname.c_str(),
                 node_ptr->mac.c_str(),
                 node_ptr->ip.c_str(),
                 node_ptr->clstr_ip.c_str(),
+                node_ptr->pxeboot_hostname.c_str(),
+                node_ptr->pxeboot_ip.c_str(),
                 node_ptr->uptime );
     mem_log (str);
 }
@@ -9430,23 +9775,25 @@ void nodeLinkClass::memDumpNodeState ( string hostname )
     {
         if ( maintenance == true )
         {
-            mem_log_dor        ( node_ptr );
-            mem_log_identity   ( node_ptr );
-            mem_log_type_info  ( node_ptr );
-            mem_log_network    ( node_ptr );
-            mem_log_state1     ( node_ptr );
-            mem_log_state2     ( node_ptr );
-            // mem_log_reset_info ( node_ptr );
-            mem_log_power_info ( node_ptr );
-            mem_log_alarm1     ( node_ptr );
-            mem_log_alarm2     ( node_ptr );
-            mem_log_mtcalive   ( node_ptr );
-            mem_log_stage      ( node_ptr );
-            mem_log_bm         ( node_ptr );
-            mem_log_ping       ( node_ptr );
-            mem_log_test_info  ( node_ptr );
-            mem_log_thread_info( node_ptr );
-            workQueue_dump     ( node_ptr );
+            mem_log_dor              ( node_ptr );
+            mem_log_identity         ( node_ptr );
+            mem_log_type_info        ( node_ptr );
+            mem_log_network          ( node_ptr );
+            mem_log_mtcalive_state   ( node_ptr );
+            mem_log_mtcalive_data    ( node_ptr );
+            mem_log_mtcalive_pxeboot ( node_ptr );
+            mem_log_state1           ( node_ptr );
+            mem_log_state2           ( node_ptr );
+            // mem_log_reset_info    ( node_ptr );
+            mem_log_power_info       ( node_ptr );
+            mem_log_alarm1           ( node_ptr );
+            mem_log_alarm2           ( node_ptr );
+            mem_log_stage            ( node_ptr );
+            mem_log_bm               ( node_ptr );
+            mem_log_ping             ( node_ptr );
+            mem_log_test_info        ( node_ptr );
+            mem_log_thread_info      ( node_ptr );
+            workQueue_dump           ( node_ptr );
         }
         if ( heartbeat == true )
         {

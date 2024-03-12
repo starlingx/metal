@@ -1,10 +1,10 @@
 #ifndef __INCLUDE_MTCNODECOMP_HH__
 #define __INCLUDE_MTCNODECOMP_HH__
 /*
- * Copyright (c) 2015-2016 Wind River Systems, Inc.
-*
-* SPDX-License-Identifier: Apache-2.0
-*
+ * Copyright (c) 2015-2016, 2024 Wind River Systems, Inc.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  */
 
 /**
@@ -92,6 +92,30 @@ typedef struct
     string        mgmnt_iface ;
     string        clstr_iface ;
 
+    // Controller-0 USB installs lead to management interface,
+    // and therefore the pxeboot interface, being the localhost 'lo'.
+    // Trying to setup the pxeboot socket and do messaging over that
+    // socket is not possible so this bool tracks when the pxeboot
+    // interface is not correct.
+    bool         pxeboot_iface_provisioned ;
+    string       pxeboot_iface   ;
+    string       pxeboot_addr    ;
+    string       pxeboot_addr_c0 ;
+    string       pxeboot_addr_c1 ;
+
+    // Assume address is learned to start even though it's likely not.
+    // This enabled the first not learned log followed by a learned
+    // log once it is.
+    bool pxeboot_address_learned [CONTROLLERS] = { true, true };
+
+    // mtcAlive current running sequence number storage
+    unsigned int mtcAlive_pxeboot_sequence = 0 ;
+    unsigned int mtcAlive_mgmnt_sequence = 0 ;
+    unsigned int mtcAlive_clstr_sequence = 0 ;
+
+    /* Maintain pxeboot, management and cluser network interface information */
+    iface_info_type  iface_info[MTCALIVE_INTERFACES_MAX];
+
     unsigned int     nodetype ;
     unsigned int     function ;
     unsigned int  subfunction ;
@@ -131,5 +155,6 @@ bool is_subfunction_worker ( void );
 int run_goenabled_scripts ( mtc_socket_type * sock_ptr , string requestor );
 int run_hostservices_scripts ( unsigned int cmd );
 void load_mtcInfo_msg ( mtc_message_type & msg );
+void load_pxebootInfo_msg ( mtc_message_type & msg );
 
-#endif
+#endif // __INCLUDE_MTCNODECOMP_HH__

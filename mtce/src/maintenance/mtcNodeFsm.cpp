@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016 Wind River Systems, Inc.
+ * Copyright (c) 2013, 2016, 2024 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -90,6 +90,14 @@ int nodeLinkClass::fsm ( struct nodeLinkClass::node * node_ptr )
      *   with mtcAlive debouncing
      */
     nodeLinkClass::online_handler ( node_ptr );
+
+    /*
+     * Always run the mtcAlive handler.
+     *
+     * - monitor host's mtcAlive messaging
+     * - manage  host's mtcAlive missing alarm
+     */
+    nodeLinkClass::pxeboot_mtcAlive_monitor ( node_ptr );
 
     if ( node_ptr->adminAction == MTC_ADMIN_ACTION__DELETE )
     {

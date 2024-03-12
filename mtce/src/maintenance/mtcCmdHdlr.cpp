@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2017, 2023 Wind River Systems, Inc.
+ * Copyright (c) 2013-2017, 2023-2024 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -360,10 +360,40 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
 
             node_ptr->reboot_cmd_ack_mgmnt = false ;
             node_ptr->reboot_cmd_ack_clstr = false ;
+            node_ptr->reboot_cmd_ack_pxeboot = false ;
 
             /* send reboot command */
             node_ptr->cmdReq = MTC_CMD_REBOOT ;
             node_ptr->cmdRsp = MTC_CMD_NONE   ;
+
+            // Send the reboot command on all provisioned networks
+            if ( this->pxeboot_network_provisioned == true )
+            {
+                if (( rc = send_mtc_cmd ( node_ptr->hostname,
+                                          MTC_CMD_REBOOT,
+                                          PXEBOOT_INTERFACE )) != PASS )
+                {
+                    // Don't report a warning log if the far end pxeboot
+                    // network address is not learned yet.
+                    if ( rc != FAIL_HOSTADDR_LOOKUP )
+                    {
+                        wlog ("%s reboot request failed (%s) (rc:%d)\n",
+                                  node_ptr->hostname.c_str(),
+                                  get_iface_name_str(PXEBOOT_INTERFACE), rc);
+                    }
+                    else
+                    {
+                        ilog ("%s %s network address not learned yet ; can't reboot",
+                                  node_ptr->hostname.c_str(),
+                                  get_iface_name_str(PXEBOOT_INTERFACE));
+                    }
+                }
+                else
+                {
+                    send_reboot_ok = true ;
+                }
+            }
+
             if (( rc = send_mtc_cmd ( node_ptr->hostname,
                                       MTC_CMD_REBOOT,
                                       MGMNT_INTERFACE )) != PASS )
@@ -383,9 +413,20 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
                                           MTC_CMD_REBOOT,
                                           CLSTR_INTERFACE )) != PASS )
                 {
-                    wlog ("%s reboot request failed (%s) (rc:%d)\n",
-                        node_ptr->hostname.c_str(),
-                        get_iface_name_str(CLSTR_INTERFACE), rc);
+                    // Don't report a warning log if the far end cluster
+                    // network IP is not learned yet.
+                    if ( rc != FAIL_HOSTADDR_LOOKUP )
+                    {
+                        wlog ("%s reboot request failed (%s) (rc:%d)",
+                                  node_ptr->hostname.c_str(),
+                                  get_iface_name_str(CLSTR_INTERFACE), rc);
+                    }
+                    else
+                    {
+                        ilog ("%s %s network address not learned yet ; can't reboot",
+                                  node_ptr->hostname.c_str(),
+                                  get_iface_name_str(CLSTR_INTERFACE));
+                    }
                 }
                 else
                 {
@@ -446,6 +487,7 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
                              * messages from the remote host during the reset delay window */
                             node_ptr->mtcAlive_mgmnt_count = 0 ;
                             node_ptr->mtcAlive_clstr_count = 0 ;
+                            node_ptr->mtcAlive_pxeboot_count = 0 ;
 
                             wlog ("%s ... bmc reset in %d secs", node_ptr->hostname.c_str(), reset_delay);
                             mtcTimer_start ( node_ptr->mtcCmd_timer, mtcTimer_handler, reset_delay );
@@ -472,11 +514,25 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
             }
             else
             {
+                // log the acks
+                string nwk_ack = "" ;
+                if ( node_ptr->reboot_cmd_ack_pxeboot )
+                     nwk_ack.append(get_iface_name_str(PXEBOOT_INTERFACE));
+                if ( node_ptr->reboot_cmd_ack_mgmnt )
+                {
+                    if ( !nwk_ack.empty() )
+                        nwk_ack.append(",");
+                    nwk_ack.append(get_iface_name_str(MGMNT_INTERFACE));
+                }
+                if ( node_ptr->reboot_cmd_ack_clstr )
+                {
+                    if ( !nwk_ack.empty() )
+                        nwk_ack.append(",");
+                    nwk_ack.append(get_iface_name_str(CLSTR_INTERFACE));
+                }
+
                 /* declare successful reboot */
-                plog ("%s reboot request succeeded (%s %s)",
-                          node_ptr->hostname.c_str(),
-                          node_ptr->reboot_cmd_ack_mgmnt ? get_iface_name_str(MGMNT_INTERFACE) : "",
-                          node_ptr->reboot_cmd_ack_clstr ? get_iface_name_str(CLSTR_INTERFACE) : "");
+                plog ("%s reboot request succeeded (%s)", node_ptr->hostname.c_str(), nwk_ack.c_str());
 
                 if ( node_ptr->cmd.task == true )
                 {
@@ -499,6 +555,7 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
                      * messages from the remote host during the reset delay window */
                     node_ptr->mtcAlive_mgmnt_count = 0 ;
                     node_ptr->mtcAlive_clstr_count = 0 ;
+                    node_ptr->mtcAlive_pxeboot_count = 0 ;
 
                     wlog ("%s max reboot retries reached ; still not offline ; reset in %3d secs",
                                   node_ptr->hostname.c_str(), reset_delay);
@@ -566,7 +623,8 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
                      * or the failure of just one (mgmnt or clstr) networks to mistakenly
                      * cancel the reset. Prevent the cancel if
                      * - the node uptime is high and
-                     * - not receiving mtcAlive both mgmnt and clstr networks.
+                     * - not receiving mtcAlive on any mtcAlive networks ;
+                     *       mgmnt, clstr and pxeboot networks.
                      *
                      * Note: online does not mean both networks are receiving mtcAlive,
                      *       Currently just mgmnt needs to see mtcAlive for the node to
@@ -578,15 +636,17 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
                     if (( node_ptr->availStatus == MTC_AVAIL_STATUS__ONLINE ) &&
                         ( node_ptr->uptime < MTC_MINS_5 ) &&
                         ( node_ptr->mtcAlive_mgmnt_count ) &&
-                        ( node_ptr->mtcAlive_clstr_count ))
+                        ( node_ptr->mtcAlive_clstr_count ) &&
+                        ( node_ptr->mtcAlive_pxeboot_count ))
                     {
                         mtcTimer_reset ( node_ptr->mtcCmd_timer );
-                        ilog ("%s cancelling reset ; host is online ; delay:%d uptime:%d mtcAlive:%d:%d ",
+                        ilog ("%s cancelling reset ; host is online ; delay:%d uptime:%d mtcAlive:%d:%d:%d ",
                                   node_ptr->hostname.c_str(),
                                   bmc_reset_delay,
                                   node_ptr->uptime,
                                   node_ptr->mtcAlive_mgmnt_count,
-                                  node_ptr->mtcAlive_clstr_count);
+                                  node_ptr->mtcAlive_clstr_count,
+                                  node_ptr->mtcAlive_pxeboot_count);
                         node_ptr->mtcCmd_work_fifo_ptr->status = PASS ;
                         node_ptr->mtcCmd_work_fifo_ptr->stage  = MTC_CMD_STAGE__DONE ;
                     }
@@ -602,13 +662,14 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
                             #define BMC_RESET_PENDING_LOG_THROTTLE (1000)
                             wlog_throttled ( node_ptr->bmc_reset_pending_log_throttle,
                                              BMC_RESET_PENDING_LOG_THROTTLE,
-                                             "%s reset in %3ld secs ; delay:%d uptime:%d mtcAlive:%d:%d",
+                                             "%s reset in %3ld secs ; delay:%d uptime:%d mtcAlive:%d:%d:%d",
                                              node_ptr->hostname.c_str(),
                                              reset_delay-diff_time.secs,
                                              bmc_reset_delay,
                                              node_ptr->uptime,
                                              node_ptr->mtcAlive_mgmnt_count,
-                                             node_ptr->mtcAlive_clstr_count);
+                                             node_ptr->mtcAlive_clstr_count,
+                                             node_ptr->mtcAlive_pxeboot_count);
                         }
                     }
                     break ; /* waiting path */
@@ -813,6 +874,8 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
                 /* update the timer hostname */
                 node_ptr->mtcTimer.hostname = name ;
                 node_ptr->mtcAlive_timer.hostname = name ;
+                node_ptr->online_timer.hostname = name ;
+                node_ptr->offline_timer.hostname = name ;
                 node_ptr->mtcSwact_timer.hostname = name ;
                 node_ptr->mtcCmd_timer.hostname = name ;
                 node_ptr->oosTestTimer.hostname = name ;

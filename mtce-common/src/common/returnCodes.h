@@ -1,7 +1,7 @@
 #ifndef __INCLUDE_RETURNCODES_H__
 #define __INCLUDE_RETURNCODES_H__
 /*
- * Copyright (c) 2013, 2016 Wind River Systems, Inc.
+ * Copyright (c) 2013, 2016, 2024 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -116,7 +116,7 @@
 #define FAIL_DUP_HOSTNAME     (92)
 #define FAIL_DUP_IPADDR       (93)
 #define FAIL_DUP_MACADDR      (94)
-#define FAIL____UNUSED____95  (95)
+#define FAIL_INVALID_IP       (95)
 #define FAIL_LOCATE_KEY_VALUE (96)
 #define FAIL_JSON_OBJECT      (97)
 #define FAIL_EXTERNAL_API     (98)

@@ -257,49 +257,17 @@ void print_mtc_message ( string hostname,
                          const char * iface,
                          bool force )
 {
-    /* Handle raw json string messages differently.
-     * Those messages just have a json string that starts at the header */
-    if ( msg.hdr[0] == '{' )
-    {
-        if ( force )
-        {
-            ilog ("%s %s (%s network) - %s\n",
-                      hostname.c_str(),
-                      direction ? "rx <-" : "tx ->" ,
-                      iface,
-                      msg.hdr);
-        }
-        else if (( daemon_get_cfg_ptr()->debug_alive&1) && ( msg.cmd  == MTC_MSG_MTCALIVE ))
-        {
-            alog  ("%s %s (%s network) - %s\n",
-                       hostname.c_str(),
-                       direction ? "rx <-" : "tx ->" ,
-                       iface,
-                       msg.hdr);
-        }
-        else
-        {
-            mlog1 ("%s %s (%s network) - %s\n",
-                       hostname.c_str(),
-                       direction ? "rx <-" : "tx ->" ,
-                       iface,
-                       msg.hdr);
-        }
-        return ;
-    }
-
     string str = "" ;
     if ( msg.buf[0] )
         str = msg.buf ;
     if ( force )
     {
-        ilog ("%s %s %s (%s network) %d.%d %x:%x:%x.%x.%x.%x [%s] %s\n",
+        ilog ("%s%s %s %s %s network: %x:%x:%x.%x.%x.%x [%s] %s\n",
                 hostname.c_str(),
-                direction ? "rx <-" : "tx ->" ,
+                direction ? "" : " tx" ,
                 get_mtcNodeCommand_str (msg.cmd),
+                direction ? "from" : "to" ,
                 iface,
-                msg.ver,
-                msg.rev,
                 msg.cmd,
                 msg.num,
                 msg.parm[0],
@@ -309,15 +277,31 @@ void print_mtc_message ( string hostname,
                 msg.hdr,
                 str.c_str());
     }
+    else if ( msg.cmd == MTC_MSG_MTCALIVE || msg.cmd == MTC_REQ_MTCALIVE )
+    {
+        alog ("%s%s %s %s %s network: [%x:%x:%x:%x:%x:%x:%s] %s",
+                    hostname.c_str(),
+                    direction ? "" : " tx" ,
+                    get_mtcNodeCommand_str (msg.cmd),
+                    direction ? "from" : "to" ,
+                    iface,
+                    msg.cmd,
+                    msg.num,
+                    msg.parm[0],
+                    msg.parm[1],
+                    msg.parm[2],
+                    msg.parm[3],
+                    msg.hdr,
+                    str.c_str());
+    }
     else
     {
-        mlog1 ("%s %s %s (%s network) %d.%d %x:%x:%x.%x.%x.%x [%s] %s\n",
-                hostname.c_str(),
-                direction ? "rx <-" : "tx ->" ,
+        mlog1 ("%s%s %s %s %s network: %x:%x:%x.%x.%x.%x [%s] %s",
+               hostname.c_str(),
+                direction ? "" : " tx" ,
                 get_mtcNodeCommand_str (msg.cmd),
+                direction ? "from" : "to" ,
                 iface,
-                msg.ver,
-                msg.rev,
                 msg.cmd,
                 msg.num,
                 msg.parm[0],
@@ -344,6 +328,8 @@ static std::string     configStages_str [MTC_CONFIG__STAGES     +1] ;
 static std::string        addStages_str [MTC_ADD__STAGES        +1] ;
 static std::string        delStages_str [MTC_DEL__STAGES        +1] ;
 static std::string        subStages_str [MTC_SUBSTAGE__STAGES   +1] ;
+static std::string   mtcAliveStages_str [MTC_MTCALIVE__STAGES   +1] ;
+
 
 void mtc_stages_init ( void )
 {
@@ -377,7 +363,7 @@ void mtc_stages_init ( void )
    enableStages_str  [MTC_ENABLE__FAILURE              ] = "Failure";
    enableStages_str  [MTC_ENABLE__FAILURE_WAIT         ] = "Failure-Wait";
    enableStages_str  [MTC_ENABLE__FAILURE_SWACT_WAIT   ] = "Failure-Swact-Wait";
-   enableStages_str  [MTC_ENABLE__STAGES               ] = "unknown" ;
+   enableStages_str  [MTC_ENABLE__STAGES               ] = "Enable-Unknown" ;
 
    recoveryStages_str[MTC_RECOVERY__START              ] = "Handler-Start";
    recoveryStages_str[MTC_RECOVERY__RETRY_WAIT         ] = "Req-Retry-Wait";
@@ -402,7 +388,7 @@ void mtc_stages_init ( void )
    recoveryStages_str[MTC_RECOVERY__FAILURE            ] = "Failure";
    recoveryStages_str[MTC_RECOVERY__WORKQUEUE_WAIT     ] = "WorkQ-Wait";
    recoveryStages_str[MTC_RECOVERY__ENABLE             ] = "Enable";
-   recoveryStages_str[MTC_RECOVERY__STAGES             ] = "unknown";
+   recoveryStages_str[MTC_RECOVERY__STAGES             ] = "Recovery-Unknown";
 
    disableStages_str [MTC_DISABLE__START               ] = "Disable-Start";
    disableStages_str [MTC_DISABLE__HANDLE_POWERON_SEND ] = "Disable-PowerOn-Send";
@@ -416,7 +402,7 @@ void mtc_stages_init ( void )
    disableStages_str [MTC_DISABLE__TASK_STATE_UPDATE   ] = "Disable-States-Update";
    disableStages_str [MTC_DISABLE__WORKQUEUE_WAIT      ] = "Disable-WorkQ-Wait";
    disableStages_str [MTC_DISABLE__DISABLED            ] = "Host-Disabled";
-   disableStages_str [MTC_DISABLE__STAGES              ] = "Unknown";
+   disableStages_str [MTC_DISABLE__STAGES              ] = "Disable-Unknown";
 
    powerStages_str   [MTC_POWERON__START               ] = "Power-On-Start";
    powerStages_str   [MTC_POWERON__POWER_STATUS_WAIT   ] = "Power-On-Status";
@@ -445,17 +431,16 @@ void mtc_stages_init ( void )
    powercycleStages_str [MTC_POWERCYCLE__POWEROFF_WAIT  ] = "Power-Cycle-Off-Wait";
    powercycleStages_str [MTC_POWERCYCLE__POWERON        ] = "Power-Cycle-On";
    powercycleStages_str [MTC_POWERCYCLE__POWERON_REQWAIT] = "Power-Cycle-On-Req-Wait";
-   powercycleStages_str [MTC_POWERCYCLE__POWERON_VERIFY]  = "Power-Cycle-On-Verify";
+   powercycleStages_str [MTC_POWERCYCLE__POWERON_VERIFY ] = "Power-Cycle-On-Verify";
    powercycleStages_str [MTC_POWERCYCLE__POWERON_WAIT   ] = "Power-Cycle-On-Wait";
    powercycleStages_str [MTC_POWERCYCLE__DONE           ] = "Power-Cycle-Done";
    powercycleStages_str [MTC_POWERCYCLE__FAIL           ] = "Power-Cycle-Fail";
    powercycleStages_str [MTC_POWERCYCLE__HOLDOFF        ] = "Power-Cycle-Hold-Off";
    powercycleStages_str [MTC_POWERCYCLE__COOLOFF        ] = "Power-Cycle-Cool-Off";
-
    powercycleStages_str [MTC_POWERCYCLE__POWEROFF_CMND_WAIT] = "Power-Cycle-Off-Cmnd-Wait";
    powercycleStages_str [MTC_POWERCYCLE__POWERON_CMND_WAIT]  = "Power-Cycle-On-Cmnd-Wait";
    powercycleStages_str [MTC_POWERCYCLE__POWERON_VERIFY_WAIT]= "Power-Cycle-On-Verify-Wait";
-
+   powercycleStages_str [MTC_POWERCYCLE__STAGES         ] = "Power-Cycle-Unknown";
 
    resetStages_str   [MTC_RESET__START                 ] = "Reset-Start";
    resetStages_str   [MTC_RESET__REQ_SEND              ] = "Reset-Req-Send";
@@ -529,6 +514,7 @@ void mtc_stages_init ( void )
    delStages_str     [MTC_DEL__START                   ] = "Del-Start";
    delStages_str     [MTC_DEL__WAIT                    ] = "Del-Wait";
    delStages_str     [MTC_DEL__DONE                    ] = "Del-Done";
+   delStages_str     [MTC_DEL__STAGES                  ] = "Del-Unknown";
 
    subStages_str     [MTC_SUBSTAGE__START              ] = "subStage-Start";
    subStages_str     [MTC_SUBSTAGE__SEND               ] = "subStage-Send";
@@ -536,6 +522,15 @@ void mtc_stages_init ( void )
    subStages_str     [MTC_SUBSTAGE__WAIT               ] = "subStage-Wait";
    subStages_str     [MTC_SUBSTAGE__DONE               ] = "subStage-Done";
    subStages_str     [MTC_SUBSTAGE__FAIL               ] = "subStage-Fail";
+   subStages_str     [MTC_SUBSTAGE__STAGES             ] = "subStage-Unknown";
+
+   mtcAliveStages_str[MTC_MTCALIVE__START              ] = "mtcAlive-Start";
+   mtcAliveStages_str[MTC_MTCALIVE__MONITOR            ] = "mtcAlive-Monitor";
+   mtcAliveStages_str[MTC_MTCALIVE__WAIT               ] = "mtcAlive-Wait";
+   mtcAliveStages_str[MTC_MTCALIVE__CHECK              ] = "mtcAlive-Check";
+   mtcAliveStages_str[MTC_MTCALIVE__SEND               ] = "mtcAlive-Send";
+   mtcAliveStages_str[MTC_MTCALIVE__FAIL               ] = "mtcAlive-Fail";
+   mtcAliveStages_str[MTC_MTCALIVE__STAGES             ] = "mtcAlive-Unknown";
 }
 
 string get_delStages_str ( mtc_delStages_enum stage )
@@ -664,6 +659,15 @@ string get_subStages_str ( mtc_subStages_enum stage )
         return (subStages_str[MTC_SUBSTAGE__STAGES]);
     }
     return (subStages_str[stage]);
+}
+
+string get_mtcAliveStages_str ( mtc_mtcAliveStages_enum stage )
+{
+    if ( stage >= MTC_MTCALIVE__STAGES )
+    {
+        return (mtcAliveStages_str[MTC_MTCALIVE__STAGES]);
+    }
+    return (mtcAliveStages_str[stage]);
 }
 
 void log_adminAction ( string hostname, 

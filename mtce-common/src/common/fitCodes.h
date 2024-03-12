@@ -1,7 +1,7 @@
 #ifndef __INCLUDE_FITCODES_H__
 #define __INCLUDE_FITCODES_H__
 /*
- * Copyright (c) 2013, 2016 Wind River Systems, Inc.
+ * Copyright (c) 2013, 2016, 2024 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -43,6 +43,8 @@
 #define MTC_CMD_FIT__NO_MGMNT_ACK ("/var/run/fit/no_mgmnt_ack") /* mtcClient */
 #define MTC_CMD_FIT__NO_CLSTR_ACK ("/var/run/fit/no_clstr_ack") /* mtcClient */
 #define MTC_CMD_FIT__NO_MTCALIVE  ("/var/run/fit/no_mtcalive")  /* mtcClient */
+#define MTC_CMD_FIT__PXEBOOT_RXSOCK ("/var/run/fit/pxeboot_rxsock") /* mtcClient */
+#define MTC_CMD_FIT__PXEBOOT_TXSOCK ("/var/run/fit/pxeboot_txsock") /* mtcClient */
 #define MTC_CMD_FIT__MGMNT_RXSOCK ("/var/run/fit/mgmnt_rxsock") /* mtcClient */
 #define MTC_CMD_FIT__MGMNT_TXSOCK ("/var/run/fit/mgmnt_txsock") /* mtcClient */
 #define MTC_CMD_FIT__CLSTR_RXSOCK ("/var/run/fit/clstr_rxsock") /* mtcClient */
@@ -182,5 +184,8 @@
 #define FIT_CODE__HWMON__SET_DB_SENSOR_STATE         (176)
 #define FIT_CODE__HWMON__SET_DB_GROUP_STATUS         (177)
 #define FIT_CODE__HWMON__SET_DB_GROUP_STATE          (178)
+
+
+#define TESTMASK__MSG__MTCALIVE_STRESS               (0x00000001)
 
 #endif /* __INCLUDE_FITCODES_H__ */

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 Wind River Systems, Inc.
+ * Copyright (c) 2013, 2024 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -153,7 +153,7 @@ EFmAlarmSeverityT alarmUtil_query ( string hostname,
                     ENTITY_PREFIX, hostname.data(), instance.data());
     }
 
-    alog ("entity_instance:%s\n", alarm_filter.entity_instance_id );
+    dlog ("entity_instance:%s\n", alarm_filter.entity_instance_id );
     if (( rc = fm_get_fault ( &alarm_filter, &alarm_query )) == FM_ERR_OK )
     {
         dlog ("Found with Severity: %d\n", alarm_query.severity );
@@ -185,7 +185,7 @@ int alarmUtil_query_identity ( string identity, SFmAlarmDataT * alarm_list_ptr, 
         memset(&alarm_filter, 0, sizeof(alarm_filter));
         snprintf ( alarm_filter.alarm_id, FM_MAX_BUFFER_LENGTH, "%s", identity.data());
         rc = fm_get_faults_by_id ( &alarm_filter.alarm_id, alarm_list_ptr, &max_alarms );
-        alog ("%s fm_get_faults_by_id rc = %d\n", alarm_filter.alarm_id, rc );
+        dlog ("%s fm_get_faults_by_id rc = %d\n", alarm_filter.alarm_id, rc );
         if ( rc == FM_ERR_OK )
         {
             return (PASS);
@@ -261,18 +261,18 @@ int alarmUtil ( string & hostname,
     {
         if ( alarm.alarm_state == FM_ALARM_STATE_SET )
         {
-            alog ("%s setting %s %s alarm\n", hostname.c_str(), alarm.alarm_id, alarm.entity_instance_id );
+            dlog ("%s setting %s %s alarm\n", hostname.c_str(), alarm.alarm_id, alarm.entity_instance_id );
         }
         else
         {
-            alog ("%s creating %s %s log\n", hostname.c_str(), alarm.alarm_id, alarm.entity_instance_id );
+            dlog ("%s creating %s %s log\n", hostname.c_str(), alarm.alarm_id, alarm.entity_instance_id );
         }
 
         /* Debug Logs */
-        alog ("%s Alarm Reason: %s\n", hostname.c_str(), alarm.reason_text );
-        alog ("%s Alarm Action: %s\n", hostname.c_str(), alarm.proposed_repair_action );
-        alog ("%s Alarm Ident : %s : %s\n", hostname.c_str(), alarm.entity_type_id, alarm.entity_instance_id );
-        alog ("%s Alarm State : state:%d sev:%d type:%d cause:%d sa:%c supp:%c\n",
+        dlog ("%s Alarm Reason: %s\n", hostname.c_str(), alarm.reason_text );
+        dlog ("%s Alarm Action: %s\n", hostname.c_str(), alarm.proposed_repair_action );
+        dlog ("%s Alarm Ident : %s : %s\n", hostname.c_str(), alarm.entity_type_id, alarm.entity_instance_id );
+        dlog ("%s Alarm State : state:%d sev:%d type:%d cause:%d sa:%c supp:%c\n",
                   hostname.c_str(),
                   alarm.alarm_state,
                   alarm.severity,
@@ -310,7 +310,7 @@ int alarmUtil ( string & hostname,
         snprintf(filter.alarm_id,           FM_MAX_BUFFER_LENGTH, "%s", alarm.alarm_id);
         snprintf(filter.entity_instance_id, FM_MAX_BUFFER_LENGTH, "%s", alarm.entity_instance_id);
 
-        alog ( "fm_clear_fault: %s %s:%s", hostname.c_str(), alarm.entity_instance_id, alarm.alarm_id );
+        dlog ( "fm_clear_fault: %s %s:%s", hostname.c_str(), alarm.entity_instance_id, alarm.alarm_id );
 
 #ifdef WANT_FIT_TESTING
         if (( daemon_is_file_present ( MTC_CMD_FIT__FM_ERROR_CODE )) &&

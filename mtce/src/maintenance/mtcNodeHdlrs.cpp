@@ -130,6 +130,15 @@ void nodeLinkClass::timer_handler ( int sig, siginfo_t *si, void *uc)
         return ;
     }
 
+   /* Is this TID a online timer TID ? */
+    node_ptr = get_online_timer ( *tid_ptr );
+    if ( node_ptr )
+    {
+        mtcTimer_stop_int_safe ( node_ptr->online_timer );
+        node_ptr->online_timer.ring = true ;
+        return ;
+    }
+
     /* Is this TID a mtcAlive timer TID ? */
     node_ptr = get_mtcAlive_timer ( *tid_ptr );
     if ( node_ptr )
@@ -244,6 +253,14 @@ void nodeLinkClass::timer_handler ( int sig, siginfo_t *si, void *uc)
         // tlog ("%s Token 'refresh' timer ring\n", mtcTimer_token.hostname.c_str());
         mtcTimer_stop_int_safe ( mtcTimer_token );
         mtcTimer_token.ring = true ;
+        return ;
+    }
+
+    /* daemon main loop timer */
+    if ( *tid_ptr == mtcTimer_loop.tid )
+    {
+        mtcTimer_stop_int_safe ( mtcTimer_loop );
+        mtcTimer_loop.ring = true ;
         return ;
     }
 
@@ -1968,7 +1985,9 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
                           node_ptr->hostname.c_str());
                 node_ptr->reboot_cmd_ack_mgmnt = false ;
                 node_ptr->reboot_cmd_ack_clstr = false ;
+                node_ptr->reboot_cmd_ack_pxeboot = false ;
                 send_mtc_cmd ( node_ptr->hostname, MTC_CMD_REBOOT, MGMNT_INTERFACE ) ;
+                send_mtc_cmd ( node_ptr->hostname, MTC_CMD_REBOOT, PXEBOOT_INTERFACE ) ;
 
                 /* If the cluster-host network is provisioned then try
                  * and issue a reset over it to expedite the recovery
@@ -2036,6 +2055,12 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
             {
                 reset_aborted = true ;
                 ilog ("%s backup bmc reset aborted due to management network reboot request ACK",
+                          node_ptr->hostname.c_str());
+            }
+            else if ( node_ptr->reboot_cmd_ack_pxeboot )
+            {
+                reset_aborted = true ;
+                ilog ("%s backup bmc reset aborted due to pxeboot network reboot request ACK",
                           node_ptr->hostname.c_str());
             }
             else if ( node_ptr->reboot_cmd_ack_clstr )
@@ -3331,6 +3356,7 @@ int nodeLinkClass::offline_handler ( struct nodeLinkClass::node * node_ptr )
             node_ptr->mtcAlive_count = 0 ;
             node_ptr->mtcAlive_mgmnt = false ;
             node_ptr->mtcAlive_clstr = false ;
+            node_ptr->mtcAlive_pxeboot = false ;
             node_ptr->offline_log_throttle = 0 ;
             node_ptr->offline_search_count = 0 ;
 
@@ -3362,22 +3388,25 @@ int nodeLinkClass::offline_handler ( struct nodeLinkClass::node * node_ptr )
              * are cleared. Need to also clear the
              * offline_search_count here as well.
              **/
-            if (( node_ptr->mtcAlive_mgmnt || node_ptr->mtcAlive_clstr ) && node_ptr->offline_search_count )
+            if (( node_ptr->mtcAlive_mgmnt || node_ptr->mtcAlive_clstr || node_ptr->mtcAlive_pxeboot ) && node_ptr->offline_search_count )
             {
                 node_ptr->mtcAlive_online = true ;
-                ilog ("%s still seeing mtcAlive (%d) (Mgmt:%c:%d Clstr:%c:%d) ; restart offline_search_count=%d of %d\n",
+                ilog ("%s still seeing mtcAlive (%d) (Mgmt:%c:%d Clstr:%c:%d Pxeboot:%c:%d) ; restart offline_search_count=%d of %d\n",
                           node_ptr->hostname.c_str(),
                           node_ptr->mtcAlive_count,
                           node_ptr->mtcAlive_mgmnt ? 'Y' : 'n',
                           node_ptr->mtcAlive_mgmnt_count,
                           node_ptr->mtcAlive_clstr ? 'Y' : 'n',
                           node_ptr->mtcAlive_clstr_count,
+                          node_ptr->mtcAlive_pxeboot ? 'Y' : 'n',
+                          node_ptr->mtcAlive_pxeboot_count,
                           node_ptr->offline_search_count,
                           offline_threshold );
                 node_ptr->offline_search_count = 0 ; /* reset the count */
             }
             node_ptr->mtcAlive_mgmnt = false ;
             node_ptr->mtcAlive_clstr = false ;
+            node_ptr->mtcAlive_pxeboot = false ;
 
             /* Request a mtcAlive from host from Mgmnt and Clstr (if provisioned) */
             send_mtc_cmd ( node_ptr->hostname, MTC_REQ_MTCALIVE, MGMNT_INTERFACE );
@@ -3409,6 +3438,10 @@ int nodeLinkClass::offline_handler ( struct nodeLinkClass::node * node_ptr )
                     if ( ++node_ptr->offline_search_count > offline_threshold )
                     {
                         node_ptr->mtcAlive_online = false ;
+
+                        // Clear all the mtcAlive_sequence numbers
+                        for (int i = 0 ; i < MTCALIVE_INTERFACES_MAX ; i++)
+                         node_ptr->mtcAlive_sequence[i] = 0;
 
                         plog ("%s going offline ; (threshold (%d msec * %d)\n",
                                   node_ptr->hostname.c_str(),
@@ -3532,23 +3565,23 @@ int nodeLinkClass::online_handler ( struct nodeLinkClass::node * node_ptr )
             node_ptr->mtcAlive_misses = 0 ;
 
             /* Start mtcAlive message timer */
-            mtcTimer_start ( node_ptr->mtcAlive_timer, mtcTimer_handler, online_period );
+            mtcTimer_start ( node_ptr->online_timer, mtcTimer_handler, online_period );
             node_ptr->onlineStage = MTC_ONLINE__WAITING ;
             break ;
         }
         case MTC_ONLINE__RETRYING:
         {
             /* Start mtcAlive message timer */
-            mtcTimer_start ( node_ptr->mtcAlive_timer, mtcTimer_handler, online_period );
+            mtcTimer_start ( node_ptr->online_timer, mtcTimer_handler, online_period );
             node_ptr->onlineStage = MTC_ONLINE__WAITING ;
             break ;
         }
         case MTC_ONLINE__WAITING:
         {
-            if ( node_ptr->mtcAlive_timer.ring == false )
+            if ( node_ptr->online_timer.ring == false )
                 break ;
 
-            alog ("%s mtcAlive [%s]  [ misses:%d]\n",
+            alog2 ("%s mtcAlive [%s]  [ misses:%d]\n",
                       node_ptr->hostname.c_str(),
                       node_ptr->mtcAlive_online ? "Yes" : "No",
                       node_ptr->mtcAlive_misses );
@@ -3581,7 +3614,7 @@ int nodeLinkClass::online_handler ( struct nodeLinkClass::node * node_ptr )
                 else
                 {
                     /* handle retries < MTC_OFFLINE_MISSES */
-                    node_ptr->mtcAlive_timer.ring = false ;
+                    node_ptr->online_timer.ring = false ;
                     node_ptr->onlineStage = MTC_ONLINE__RETRYING ;
                     break ;
                 }
@@ -3629,7 +3662,7 @@ int nodeLinkClass::online_handler ( struct nodeLinkClass::node * node_ptr )
             }
 
             /* Start over */
-            node_ptr->mtcAlive_timer.ring = false ;
+            node_ptr->online_timer.ring = false ;
             node_ptr->onlineStage = MTC_ONLINE__START ;
             break ;
         }
@@ -7523,7 +7556,148 @@ int nodeLinkClass::oos_test_handler ( struct nodeLinkClass::node * node_ptr )
     return (PASS);
 }
 
+///////////////////////////////////////////////////////////////////////////////
+//
+// Name       : pxeboot_mtcAlive_monitor
+//
+// Purpose    : Monitor pxeboot network mtcAlive and manage associated alarm.
+//
+// Description: Monitor pxeboot mtcAlive messages.
+//              Request mtcAlive when not receiving mtcAlive messages.
+//              Debounce mtcAlive messaging and manage alarm accordingly.
+//
+// Parameters : nodeLinkClass::node struct pointer - node_ptr
+//
+// Returns    : PASS
+//
+///////////////////////////////////////////////////////////////////////////////
+#define PXEBOOT_MTCALIVE_MONITOR_RATE_SECS     (10)
+#define PXEBOOT_MTCALIVE_LOSS_THRESHOLD        (6)
+#define PXEBOOT_MTCALIVE_NOT_SEEN_LOG_THROTTLE (6)
+#define PXEBOOT_MTCALIVE_LOSS_LOG_THROTTLE     (6)
+int nodeLinkClass::pxeboot_mtcAlive_monitor ( struct nodeLinkClass::node * node_ptr )
+{
+    // ERIK: TODO: Comment out once verified
+    flog ("%s pxeboot mtcAlive fsm stage: %s",
+           node_ptr->hostname.c_str(),
+           get_mtcAliveStages_str(node_ptr->mtcAliveStage).c_str());
 
+    if ( !this->pxeboot_network_provisioned ) return PASS ;
+
+    switch (node_ptr->mtcAliveStage)
+    {
+        case MTC_MTCALIVE__START:
+        {
+            alog2 ("%s mtcAlive start", node_ptr->hostname.c_str());
+            mtcTimer_reset ( node_ptr->mtcAlive_timer );
+            node_ptr->mtcAlive_sequence[PXEBOOT_INTERFACE] = 0 ;
+            mtcAliveStageChange (node_ptr, MTC_MTCALIVE__SEND);
+            break ;
+        }
+        case MTC_MTCALIVE__SEND:
+        {
+            /* pxeboot info refresh audit */
+            if ( node_ptr->hostname == my_hostname )
+                pxebootInfo_loader ();
+            alog2 ("%s mtcAlive send", node_ptr->hostname.c_str());
+            send_mtc_cmd ( node_ptr->hostname, MTC_REQ_MTCALIVE, PXEBOOT_INTERFACE );
+            node_ptr->mtcAlive_sequence_save[PXEBOOT_INTERFACE] = 0 ;
+            node_ptr->mtcAlive_sequence_miss[PXEBOOT_INTERFACE] = 0 ;
+            mtcAliveStageChange (node_ptr, MTC_MTCALIVE__MONITOR);
+            break ;
+        }
+        case MTC_MTCALIVE__MONITOR:
+        {
+            alog2 ("%s mtcAlive monitor", node_ptr->hostname.c_str());
+            mtcTimer_start ( node_ptr->mtcAlive_timer, mtcTimer_handler,
+                             PXEBOOT_MTCALIVE_MONITOR_RATE_SECS );
+            mtcAliveStageChange (node_ptr, MTC_MTCALIVE__WAIT);
+            break ;
+        }
+        case MTC_MTCALIVE__WAIT:
+        {
+            if ( mtcTimer_expired ( node_ptr->mtcAlive_timer ) )
+                mtcAliveStageChange (node_ptr, MTC_MTCALIVE__CHECK);
+            break ;
+        }
+        case MTC_MTCALIVE__CHECK:
+        {
+            if ( node_ptr->mtcAlive_sequence[PXEBOOT_INTERFACE] > node_ptr->mtcAlive_sequence_save[PXEBOOT_INTERFACE] )
+            {
+                // Typical success path
+                alog2 ("%s pxeboot mtcAlive received %d messages since last audit ; this:%d  last:%d",
+                           node_ptr->hostname.c_str(),
+                           node_ptr->mtcAlive_sequence[PXEBOOT_INTERFACE] - node_ptr->mtcAlive_sequence_save[PXEBOOT_INTERFACE],
+                           node_ptr->mtcAlive_sequence[PXEBOOT_INTERFACE],
+                           node_ptr->mtcAlive_sequence_save[PXEBOOT_INTERFACE]);
+
+                // Now that we received a message we can dec the missed count
+                if ( node_ptr->mtcAlive_sequence_miss[PXEBOOT_INTERFACE] )
+                    node_ptr->mtcAlive_sequence_miss[PXEBOOT_INTERFACE]-- ;
+                node_ptr->pxeboot_mtcAlive_not_seen_log_throttle = 0 ;
+                node_ptr->pxeboot_mtcAlive_loss_log_throttle = 0 ;
+                mtcAliveStageChange (node_ptr, MTC_MTCALIVE__MONITOR);
+            }
+            else if ( node_ptr->mtcAlive_sequence[PXEBOOT_INTERFACE] < node_ptr->mtcAlive_sequence_save[PXEBOOT_INTERFACE] )
+            {
+                // unexpected case
+                wlog ("%s mtcAlive out-of-sequence ; this:%d  last:%d",
+                          node_ptr->hostname.c_str(),
+                          node_ptr->mtcAlive_sequence[PXEBOOT_INTERFACE],
+                          node_ptr->mtcAlive_sequence_save[PXEBOOT_INTERFACE]);
+                node_ptr->mtcAlive_sequence_miss[PXEBOOT_INTERFACE]++ ;
+                mtcAliveStageChange (node_ptr, MTC_MTCALIVE__START);
+            }
+            else if ( ++node_ptr->mtcAlive_sequence_miss[PXEBOOT_INTERFACE] < PXEBOOT_MTCALIVE_LOSS_THRESHOLD )
+            {
+                // Missing pxeboot mtcAlive
+                alog ("%s pxeboot mtcAlive miss count %d ; sending request",
+                          node_ptr->hostname.c_str(),
+                          node_ptr->mtcAlive_sequence_miss[PXEBOOT_INTERFACE]);
+                send_mtc_cmd ( node_ptr->hostname, MTC_REQ_MTCALIVE, PXEBOOT_INTERFACE );
+                mtcAliveStageChange (node_ptr, MTC_MTCALIVE__MONITOR);
+            }
+            else if ( node_ptr->mtcAlive_pxeboot == true )
+            {
+                wlog_throttled (node_ptr->pxeboot_mtcAlive_loss_log_throttle,
+                                PXEBOOT_MTCALIVE_LOSS_LOG_THROTTLE,
+                                "%s pxeboot mtcAlive loss ; missed: %d ; last: count:%d seq: %d ; sending request",
+                                node_ptr->hostname.c_str(),
+                                node_ptr->mtcAlive_sequence_miss[PXEBOOT_INTERFACE],
+                                node_ptr->mtcAlive_pxeboot_count,
+                                node_ptr->mtcAlive_sequence_save[PXEBOOT_INTERFACE]);
+                mtcAliveStageChange (node_ptr, MTC_MTCALIVE__SEND);
+            }
+            else
+            {
+                ilog_throttled (node_ptr->pxeboot_mtcAlive_not_seen_log_throttle,
+                                PXEBOOT_MTCALIVE_NOT_SEEN_LOG_THROTTLE,
+                                "%s pxeboot mtcAlive not seen yet ; sending request",
+                                node_ptr->hostname.c_str());
+                mtcAliveStageChange (node_ptr, MTC_MTCALIVE__SEND);
+            }
+            node_ptr->mtcAlive_sequence_save[PXEBOOT_INTERFACE] = node_ptr->mtcAlive_sequence[PXEBOOT_INTERFACE] ;
+
+            // TODO (emacdona): Need to handle loss case that manages raising the alarm
+            //                  Transition to MTC_MTCALIVE__FAIL
+
+            break ;
+        }
+        case MTC_MTCALIVE__FAIL:
+        {
+            wlog ("%s mtcAlive fail", node_ptr->hostname.c_str());
+            mtcAliveStageChange (node_ptr, MTC_MTCALIVE__START);
+            break ;
+        }
+        default:
+        {
+            slog ("%s mtcAlive fsm default", node_ptr->hostname.c_str());
+            mtcAliveStageChange (node_ptr, MTC_MTCALIVE__START);
+            break ;
+        }
+    }
+    return (PASS);
+}
 
 int local_counter = 0 ;
 

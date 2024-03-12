@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2017,2019 Wind River Systems, Inc.
+ * Copyright (c) 2016-2017,2019, 2024 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -83,7 +83,7 @@ void alarmMgr_queue_clear ( void )
  ************************************************************************/
 void alarmMgr_queue_alarm  ( queue_entry_type entry )
 {
-    alog ("%s adding %s to alarm queue [size=%ld]\n",
+    dlog ("%s adding %s to alarm queue [size=%ld]\n",
               entry.hostname.c_str(),
               entry.alarmid.c_str(),
               alarm_queue.size() );
@@ -116,7 +116,7 @@ void alarmMgr_queue_alarm  ( queue_entry_type entry )
 
 void alarmMgr_service_queue ( void )
 {
-    alog1 ("Elements: %ld\n", alarm_queue.size());
+    dlog1 ("Elements: %ld\n", alarm_queue.size());
     if ( alarm_queue.empty() )
         return ;
 
@@ -138,7 +138,7 @@ void alarmMgr_service_queue ( void )
     string action = entry.operation ;
     action.append (" alarm");
 
-    alog ("%s %s operation:%s severity:%s entity:%s prefix:%s\n",
+    dlog ("%s %s operation:%s severity:%s entity:%s prefix:%s\n",
            entry.hostname.c_str(),
            entry.alarmid.c_str(),
            entry.operation.c_str(),

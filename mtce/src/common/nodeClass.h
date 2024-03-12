@@ -121,6 +121,12 @@ private:
         /** The Mac address of the host node */
         std::string mac ;
 
+        /** The pxeboot network IP address of the host node */
+        std::string pxeboot_ip ;
+
+        /** The pxeboot network hostname of the host node */
+        std::string pxeboot_hostname ;
+
         /** The cluster-host network IP address of the host node */
         std::string clstr_ip  ;
 
@@ -279,6 +285,7 @@ private:
         mtc_configStages_enum     configStage     ;
         mtc_resetProgStages_enum  resetProgStage  ;
         mtc_reinstallStages_enum  reinstallStage  ;
+        mtc_mtcAliveStages_enum   mtcAliveStage   ;
 
         /** Board management specific FSM Stages */
         mtc_powerStages_enum      powerStage         ;
@@ -315,10 +322,25 @@ private:
         int mtcAlive_hits      ;
         int mtcAlive_purge     ;
 
-        int mtcAlive_mgmnt_count ; /* count the mgmnt network mtcAlive messages   */
-        int mtcAlive_clstr_count ; /* count the clstr network mtcAlive messages   */
-        bool mtcAlive_mgmnt ; /* set true when mtcAlive is rx'd from mgmnt network */
-        bool mtcAlive_clstr ; /* set true when mtcAlive is rx'd from clstr network */
+        /* TODO: (emacdona) make these an array of interfaces */
+        bool mtcAlive_mgmnt    ; /* set true when mtcAlive is rx'd from mgmnt network   */
+        bool mtcAlive_clstr    ; /* set true when mtcAlive is rx'd from clstr network   */
+        bool mtcAlive_pxeboot  ; /* set true when mtcAlive is rx'd from pxeboot network */
+
+        /* TODO: (emacdona) make these an array of interfaces */
+        int mtcAlive_mgmnt_count   ; /* count the mgmnt network mtcAlive messages   */
+        int mtcAlive_clstr_count   ; /* count the clstr network mtcAlive messages   */
+        int mtcAlive_pxeboot_count ; /* count the pxeboot network mtcAlive messages */
+
+        /* tracks the sequence number of the last <iface> mtcAlive message */
+        unsigned int mtcAlive_sequence     [MTCALIVE_INTERFACES_MAX] ;
+        unsigned int mtcAlive_sequence_save[MTCALIVE_INTERFACES_MAX] ;
+        unsigned int mtcAlive_sequence_miss[MTCALIVE_INTERFACES_MAX] ;
+        unsigned int mtcAlive_log_throttle [MTCALIVE_INTERFACES_MAX] ;
+
+        /* pxeboot mtcAlive monitor log throttles */
+        int pxeboot_mtcAlive_not_seen_log_throttle ;
+        int pxeboot_mtcAlive_loss_log_throttle ;
 
         /* used to log time leading up to reset */
         int bmc_reset_pending_log_throttle ;
@@ -334,13 +356,11 @@ private:
         bool  online_log_reported ; /*   availStatus switches between these states */
                                     /*   and failed                                */
 
-        /** Host's mtc timer struct. Use to time handler stages.
-         *
-         *  reset     -> reset command response
-         *  reboot    -> then wait for mtcalive message
-         *  mtcalive  -> then wait for go enabled message
-         */
+        /* timer for pxeboot_mtcAlive_monitor fsm */
         struct mtc_timer mtcAlive_timer ;
+
+        /* timer for online_handler fsm. */
+        struct mtc_timer online_timer ;
 
         /* the fault handling offline handler timer */
         struct mtc_timer offline_timer ;
@@ -456,6 +476,7 @@ private:
         bool unlock_cmd_ack       ; /* set true when a unlocked command ack is rx'ed */
         bool reboot_cmd_ack_mgmnt ;
         bool reboot_cmd_ack_clstr ;
+        bool reboot_cmd_ack_pxeboot ;
 
         /** Tracks back to back Fast Fault Recovery counts */
         int  graceful_recovery_counter;
@@ -849,6 +870,9 @@ private:
     /* Starts the specified 'reset or powercycle' recovery monitor */
     int hwmon_recovery_monitor ( struct nodeLinkClass::node * node_ptr, int hwmon_event );
 
+    /* Monitors pxeboot mtcAlive messages and manages associated alarm */
+    int pxeboot_mtcAlive_monitor ( struct nodeLinkClass::node * node_ptr );
+
     /* server specific power state query handler */
     bool (*is_poweron_handler) (string hostname, string query_response );
 
@@ -865,7 +889,7 @@ private:
 
     bool get_mtcAlive_gate ( struct nodeLinkClass::node * node_ptr );
     void ctl_mtcAlive_gate ( struct nodeLinkClass::node * node_ptr, bool gate_state );
-    void set_mtcAlive      ( struct nodeLinkClass::node * node_ptr, int interface );
+    void set_mtcAlive      ( struct nodeLinkClass::node * node_ptr, unsigned int sequence, int iface);
 
     /*********               mtcInfo in the database              ************/
     int    mtcInfo_set ( struct nodeLinkClass::node * node_ptr, string key, string value );
@@ -1087,6 +1111,10 @@ private:
     int subStageChange      ( struct nodeLinkClass::node * node_ptr,
                               mtc_subStages_enum newHdlrStage );
 
+    /** mtcAlive Stage Change member function */
+    int mtcAliveStageChange ( struct nodeLinkClass::node * node_ptr,
+                              mtc_mtcAliveStages_enum newHdlrStage );
+
     int failed_state_change ( struct nodeLinkClass::node * node_ptr );
 
     /* issue a
@@ -1125,6 +1153,7 @@ private:
     struct nodeLinkClass::node * get_mtcTimer_timer   ( timer_t tid );
     struct nodeLinkClass::node * get_mtcConfig_timer  ( timer_t tid );
     struct nodeLinkClass::node * get_mtcAlive_timer   ( timer_t tid );
+    struct nodeLinkClass::node * get_online_timer     ( timer_t tid );
     struct nodeLinkClass::node * get_offline_timer    ( timer_t tid );
     struct nodeLinkClass::node * get_mtcSwact_timer   ( timer_t tid );
     struct nodeLinkClass::node * get_mtcCmd_timer     ( timer_t tid );
@@ -1316,26 +1345,28 @@ private:
     void mem_log_general_mtce_hosts ( void );
     void mem_log_mnfa      ( void );
 
-    void mem_log_dor       ( struct nodeLinkClass::node * node_ptr );
-    void mem_log_identity  ( struct nodeLinkClass::node * node_ptr );
-    void mem_log_network   ( struct nodeLinkClass::node * node_ptr );
-    void mem_log_state1    ( struct nodeLinkClass::node * node_ptr );
-    void mem_log_state2    ( struct nodeLinkClass::node * node_ptr );
-    void mem_log_alarm1    ( struct nodeLinkClass::node * node_ptr );
-    void mem_log_alarm2    ( struct nodeLinkClass::node * node_ptr );
-    void mem_log_mtcalive  ( struct nodeLinkClass::node * node_ptr );
-    void mem_log_stage     ( struct nodeLinkClass::node * node_ptr );
-    void mem_log_test_info ( struct nodeLinkClass::node * node_ptr );
-    void mem_log_bm        ( struct nodeLinkClass::node * node_ptr );
-    void mem_log_ping      ( struct nodeLinkClass::node * node_ptr );
-    void mem_log_heartbeat ( struct nodeLinkClass::node * node_ptr );
-    void mem_log_hbs_cnts  ( struct nodeLinkClass::node * node_ptr );
-    void mem_log_type_info ( struct nodeLinkClass::node * node_ptr );
-    void mem_log_reset_info( struct nodeLinkClass::node * node_ptr );
-    void mem_log_power_info( struct nodeLinkClass::node * node_ptr );
-    void mem_log_thread_info ( struct nodeLinkClass::node * node_ptr );
+    void mem_log_dor              ( struct nodeLinkClass::node * node_ptr );
+    void mem_log_identity         ( struct nodeLinkClass::node * node_ptr );
+    void mem_log_network          ( struct nodeLinkClass::node * node_ptr );
+    void mem_log_state1           ( struct nodeLinkClass::node * node_ptr );
+    void mem_log_state2           ( struct nodeLinkClass::node * node_ptr );
+    void mem_log_alarm1           ( struct nodeLinkClass::node * node_ptr );
+    void mem_log_alarm2           ( struct nodeLinkClass::node * node_ptr );
+    void mem_log_mtcalive_state   ( struct nodeLinkClass::node * node_ptr );
+    void mem_log_mtcalive_data    ( struct nodeLinkClass::node * node_ptr );
+    void mem_log_mtcalive_pxeboot ( struct nodeLinkClass::node * node_ptr );
+    void mem_log_stage            ( struct nodeLinkClass::node * node_ptr );
+    void mem_log_test_info        ( struct nodeLinkClass::node * node_ptr );
+    void mem_log_bm               ( struct nodeLinkClass::node * node_ptr );
+    void mem_log_ping             ( struct nodeLinkClass::node * node_ptr );
+    void mem_log_heartbeat        ( struct nodeLinkClass::node * node_ptr );
+    void mem_log_hbs_cnts         ( struct nodeLinkClass::node * node_ptr );
+    void mem_log_type_info        ( struct nodeLinkClass::node * node_ptr );
+    void mem_log_reset_info       ( struct nodeLinkClass::node * node_ptr );
+    void mem_log_power_info       ( struct nodeLinkClass::node * node_ptr );
+    void mem_log_thread_info      ( struct nodeLinkClass::node * node_ptr );
 
-    void print_node_info   ( struct nodeLinkClass::node * node_ptr );
+    void print_node_info          ( struct nodeLinkClass::node * node_ptr );
 
 // #endif
 
@@ -1349,9 +1380,12 @@ public:
 
     system_type_enum system_type ;
 
-    string functions ;  /**< comma delimited string list of functions supported */
-    bool maintenance ;
-    bool heartbeat   ;
+    string sw_version;  /* fetched from /etc/build.info using daemon_sw_version */
+    string functions ;  /* comma delimited string list of functions supported   */
+
+    bool maintenance ;  /* the mtcAgent */
+    bool heartbeat   ;  /* the hbsAgent */
+
 
     /* Set to true if this controller is active.
      * Currently only used by heartbeat service. */
@@ -1403,10 +1437,12 @@ public:
     { active = state ; }
 
     /** Store the hostname of this controller */
-    string my_hostname ; /**< */
-    string my_local_ip ; /**< Primary IP address              */
-    string my_float_ip ; /**< Secondary (floating) IP address */
-    string my_clstr_ip ; /**< Cluster network IP address      */
+    string my_hostname   ; /** My Hostname                     */
+    string my_local_ip   ; /** Primary IP address              */
+    string my_float_ip   ; /** Secondary (floating) IP address */
+    string my_clstr_ip   ; /** Cluster network IP address      */
+    string my_pxeboot_ip ; /** Pxeboot network IP address      */
+    string my_pxeboot_if ; /** Pxeboot interface name          */
 
     /*********  New Public Constructs for IPMI Comamnd Handling ***********/
 
@@ -1448,11 +1484,17 @@ public:
     /** get cluster-host network ip address for any hostname */
     string get_clstr_hostaddr ( string & hostname );
 
+    /** get the pxeboot network address for any hostname */
+    string get_pxeboot_hostaddr ( string hostname );
+
     /** set a node's ip address */
     int set_hostaddr ( string & hostname, string & ip );
 
     /** set a node's cluster-host ip address */
     int set_clstr_hostaddr ( string & hostname, string & ip );
+
+    /* set the pxeboot network address for any hostname */
+    int set_pxeboot_hostaddr ( string hostname, string ip );
 
     /** get hostname for any hostname */
     string get_hostname ( string hostaddr );
@@ -1684,6 +1726,12 @@ public:
       * network is provisioned and configured for this daemon to use */
     bool clstr_network_provisioned ;
 
+    /** A boolean that is used to quickly determine if the pxeboot network
+     *  is provisioned.
+     *  The pxeboot network is considered unprovisioned while the management
+     *  interface is on the 'lo' (localhost) interface. */
+    bool pxeboot_network_provisioned ;
+
     /** A debug bool hat allows cluster-host heartbeat failures to only
      *  cause host degrade rather than failure */
     bool clstr_degrade_only ;
@@ -1758,6 +1806,7 @@ public:
     struct mtc_timer mtcTimer_mnfa    ;
     struct mtc_timer mtcTimer_token   ;
     struct mtc_timer mtcTimer_uptime  ;
+    struct mtc_timer mtcTimer_loop    ; // main loop timer
 
     /* System Level DOR recovery timer
      * Note: tid != NULL represents DOR Mode Active */
@@ -1775,9 +1824,14 @@ public:
 
     /** Returns true when a 'maintenance alive' message for that
       * hostnamed node is received */
-    void set_mtcAlive      ( string & hostname, int iface  );
+    void set_mtcAlive      ( string & hostname, unsigned int sequence, int iface  );
     bool get_mtcAlive_gate ( string & hostname );
     void ctl_mtcAlive_gate ( string & hostname, bool gated );
+
+    /* Updates my_pxeboot_ip if my_mac is specified.
+     * Otherwise, tries to update the pxeboot ip and
+     * hostname for each provisioned node in the system. */
+    void pxebootInfo_loader ( string my_mac = "" );
 
     /** Store the latest mtce flags for the specified host
       * current flags are defined in nodebase.h

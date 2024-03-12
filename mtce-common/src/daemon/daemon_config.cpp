@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2013-2014, 2016 Wind River Systems, Inc.
+* Copyright (c) 2013-2014, 2016, 2024 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -43,6 +43,7 @@ void daemon_config_default ( daemon_config_type* config_ptr )
     config_ptr->sysinv_mtc_inv_label  = strdup("none");
     config_ptr->mgmnt_iface           = strdup("none");
     config_ptr->clstr_iface           = strdup("none");
+    config_ptr->pxeboot_iface         = strdup("none");
     config_ptr->sysinv_api_bind_ip    = strdup("none");
     config_ptr->mode                  = strdup("none");
     config_ptr->fit_host              = strdup("none");
@@ -354,8 +355,10 @@ void daemon_dump_cfg ( void )
 
     if ( ptr->mtc_rx_mgmnt_port    ) { ilog ("mtc_rx_mgmnt_port     = %d\n", ptr->mtc_rx_mgmnt_port    );}
     if ( ptr->mtc_rx_clstr_port    ) { ilog ("mtc_rx_clstr_port     = %d\n", ptr->mtc_rx_clstr_port    );}
+    if ( ptr->mtc_rx_pxeboot_port  ) { ilog ("mtc_rx_pxeboot_port   = %d\n", ptr->mtc_rx_pxeboot_port  );}
     if ( ptr->mtc_tx_mgmnt_port    ) { ilog ("mtc_tx_mgmnt_port     = %d\n", ptr->mtc_tx_mgmnt_port    );}
     if ( ptr->mtc_tx_clstr_port    ) { ilog ("mtc_tx_clstr_port     = %d\n", ptr->mtc_tx_clstr_port    );}
+    if ( ptr->mtc_tx_pxeboot_port  ) { ilog ("mtc_tx_pxeboot_port   = %d\n", ptr->mtc_tx_pxeboot_port  );}
     if ( ptr->agent_rx_port        ) { ilog ("agent_rx_port         = %d\n", ptr->agent_rx_port        );}
     if ( ptr->client_rx_port       ) { ilog ("client_rx_port        = %d\n", ptr->client_rx_port       );}
     if ( ptr->mtc_to_hbs_cmd_port  ) { ilog ("mtc_to_hbs_cmd_port   = %d\n", ptr->mtc_to_hbs_cmd_port  );}

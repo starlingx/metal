@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016, 2023 Wind River Systems, Inc.
+ * Copyright (c) 2013, 2016, 2023-2024 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -134,21 +134,21 @@ msgSock_type * get_mtclogd_sockPtr ( void )
 /******************************************************/
 /* Socket Close functions                             */
 /******************************************************/
-static void mtc_agent_tx_socket_close ( void )
+static void mtc_agent_mgmt_tx_socket_close ( void )
 {
-    if (mtc_sock.mtc_agent_tx_socket)
+    if (mtc_sock.mtc_agent_mgmt_tx_socket)
     {
-        delete mtc_sock.mtc_agent_tx_socket;
-        mtc_sock.mtc_agent_tx_socket = NULL;
+        delete mtc_sock.mtc_agent_mgmt_tx_socket;
+        mtc_sock.mtc_agent_mgmt_tx_socket = NULL;
     }
 }
 
-static void mtc_agent_rx_socket_close ( void )
+static void mtc_agent_mgmt_rx_socket_close ( void )
 {
-    if (mtc_sock.mtc_agent_rx_socket)
+    if (mtc_sock.mtc_agent_mgmt_rx_socket)
     {
-        delete (mtc_sock.mtc_agent_rx_socket);
-        mtc_sock.mtc_agent_rx_socket = NULL;
+        delete (mtc_sock.mtc_agent_mgmt_rx_socket);
+        mtc_sock.mtc_agent_mgmt_rx_socket = NULL;
     }
 }
 
@@ -170,7 +170,7 @@ static void mtc_agent_clstr_rx_socket_close ( void )
     }
 }
 
-static void mtc_event_rx_sock_close ( void )
+static void event_rx_sock_close ( void )
 {
     if (mtc_sock.mtc_event_rx_sock)
     {
@@ -224,6 +224,24 @@ static void ioctl_sock_close ( void )
     }
 }
 
+static void pxeboot_rx_socket_close ( void )
+{
+    if ( mtc_sock.pxeboot_rx_socket )
+    {
+        close (mtc_sock.pxeboot_rx_socket);
+        mtc_sock.pxeboot_rx_socket = 0 ;
+    }
+}
+
+static void pxeboot_tx_socket_close ( void )
+{
+    if ( mtc_sock.pxeboot_tx_socket )
+    {
+        close (mtc_sock.pxeboot_tx_socket);
+        mtc_sock.pxeboot_tx_socket = 0 ;
+    }
+}
+
 /* close all the sockets */
 static void mtc_socket_fini(void)
 {
@@ -231,15 +249,62 @@ static void mtc_socket_fini(void)
     set_inotify_close(mtcInv.inotify_shadow_file_fd,
                       mtcInv.inotify_shadow_file_wd);
 
+    pxeboot_tx_socket_close();
+    pxeboot_rx_socket_close();
     mtc_agent_clstr_tx_socket_close();
     mtc_agent_clstr_rx_socket_close();
-    mtc_agent_tx_socket_close();
-    mtc_agent_rx_socket_close();
-    mtc_event_rx_sock_close();
+    mtc_agent_mgmt_tx_socket_close();
+    mtc_agent_mgmt_rx_socket_close();
+    event_rx_sock_close();
     mtc_to_hbs_sock_close();
     hwmon_cmd_sock_close();
     mtclogd_socket_close();
     mtcHttpSvr_fini(mtce_event);
+}
+
+void setup_pxeboot_tx_socket ( void )
+{
+    if ( !mtcInv.pxeboot_network_provisioned ) return ;
+    pxeboot_tx_socket_close();
+    ilog ("Creating pxeboot transmit socket");
+    if ((mtc_sock.pxeboot_tx_socket = socket(AF_INET, SOCK_DGRAM, 0)) <= 0)
+    {
+        elog ("failed to create IPV4 pxeboot network transmit socket ; (%d:%m)", errno);
+    }
+}
+
+void setup_pxeboot_rx_socket ( void )
+{
+    if ( !mtcInv.pxeboot_network_provisioned ) return ;
+    pxeboot_rx_socket_close ();
+    ilog ("Creating pxeboot receive socket on %s:%d",
+            mtcInv.my_pxeboot_ip.c_str(),
+            mtc_sock.mtc_rx_pxeboot_port);
+
+    struct sockaddr_in pxeboot_addr ;
+
+    // Create the socket
+    if ((mtc_sock.pxeboot_rx_socket = socket(AF_INET, SOCK_DGRAM | SOCK_NONBLOCK, 0)) == -1)
+    {
+        elog ("failed to create IPV4 pxeboot network receive socket ; (%d:%m)", errno);
+    }
+
+    // Initialize pxeboot address structure
+    memset(&pxeboot_addr, 0, sizeof(pxeboot_addr));
+
+    pxeboot_addr.sin_family = AF_INET;
+    pxeboot_addr.sin_port = htons(mtc_sock.mtc_rx_pxeboot_port);
+    pxeboot_addr.sin_addr.s_addr = inet_addr(mtcInv.my_pxeboot_ip.data());
+
+    // Bind the pxeboot unit address and messaging port to socket
+    if (bind(mtc_sock.pxeboot_rx_socket, (const struct sockaddr*)&pxeboot_addr, sizeof(pxeboot_addr)) == -1)
+    {
+        elog ("failed to bind %s:%d to socket (%d:%m)",
+               mtcInv.my_pxeboot_ip.c_str(),
+               mtc_sock.mtc_rx_pxeboot_port,
+               errno);
+        pxeboot_rx_socket_close();
+    }
 }
 
 void daemon_exit(void)
@@ -359,6 +424,20 @@ static int mtc_config_handler ( void * user,
     {
         config_ptr->mtc_rx_clstr_port = atoi(value);
         config_ptr->mask |= CONFIG_CLIENT_MTC_CLSTR_PORT ;
+    }
+    else if (MATCH("agent", "mtc_rx_pxeboot_port"))
+    {
+        config_ptr->mtc_rx_pxeboot_port = atoi(value);
+        mtc_sock.mtc_rx_pxeboot_port = mtc_config.mtc_rx_pxeboot_port ;
+    }
+    else if (MATCH("client", "mtc_rx_pxeboot_port"))
+    {
+        // Get the mtcClient's pxeboot network receive port number
+        // and use it as the mtcAgent's pxeboot network transmit port.
+        // So that the mtcAgent can send the mtcClient messages over the
+        // pxeboot network.
+        config_ptr->mtc_tx_pxeboot_port = atoi(value);
+        mtc_sock.mtc_tx_pxeboot_port = config_ptr->mtc_tx_pxeboot_port ;
     }
     else if (MATCH("agent", "token_refresh_rate"))
     {
@@ -791,34 +870,34 @@ int mtc_socket_init ( void )
     int socket_size = 0 ;
     char ip_address[INET6_ADDRSTRLEN];
 
-    /***********************************************************/
-    /* Setup UDP Maintenance Command Transmit Socket Mgmnt I/F */
-    /***********************************************************/
+    /**********************************************************************/
+    /* Setup UDP Maintenance Command Transmit Socket to the Mgmnt network */
+    /**********************************************************************/
     mtc_sock.mtc_mgmnt_cmd_port = mtc_config.cmd_port;
     msgClassAddr::getAddressFromInterface(mtc_config.mgmnt_iface, ip_address, INET6_ADDRSTRLEN);
-    mtc_sock.mtc_agent_tx_socket =
+    mtc_sock.mtc_agent_mgmt_tx_socket =
     new msgClassTx(ip_address, mtc_sock.mtc_mgmnt_cmd_port, IPPROTO_UDP, mtc_config.mgmnt_iface);
 
 #ifdef WANT_FIT_TESTING
-    if ( daemon_want_fit ( FIT_CODE__SOCKET_SETUP, mtcInv.my_hostname, "mtc_agent_tx_socket"))
-        mtc_sock.mtc_agent_tx_socket->return_status = FAIL ;
+    if ( daemon_want_fit ( FIT_CODE__SOCKET_SETUP, mtcInv.my_hostname, "mtc_agent_mgmt_tx_socket"))
+        mtc_sock.mtc_agent_mgmt_tx_socket->return_status = FAIL ;
 #endif
 
-    if ((mtc_sock.mtc_agent_tx_socket == NULL) ||
-        (mtc_sock.mtc_agent_tx_socket->return_status))
+    if ((mtc_sock.mtc_agent_mgmt_tx_socket == NULL) ||
+        (mtc_sock.mtc_agent_mgmt_tx_socket->return_status))
     {
         elog("Failed to create mtcClient command socket on port %d for %s (%d:%s)\n",
              mtc_sock.mtc_mgmnt_cmd_port,
              mtc_config.mgmnt_iface,
              errno,
              strerror(errno));
-        mtc_agent_tx_socket_close();
+        mtc_agent_mgmt_tx_socket_close();
         return (FAIL_SOCKET_CREATE) ;
     }
 
-    /***********************************************************/
-    /* Setup UDP Maintenance Command Transmit Socket Clstr I/F */
-    /***********************************************************/
+    /**********************************************************************/
+    /* Setup UDP Maintenance Command Transmit Socket to the Clstr network */
+    /**********************************************************************/
     if (strlen(mtc_config.clstr_iface))
     {
         mtc_sock.mtc_clstr_cmd_port = mtc_config.mtc_rx_clstr_port;
@@ -845,48 +924,49 @@ int mtc_socket_init ( void )
 
     /*********************************************************************
      * Setup Maintenance Command Reply and Event Receiver Socket
-     *  - management interface
+     *  - management network
+     *  - pxeboot network
      *
      * This socket is used to receive command replies over the management
      * interface and asynchronous events from the mtcClient and other
      * maintenance service daemons.
      *********************************************************************/
     mtc_sock.mtc_agent_port = mtc_config.mtc_agent_port;
-    mtc_sock.mtc_agent_rx_socket =
+    mtc_sock.mtc_agent_mgmt_rx_socket =
     new msgClassRx(CONTROLLER, mtc_sock.mtc_agent_port, IPPROTO_UDP);
 
 #ifdef WANT_FIT_TESTING
-    if ( daemon_want_fit ( FIT_CODE__SOCKET_SETUP, mtcInv.my_hostname, "mtc_agent_rx_socket"))
-        mtc_sock.mtc_agent_rx_socket = NULL ;
+    if ( daemon_want_fit ( FIT_CODE__SOCKET_SETUP, mtcInv.my_hostname, "mtc_agent_mgmt_rx_socket"))
+        mtc_sock.mtc_agent_mgmt_rx_socket = NULL ;
 #endif
 
-    if ((mtc_sock.mtc_agent_rx_socket == NULL) ||
-        (mtc_sock.mtc_agent_rx_socket->return_status))
+    if ((mtc_sock.mtc_agent_mgmt_rx_socket == NULL) ||
+        (mtc_sock.mtc_agent_mgmt_rx_socket->return_status))
     {
         elog("Failed to create mtcClient receive socket on port %d for %s (%d:%m)\n",
              mtc_sock.mtc_agent_port,
              mtc_config.mgmnt_iface,
              errno);
-        mtc_agent_rx_socket_close();
+        mtc_agent_mgmt_rx_socket_close();
         return (FAIL_SOCKET_CREATE );
     }
 
     /* Set messaging buffer size */
     /* if we need a bigger then default we can use a sysctl to raise the max */
     socket_size = MTC_AGENT_RX_BUFF_SIZE;
-    if ((rc = mtc_sock.mtc_agent_rx_socket->setSocketMemory(mtc_config.mgmnt_iface, "mtce command and event receiver (Mgmnt network)", socket_size)) != PASS)
+    if ((rc = mtc_sock.mtc_agent_mgmt_rx_socket->setSocketMemory(mtc_config.mgmnt_iface, "mtce command and event receiver (Mgmnt network)", socket_size)) != PASS)
     {
         elog("setsockopt failed for SO_RCVBUF (%d:%m)\n", errno);
-        mtc_agent_rx_socket_close();
+        mtc_agent_mgmt_rx_socket_close();
         return (FAIL_SOCKET_OPTION);
     }
-    socklen_t optlen = sizeof(mtc_sock.mtc_agent_rx_socket_size);
-    getsockopt(mtc_sock.mtc_agent_rx_socket->getFD(), SOL_SOCKET, SO_RCVBUF,
-               &mtc_sock.mtc_agent_rx_socket_size, &optlen);
+    socklen_t optlen = sizeof(mtc_sock.mtc_agent_mgmt_rx_socket_size);
+    getsockopt(mtc_sock.mtc_agent_mgmt_rx_socket->getFD(), SOL_SOCKET, SO_RCVBUF,
+               &mtc_sock.mtc_agent_mgmt_rx_socket_size, &optlen);
 
     ilog("Listening On: 'mtc client receive' socket %d (%d rx bytes - req:%d) (%s)\n",
          mtc_sock.mtc_agent_port,
-         mtc_sock.mtc_agent_rx_socket_size, MTC_AGENT_RX_BUFF_SIZE,
+         mtc_sock.mtc_agent_mgmt_rx_socket_size, MTC_AGENT_RX_BUFF_SIZE,
          mtc_config.mgmnt_iface);
 
     /*********************************************************************
@@ -967,7 +1047,7 @@ int mtc_socket_init ( void )
              mtc_config.hbs_to_mtc_event_port,
              mtc_config.mgmnt_iface,
              errno);
-        mtc_event_rx_sock_close();
+        event_rx_sock_close();
         return ( FAIL_SOCKET_CREATE );
     }
 
@@ -1077,6 +1157,8 @@ int daemon_init ( string iface, string nodetype )
     }
 
     mtcInv.system_type = daemon_system_type ();
+    mtcInv.sw_version  = daemon_sw_version();
+    ilog ("SW Version  : %s", mtcInv.sw_version.c_str());
 
     /* Get and store my hostname */
     if ( mtc_hostname_read () != PASS )
@@ -1370,9 +1452,6 @@ void daemon_service_run ( void )
     /* Init board management stuff */
     bmcUtil_init ();
 
-    /* log the currect software version */
-    ilog ("SW VERSION  : %s\n", daemon_sw_version ().c_str());
-
     /* Collect inventory in active state only */
     if ( mtc_config.active == true )
     {
@@ -1383,6 +1462,32 @@ void daemon_service_run ( void )
             daemon_exit ();
         }
 
+
+        string my_mac = "" ;
+        get_iface_macaddr ( mtc_config.mgmnt_iface , my_mac );
+        dlog ("Mgmt IF mac: %s", my_mac.c_str());
+        mtcInv.my_pxeboot_if = daemon_mgmnt_iface() ;
+        if (( mtcInv.my_pxeboot_if != LOOPBACK_IF ) && ( !my_mac.empty() ))
+        {
+            mtcInv.pxeboot_network_provisioned = true ;
+            mtc_config.pxeboot_iface = daemon_get_iface_master ((char*)mtcInv.my_pxeboot_if.data());
+            {
+                string ifname = mtc_config.pxeboot_iface ;
+                if ( get_iface_parent ( PXEBOOT_INTERFACE, ifname, mtcInv.my_pxeboot_if ) == PASS )
+                {
+                    ilog ("Pxeboot IF  : %s", mtcInv.my_pxeboot_if.c_str() );
+                }
+            }
+            mtcInv.pxebootInfo_loader ( my_mac );
+            ilog ("Pxeboot IP  : %s", mtcInv.my_pxeboot_ip.empty() ? "none" : mtcInv.my_pxeboot_ip.c_str());
+
+            /************************************************************************/
+            /* Setup UDP IPV4 Maintenance pxeboot network Transmit/Receive Sockets  */
+            /************************************************************************/
+            setup_pxeboot_rx_socket ();
+            setup_pxeboot_tx_socket ();
+        }
+
         /* The following are base object controller timers ; init them */
         mtcTimer_init ( mtcInv.mtcTimer_token, mtcInv.my_hostname, "token timer" );
         mtcTimer_init ( mtcInv.mtcTimer_uptime,mtcInv.my_hostname, "uptime timer" );
@@ -1390,7 +1495,6 @@ void daemon_service_run ( void )
         mtcTimer_init ( mtcInv.mtcTimer_dor,   mtcInv.my_hostname, "DOR mode timer" );
 
         if ( get_link_state ( mtc_sock.ioctl_sock, mtc_config.mgmnt_iface, &mtcInv.mgmnt_link_up_and_running ) )
-
         {
             mtcInv.mgmnt_link_up_and_running = false ;
             wlog ("Failed to query %s operational state ; defaulting to down\n", mtc_config.mgmnt_iface );
@@ -1483,12 +1587,17 @@ void daemon_service_run ( void )
     send_hbs_command ( mtcInv.my_hostname, MTC_CMD_START_HOST );
 
     socks.clear();
-    socks.push_front (mtc_sock.mtc_event_rx_sock->getFD());   // service_events
-    socks.push_front (mtc_sock.mtc_agent_rx_socket->getFD()); // mtc_service_inbox
 
+    // service_events
+    socks.push_front (mtc_sock.mtc_event_rx_sock->getFD());
+
+    // mtc_service_inbox - receive sockets from Pxeboot, Mgmt and Clstr network
+    if ( mtc_sock.pxeboot_rx_socket )
+        socks.push_front (mtc_sock.pxeboot_rx_socket);
+    socks.push_front (mtc_sock.mtc_agent_mgmt_rx_socket->getFD());
     if ( mtcInv.clstr_network_provisioned == true )
     {
-        socks.push_front (mtc_sock.mtc_agent_clstr_rx_socket->getFD()); // mtc_service_inbox
+        socks.push_front (mtc_sock.mtc_agent_clstr_rx_socket->getFD());
     }
 
     socks.push_front (mtc_sock.netlink_sock);
@@ -1559,9 +1668,57 @@ void daemon_service_run ( void )
      * where it had commanded the hbsAgent to heartbeat at a reduced rate. */
     send_hbs_command ( mtcInv.my_hostname, MTC_RECOVER_HBS );
 
+    // Used to track mtcAgent incoming messaging rate
+    #define LOOP_TIMER_PERIOD_SECS    (60)
+    #define MSGS_PER_SEC_THRESHOLD    (20)
+    #define MSGS_CNT_IDX_INBOX        (0)
+    #define MSGS_CNT_IDX_EVENT        (1)
+    #define MSGS_CNT_IDX_PMOND        (2)
+    #define MSGS_CNT_IDX_HTTP         (3)
+    #define MSGS_CNT_IDX_NETLINK      (4)
+    #define MSGS_CNT_IDX_INOTIFY      (5)
+    #define MSGS_CNT_IDX_MAX          (6)
+    static unsigned int messages_tally[MSGS_CNT_IDX_MAX] = {0,0,0,0,0,0} ;
+    static float messages_total = 0 ;
+    mtcTimer_init ( mtcInv.mtcTimer_loop, mtcInv.my_hostname, "loop timer" );
+
     /* Run Maintenance service forever */
-    for ( ; ; )
+    for ( mtc_sock.msg_rate = 0 ; ; )
     {
+        if ( mtcTimer_expired ( mtcInv.mtcTimer_loop ) )
+        {
+            // Maintain an incoming messaging rate.
+            for ( int m = MSGS_CNT_IDX_INBOX ; m < MSGS_CNT_IDX_MAX ; m++ )
+                messages_total += messages_tally[m] ;
+            float rate_per_sec = messages_total/LOOP_TIMER_PERIOD_SECS ;
+
+            // Only log the messaging rate log when
+            // - the rate is above basic MSGS_PER_SEC_THRESHOLD ; first log
+            // - the messaging rate changes by half of the threshold in either direction
+            if (( mtc_config.debug_msg ) ||
+                (( rate_per_sec > MSGS_PER_SEC_THRESHOLD ) &&
+                 (( rate_per_sec > (mtc_sock.msg_rate+(MSGS_PER_SEC_THRESHOLD/2))) ||
+                  ( rate_per_sec < (mtc_sock.msg_rate-(MSGS_PER_SEC_THRESHOLD/2))))))
+            {
+                ilog ("%d messages processed ; rate: %.1f msgs/sec] [%d:%d:%d:%d:%d:%d]",
+                          (int)messages_total, rate_per_sec,
+                          messages_tally[MSGS_CNT_IDX_INBOX],
+                          messages_tally[MSGS_CNT_IDX_EVENT],
+                          messages_tally[MSGS_CNT_IDX_PMOND],
+                          messages_tally[MSGS_CNT_IDX_HTTP],
+                          messages_tally[MSGS_CNT_IDX_NETLINK],
+                          messages_tally[MSGS_CNT_IDX_INOTIFY]);
+
+                // Save this message rate for next compare
+                mtc_sock.msg_rate = rate_per_sec ;
+            }
+
+            // clean the stats and restart the timer
+            messages_total = 0 ;
+            for ( int m = MSGS_CNT_IDX_INBOX ; m < MSGS_CNT_IDX_MAX ; m++ )
+                messages_tally[m] = 0 ;
+            mtcTimer_start ( mtcInv.mtcTimer_loop, mtcTimer_handler, LOOP_TIMER_PERIOD_SECS );
+        }
         daemon_signal_hdlr ();
         /**
          *  Can't just run 'mtcHttpSvr_look' off select as it is seen to miss events.
@@ -1587,13 +1744,17 @@ void daemon_service_run ( void )
 
         /* Initialize the master fd_set */
         FD_ZERO(&mtc_sock.readfds);
-        FD_SET(mtc_sock.mtc_event_rx_sock->getFD(),        &mtc_sock.readfds);
-        FD_SET(mtc_sock.mtc_agent_rx_socket->getFD(),      &mtc_sock.readfds);
+        FD_SET(mtc_sock.mtc_event_rx_sock->getFD(), &mtc_sock.readfds);
+        FD_SET(mtc_sock.mtc_agent_mgmt_rx_socket->getFD(), &mtc_sock.readfds);
         if ( mtcInv.clstr_network_provisioned == true )
         {
             FD_SET(mtc_sock.mtc_agent_clstr_rx_socket->getFD(),&mtc_sock.readfds);
         }
-
+        // Listen to the pxeboot rx socket if it is setup
+        if ( mtc_sock.pxeboot_rx_socket > 0 )
+        {
+            FD_SET(mtc_sock.pxeboot_rx_socket, &mtc_sock.readfds);
+        }
         if ( mtce_event.fd )
         {
             FD_SET(mtce_event.fd, &mtc_sock.readfds);
@@ -1631,44 +1792,95 @@ void daemon_service_run ( void )
         {
             if ( FD_ISSET( mtce_event.fd , &mtc_sock.readfds))
             {
+                mlog3 ("http socket fired");
+                messages_tally[MSGS_CNT_IDX_HTTP]++ ;
                 mtcHttpSvr_look ( mtce_event );
+                mlog3 ("http handling done");
             }
             if (FD_ISSET(mtc_sock.netlink_sock, &mtc_sock.readfds))
             {
-                dlog ("netlink socket fired\n");
+                mlog3 ("netlink socket fired");
+                messages_tally[MSGS_CNT_IDX_NETLINK]++ ;
                 if ( mtcInv.service_netlink_events ( mtc_sock.netlink_sock, mtc_sock.ioctl_sock ) != PASS )
                 {
                     elog ("service_netlink_events failed (rc:%d)\n", rc );
                 }
+                mlog3 ("netlink handling done");
             }
 
             if (FD_ISSET(mtc_sock.mtc_event_rx_sock->getFD(), &mtc_sock.readfds))
             {
+                mlog3 ("events socket fired");
+                messages_tally[MSGS_CNT_IDX_EVENT]++ ;
                 if ( (rc = service_events ( &mtcInv, &mtc_sock )) != PASS )
                 {
                     elog ("service_events failed (rc:%d)\n", rc );
                 }
+                mlog3 ("events handling done");
             }
 
-            if ( FD_ISSET(mtc_sock.mtc_agent_rx_socket->getFD(), &mtc_sock.readfds))
+            if ( mtc_sock.pxeboot_rx_socket && FD_ISSET(mtc_sock.pxeboot_rx_socket, &mtc_sock.readfds))
             {
                 int cnt = 0 ;
                 /* Service up to MAX_RX_MSG_BATCH of messages at once */
+                mlog3 ("pxeboot network socket fired");
                 for ( ; cnt < MAX_RX_MSG_BATCH ; cnt++ )
                 {
-                    rc =  mtc_service_inbox ( &mtcInv, &mtc_sock , MGMNT_INTERFACE) ;
-                    if ( rc > RETRY )
+                    mlog3 ("... service inbox ; message %d", cnt+1);
+                    rc =  mtc_service_inbox ( &mtcInv, &mtc_sock , PXEBOOT_INTERFACE) ;
+                    if ( rc == RETRY )
                     {
-                        mlog2 ("mtc_service_inbox failed (rc:%d) (Mgmnt)\n", rc );
+                        mlog3 ("... service inbox done");
                         break ;
                     }
-                    if ( rc == RETRY )
+                    messages_tally[MSGS_CNT_IDX_INBOX]++ ;
+                    if ( rc > RETRY )
+                    {
+                        wlog ("mtc_service_inbox failed (rc:%d) (pxeboot)", rc );
                         break ;
+                    }
+                    else
+                    {
+                       mlog3 ("......more messages to service");
+                    }
                 }
-                if ( cnt > 1 )
+                if ( cnt > (MAX_RX_MSG_BATCH/2) )
                 {
-                   mlog2 ("serviced %d messages in one batch (Mgmnt)\n", cnt );
+                    ilog ("serviced %d messages in one batch (pxeboot)", cnt );
                 }
+                mlog3 ("pxeboot network message handling done");
+            }
+
+            if ( FD_ISSET(mtc_sock.mtc_agent_mgmt_rx_socket->getFD(), &mtc_sock.readfds))
+            {
+                int cnt = 0 ;
+                /* Service up to MAX_RX_MSG_BATCH of messages at once */
+                mlog3 ("mgmt network socket fired");
+                for ( ; cnt < MAX_RX_MSG_BATCH ; cnt++ )
+                {
+                    mlog3 ("... service inbox ; message %d", cnt+1);
+                    rc =  mtc_service_inbox ( &mtcInv, &mtc_sock , MGMNT_INTERFACE) ;
+                    if ( rc == RETRY )
+                    {
+                        mlog3 ("... service inbox done");
+                        break ;
+                    }
+                    messages_tally[MSGS_CNT_IDX_INBOX]++ ;
+                    if ( rc > RETRY )
+                    {
+                        wlog ("mtc_service_inbox failed (rc:%d) (Mgmnt)", rc );
+                        break ;
+                    }
+                    else
+                    {
+                        mlog3 ("......more messages to service");
+                    }
+                }
+                if ( cnt > (MAX_RX_MSG_BATCH/2) )
+                {
+                    ilog ("serviced %d messages in one batch (Mgmnt)", cnt );
+                }
+                mlog3 ("mgmt network message handling done");
             }
 
             if (( mtcInv.clstr_network_provisioned == true ) &&
@@ -1677,24 +1889,38 @@ void daemon_service_run ( void )
             {
                 int cnt = 0 ;
                 /* Service up to MAX_RX_MSG_BATCH of messages at once */
+                mlog3 ("clstr network socket fired");
                 for ( ; cnt < MAX_RX_MSG_BATCH ; cnt++ )
                 {
+                    mlog3 ("... service inbox ; message %d", cnt+1);
+
                     rc =  mtc_service_inbox ( &mtcInv, &mtc_sock, CLSTR_INTERFACE ) ;
-                    if ( rc > RETRY )
+                    if ( rc == RETRY )
                     {
-                        mlog2 ("mtc_service_inbox failed (rc:%d) (Clstr)\n", rc );
+                        mlog3 ("... service inbox done");
                         break ;
                     }
-                    if ( rc == RETRY )
+                    messages_tally[MSGS_CNT_IDX_INBOX]++ ;
+                    if ( rc > RETRY )
+                    {
+                        mlog ("mtc_service_inbox failed (rc:%d) (Clstr)\n", rc );
                         break ;
+                    }
+                    else
+                    {
+                        mlog3 ("......more messages to service");
+                    }
                 }
-                if ( cnt > 1 )
+                if ( cnt > (MAX_RX_MSG_BATCH/2) )
                 {
-                   mlog2 ("serviced %d messages in one batch (Clstr)\n", cnt ); // ERIC dlog
+                   ilog ("serviced %d messages in one batch (Clstr)", cnt );
                 }
+                mlog3 ("mgmt network message handling done");
             }
             if (FD_ISSET(mtcInv.inotify_shadow_file_fd, &mtc_sock.readfds))
             {
+                mlog3 ("inotify socket fired");
+                messages_tally[MSGS_CNT_IDX_INOTIFY]++ ;
                 rc = get_inotify_events ( mtcInv.inotify_shadow_file_fd, (IN_MODIFY | IN_CREATE | IN_IGNORED) );
                 if ( rc )
                 {
@@ -1715,6 +1941,7 @@ void daemon_service_run ( void )
                         wlog ("Reselecting on %s change (Select:%d)\n", SHADOW_FILE, mtcInv.inotify_shadow_file_fd );
                     }
                 }
+                mlog3 ("inotify event handling done");
             }
         }
 
