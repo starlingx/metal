@@ -125,13 +125,53 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
     mtc_message_type msg ;
     int bytes = 0    ;
     int rc    = PASS ;
-    if ( iface == CLSTR_INTERFACE )
+    string hostaddr = "" ;
+    string hostname = "" ;
+    const char * iface_name_ptr = get_iface_name_str(iface);
+
+    if ( iface == PXEBOOT_INTERFACE )
+    {
+
+        struct sockaddr_in  client_addr;
+        socklen_t addr_len = sizeof(client_addr);
+
+        // Receive data
+        bytes = recvfrom(sock_ptr->pxeboot_rx_socket,
+                        (char*)&msg.hdr[0],
+                        sizeof(mtc_message_type), 0,
+                        (struct sockaddr*)&client_addr, &addr_len);
+
+        // As a non-blocking socket this is normal to occur
+        // due to batch handling.
+        if ( bytes == -1 )
+            return RETRY ;
+
+        // Log with debug_msg lane 2
+        if ( daemon_get_cfg_ptr()->debug_msg&2 )
+        {
+            // log the message ; both header and buffer
+            string _buf = msg.buf[0] ? msg.buf : "empty";
+            mlog3 ("Received %d bytes (%s) from %s:%d - cmd:%d:%s hdr:%s buf:%s",
+                    bytes,
+                    iface_name_ptr,
+                    inet_ntoa(client_addr.sin_addr),
+                    ntohs(client_addr.sin_port),
+                    msg.cmd,
+                    get_mtcNodeCommand_str(msg.cmd),
+                    &msg.hdr[0], _buf.c_str());
+        }
+        hostaddr = inet_ntoa(client_addr.sin_addr);
+        hostname = obj_ptr->get_hostname ( hostaddr ) ; // based on pxeboot ip
+    }
+    else if ( iface == CLSTR_INTERFACE )
     {
         if ( ( obj_ptr ) &&
              ( obj_ptr->clstr_network_provisioned == true ) &&
              ( sock_ptr->mtc_agent_clstr_rx_socket ))
         {
+            mlog3 ("clstr network 'recvfrom' start");
             bytes = sock_ptr->mtc_agent_clstr_rx_socket->read((char*)&msg, sizeof(msg));
+            mlog3 ("clstr network 'recvfrom' stop");
         }
         else
         {
@@ -140,7 +180,9 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
     }
     else
     {
-        bytes = sock_ptr->mtc_agent_rx_socket->read((char*)&msg, sizeof(msg));
+        mlog3 ("mgmt network 'recvfrom' start");
+        bytes = sock_ptr->mtc_agent_mgmt_rx_socket->read((char*)&msg, sizeof(msg));
+        mlog3 ("mgmt network 'recvfrom' stop");
     }
     msg.buf[BUF_SIZE-1] = '\0';
 
@@ -160,17 +202,14 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
 
     zero_unused_msg_buf (msg, bytes);
 
-    /* get the sender's hostname */
-    string hostaddr = "" ;
-    string hostname = "" ;
     if ( iface == CLSTR_INTERFACE )
     {
         hostaddr = sock_ptr->mtc_agent_clstr_rx_socket->get_src_str();
         hostname = obj_ptr->get_hostname ( hostaddr ) ;
     }
-    else
+    else if ( iface == MGMNT_INTERFACE )
     {
-        hostaddr = sock_ptr->mtc_agent_rx_socket->get_src_str();
+        hostaddr = sock_ptr->mtc_agent_mgmt_rx_socket->get_src_str();
         hostname = obj_ptr->get_hostname ( hostaddr ) ;
     }
 
@@ -181,17 +220,26 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
         if (( msg.cmd == MTC_MSG_MTCALIVE ) &&
             (( rc = jsonUtil_get_key_val ( &msg.buf[0], "hostname", hostname )) == PASS ))
         {
-            ilog ("%s learned from mtcAlive", hostname.c_str());
+            string curr_hostaddr = obj_ptr->get_pxeboot_hostaddr ( hostname );
+            if ( curr_hostaddr != hostaddr )
+            {
+                ilog ("%s hostname learned from %s mtcAlive ; hostaddr:%s was:%s",
+                          hostname.c_str(),
+                          iface_name_ptr,
+                          hostaddr.c_str(),
+                          curr_hostaddr.c_str());
+                obj_ptr->set_pxeboot_hostaddr ( hostname, hostaddr );
+            }
         }
         else
         {
             wlog ("unknown hostname message ... dropping" ); /* make dlog */
-            print_mtc_message ( hostname, MTC_CMD_RX, msg, get_iface_name_str(iface), true );
+            print_mtc_message ( hostname, MTC_CMD_RX, msg, iface_name_ptr, true );
             return (FAIL_GET_HOSTNAME);
         }
     }
 
-    print_mtc_message ( hostname, MTC_CMD_RX, msg, get_iface_name_str(iface), false );
+    print_mtc_message ( hostname, MTC_CMD_RX, msg, iface_name_ptr, false );
 
     /* handle messages that are not mtc_message_type
      * but rather are simply a json string */
@@ -199,7 +247,7 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
     {
         string service ;
 
-        mlog1 ("%s\n", &msg.hdr[0] );
+        mlog3 ("%s\n", &msg.hdr[0] );
 
         rc = jsonUtil_get_key_val(&msg.hdr[0],"service", service );
         if ( rc == PASS )
@@ -256,7 +304,7 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
                           hostname.c_str(),
                           get_mtcNodeCommand_str(msg.cmd),
                           msg.parm[0],
-                          get_iface_name_str(iface));
+                          iface_name_ptr);
             }
             else
             {
@@ -264,7 +312,7 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
                           hostname.c_str(),
                           get_mtcNodeCommand_str(msg.cmd),
                           msg.parm[0],
-                          get_iface_name_str(iface));
+                          iface_name_ptr);
             }
         }
     }
@@ -309,16 +357,16 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
             obj_ptr->set_uptime     ( hostname , msg.parm[MTC_PARM_UPTIME_IDX], false );
             obj_ptr->set_health     ( hostname , msg.parm[MTC_PARM_HEALTH_IDX] );
             obj_ptr->set_mtce_flags ( hostname , msg.parm[MTC_PARM_FLAGS_IDX], iface );
-            obj_ptr->set_mtcAlive   ( hostname, iface );
+            obj_ptr->set_mtcAlive   ( hostname , msg.parm[MTC_PARM_SEQ_IDX], iface);
 
-            mlog1("%s Uptime:%d Health:%d Flags:0x%x mtcAlive:%s (%s)\n",
+            mlog2("%s Uptime:%d Health:%d Flags:0x%x Seq:%5d mtcAlive:%s  (%s)\n",
                       hostname.c_str(),
                       msg.parm[MTC_PARM_UPTIME_IDX],
                       msg.parm[MTC_PARM_HEALTH_IDX],
                       msg.parm[MTC_PARM_FLAGS_IDX],
+                      msg.parm[MTC_PARM_SEQ_IDX],
                       obj_ptr->get_mtcAlive_gate ( hostname ) ? "gated" : "open",
-                      get_iface_name_str(iface));
-
+                      iface_name_ptr);
         }
         else if ( msg.cmd == MTC_MSG_MAIN_GOENABLED )
         {
@@ -426,7 +474,7 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
         if (( rc | rc1 ) != PASS )
         {
             elog ("received invalid event [rc:%d:%d]", rc, rc1);
-            print_mtc_message ( hostname, MTC_CMD_RX, msg, get_iface_name_str(iface), true );
+            print_mtc_message ( hostname, MTC_CMD_RX, msg, iface_name_ptr, true );
             return ( FAIL_INVALID_OPERATION );
         }
         switch ( msg.cmd )
@@ -613,6 +661,8 @@ int send_mtc_cmd ( string & hostname, int cmd , int interface, string json_dict 
     mtc_message_type mtc_cmd ;
     string data = "" ;
     mtc_socket_type * sock_ptr = get_sockPtr ();
+    nodeLinkClass * obj_ptr = get_mtcInv_ptr ();
+    const char * iface_name_ptr = get_iface_name_str(interface);
     memset (&mtc_cmd,0,sizeof(mtc_message_type));
 
     /* Add the command version to he message */
@@ -627,7 +677,7 @@ int send_mtc_cmd ( string & hostname, int cmd , int interface, string json_dict 
             mtc_cmd.cmd = cmd ;
             mtc_cmd.num = 0 ;
             data = "{\"mtcInfo\":" + json_dict + "}";
-            ilog("%s mtc info update", hostname.c_str());
+            ilog("%s mtc info update: %s", hostname.c_str(), data.c_str());
             rc = PASS ;
             break ;
         }
@@ -636,6 +686,30 @@ int send_mtc_cmd ( string & hostname, int cmd , int interface, string json_dict 
             snprintf ( &mtc_cmd.hdr[0], MSG_HEADER_SIZE, "%s" , get_cmd_req_msg_header() );
             mtc_cmd.cmd = cmd ;
             mtc_cmd.num = 0 ;
+            if ( interface == PXEBOOT_INTERFACE )
+            {
+                if ( !obj_ptr->pxeboot_network_provisioned ) return PASS;
+
+                /* There is no pxeboot floating IP so the mtcClient cannot use
+                 * a resolvable name label like 'CONTROLLER' as it does for
+                 * management nwk.
+                 * Therefore, the mtcClient on each node needs to be told the
+                 * controller's pxeboot ip addresses so it knows where to send. */
+                obj_ptr->pxebootInfo_loader();
+                data = "{\"pxebootInfo\":{" ;
+                data.append ("\"address\":\"");
+                data.append (obj_ptr->my_pxeboot_ip);
+                data.append ("\",\"");
+                data.append (CONTROLLER_0);
+                data.append ("\":\"");
+                data.append (obj_ptr->get_pxeboot_hostaddr(CONTROLLER_0));
+                data.append ("\",\"");
+                data.append (CONTROLLER_1);
+                data.append ("\":\"");
+                data.append (obj_ptr->get_pxeboot_hostaddr(CONTROLLER_1));
+                data.append ("\"}}");
+                alog1("%s pxeboot info update:%s", hostname.c_str(), data.c_str());
+            }
             rc = PASS ;
             break ;
         }
@@ -668,7 +742,7 @@ int send_mtc_cmd ( string & hostname, int cmd , int interface, string json_dict 
             ilog ("%s sending '%s' request (%s)",
                       hostname.c_str(),
                       get_mtcNodeCommand_str(cmd),
-                      get_iface_name_str(interface));
+                      iface_name_ptr);
             snprintf ( &mtc_cmd.hdr[0], MSG_HEADER_SIZE, "%s", get_cmd_req_msg_header() );
             mtc_cmd.cmd = cmd ;
             mtc_cmd.num = 0 ;
@@ -688,7 +762,7 @@ int send_mtc_cmd ( string & hostname, int cmd , int interface, string json_dict 
             ilog ("%s sending '%s' request (%s)",
                       hostname.c_str(),
                       get_mtcNodeCommand_str(cmd),
-                      get_iface_name_str(interface));
+                      iface_name_ptr);
             snprintf ( &mtc_cmd.hdr[0], MSG_HEADER_SIZE, "%s", get_cmd_req_msg_header() );
             mtc_cmd.cmd = cmd ;
             mtc_cmd.num = 0 ;
@@ -713,7 +787,7 @@ int send_mtc_cmd ( string & hostname, int cmd , int interface, string json_dict 
         {
             mlog ("%s sending 'Locked' notification (%s)",
                       hostname.c_str(),
-                      get_iface_name_str(interface));
+                      iface_name_ptr);
             snprintf ( &mtc_cmd.hdr[0], MSG_HEADER_SIZE, "%s", get_cmd_req_msg_header() );
             mtc_cmd.cmd = cmd ;
             mtc_cmd.num = 0 ;
@@ -738,7 +812,7 @@ int send_mtc_cmd ( string & hostname, int cmd , int interface, string json_dict 
         {
             ilog ("%s sending 'UnLocked' notification (%s)",
                       hostname.c_str(),
-                      get_iface_name_str(interface));
+                      iface_name_ptr);
             snprintf ( &mtc_cmd.hdr[0], MSG_HEADER_SIZE, "%s", get_cmd_req_msg_header() );
             mtc_cmd.cmd = cmd ;
             mtc_cmd.num = 0 ;
@@ -754,20 +828,27 @@ int send_mtc_cmd ( string & hostname, int cmd , int interface, string json_dict 
     if ( rc == PASS )
     {
         int bytes = 0;
-
-        nodeLinkClass * obj_ptr = get_mtcInv_ptr ();
+        string iface_address ;
 
         /* add the mac address of the target card to the header
          * Note: the minus 1 is to overwrite the null */
         snprintf ( &mtc_cmd.hdr[MSG_HEADER_SIZE-1], MSG_HEADER_SIZE, "%s", obj_ptr->get_hostIfaceMac(hostname, MGMNT_IFACE).data());
 
+        /* Update the sender's address */
+        if (interface == PXEBOOT_INTERFACE)
+            iface_address = obj_ptr->my_pxeboot_ip ;
+        else if (interface == CLSTR_INTERFACE)
+            iface_address = obj_ptr->my_clstr_ip ;
+        else
+            iface_address = obj_ptr->my_float_ip ;
+
         /* If data is empty then at least add where the message came from */
         if ( data.empty() )
         {
             data = "{\"address\":\"";
-            data.append(obj_ptr->my_float_ip) ;
+            data.append(iface_address) ;
             data.append("\",\"interface\":\"");
-            data.append(get_iface_name_str(interface));
+            data.append(iface_name_ptr);
             data.append("\"}");
         }
         else
@@ -778,7 +859,7 @@ int send_mtc_cmd ( string & hostname, int cmd , int interface, string json_dict 
         snprintf ( &mtc_cmd.buf[0], data.length()+1, "%s", data.data());
         bytes = (sizeof(mtc_message_type)-(BUF_SIZE-(data.length()+1)));
 
-        print_mtc_message ( hostname, MTC_CMD_TX, mtc_cmd, get_iface_name_str(interface), force ) ;
+        print_mtc_message ( hostname, MTC_CMD_TX, mtc_cmd, iface_name_ptr, force ) ;
 
         if (interface == MGMNT_INTERFACE)
         {
@@ -791,13 +872,55 @@ int send_mtc_cmd ( string & hostname, int cmd , int interface, string json_dict 
                 return (FAIL_HOSTADDR_LOOKUP);
             }
 
-            mlog ("%s sending %s request to %s (%s)",
+            mlog ("%s sending %s request to %s:%d (%s)",
                       hostname.c_str(),
                       get_mtcNodeCommand_str(cmd),
                       hostaddr.c_str(),
-                      get_iface_name_str(interface));
+                      sock_ptr->mtc_mgmnt_cmd_port,
+                      iface_name_ptr);
 
-            rc = sock_ptr->mtc_agent_tx_socket->write((char *)&mtc_cmd, bytes, hostaddr.c_str(), sock_ptr->mtc_mgmnt_cmd_port);
+            rc = sock_ptr->mtc_agent_mgmt_tx_socket->write((char *)&mtc_cmd, bytes, hostaddr.c_str(), sock_ptr->mtc_mgmnt_cmd_port);
+        }
+        else if ((interface == PXEBOOT_INTERFACE) && (sock_ptr->pxeboot_tx_socket))
+        {
+            string pxeboot_hostAddr = obj_ptr->get_pxeboot_hostaddr(hostname);
+            if (hostUtil_is_valid_ip_addr(pxeboot_hostAddr))
+            {
+                // Set up sockaddr_in with the host pxeboot address and its rx port number
+                int flags = 0 ;
+                struct sockaddr_in hostAddr;
+                memset(&hostAddr, 0, sizeof(hostAddr));
+                hostAddr.sin_family = AF_INET; // pxeboot network is IPV4 only
+                hostAddr.sin_port = htons(sock_ptr->mtc_tx_pxeboot_port);
+                hostAddr.sin_addr.s_addr = inet_addr(pxeboot_hostAddr.c_str());
+
+                mlog ("%s sending %s request to %s:%d (%s)",
+                          hostname.c_str(),
+                          get_mtcNodeCommand_str(cmd),
+                          pxeboot_hostAddr.c_str(),
+                          sock_ptr->mtc_rx_pxeboot_port,
+                          iface_name_ptr);
+
+                ssize_t bytes_sent = sendto(sock_ptr->pxeboot_tx_socket,
+                                          (char *)&mtc_cmd,
+                                          bytes, flags,
+                                          (const struct sockaddr*)&hostAddr,
+                                          sizeof(hostAddr));
+                if (bytes_sent <= 0)
+                {
+                    elog ("%s failed to send %d:%s command to %s:%d (%s) (%d:%m)",
+                              hostname.c_str(), cmd,
+                              get_mtcNodeCommand_str(cmd),
+                              pxeboot_hostAddr.c_str(),
+                              sock_ptr->mtc_rx_pxeboot_port,
+                              iface_name_ptr,
+                              errno);
+                }
+            }
+            else
+            {
+                return (FAIL_HOSTADDR_LOOKUP);
+            }
         }
         else if ((interface == CLSTR_INTERFACE) &&
                  ( obj_ptr->clstr_network_provisioned == true ) &&
@@ -805,17 +928,25 @@ int send_mtc_cmd ( string & hostname, int cmd , int interface, string json_dict 
         {
             string clstr_hostaddr = obj_ptr->get_clstr_hostaddr(hostname);
             if ( hostUtil_is_valid_ip_addr( clstr_hostaddr ) != true )
-                return (FAIL_NO_CLSTR_PROV);
+                return (FAIL_HOSTADDR_LOOKUP);
 
             mlog ("%s sending %s request to %s (%s)",
                       hostname.c_str(),
                       get_mtcNodeCommand_str(cmd),
                       clstr_hostaddr.c_str(),
-                      get_iface_name_str(interface));
+                      iface_name_ptr);
 
             rc = sock_ptr->mtc_agent_clstr_tx_socket->write((char *)&mtc_cmd, bytes, clstr_hostaddr.c_str(), sock_ptr->mtc_clstr_cmd_port);
         }
-
+        else if ( interface == CLSTR_INTERFACE )
+        {
+            // This path can be taken if the cluster interface
+             mlog ("%s to %s network not sent", get_mtcNodeCommand_str(cmd), iface_name_ptr);
+        }
+        else
+        {
+             wlog ("%s to %s network not sent", get_mtcNodeCommand_str(cmd), iface_name_ptr);
+        }
         if ( 0 > rc )
         {
             elog("%s Failed to send command (rc:%i)\n", hostname.c_str(), rc);
@@ -944,7 +1075,7 @@ int send_hbs_command ( string hostname, int cmd, string controller )
             {
                 if ( cmd == MTC_CMD_ACTIVE_CTRL )
                 {
-                    mlog3 ("%s %s sent to %s %s",
+                    mlog1 ("%s %s sent to %s %s",
                                hostname.c_str(),
                                get_mtcNodeCommand_str(cmd),
                                unit->c_str(),
@@ -1162,7 +1293,7 @@ int service_events ( nodeLinkClass * obj_ptr, mtc_socket_type * sock_ptr )
         else
         {
             /* The interface that the heartbeat loss occurred over is
-             * specified in parm[0 for this command
+             * specified in parm[0] for this command
              * 0 = MGMNT_IFACE
              * 1 = CLSTR_IFACE
              * else default to 0 (MGMNT_IFACE) to be backwards compatible

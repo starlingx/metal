@@ -160,12 +160,25 @@ void timer_handler ( int sig, siginfo_t *si, void *uc)
     }
 }
 
-void _close_mgmnt_rx_socket ( void )
+/********************************************/
+/* Network receive socket 'close' functions */
+/********************************************/
+
+void _close_pxeboot_rx_socket ( void )
 {
-    if ( mtc_sock.mtc_client_rx_socket )
+    if ( mtc_sock.pxeboot_rx_socket )
     {
-        delete(mtc_sock.mtc_client_rx_socket);
-        mtc_sock.mtc_client_rx_socket = 0 ;
+        close (mtc_sock.pxeboot_rx_socket);
+        mtc_sock.pxeboot_rx_socket = 0 ;
+    }
+}
+
+void _close_mgmt_rx_socket ( void )
+{
+    if ( mtc_sock.mtc_client_mgmt_rx_socket )
+    {
+        delete(mtc_sock.mtc_client_mgmt_rx_socket);
+        mtc_sock.mtc_client_mgmt_rx_socket = 0 ;
     }
 }
 
@@ -178,26 +191,39 @@ void _close_clstr_rx_socket ( void )
     }
 }
 
-void _close_mgmnt_tx_socket ( void )
+/*********************************************/
+/* Network transmit socket 'close' functions */
+/*********************************************/
+
+void _close_pxeboot_tx_socket ( void )
 {
-    if (mtc_sock.mtc_client_tx_socket)
+    if ( mtc_sock.pxeboot_tx_socket )
     {
-        delete (mtc_sock.mtc_client_tx_socket);
-        mtc_sock.mtc_client_tx_socket = 0 ;
+        close (mtc_sock.pxeboot_tx_socket);
+        mtc_sock.pxeboot_tx_socket = 0 ;
+    }
+}
+
+void _close_mgmt_tx_socket ( void )
+{
+    if (mtc_sock.mtc_client_mgmt_tx_socket)
+    {
+        delete (mtc_sock.mtc_client_mgmt_tx_socket);
+        mtc_sock.mtc_client_mgmt_tx_socket = 0 ;
     }
 }
 
 void _close_clstr_tx_sockets ( void )
 {
-    if (mtc_sock.mtc_client_tx_socket_c0_clstr)
+    if (mtc_sock.mtc_client_clstr_tx_socket_c0)
     {
-        delete (mtc_sock.mtc_client_tx_socket_c0_clstr);
-        mtc_sock.mtc_client_tx_socket_c0_clstr = 0 ;
+        delete (mtc_sock.mtc_client_clstr_tx_socket_c0);
+        mtc_sock.mtc_client_clstr_tx_socket_c0 = 0 ;
     }
-    if (mtc_sock.mtc_client_tx_socket_c1_clstr)
+    if (mtc_sock.mtc_client_clstr_tx_socket_c1)
     {
-        delete (mtc_sock.mtc_client_tx_socket_c1_clstr);
-        mtc_sock.mtc_client_tx_socket_c1_clstr = 0 ;
+        delete (mtc_sock.mtc_client_clstr_tx_socket_c1);
+        mtc_sock.mtc_client_clstr_tx_socket_c1 = 0 ;
     }
 }
 
@@ -214,9 +240,9 @@ void daemon_exit ( void )
 {
     daemon_files_fini ();
 
-    _close_mgmnt_rx_socket ();
+    _close_mgmt_rx_socket ();
     _close_clstr_rx_socket ();
-    _close_mgmnt_tx_socket ();
+    _close_mgmt_tx_socket ();
     _close_clstr_tx_sockets();
     _close_amon_sock       ();
 
@@ -245,6 +271,18 @@ static int mtc_config_handler ( void * user,
     {
         config_ptr->mtc_rx_clstr_port = atoi(value);
         config_ptr->mask |= CONFIG_CLIENT_MTC_CLSTR_PORT ;
+    }
+    else if (MATCH("agent", "mtc_rx_pxeboot_port"))
+    {
+        // The mtcClient fetches the mtcAgent's pxeboot receive
+        // port and uses it for the mtcClient's pxeboot transmitter.
+        config_ptr->mtc_tx_pxeboot_port = atoi(value);
+        mtc_sock.mtc_tx_pxeboot_port = config_ptr->mtc_tx_pxeboot_port;
+    }
+    else if (MATCH("client", "mtc_rx_pxeboot_port"))
+    {
+        config_ptr->mtc_rx_pxeboot_port = atoi(value);
+        mtc_sock.mtc_rx_pxeboot_port = mtc_config.mtc_rx_pxeboot_port;
     }
     else if (MATCH("timeouts", "failsafe_shutdown_delay"))
     {
@@ -277,11 +315,11 @@ int daemon_configure ( void )
 
     get_debug_options ( MTCE_CONF_FILE, &mtc_config );
 
-    /* Verify loaded config against an expected mask 
+    /* Verify loaded config against an expected mask
      * as an ini file fault detection method */
     if ( mtc_config.mask != CONFIG_CLIENT_MASK )
     {
-        elog ("Failed Compute Mtc Configuration (%x)\n", 
+        elog ("Failed Compute Mtc Configuration (%x)",
              (( -1 ^ mtc_config.mask ) & CONFIG_CLIENT_MASK) );
         rc = FAIL_INI_CONFIG ;
     }
@@ -306,9 +344,9 @@ int daemon_configure ( void )
 /* Initialization Utilities */
 /****************************/
 
-void setup_mgmnt_rx_socket ( void )
+void setup_mgmt_rx_socket ( void )
 {
-    dlog ("setup of mgmnt RX\n");
+    dlog ("setup of Mgmt receive socket");
     ctrl.mgmnt_iface = daemon_mgmnt_iface() ;
     ctrl.mgmnt_iface = daemon_get_iface_master ((char*)ctrl.mgmnt_iface.data());
 
@@ -318,39 +356,102 @@ void setup_mgmnt_rx_socket ( void )
         get_iface_macaddr  ( ctrl.mgmnt_iface.data(), ctrl.macaddr );
         get_iface_address  ( ctrl.mgmnt_iface.data(), ctrl.address , true );
 
-        _close_mgmnt_rx_socket ();
-        mtc_sock.mtc_client_rx_socket = new msgClassRx(ctrl.address.c_str(),mtc_sock.mtc_mgmnt_cmd_port, IPPROTO_UDP, ctrl.mgmnt_iface.data(), false );
+        _close_mgmt_rx_socket ();
+        mtc_sock.mtc_client_mgmt_rx_socket = new msgClassRx(ctrl.address.c_str(),mtc_sock.mtc_mgmnt_cmd_port, IPPROTO_UDP, ctrl.mgmnt_iface.data(), false );
 
         /* update health of socket */
-        if ( mtc_sock.mtc_client_rx_socket )
+        if ( mtc_sock.mtc_client_mgmt_rx_socket )
         {
             /* look for fault insertion request */
             if ( daemon_is_file_present ( MTC_CMD_FIT__MGMNT_RXSOCK ) )
-                mtc_sock.mtc_client_rx_socket->return_status = FAIL ;
+                mtc_sock.mtc_client_mgmt_rx_socket->return_status = FAIL ;
 
-            if ( mtc_sock.mtc_client_rx_socket->return_status == PASS )
+            if ( mtc_sock.mtc_client_mgmt_rx_socket->return_status == PASS )
             {
-                mtc_sock.mtc_client_rx_socket->sock_ok (true);
+                mtc_sock.mtc_client_mgmt_rx_socket->sock_ok (true);
             }
             else
             {
                 elog ("failed to init 'management rx' socket (rc:%d)\n",
-                mtc_sock.mtc_client_rx_socket->return_status );
-                mtc_sock.mtc_client_rx_socket->sock_ok (false);
+                mtc_sock.mtc_client_mgmt_rx_socket->return_status );
+                mtc_sock.mtc_client_mgmt_rx_socket->sock_ok (false);
             }
         }
     }
 }
 
-
-void setup_clstr_rx_socket ( void )
+void setup_pxeboot_rx_socket ( void )
 {
-    if ( ctrl.clstr_iface_provisioned == false )
+    if ( !ctrl.pxeboot_iface_provisioned ) return ;
+    string log_prefix = "setup pxeboot receive socket" ;
+
+    /* The pxeboot interface is always the management interface  */
+    ctrl.pxeboot_iface = daemon_mgmnt_iface() ;
+    ctrl.pxeboot_iface = daemon_get_iface_master ((char*)ctrl.pxeboot_iface.data());
+
+    /* Use the learned parent if it exists and is not the same */
+    if ( ! ctrl.iface_info[PXEBOOT_INTERFACE].parent.empty() )
+        if ( ctrl.pxeboot_iface != ctrl.iface_info[PXEBOOT_INTERFACE].parent )
+            ctrl.pxeboot_iface = ctrl.iface_info[PXEBOOT_INTERFACE].parent ;
+
+    if ( ctrl.pxeboot_iface.empty() )
     {
+        wlog ("cannot %s without a pxeboot iface: %s",
+              log_prefix.c_str(),
+              ctrl.pxeboot_iface.c_str());
+    }
+    else if ( mtc_sock.mtc_rx_pxeboot_port <= 0 )
+    {
+        wlog ("cannot %s without a valid ; port: %d",
+               log_prefix.c_str(),
+               mtc_sock.mtc_rx_pxeboot_port)
+    }
+    else if ( ctrl.pxeboot_addr.empty() )
+    {
+        wlog ("cannot %s socket on %s port %d with no pxeboot address",
+               log_prefix.c_str(),
+               ctrl.pxeboot_iface.c_str(),
+               mtc_sock.mtc_rx_pxeboot_port)
         return ;
     }
 
-    dlog ("setup of cluster-host RX\n");
+    ilog ("%s on %s:%s:%d",
+            log_prefix.c_str(),
+            ctrl.pxeboot_iface.c_str(),
+            ctrl.pxeboot_addr.c_str(),
+            mtc_sock.mtc_rx_pxeboot_port);
+
+    _close_pxeboot_rx_socket ();
+
+    struct sockaddr_in pxeboot_addr ;
+
+    // Create the socket
+    if ((mtc_sock.pxeboot_rx_socket = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+    {
+        elog ("failed to create IPV4 pxeboot receive socket");
+    }
+
+    // Initialize pxeboot address structure
+    memset(&pxeboot_addr, 0, sizeof(pxeboot_addr));
+
+    pxeboot_addr.sin_family = AF_INET;
+    pxeboot_addr.sin_port = htons(mtc_sock.mtc_rx_pxeboot_port);
+    pxeboot_addr.sin_addr.s_addr = inet_addr(ctrl.pxeboot_addr.data());
+
+    // Bind the pxeboot unit address and messaging port to socket
+    if (bind(mtc_sock.pxeboot_rx_socket, (const struct sockaddr*)&pxeboot_addr, sizeof(pxeboot_addr)) == -1)
+    {
+        elog ("failed to bind %s:%d to socket",
+               ctrl.pxeboot_addr.c_str(),
+               mtc_sock.mtc_rx_pxeboot_port);
+        _close_pxeboot_rx_socket();
+    }
+}
+
+void setup_clstr_rx_socket ( void )
+{
+    if ( !ctrl.clstr_iface_provisioned ) return ;
+    ilog ("setup of cluster-host receive socket");
     /* Fetch the cluster-host interface name.
      * calls daemon_get_iface_master inside so the
      * aggrigated name is returned if it exists */
@@ -393,84 +494,92 @@ void setup_clstr_rx_socket ( void )
     }
 }
 
-void setup_mgmnt_tx_socket ( void )
+void setup_mgmt_tx_socket ( void )
 {
-    dlog ("setup of mgmnt TX\n");
-    _close_mgmnt_tx_socket ();
-    mtc_sock.mtc_client_tx_socket = new msgClassTx(CONTROLLER,mtc_sock.mtc_agent_port, IPPROTO_UDP, ctrl.mgmnt_iface.data());
+    ilog ("setup of Mgmt network transmit socket");
+    _close_mgmt_tx_socket ();
+    mtc_sock.mtc_client_mgmt_tx_socket = new msgClassTx(CONTROLLER,mtc_sock.mtc_agent_port, IPPROTO_UDP, ctrl.mgmnt_iface.data());
 
-    if ( mtc_sock.mtc_client_tx_socket )
+    if ( mtc_sock.mtc_client_mgmt_tx_socket )
     {
         /* look for fault insertion request */
         if ( daemon_is_file_present ( MTC_CMD_FIT__MGMNT_TXSOCK ) )
-            mtc_sock.mtc_client_tx_socket->return_status = FAIL ;
+            mtc_sock.mtc_client_mgmt_tx_socket->return_status = FAIL ;
 
-        if ( mtc_sock.mtc_client_tx_socket->return_status == PASS )
+        if ( mtc_sock.mtc_client_mgmt_tx_socket->return_status == PASS )
         {
-            mtc_sock.mtc_client_tx_socket->sock_ok(true);
+            mtc_sock.mtc_client_mgmt_tx_socket->sock_ok(true);
         }
         else
         {
             elog ("failed to init 'management tx' socket (rc:%d)\n",
-            mtc_sock.mtc_client_tx_socket->return_status );
-            mtc_sock.mtc_client_tx_socket->sock_ok(false);
+            mtc_sock.mtc_client_mgmt_tx_socket->return_status );
+            mtc_sock.mtc_client_mgmt_tx_socket->sock_ok(false);
         }
+    }
+}
+
+// Send mtcAlive messages to the controllers
+void setup_pxeboot_tx_socket ( void )
+{
+    if ( !ctrl.pxeboot_iface_provisioned ) return ;
+    ilog ("setup of pxeboot transmit socket");
+    _close_pxeboot_tx_socket ();
+    if ((mtc_sock.pxeboot_tx_socket = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+    {
+        elog ("failed to setup pxeboot network transmit socket ; (%d:%m)", errno);
     }
 }
 
 void setup_clstr_tx_sockets ( void )
 {
-    if ( ctrl.clstr_iface_provisioned == false )
-    {
-        return ;
-    }
-
-    dlog ("setup of %s TX\n", CONTROLLER_0_CLUSTER_HOST);
+    if ( !ctrl.clstr_iface_provisioned ) return ;
+    ilog ("setup of %s transmit sockets", CONTROLLER_0_CLUSTER_HOST);
 
     _close_clstr_tx_sockets ();
 
-    mtc_sock.mtc_client_tx_socket_c0_clstr =
+    mtc_sock.mtc_client_clstr_tx_socket_c0 =
         new msgClassTx(CONTROLLER_0_CLUSTER_HOST,
                        mtc_sock.mtc_agent_port,
                        IPPROTO_UDP,
                        mtc_config.clstr_iface);
 
-    if ( mtc_sock.mtc_client_tx_socket_c0_clstr )
+    if ( mtc_sock.mtc_client_clstr_tx_socket_c0 )
     {
-        if ( mtc_sock.mtc_client_tx_socket_c0_clstr->return_status == PASS )
+        if ( mtc_sock.mtc_client_clstr_tx_socket_c0->return_status == PASS )
         {
-            mtc_sock.mtc_client_tx_socket_c0_clstr->sock_ok(true);
+            mtc_sock.mtc_client_clstr_tx_socket_c0->sock_ok(true);
         }
         else
         {
             elog ("failed to init '%s' tx socket (rc:%d)\n",
             CONTROLLER_0_CLUSTER_HOST,
-            mtc_sock.mtc_client_tx_socket_c0_clstr->return_status );
-            mtc_sock.mtc_client_tx_socket_c0_clstr->sock_ok(false);
+            mtc_sock.mtc_client_clstr_tx_socket_c0->return_status );
+            mtc_sock.mtc_client_clstr_tx_socket_c0->sock_ok(false);
         }
     }
     if ( ctrl.system_type != SYSTEM_TYPE__AIO__SIMPLEX )
     {
         dlog ("setup of %s TX\n", CONTROLLER_1_CLUSTER_HOST);
 
-        mtc_sock.mtc_client_tx_socket_c1_clstr =
+        mtc_sock.mtc_client_clstr_tx_socket_c1 =
             new msgClassTx(CONTROLLER_1_CLUSTER_HOST,
                            mtc_sock.mtc_agent_port,
                            IPPROTO_UDP,
                            mtc_config.clstr_iface);
 
-        if ( mtc_sock.mtc_client_tx_socket_c1_clstr )
+        if ( mtc_sock.mtc_client_clstr_tx_socket_c1 )
         {
-            if ( mtc_sock.mtc_client_tx_socket_c1_clstr->return_status == PASS )
+            if ( mtc_sock.mtc_client_clstr_tx_socket_c1->return_status == PASS )
             {
-                mtc_sock.mtc_client_tx_socket_c1_clstr->sock_ok(true);
+                mtc_sock.mtc_client_clstr_tx_socket_c1->sock_ok(true);
             }
             else
             {
                 elog ("failed to init '%s' tx socket (rc:%d)\n",
                 CONTROLLER_0_CLUSTER_HOST,
-                mtc_sock.mtc_client_tx_socket_c1_clstr->return_status );
-                mtc_sock.mtc_client_tx_socket_c1_clstr->sock_ok(false);
+                mtc_sock.mtc_client_clstr_tx_socket_c1->return_status );
+                mtc_sock.mtc_client_clstr_tx_socket_c1->sock_ok(false);
             }
         }
     }
@@ -479,6 +588,7 @@ void setup_clstr_tx_sockets ( void )
 
 void setup_amon_socket ( void )
 {
+    ilog ("setup of active monitoring socket");
     char filename [MAX_FILENAME_LEN] ;
     string port_string ;
 
@@ -496,13 +606,13 @@ void setup_amon_socket ( void )
     if ( mtc_sock.amon_socket )
     {
         int  val = 1;
-   
-    /* Make the active monitor socket non-blocking */
+
+        /* Make the active monitor socket non-blocking */
         if ( 0 > ioctl(mtc_sock.amon_socket, FIONBIO, (char *)&val) )
-    {
-        elog ("Failed to set amon socket non-blocking\n");
+        {
+            elog ("Failed to set amon socket non-blocking");
             close (mtc_sock.amon_socket);
-    }
+        }
         else
         {
             ilog ("Active Monitor Socket %d\n", mtc_sock.amon_socket );
@@ -516,19 +626,22 @@ void setup_amon_socket ( void )
  *
  * Construct the messaging sockets
  *
- * 1. Unicast receive socket mgmnt (mtc_client_rx_socket)
- * 2. Unicast receive socket clstr (mtc_client_clstr_rx_socket)
- * 3. Unicast transmit socket mgmnt (mtc_client_tx_socket)
- * 4. Unicast transmit socket clstr (mtc_client_tx_socket_c?_clstr)
+ * 1. Unicast UDP Mgmt network RX socket     - mtc_client_mgmt_rx_socket    (msgClass)
+ * 2. Unicast UDP Clstr network RX socket    - mtc_client_clstr_rx_socket   (msgClass)
+ * 3. Unicast UDP Pxeboot network RX socket  - mtc_clinet_pxeboot_rx_socket (raw)
  *
- * 5. socket for pmond acive monitoring
+ * 4. Unicast UDP Mgmt network TX socket    - mtc_client_mgmt_tx_socket     (msgClass)
+ * 5. Unicast UDP Clstr network TX socket   - mtc_client_clstr_tx_socket_c? (msgClass)
+ * 6. Unicast UDP Pxeboot network TX socket - mtc_clinet_pxeboot_tx_socket  (raw)
+ *
+ * 7. Unicase UDP lo network active monitor  - amon_socket                  (raw)
  *
  *******************************************************************/
 int mtc_socket_init ( void )
 {
     /* Setup the Management Interface Recieve Socket */
     /* Read the port config strings into the socket struct */
-    mtc_sock.mtc_agent_port  = mtc_config.mtc_agent_port;
+    mtc_sock.mtc_agent_port        = mtc_config.mtc_agent_port;
     mtc_sock.mtc_mgmnt_cmd_port    = mtc_config.mtc_rx_mgmnt_port;
     mtc_sock.mtc_clstr_cmd_port    = mtc_config.mtc_rx_clstr_port;
 
@@ -537,14 +650,16 @@ int mtc_socket_init ( void )
     ilog ("Controller  : %s\n", ctrl.mtcAgent_ip.c_str());
 
     /************************************************************/
-    /* Setup the Mgmnt Interface Receive Socket                 */
+    /* Setup Mgmnt Network messaging sockets to/from mtcAgent   */
     /************************************************************/
-    setup_mgmnt_rx_socket ();
+    setup_mgmt_rx_socket ();
+    setup_mgmt_tx_socket ();
 
     /************************************************************/
-    /* Setup the Mgmnt Interface Transmit messaging to mtcAgent */
+    /* Setup Pxeboot Network messaging sockets to/from mtcAgent */
     /************************************************************/
-    setup_mgmnt_tx_socket ();
+    setup_pxeboot_rx_socket ();
+    setup_pxeboot_tx_socket ();
 
     /* Manage Cluster-host network setup */
     string mgmnt_iface_name = daemon_mgmnt_iface();
@@ -598,6 +713,10 @@ string _self_identify ( string nodetype )
     ctrl.who_i_am.append( nodetype.data() );
     ctrl.who_i_am.append( "\"");
 
+    ctrl.who_i_am.append( ",\"pxeboot_ip\":\"");
+    ctrl.who_i_am.append( ctrl.pxeboot_addr.data() );
+    ctrl.who_i_am.append( "\"");
+
     ctrl.who_i_am.append( ",\"mgmt_ip\":\"");
     ctrl.who_i_am.append( ctrl.address.data() );
     ctrl.who_i_am.append( "\"");
@@ -605,7 +724,7 @@ string _self_identify ( string nodetype )
     ctrl.who_i_am.append( ",\"cluster_host_ip\":\"");
     ctrl.who_i_am.append( ctrl.address_clstr.data() );
     ctrl.who_i_am.append( "\"");
-    
+
     ctrl.who_i_am.append( ",\"mgmt_mac\":\"");
     ctrl.who_i_am.append( ctrl.macaddr.data() );
     ctrl.who_i_am.append( "\"");
@@ -1023,6 +1142,112 @@ int issue_reset_and_cleanup ( void )
     return (rc);
 }
 
+/*****************************************************************************
+ * Name       : learn_my_pxeboot_address
+ *
+ * Purpose    :  Learn my pxeboot ip address.
+ *
+ * Description:
+ *
+ * worker and storage nodes' learn their DHCP pxeboot ip from a
+ * local /var/lib/dhcp/<interface> file.
+ *
+ * controllers learn their STATIC pxeboot address based on
+ * their mac address from the dnsmasq.hosts file.
+ *
+ * However, the pxeboot address for a system node installed
+ * controller, before it is unlocked, is DHCP'ed from
+ * /etc/network/interfaces.d/ifcfg-pxeboot created by the
+ * kickstart. So until the controller is unlocked its pxeboot
+ * address must be learned like the worker and storage nodes.
+ * That being from the local dhcp file.
+ *
+ * Note: In cases where the pxeboot interface name is the same as the
+ *       management interface name then the ifcfg file for the pxeboot
+ *       interface is suffixed with ":2" so that ifupdown can handle
+ *       each interface independently during networking.service start.
+ *       This is true for ethernet type interfaces as well as the
+ *       bond interface when there are no vlans. In these cases the
+ *       pxeboot and management interface names are the same and need
+ *       distinction.
+ *
+ * Parameters : None
+ *
+ * Returns    : PASS or failed return from get_iface_info
+ *
+ *****************************************************************************/
+int learn_my_pxeboot_address ( void )
+{
+    int rc = PASS ;
+    if ( ctrl.pxeboot_iface_provisioned == false ) return rc ;
+
+    if ( (rc = get_iface_info ( PXEBOOT_INTERFACE, ctrl.pxeboot_iface, ctrl.iface_info[PXEBOOT_INTERFACE] )) == PASS )
+    {
+        string ifcfg_file_suffix = ":2" ; // Assume ifcfg file suffix ':2' for first boot after install case
+        iface_info_type * iface_info_ptr = &ctrl.iface_info[PXEBOOT_INTERFACE] ;
+        iface_info_ptr->iface_name = ctrl.pxeboot_iface ;
+
+        ilog ("...        Type: %s", get_iface_type_str(iface_info_ptr->iface_type));
+        ilog ("...      Parent: %s", iface_info_ptr->parent.empty() ? "none" : iface_info_ptr->parent.c_str());
+        if ( iface_info_ptr->iface_type == bond )
+        {
+            ilog ("... Bond Slaves: %s and %s",
+                   iface_info_ptr->slave1.empty() ? "none" : iface_info_ptr->slave1.c_str(),
+                   iface_info_ptr->slave2.empty() ? "none" : iface_info_ptr->slave2.c_str());
+            ilog ("...   Bond Mode: %s",
+                   iface_info_ptr->bond_mode.empty() ? "unknown" : iface_info_ptr->bond_mode.c_str());
+        }
+        ilog ("Pxeboot IF Name: %s", iface_info_ptr->parent.c_str());
+
+        // To handle the first reboot after install where the kickstart adds a ':2'
+        // to the boot interface we always try the dhcp search with the ':2' first.
+        ctrl.pxeboot_addr = get_pxeboot_dhcp_addr (  iface_info_ptr->parent + ifcfg_file_suffix);
+        if ( !ctrl.pxeboot_addr.empty() )
+        {
+            ilog ("pxeboot dhcp lease address: %s ; initial", ctrl.pxeboot_addr.c_str());
+        }
+        // If the pxeboot address is not found above then do the full search.
+        else
+        {
+            // If the pxeboot interface is not same as the management interface
+            // name then we need to remove the ":2" suffix.
+            // The ':2' is something the kickstart and the networking management
+            // adds to the interface name to distinguish between mgmt and pxeboot
+            // interfaces when they are the same.
+            if ( iface_info_ptr->parent != std::string(ctrl.mgmnt_iface))
+                ifcfg_file_suffix = "" ;
+
+            ctrl.pxeboot_addr = get_pxeboot_dhcp_addr ( iface_info_ptr->parent + ifcfg_file_suffix);
+            if ( !ctrl.pxeboot_addr.empty() )
+            {
+                ilog ("pxeboot dhcp lease address: %s", ctrl.pxeboot_addr.c_str());
+            }
+            // Now, override that local address if its found in the controller leases file.
+            if ( ctrl.nodetype & CONTROLLER_TYPE )
+            {
+                string temp_pxeboot_addr= get_pxeboot_static_addr ( iface_info_ptr->parent + ifcfg_file_suffix );
+                if ( !temp_pxeboot_addr.empty() )
+                {
+                    ctrl.pxeboot_addr = temp_pxeboot_addr ;
+                    ilog ("pxeboot static address: %s", ctrl.pxeboot_addr.c_str());
+                }
+            }
+        }
+        if ( ctrl.pxeboot_addr.empty() )
+        {
+            elog ("failed to get pxeboot address");
+        }
+        else
+        {
+            ilog ("Pxeboot IP: %s", ctrl.pxeboot_addr.c_str());
+        }
+    }
+    else
+    {
+        elog ("failed to get interface info ; rc:%d", rc);
+    }
+    return (rc);
+}
 
 /* The main service loop */
 int daemon_init ( string iface, string nodetype_str )
@@ -1040,6 +1265,7 @@ int daemon_init ( string iface, string nodetype_str )
     ctrl.subfunction = 0 ;
     ctrl.system_type = daemon_system_type ();
     ctrl.clstr_iface_provisioned = false ;
+    ctrl.pxeboot_iface_provisioned = false ;
     ctrl.peer_ctrlr_reset.sync = false ;
 
     /* convert node type to integer */
@@ -1053,6 +1279,28 @@ int daemon_init ( string iface, string nodetype_str )
     /* Assign interface to config */
     ctrl.mgmnt_iface = iface ;
 
+    // Condition gates for pxeboot network provisioning.
+    // The pxeboot network is only provisioned while management is not on 'lo'
+    if ( iface != LOOPBACK_IF )
+    {
+        // ... and while this is not the first unconfigured controller.
+        if (( daemon_is_file_present ( FIRST_CONTROLLER_FILE ) == true ) &&
+            ( daemon_is_file_present ( INIT_CONFIG_COMPLETE ) == false ))
+        {
+            // This check prevents trying to setup the pxeboot
+            // network on the oam interface immediately following
+            // initial controller-0 network install.
+            // All other cases get a provisioned pxeboot network.
+            dlog ("pxeboot network not provisionable yet");
+        }
+        else
+        {
+            // Ready to do pxeboot messaging
+            ctrl.pxeboot_iface = ctrl.mgmnt_iface ;
+            ilog ("Pxeboot iface %s", ctrl.pxeboot_iface.c_str());
+            ctrl.pxeboot_iface_provisioned = true ;
+        }
+    }
     if ( daemon_files_init () != PASS )
     {
         printf ("Pid, log or other files could not be opened\n");
@@ -1079,6 +1327,11 @@ int daemon_init ( string iface, string nodetype_str )
     {
         elog ("failed to extract nodetype info\n");
         rc = FAIL_NODETYPE;
+    }
+
+    if (( rc = learn_my_pxeboot_address () ) != PASS )
+    {
+        wlog ("failed to learn my pxeboot address ; rc:%d", rc );
     }
 
     /* Setup the heartbeat service messaging sockets */
@@ -1199,10 +1452,10 @@ void daemon_service_run ( void )
         FD_ZERO(&mtc_sock.readfds);
         socks.clear();
 
-        if ( mtc_sock.mtc_client_rx_socket && mtc_sock.mtc_client_rx_socket->return_status==PASS )
+        if ( mtc_sock.mtc_client_mgmt_rx_socket && mtc_sock.mtc_client_mgmt_rx_socket->return_status==PASS )
         {
-            socks.push_front (mtc_sock.mtc_client_rx_socket->getFD());
-            FD_SET(mtc_sock.mtc_client_rx_socket->getFD(), &mtc_sock.readfds);
+            socks.push_front (mtc_sock.mtc_client_mgmt_rx_socket->getFD());
+            FD_SET(mtc_sock.mtc_client_mgmt_rx_socket->getFD(), &mtc_sock.readfds);
         }
 
         if (( ctrl.clstr_iface_provisioned == true ) &&
@@ -1211,6 +1464,12 @@ void daemon_service_run ( void )
         {
             socks.push_front (mtc_sock.mtc_client_clstr_rx_socket->getFD());
             FD_SET(mtc_sock.mtc_client_clstr_rx_socket->getFD(), &mtc_sock.readfds);
+        }
+
+        if ( mtc_sock.pxeboot_rx_socket )
+        {
+            socks.push_front (mtc_sock.pxeboot_rx_socket);
+            FD_SET(mtc_sock.pxeboot_rx_socket, &mtc_sock.readfds);
         }
 
         mtc_sock.amon_socket = active_monitor_get_sel_obj ();
@@ -1226,15 +1485,6 @@ void daemon_service_run ( void )
 
         /* Call select() and wait only up to SOCKET_WAIT */
         socks.sort();
-
-#ifdef WANT_SELECTS
-        ilog_throttled ( select_log_count, 200 , "Selects: mgmnt:%d clstr:%d amon:%d - Size:%ld  First:%d Last:%d\n",
-                mtc_sock.mtc_client_rx_socket,
-                mtc_sock.mtc_client_clstr_rx_socket,
-                mtc_sock.amon_socket,
-                socks.size(), socks.front(), socks.back());
-#endif
-
         rc = select( socks.back()+1,
                     &mtc_sock.readfds, NULL, NULL,
                     &mtc_sock.waitd);
@@ -1251,23 +1501,40 @@ void daemon_service_run ( void )
         }
         else
         {
-             if ((mtc_sock.mtc_client_rx_socket && mtc_sock.mtc_client_rx_socket->return_status==PASS) && FD_ISSET(mtc_sock.mtc_client_rx_socket->getFD(), &mtc_sock.readfds))
-             {
-                 mtc_service_command ( sock_ptr, MGMNT_INTERFACE );
-             }
-             if (( ctrl.clstr_iface_provisioned == true ) &&
-                 ( !ctrl.address_clstr.empty() ) &&
-                 ( mtc_sock.mtc_client_clstr_rx_socket ) &&
-                 ( mtc_sock.mtc_client_clstr_rx_socket->return_status==PASS) &&
-                 ( FD_ISSET(mtc_sock.mtc_client_clstr_rx_socket->getFD(), &mtc_sock.readfds)))
-             {
-                 mtc_service_command ( sock_ptr, CLSTR_INTERFACE );
-             }
-             if ( FD_ISSET(mtc_sock.amon_socket, &mtc_sock.readfds))
-             {
-                 dlog3 ("Active Monitor Select Fired\n");
-                 active_monitor_dispatch ();
-             }
+            // Is there a Pxeboot network message present ?
+            if (mtc_sock.pxeboot_rx_socket &&
+                FD_ISSET(mtc_sock.pxeboot_rx_socket, &mtc_sock.readfds))
+            {
+                mlog3 ("pxeboot rx socket fired");
+                mtc_service_command ( sock_ptr, PXEBOOT_INTERFACE );
+            }
+
+            // Is there a Mgmt network message present ?
+            if ((mtc_sock.mtc_client_mgmt_rx_socket &&
+                 mtc_sock.mtc_client_mgmt_rx_socket->return_status==PASS) &&
+                 FD_ISSET(mtc_sock.mtc_client_mgmt_rx_socket->getFD(), &mtc_sock.readfds))
+            {
+                mlog3 ("mgmt rx socket fired");
+                mtc_service_command ( sock_ptr, MGMNT_INTERFACE );
+            }
+
+            // Is there a cluster host network message present ?
+            if (( ctrl.clstr_iface_provisioned == true ) &&
+                ( !ctrl.address_clstr.empty() ) &&
+                ( mtc_sock.mtc_client_clstr_rx_socket ) &&
+                ( mtc_sock.mtc_client_clstr_rx_socket->return_status==PASS) &&
+                ( FD_ISSET(mtc_sock.mtc_client_clstr_rx_socket->getFD(), &mtc_sock.readfds)))
+            {
+                mlog3 ("clstr rx socket fired");
+                mtc_service_command ( sock_ptr, CLSTR_INTERFACE );
+            }
+
+            // Is there a active monitor request pesent
+            if ( FD_ISSET(mtc_sock.amon_socket, &mtc_sock.readfds))
+            {
+                mlog3 ("Active Monitor Select Fired\n");
+                active_monitor_dispatch ();
+            }
         }
 
         if (( ctrl.active_script_set == GOENABLED_MAIN_SCRIPTS ) ||
@@ -1386,25 +1653,41 @@ void daemon_service_run ( void )
             /**
              *  Look for failing sockets and try to recover them,
              *  but only one at a time if there are multiple failing.
-             *  Priority is the command receiver, thehn transmitter,
+             *  Priority is the command receiver, then transmitter,
              *  followed by the cluster-host and others.
              **/
 
-            /* Mgmnt Rx */
-            if (( mtc_sock.mtc_client_rx_socket == NULL ) ||
-                ( mtc_sock.mtc_client_rx_socket->sock_ok() == false ))
+            /* Mgmt Rx */
+            if (( mtc_sock.mtc_client_mgmt_rx_socket == NULL ) ||
+                ( mtc_sock.mtc_client_mgmt_rx_socket->sock_ok() == false ))
             {
-                wlog ("calling setup_mgmnt_rx_socket (auto-recovery)\n");
-                setup_mgmnt_rx_socket();
+                wlog ("calling setup_mgmt_rx_socket (auto-recovery)\n");
+                setup_mgmt_rx_socket();
                 socket_reinit = true ;
             }
 
-            /* Mgmnt Tx */
-            else if (( mtc_sock.mtc_client_tx_socket == NULL  ) ||
-                     ( mtc_sock.mtc_client_tx_socket->sock_ok() == false ))
+            /* Mgmt Tx */
+            else if (( mtc_sock.mtc_client_mgmt_tx_socket == NULL  ) ||
+                     ( mtc_sock.mtc_client_mgmt_tx_socket->sock_ok() == false ))
             {
-                wlog ("calling setup_mgmnt_tx_socket\n");
-                setup_mgmnt_tx_socket();
+                wlog ("calling setup_mgmt_tx_socket (auto-recovery)");
+                setup_mgmt_tx_socket();
+                socket_reinit = true ;
+            }
+
+            /* Pxeboot Rx */
+            else if ((ctrl.pxeboot_iface_provisioned == true) && (mtc_sock.pxeboot_rx_socket <= 0))
+            {
+                wlog ("calling setup_pxeboot_rx_socket (auto-recovery)");
+                setup_pxeboot_rx_socket();
+                socket_reinit = true ;
+            }
+
+            /* Pxeboot Tx */
+            else if ((ctrl.pxeboot_iface_provisioned == true) && (mtc_sock.pxeboot_tx_socket == 0))
+            {
+                wlog ("calling setup_pxeboot_tx_socket (auto-recovery)");
+                setup_pxeboot_tx_socket();
                 socket_reinit = true ;
             }
 
@@ -1413,7 +1696,7 @@ void daemon_service_run ( void )
                      (( mtc_sock.mtc_client_clstr_rx_socket == NULL ) ||
                       ( mtc_sock.mtc_client_clstr_rx_socket->sock_ok() == false )))
             {
-                wlog ("calling setup_clstr_rx_socket (auto-recovery)\n");
+                wlog ("calling setup_clstr_rx_socket (auto-recovery)");
                 setup_clstr_rx_socket();
                 socket_reinit = true ;
             }
@@ -1421,10 +1704,10 @@ void daemon_service_run ( void )
             /* Clstr Tx ; AIO SX */
             else if ((ctrl.system_type == SYSTEM_TYPE__AIO__SIMPLEX) &&
                      ( ctrl.clstr_iface_provisioned == true ) &&
-                     (( mtc_sock.mtc_client_tx_socket_c0_clstr == NULL ) ||
-                      ( mtc_sock.mtc_client_tx_socket_c0_clstr->sock_ok() == false )))
+                     (( mtc_sock.mtc_client_clstr_tx_socket_c0 == NULL ) ||
+                      ( mtc_sock.mtc_client_clstr_tx_socket_c0->sock_ok() == false )))
             {
-                wlog ("calling setup_clstr_tx_sockets (auto-recovery)\n");
+                wlog ("calling setup_clstr_tx_sockets (auto-recovery)");
                 setup_clstr_tx_sockets();
                 socket_reinit = true ;
             }
@@ -1432,12 +1715,12 @@ void daemon_service_run ( void )
             /* Clstr Tx ; not AIO SX */
             else if ((ctrl.system_type != SYSTEM_TYPE__AIO__SIMPLEX) &&
                      ( ctrl.clstr_iface_provisioned == true ) &&
-                     (( mtc_sock.mtc_client_tx_socket_c0_clstr == NULL ) ||
-                      ( mtc_sock.mtc_client_tx_socket_c1_clstr == NULL ) ||
-                      ( mtc_sock.mtc_client_tx_socket_c0_clstr->sock_ok() == false ) ||
-                      ( mtc_sock.mtc_client_tx_socket_c1_clstr->sock_ok() == false )))
+                     (( mtc_sock.mtc_client_clstr_tx_socket_c0 == NULL ) ||
+                      ( mtc_sock.mtc_client_clstr_tx_socket_c1 == NULL ) ||
+                      ( mtc_sock.mtc_client_clstr_tx_socket_c0->sock_ok() == false ) ||
+                      ( mtc_sock.mtc_client_clstr_tx_socket_c1->sock_ok() == false )))
             {
-                wlog ("calling setup_clstr_tx_sockets (auto-recovery)\n");
+                wlog ("calling setup_clstr_tx_sockets (auto-recovery)");
                 setup_clstr_tx_sockets();
                 socket_reinit = true ;
             }
@@ -1445,7 +1728,7 @@ void daemon_service_run ( void )
             else if ( mtc_sock.amon_socket <= 0 )
             {
                 setup_amon_socket ();
-                wlog ("calling setup_amon_socket (auto-recovery)\n");
+                wlog ("calling setup_amon_socket (auto-recovery)");
                 socket_reinit = true ;
             }
             else
@@ -1455,10 +1738,14 @@ void daemon_service_run ( void )
 
             if ( socket_reinit )
             {
+                if (( mtc_sock.pxeboot_tx_socket <= 0 ) || ( mtc_sock.pxeboot_rx_socket <= 0 ))
+                    learn_my_pxeboot_address ();
+
                 /* re-get identity if interfaces are re-initialized */
                 string who_i_am = _self_identify ( ctrl.nodetype_str );
             }
-
+            alog1 ("sending mtcAlive on all provisioned mtcAlive networks");
+            send_mtcAlive_msg ( sock_ptr, ctrl.who_i_am, PXEBOOT_INTERFACE );
             send_mtcAlive_msg ( sock_ptr, ctrl.who_i_am, MGMNT_INTERFACE );
             if (( ctrl.clstr_iface_provisioned == true ) &&
                 ( mtc_sock.mtc_client_clstr_rx_socket != NULL ) &&
@@ -1475,20 +1762,26 @@ void daemon_service_run ( void )
             if ( daemon_is_file_present ( MTC_CMD_FIT__DIR ) )
             {
                 /* fault insertion testing */
+                if ( daemon_is_file_present ( MTC_CMD_FIT__PXEBOOT_RXSOCK ))
+                    _close_pxeboot_rx_socket();
+                if ( daemon_is_file_present ( MTC_CMD_FIT__PXEBOOT_TXSOCK ))
+                    _close_pxeboot_tx_socket ();
+
+                /* fault insertion testing */
                 if ( daemon_is_file_present ( MTC_CMD_FIT__MGMNT_RXSOCK ))
                 {
-                    if ( mtc_sock.mtc_client_rx_socket )
+                    if ( mtc_sock.mtc_client_mgmt_rx_socket )
                     {
-                        mtc_sock.mtc_client_rx_socket->sock_ok (false);
-                        _close_mgmnt_rx_socket();
+                        mtc_sock.mtc_client_mgmt_rx_socket->sock_ok (false);
+                        _close_mgmt_rx_socket();
                     }
                 }
                 if ( daemon_is_file_present ( MTC_CMD_FIT__MGMNT_TXSOCK ))
                 {
-                    if ( mtc_sock.mtc_client_tx_socket )
+                    if ( mtc_sock.mtc_client_mgmt_tx_socket )
                     {
-                        mtc_sock.mtc_client_tx_socket->sock_ok (false);
-                        _close_mgmnt_tx_socket ();
+                        mtc_sock.mtc_client_mgmt_tx_socket->sock_ok (false);
+                        _close_mgmt_tx_socket ();
                     }
                 }
                 if ( daemon_is_file_present ( MTC_CMD_FIT__CLSTR_RXSOCK ))
@@ -1498,10 +1791,10 @@ void daemon_service_run ( void )
                 }
                 if ( daemon_is_file_present ( MTC_CMD_FIT__CLSTR_TXSOCK ))
                 {
-                    if ( mtc_sock.mtc_client_tx_socket_c0_clstr )
-                        mtc_sock.mtc_client_tx_socket_c0_clstr->sock_ok (false);
-                    if ( mtc_sock.mtc_client_tx_socket_c1_clstr )
-                        mtc_sock.mtc_client_tx_socket_c1_clstr->sock_ok (false);
+                    if ( mtc_sock.mtc_client_clstr_tx_socket_c0 )
+                        mtc_sock.mtc_client_clstr_tx_socket_c0->sock_ok (false);
+                    if ( mtc_sock.mtc_client_clstr_tx_socket_c1 )
+                        mtc_sock.mtc_client_clstr_tx_socket_c1->sock_ok (false);
                 }
                 if ( daemon_is_file_present ( MTC_CMD_FIT__AMON_SOCK ))
                 {
@@ -1509,6 +1802,7 @@ void daemon_service_run ( void )
                 }
             }
         }
+
         /* service controller specific audits */
         if ( ctrl.nodetype & CONTROLLER_TYPE )
         {
@@ -1552,6 +1846,24 @@ void daemon_service_run ( void )
                     }
                 }
                 ctrl.peer_ctrlr_reset.audit_timer.ring = false ;
+            }
+        }
+
+        // mtcAlive Stress Test. Send the mtcAgent a lot of messages
+        #define MTCALIVE_STRESS_FILE ((const char*)"/var/run/mtcAlive_stress")
+        if (( daemon_get_cfg_ptr()->testmask & TESTMASK__MSG__MTCALIVE_STRESS ) &&
+            ( daemon_is_file_present ( MTCALIVE_STRESS_FILE )))
+        {
+            int loops = daemon_get_file_int ( MTCALIVE_STRESS_FILE );
+            slog ("mtcAlive Stress Test: Sending %d mtcAlive on each network.", loops);
+            for ( int loop = 0 ; loop < loops ; loop++ )
+            {
+                send_mtcAlive_msg ( sock_ptr, ctrl.who_i_am, PXEBOOT_INTERFACE );
+                send_mtcAlive_msg ( sock_ptr, ctrl.who_i_am, MGMNT_INTERFACE );
+                send_mtcAlive_msg ( sock_ptr, ctrl.who_i_am, CLSTR_INTERFACE );
+
+                // Service signal handler just in case the loaded loops number is big
+                daemon_signal_hdlr ();
             }
         }
         daemon_signal_hdlr ();
@@ -2065,6 +2377,114 @@ void load_mtcInfo_msg ( mtc_message_type & msg )
     }
 }
 
+/***************************************************************************
+ *
+ * Name       : load_pxebootInfo_msg
+ *
+ * Description: Extract the pxeboot info from the MTC_REQ_MTCALIVE message.
+ *
+ * Assumptions: Contains a json string with the controller pxeboot
+ *              network unit IP addresses in the following form.
+ *              Address can be empty of an unprovisioned controller.
+ *
+ *              { "pxebootInfo":{
+ *                   "controller-0":"169.254.202.2",
+ *                   "controller-1":"169.254.202.3"
+ *                 }
+ *              }
+ *
+ * Returns    : Nothing
+ *
+ ***************************************************************************/
+void load_pxebootInfo_msg ( mtc_message_type & msg )
+{
+    struct json_object *_obj = json_tokener_parse( &msg.buf[0] );
+    if ( _obj )
+    {
+        const char dict_label [] = "pxebootInfo" ;
+        struct json_object *info_obj = (struct json_object *)(NULL);
+        json_bool json_rc = json_object_object_get_ex( _obj,
+                                            &dict_label[0],
+                                            &info_obj );
+
+        if ( ( json_rc == true ) && ( info_obj ) )
+        {
+            struct json_object *ctrl_obj = (struct json_object *)(NULL);
+            string pxeboot_addr_cx[CONTROLLERS] = {CONTROLLER_0, CONTROLLER_1};
+            for (int c = 0 ; c < CONTROLLERS ; c++)
+            {
+                // used to store the in-loop controller current pxeboot address
+                string cur_pxeboot_addr ;
+                // only updated if the address changes
+                string new_pxeboot_addr ;
+                // current loop controller hostname
+                string controller = pxeboot_addr_cx[c] ;
+
+                // get the current pxeboot address for the in loop controller
+                cur_pxeboot_addr = (controller == CONTROLLER_0) ? ctrl.pxeboot_addr_c0 : ctrl.pxeboot_addr_c1;
+
+                json_bool json_rc =
+                json_object_object_get_ex( info_obj, controller.data(), &ctrl_obj );
+                if (( json_rc == true ) && (ctrl_obj))
+                {
+                    jlog ("controller-x obj data: %s", json_object_get_string(ctrl_obj));
+
+                    // get the in-loop controller pxeboot address from the msg
+                    string now_pxeboot_addr = json_object_get_string(ctrl_obj);
+                    if ( now_pxeboot_addr != cur_pxeboot_addr )
+                    {
+                        if ( now_pxeboot_addr.empty() )
+                        {
+                            new_pxeboot_addr = now_pxeboot_addr ;
+                            wlog ("%s pxeboot address now null ; was %s", controller.c_str(),
+                                      cur_pxeboot_addr.empty() ? "null" : cur_pxeboot_addr.c_str());
+                        }
+                        else if ( cur_pxeboot_addr.empty() )
+                        {
+                            new_pxeboot_addr = now_pxeboot_addr ;
+                            ilog ("%s pxeboot ip: %s", controller.c_str(), new_pxeboot_addr.c_str());
+                        }
+                        else
+                        {
+                            new_pxeboot_addr = now_pxeboot_addr ;
+                            ilog ("%s pxeboot ip: %s ; change from %s", controller.c_str(),
+                                      new_pxeboot_addr.c_str(), cur_pxeboot_addr.c_str());
+                        }
+                    }
+                    else if ( !cur_pxeboot_addr.empty() )
+                    {
+                        alog1 ("%s pxeboot ip %s ; unchanged", controller.c_str(), cur_pxeboot_addr.c_str());
+                    }
+
+                    // now manage the change
+                    if ( !new_pxeboot_addr.empty() )
+                    {
+                        if ( controller == CONTROLLER_0 )
+                            ctrl.pxeboot_addr_c0 = new_pxeboot_addr ;
+                        else
+                            ctrl.pxeboot_addr_c1 = new_pxeboot_addr ;
+                    }
+                }
+                else
+                {
+                    wlog ("Failed to parse %s pxeboot ip from '%s' : %s",
+                           controller.c_str(), &dict_label[0], &msg.buf[0]);
+                }
+            } // for loop
+        }
+        else
+        {
+            elog("Failed to parse '%s' from mtcAlive request message: %s",
+                  &dict_label[0], &msg.buf[0]);
+        }
+        json_object_put(_obj);
+    }
+    else
+    {
+        elog("Failed to tokenize mtcAlive request message data: %s",
+              &msg.buf[0]);
+    }
+}
 
 /* Push daemon state to log file */
 void daemon_dump_info ( void )

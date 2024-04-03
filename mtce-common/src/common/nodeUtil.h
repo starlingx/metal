@@ -2,7 +2,7 @@
 #define __INCLUDE_NODEUTIL_H__
 
 /*
-* Copyright (c) 2013-2014, 2016, 2019 Wind River Systems, Inc.
+* Copyright (c) 2013-2014, 2016, 2019, 2024 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -28,6 +28,8 @@ using namespace std;
 #define NODEUTIL_LATENCY_MON_START ((const char *)"start")
 void nodeUtil_latency_log ( string hostname, const char * label_ptr, int msecs );
 
+// path to the Debian network interfaces directory
+#define NETWORK_INTERFACES_DIR (const char *)("/etc/network/interfaces.d")
 
 /* Common socket type struct */
 typedef struct
@@ -65,7 +67,68 @@ string get_iface_mac ( const char * iface_ptr );
 
 void print_inv ( node_inv_type & info );
 int  get_iface_attrs ( const char * iface_ptr, int & index, int & speed , int & duplex , string & autoneg );
+
 const char * get_iface_name_str ( int iface );
+const char * get_interface_name_str ( int iface );
+
+/* Used to learn the pxeboot address */
+enum iface_type_enum { ethernet = 0, vlan = 1, bond = 2 };
+typedef struct
+{
+    string iface_name ;
+    iface_type_enum iface_type = ethernet ;
+
+    /* vlan link ; physical or bond
+     *
+     * The parent interface is the physical network interface
+     * to which the VLAN is associated.*/
+    string parent = "" ;
+
+    /* bond links ; two physical interfaces
+     *
+     * A bond is a logical interface created by combining multiple
+     * physical network interfaces, known as "slaves"*/
+    string slave1 = "" ;
+    string slave2 = "" ;
+
+    /* bonding mode ;  active-backup, balanced-xor, 802.3ad, etc.
+     * A string that represents the bonding mode string and id
+     * Example: 802.3ad 4 */
+    string bond_mode = "" ;
+
+    /* string representing the iface hierarchy.
+     *
+     *  ethernet
+     *  bond -> slaves
+     *  vlan -> bond -> slaves
+     *
+     * This interface chain string exists soley for the purpose
+     * of logging for the report tool system info. */
+    string chain = "" ;
+} iface_info_type ;
+
+#define INTERFACES_DIR ((const char *)"/sys/class/net/")
+
+const char * get_iface_type_str ( iface_type_enum type_enum );
+int    get_iface_type     ( string iface,
+                            iface_type_enum & iface_type );
+int    get_iface_parent   ( int network,
+                            string & ifname,
+                            string & parent );
+int    get_bond_slaves    ( int network,
+                            string bonded_iface,
+                            string & slave1,
+                            string & slave2 );
+int    get_bond_mode      ( int network,
+                            string bonded_iface,
+                            string & bond_mode);
+int    get_iface_info     ( int network,
+                            string iface,
+                            iface_info_type & iface_info);
+
+// For the mtcClient pxeboot address learning.
+string get_pxeboot_dhcp_addr   ( string iface ); // worker/storage
+string get_pxeboot_static_addr ( string iface ); // controllers
 
 unsigned int  get_host_function_mask ( string & nodeType_str );
 bool          is_combo_system (unsigned int nodetype_mask );

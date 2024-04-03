@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Wind River Systems, Inc.
+ * Copyright (c) 2019, 2024 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -35,7 +35,7 @@
  *
  ****************************************************************************/
 
-string iface_type ( interface_type type_enum )
+string iface_type ( iface_type_enum type_enum )
 {
     switch(type_enum)
     {
@@ -187,7 +187,7 @@ int lmon_get_link_state ( int    ioctl_socket,
  * Name    : lmon_interfaces_init
  *
  * Purpose : Map an interface (mgmt, oam or cluster-host) to a physical port.
- *           See interface_type enum in lmon.h
+ *           See iface_type_enum enum in nodeUtil.h
  *
  *****************************************************************************/
 

@@ -48,6 +48,7 @@ typedef struct
 
     char* mgmnt_iface           ; /**< management interface name pointer      */
     char* clstr_iface           ; /**< cluster-host interface name pointer    */
+    char* pxeboot_iface         ; /**< pxeboot interface name pointer         */
     char* multicast             ; /**< Multicast address                      */
     int   ha_port               ; /**< HA REST API Port Number                */
     int   vim_cmd_port          ; /**< Mtce -> VIM Command REST API Port      */
@@ -75,6 +76,8 @@ typedef struct
     char* barbican_api_host     ; /**< Barbican REST API host IP address      */
     int   barbican_api_port     ; /**< Barbican REST API port number          */
 
+    int   mtc_tx_pxeboot_port   ; /**< mtcAgent/Client pxeboot nwk tx port    */
+    int   mtc_rx_pxeboot_port   ; /**< mtcClient listens pxeboot nwk cmd reqs */
     int   mtc_rx_mgmnt_port     ; /**< mtcClient listens mgmnt nwk cmd reqs   */
     int   mtc_rx_clstr_port     ; /**< mtcClient listens clstr nwk cmd reqs   */
     int   mtc_tx_mgmnt_port     ; /**< mtcClient sends mgmnt nwk cmds/resp's  */
@@ -258,6 +261,22 @@ extern char *program_invocation_short_name;
     else { syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s:Error : " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; } \
 }
 
+/** mtcAlive alog logger macro with throttling */
+#define alog_throttled(cnt,max,format,args...) { \
+    if ( daemon_get_cfg_ptr()->debug_alive ) \
+    { \
+        if ( ++cnt == 1 ) \
+        { \
+            if (ltc()) {    printf ("%s [%d.%05d] %s %s %-3s %-18s(%4d) %-24s: Alive: " format, pt(), getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; } \
+            else { syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s: Work : " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; } \
+        } \
+        if ( cnt >= max ) \
+        { \
+            cnt = 0 ; \
+        } \
+    } \
+}
+
 /** Error logger macro with throttling */
 #define elog_throttled(cnt,max,format,args...) { \
     if ( ++cnt == 1 ) \
@@ -389,37 +408,37 @@ extern char *program_invocation_short_name;
 #define plog(format, args...)  { syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s: Info : " format, getpid(), lc(), _hn(), _pn, "|-|", __FILE__, __LINE__, __FUNCTION__, ##args) ; }
 
 #define mlog(format, args...)  { if(daemon_get_cfg_ptr()->debug_msg&1 ) syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s: Msg  : " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
-#define mlog1(format, args...) { if(daemon_get_cfg_ptr()->debug_msg&2 ) syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s: Msg2 : " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
-#define mlog2(format, args...) { if(daemon_get_cfg_ptr()->debug_msg&4 ) syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s: Msg4 : " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
-#define mlog3(format, args...) { if(daemon_get_cfg_ptr()->debug_msg&8 ) syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s: Msg8 : " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
+#define mlog1(format, args...) { if(daemon_get_cfg_ptr()->debug_msg&2 ) syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s: Msg1 : " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
+#define mlog2(format, args...) { if(daemon_get_cfg_ptr()->debug_msg&4 ) syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s: Msg2 : " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
+#define mlog3(format, args...) { if(daemon_get_cfg_ptr()->debug_msg&8 ) syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s: Msg3 : " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
 
 #define jlog(format, args...)  { if(daemon_get_cfg_ptr()->debug_json&1) syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s: Json : " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
-#define jlog1(format, args...) { if(daemon_get_cfg_ptr()->debug_json&2) syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s: Json2: " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
-#define jlog2(format, args...) { if(daemon_get_cfg_ptr()->debug_json&4) syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s: Json4: " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
-#define jlog3(format, args...) { if(daemon_get_cfg_ptr()->debug_json&8) syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s: Json8: " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
+#define jlog1(format, args...) { if(daemon_get_cfg_ptr()->debug_json&2) syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s: Json1: " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
+#define jlog2(format, args...) { if(daemon_get_cfg_ptr()->debug_json&4) syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s: Json2: " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
+#define jlog3(format, args...) { if(daemon_get_cfg_ptr()->debug_json&8) syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s: Json3: " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
 
 #define hlog(format, args...)  { if(daemon_get_cfg_ptr()->debug_http&1) syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s: Http : " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
-#define hlog1(format, args...) { if(daemon_get_cfg_ptr()->debug_http&2) syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s: Http2: " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
-#define hlog2(format, args...) { if(daemon_get_cfg_ptr()->debug_http&4) syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s: Http4: " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
-#define hlog3(format, args...) { if(daemon_get_cfg_ptr()->debug_http&8) syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s: Http8: " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
+#define hlog1(format, args...) { if(daemon_get_cfg_ptr()->debug_http&2) syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s: Http1: " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
+#define hlog2(format, args...) { if(daemon_get_cfg_ptr()->debug_http&4) syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s: Http2: " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
+#define hlog3(format, args...) { if(daemon_get_cfg_ptr()->debug_http&8) syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s: Http3: " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
 
 #define alog(format, args...)  { if(daemon_get_cfg_ptr()->debug_alive&1) syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s:Alive : " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
-#define alog1(format, args...) { if(daemon_get_cfg_ptr()->debug_alive&2) syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s:Alive2: " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
-#define alog2(format, args...) { if(daemon_get_cfg_ptr()->debug_alive&4) syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s:Alive4: " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
-#define alog3(format, args...) { if(daemon_get_cfg_ptr()->debug_alive&8) syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s:Alive8: " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
+#define alog1(format, args...) { if(daemon_get_cfg_ptr()->debug_alive&2) syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s:Alive1: " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
+#define alog2(format, args...) { if(daemon_get_cfg_ptr()->debug_alive&4) syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s:Alive2: " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
+#define alog3(format, args...) { if(daemon_get_cfg_ptr()->debug_alive&8) syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s:Alive3: " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
 
 #define qlog(format, args...)  { if(daemon_get_cfg_ptr()->debug_work&1)  syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s: Work : " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
-#define qlog1(format, args...) { if(daemon_get_cfg_ptr()->debug_work&2)  syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s: Work2: " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
-#define qlog2(format, args...) { if(daemon_get_cfg_ptr()->debug_work&4)  syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s: Work4: " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
-#define qlog3(format, args...) { if(daemon_get_cfg_ptr()->debug_work&8)  syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s: Work8: " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
+#define qlog1(format, args...) { if(daemon_get_cfg_ptr()->debug_work&2)  syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s: Work1: " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
+#define qlog2(format, args...) { if(daemon_get_cfg_ptr()->debug_work&4)  syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s: Work2: " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
+#define qlog3(format, args...) { if(daemon_get_cfg_ptr()->debug_work&8)  syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s: Work3: " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
 
 #define flog(format, args...)  { if(daemon_get_cfg_ptr()->debug_fsm)     syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s: FSM  : " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
 #define tlog(format, args...)  { if(daemon_get_cfg_ptr()->debug_timer)   syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s: Timer: " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
 
 #define clog(format, args...)  { if(daemon_get_cfg_ptr()->debug_state&1) syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s:Change: " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
-#define clog1(format, args...) { if(daemon_get_cfg_ptr()->debug_state&2)  syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s:Chang2: " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
-#define clog2(format, args...) { if(daemon_get_cfg_ptr()->debug_state&4)  syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s:Chang4: " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
-#define clog3(format, args...) { if(daemon_get_cfg_ptr()->debug_state&8)  syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s:Chang8: " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
+#define clog1(format, args...) { if(daemon_get_cfg_ptr()->debug_state&2)  syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s:Chang1: " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
+#define clog2(format, args...) { if(daemon_get_cfg_ptr()->debug_state&4)  syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s:Chang2: " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
+#define clog3(format, args...) { if(daemon_get_cfg_ptr()->debug_state&8)  syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s:Chang3: " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }
 
 
 #define log_event(format, args...)  { syslog(LOG_INFO, "[%d.%05d] %s %s %-3s %-18s(%4d) %-24s: Event: " format, getpid(), lc(), _hn(), _pn, __AREA__, __FILE__, __LINE__, __FUNCTION__, ##args) ; }

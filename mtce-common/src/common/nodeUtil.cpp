@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2013-2017 Wind River Systems, Inc.
+* Copyright (c) 2013-2017, 2024 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -29,6 +29,7 @@
 #include <dirent.h>
 #include <string>
 #include <iostream>
+#include <sstream>
 #include <fstream>
 #include <stdlib.h>
 #include <stdio.h>
@@ -1350,24 +1351,582 @@ int get_pid_by_name_proc ( string procname )
 }
 
 
-
-const char mgmnt_iface_str[] = { "Mgmnt" } ;
-const char clstr_iface_str[] = { "Clstr" } ;
-const char  null_iface_str[] = { "Null" } ;
+const char pxeboot_iface_str[] = { "Pxeboot" } ;
+const char   mgmnt_iface_str[] = { "Mgmnt" } ;
+const char   clstr_iface_str[] = { "Clstr" } ;
+const char    null_iface_str[] = { "Null" } ;
 
 const char * get_iface_name_str ( int iface )
 {
     switch ( iface )
     {
         case MGMNT_IFACE:
-            return mgmnt_iface_str;     
+            return mgmnt_iface_str;
         case CLSTR_IFACE:
             return clstr_iface_str;
+        case PXEBOOT_INTERFACE:
+            return pxeboot_iface_str;
         default:
             return null_iface_str ;
     }
 }
 
+/**********************************************************************
+ * Name       : get_interface_name_str
+ *
+ * Purpose    : get mtcAgent/Client interface name strings
+ *
+ * Return     : pointer to the interface name string
+ **********************************************************************/
+const char * get_interface_name_str ( int iface )
+{
+    switch ( iface )
+    {
+        case MGMNT_INTERFACE:
+            return mgmnt_iface_str;
+        case CLSTR_INTERFACE:
+            return clstr_iface_str;
+        case PXEBOOT_INTERFACE:
+            return pxeboot_iface_str;
+        default:
+            return null_iface_str ;
+    }
+}
+
+/**********************************************************************
+ * Name       : get_iface_type_str
+ *
+ * Purpose    : get interface type string
+ *
+ * Return     : pointer to the interface type string
+ **********************************************************************/
+const char ethernet_iface_type_str[] = { "ethernet" };
+const char     vlan_iface_type_str[] = { "vlan"     };
+const char     bond_iface_type_str[] = { "bond"     };
+const char  unknown_iface_type_str[] = { "unknown"  };
+
+const char * get_iface_type_str ( iface_type_enum type_enum )
+{
+    switch ( type_enum )
+    {
+        case ethernet: return ethernet_iface_type_str;
+        case vlan:     return     vlan_iface_type_str;
+        case bond:     return     bond_iface_type_str;
+    }
+    return unknown_iface_type_str;
+}
+
+/********************************************************************
+ * Name       : get_iface_type
+ *
+ * Purpose    : Fetch the specified interface's type as
+ *              physical ethernet, vlan or bond.
+ *
+ * Description: This function opens the uevents file in /sys/class/net
+ *              for the specified interface and uses DEVTYPE, in that
+ *              info, to determine the specified interface type.
+ *              A missing DEVTYPE label implies that its a standard
+ *              physical 'ethernet' interface type.
+ *
+ * Example:
+ *
+ * sysadmin@controller-0:~$ cat /sys/class/net/vlan163/uevent
+ * DEVTYPE=vlan
+ * INTERFACE=vlan163
+ * IFINDEX=41
+ *
+ * Updates: iface_type_enum (ethernet, vlan or bond) on PASS
+ *
+ * Returns: PASS or FAIL_OPERATION
+ * ******************************************************************/
+int get_iface_type ( string            iface,
+                     iface_type_enum & iface_type )
+{
+    int rc = PASS ;
+
+    /* determine the interface type though uevent */
+    string uevent_iface_file = INTERFACES_DIR + iface + "/uevent";
+    ifstream _uevent( uevent_iface_file.data() );
+    if ( _uevent )
+    {
+        string line;
+        while( getline( _uevent, line ) )
+        {
+            if ( line.find ("DEVTYPE") == 0 )
+            {
+                if ( line.find ("=vlan") != string::npos )
+                    iface_type = vlan;
+                else if ( line.find ("=bond") != string::npos )
+                    iface_type = bond;
+                else
+                    iface_type = ethernet ;
+                break;
+            }
+        }
+    }
+    else
+    {
+        wlog ("Failed to find file: %s", uevent_iface_file.c_str());
+        rc = FAIL_FILE_OPEN ;
+    }
+    return (rc);
+}
+
+/*****************************************************************************
+ * Name    : get_iface_parent
+ *
+ * Purpose : Gets the ifname of the linked parent interface
+ *
+ * Updates : parent interface name.
+ *
+ * Returns : Returns PASS, FAIL_FILE_OPEN or FAIL_NOT_FOUND
+ ****************************************************************************/
+int get_iface_parent ( int network, string & ifname, string & parent )
+{
+    int rc = PASS ;
+
+    /* build the full file path */
+    string iflink_file = INTERFACES_DIR + ifname + "/iflink";
+
+    /* declare a file stream based on the full file path */
+    ifstream iflink_file_stream ( iflink_file.c_str() );
+
+    /* open the file stream */
+    if (iflink_file_stream.is_open())
+    {
+        int    iflink = -1;
+        string iflink_line;
+        char * dummy_ptr  ;
+        char iface_buffer [IF_NAMESIZE] = "";
+
+        /* start clean */
+        MEMSET_ZERO (iface_buffer[0]);
+
+        while ( getline (iflink_file_stream, iflink_line) )
+        {
+            iflink = strtol(iflink_line.c_str(), &dummy_ptr, 10);
+        }
+        iflink_file_stream.close();
+
+        /*
+         * load iface_buffer with the name of the network interface
+         * corresponding to iflink.
+         */
+        if_indextoname (iflink, iface_buffer);
+
+        if (iface_buffer[0] != '\0')
+        {
+            parent = iface_buffer;
+            dlog ("%s network interface name: %s",
+                      get_interface_name_str(network),
+                      parent.c_str());
+        }
+        else
+        {
+            wlog ("%s network parent interface not found for ifname:%s",
+                      get_interface_name_str(network), ifname.c_str() );
+            rc = FAIL_NOT_FOUND ;
+        }
+    }
+    else
+    {
+        wlog ("failed to open %s", iflink_file.c_str());
+        rc = FAIL_FILE_OPEN ;
+    }
+    return rc ;
+}
+
+/********************************************************************
+ * Name       : get_bond_mode
+ *
+ * Purpose    : Get the mode of a Linux bonding interface.
+ *
+ * Description: Returns the data in /sys/class/net/bonding/mode
+ *              as update to 'bond_mode' string reference argument.
+ *
+ * Example    : $ cat /sys/class/net/pxeboot0/bonding/mode
+ *              802.3ad 4
+ *
+ * Updates    : bond_mode
+ *
+ * Returns    : PASS or FAIL_FILE_OPEN if no bonding/mode file is found.
+ *
+ * ******************************************************************/
+int get_bond_mode ( int network,
+                    string bond_name,
+                    string & bond_mode)
+{
+    int rc = PASS ;
+    string bond_mode_file = INTERFACES_DIR + bond_name + "/bonding/mode";
+
+    ifstream bond_mode_data ( bond_mode_file.data() );
+    if (!bond_mode_data)
+    {
+        wlog ("Failed to find bonding mode file: %s",
+               bond_mode_file.c_str());
+        rc = FAIL_FILE_OPEN ;
+    }
+    else
+    {
+        getline ( bond_mode_data, bond_mode );
+        if ( ! bond_mode.empty() )
+        {
+            ilog ("%s network %s mode: %s",
+                      get_interface_name_str(network),
+                      bond_name.c_str(),
+                      bond_mode.c_str());
+        }
+    }
+    return rc ;
+}
+
+/*********************************************************************
+ * Name       : get_bond_slaves
+ *
+ * Purpose    : Get a bonded interface slave names.
+ *
+ * Description: Returns the data in /sys/class/net/bonding/slaves
+ *              as updates to reference arguments.
+ *
+ * Updates    : slave1 and slave2
+ *
+ * Returns    : PASS or FAIL_FILE_OPEN if no slaves file is found.
+ *
+ *********************************************************************/
+int get_bond_slaves ( int network,
+                      string bond_name,
+                      string & slave1,
+                      string & slave2 )
+{
+    int rc = 0 ;
+    string bonded_interface_file = INTERFACES_DIR + \
+                                   bond_name + \
+                                   "/bonding/slaves";
+    ifstream slaves(bonded_interface_file.data());
+    if (!slaves)
+    {
+        wlog ("failed to open file: %s", bonded_interface_file.c_str());
+        rc = FAIL_FILE_OPEN ;
+    }
+    else
+    {
+        char *token ;
+        string bond_slaves ;
+        getline ( slaves, bond_slaves );
+        if ( ! bond_slaves.empty() )
+        {
+            dlog ("%s network %s slaves: %s",
+                      get_interface_name_str(network),
+                      bond_name.c_str(),
+                      bond_slaves.c_str());
+
+            token = strtok((char *)bond_slaves.data(), " ");
+            if ( token != NULL )
+                slave1 = token ;
+            token = strtok(NULL, " ");
+            if ( token != NULL )
+                slave2 = token ;
+        }
+    }
+    return rc ;
+}
+
+/*****************************************************************************
+ * Name       : get_iface_info
+ *
+ * Purpose    : Update the iface_info with interface type details and heirarchy.
+ *
+ * Description: Lookup the interface type, bond, vlan or physical ethernet.
+ *              Then for each case add interface info and create a 'chain'
+ *              string that represents the heirarchy.
+ *
+ *              - ethernet    - enp0s8
+ *              - vlan        - vlan16   -> enp0s8
+ *              - bond        - pxeboot0 -> enp0s8 and enp0s9
+ *              - bonded vlan - vlan16   -> pxeboot0 -> enp0s8 and enp0s9
+ *
+ * Updates    : iface_info with learned interface type, parent, bond mode
+ *              and slaves
+ * Returns    : Returns PASS, FAIL_FILE_OPEN, FAIL_NOT_FOUND, FAIL_INVALID_DATA
+ *
+ *****************************************************************************/
+int get_iface_info ( int network, string iface, iface_info_type & iface_info )
+{
+    const char * network_str_ptr = get_interface_name_str (network) ;
+
+    iface_info.iface_name = iface ;
+    iface_info.iface_type = ethernet;
+    iface_info.chain = "" ;
+
+    int rc = get_iface_type ( iface_info.iface_name, iface_info.iface_type );
+    if ( rc )
+    {
+        wlog ("failed to get interface type from iface: %s", iface.c_str());
+        return rc ;
+    }
+    switch ( iface_info.iface_type )
+    {
+        case ethernet:
+        {
+            iface_info.parent = iface_info.iface_name ;
+            ilog ("%s network %s parent: %s", network_str_ptr, iface_info.iface_name.c_str(), iface_info.parent.c_str());
+            iface_info.chain.append (iface_info.parent);
+            break ;
+        }
+        case vlan:
+        {
+            if (( rc = get_iface_parent (MGMNT_INTERFACE, iface_info.iface_name, iface_info.parent )) == PASS )
+            {
+                ilog ("%s network %s parent: %s", network_str_ptr, iface_info.iface_name.c_str(), iface_info.parent.c_str());
+                if (( rc = get_iface_type ( iface_info.parent, iface_info.iface_type )) == PASS )
+                {
+                    if ( iface_info.iface_type == bond )
+                    {
+                        get_bond_mode ( network, iface_info.parent, iface_info.bond_mode);
+                        iface_info.chain.append( iface_info.iface_name + " -> " + iface_info.parent + " (" + iface_info.bond_mode + ")");
+                        if (( rc = get_bond_slaves ( MGMNT_INTERFACE, iface_info.parent, iface_info.slave1, iface_info.slave2 )) == PASS )
+                        {
+                            iface_info.chain.append(" -> " + iface_info.slave1 + " and " + iface_info.slave2);
+                            ilog ("%s network %s slaves: %s and %s",
+                                      network_str_ptr, iface_info.parent.c_str(),
+                                      iface_info.slave1.c_str(), iface_info.slave2.c_str());
+                        }
+                        else
+                        {
+                            wlog ("failed to get slaves from bond: %s ; rc:%d", iface_info.parent.c_str(), rc);
+                            rc = FAIL_NOT_FOUND ;
+                        }
+                    }
+                    else
+                    {
+                        wlog ("%s network iface: %s", network_str_ptr, iface_info.iface_name.c_str());
+                        iface_info.chain.append( iface_info.iface_name + " -> " + iface_info.parent);
+                    }
+                }
+                else
+                {
+                    wlog ("failed to get %s network interface type from iface: %s ; rc:%d",
+                           network_str_ptr, iface_info.parent.c_str(), rc);
+                    rc = FAIL_NOT_FOUND ;
+                }
+            }
+            else
+            {
+                wlog ("failed to get parent interface from %s ; rc:%d", iface_info.iface_name.c_str(), rc );
+            }
+            break ;
+        }
+        case bond:
+        {
+            iface_info.parent = iface_info.iface_name ;
+            ilog ("%s network %s", network_str_ptr, iface_info.iface_name.c_str());
+            get_bond_mode (network, iface_info.parent, iface_info.bond_mode);
+
+            iface_info.chain.append(iface_info.parent + " (" + iface_info.bond_mode + ")");
+            if (( rc = get_bond_slaves ( network, iface_info.parent, iface_info.slave1, iface_info.slave2 )) == PASS )
+            {
+                iface_info.chain.append(" -> " + iface_info.slave1 + " and " + iface_info.slave2);
+                ilog ("%s network %s slaves: %s and %s",
+                          network_str_ptr, iface_info.parent.c_str(),
+                          iface_info.slave1.c_str(), iface_info.slave2.c_str());
+            }
+            else
+            {
+                wlog ("failed to get slaves from bond: %s ; rc:%d", iface_info.iface_name.c_str(), rc);
+                rc = FAIL_NOT_FOUND ;
+            }
+            break ;
+        }
+        default:
+        {
+            wlog ("failed: unknown interface type: %d", iface_info.iface_type);
+            rc = FAIL_INVALID_DATA ;
+            break ;
+        }
+    }
+    if ( !iface_info.chain.empty() )
+    {
+        ilog ("Interface Chain: %s", iface_info.chain.c_str());
+    }
+    return rc ;
+}
+
+/*****************************************************************************
+ * Name       : get_pxeboot_dhcp_addr
+ *
+ * Purpose    : get the pxeboot address from dhcp leases file.
+ *
+ * Description: Worker and storage nodes DHCP for their pxeboot IP address.
+ *
+ * Therefore, the pxeboot address for non-controller nodes is taken from
+ * the 'fixed-address' label of the last tuple of the management interface's
+ * /var/lib/dhcp leases file.
+ *
+ * Assumptions: If this lookup is for the pxeboot interface then the caller
+ *              is expected to suffix the interface name with a ":2"
+ *
+ * Example:
+ *
+ * sysadmin@worker-0:~$ cat /var/lib/dhcp/dhclient.enp0s3:2.leases
+ * lease {
+ *    interface "enp0s3:2";
+ *    fixed-address 169.254.202.159;    <-- non-controller pxeboot address
+ *    option subnet-mask 255.255.255.0;
+ *
+ * Returns:  a string containing the unit's pxeboot address
+ ******************************************************************************/
+string get_pxeboot_dhcp_addr ( string iface )
+{
+    // Struct to hold the items extracted from the lease.
+    // ... currently only the fixed-address is needed.
+    struct Lease { string address; };
+    #define DHCP_LEASES_DIR ((const char *) "/var/lib/dhcp")
+    string pxeboot_address = "" ; // return value
+
+    mlog ("learning pxeboot address ...");
+
+    Lease last_lease; // defaults to null info
+    string lease_filename = "" ;
+    DIR* dhcp_dir = opendir(DHCP_LEASES_DIR);
+    if ( dhcp_dir != NULL)
+    {
+        struct dirent* entry;
+        while ((entry = readdir(dhcp_dir)) != nullptr)
+        {
+            string _filename = entry->d_name;
+            // Check if the entry contains the interface name
+            if (_filename.find(iface) != string::npos)
+                lease_filename = _filename ;
+        }
+        closedir(dhcp_dir);
+    }
+    else
+    {
+        ilog ( "no dhcp leases");
+        return pxeboot_address ; // is null
+    }
+
+    string full_path = DHCP_LEASES_DIR;
+    full_path.append("/");
+    full_path.append(lease_filename);
+
+    if ( lease_filename.empty() )
+    {
+        ilog ("dhcp lease file %s/%s not found", DHCP_LEASES_DIR, iface.c_str());
+        return pxeboot_address ; // is null
+    }
+
+    mlog ("pxeboot dhcp lease file: %s", full_path.c_str());
+
+    ifstream lease_file(full_path);
+    if (lease_file.is_open())
+    {
+        string line;
+
+        // Iterate through the file line by line
+        while (getline(lease_file, line))
+        {
+            // search for new 'lease' entries
+            if (line.find("lease {") != string::npos)
+            {
+                // point to the new lease
+                last_lease = Lease();
+            }
+
+            // If 'fixed-address' is found, update the last_lease
+            if (line.find("fixed-address") != string::npos)
+            {
+                istringstream leaseStream(line);
+                string token;
+                leaseStream >> token;              // ignore "fixed-address" label
+                leaseStream >> last_lease.address; // just want the address
+
+                // If there is a ';' at the end of the line, remove it.
+                if (!last_lease.address.empty() && last_lease.address.back() == ';')
+                    last_lease.address.pop_back();
+            }
+        }
+        // The 'last_lease' should now contain this host's pxeboot address.
+        // Close the file and return the lease struct.
+        lease_file.close();
+    }
+    else
+    {
+        wlog ("unable to open dhcp lease file: %s", full_path.c_str());
+    }
+    pxeboot_address = last_lease.address ;
+    return (pxeboot_address);
+}
+
+/*****************************************************************************
+ * Name       : get_pxeboot_static_addr
+ *
+ * Purpose    : Get pxeboot address from pxeboot network interface config file.
+ *
+ * Description: The controller nodes pxeboot addresses are static.
+ *              Therefore, the pxeboot address for a controller node is
+ *              taken from the 'address' label inside the pxeboot network
+ *              interface file.
+ *
+ * Assumptions: If this lookup is for the pxeboot interface then the caller
+ *              is expected to suffix the interface name with a ":2"
+ *
+
+ * Example:
+ *
+ *   sysadmin@controller-1:/etc/network/interfaces.d$ cat ifcfg-enp0s8:2
+ *   iface enp0s8:2 inet static
+ *   address 169.254.202.3      <-- controller pxeboot address
+ *   netmask 255.255.255.0
+ *
+ * Returns: a string containing the host's pxeboot address
+ ****************************************************************************/
+string get_pxeboot_static_addr ( string iface )
+{
+    string pxeboot_address = "" ; // return value
+    string interface_file = NETWORK_INTERFACES_DIR ;
+    interface_file.append("/ifcfg-");
+    interface_file.append(iface);
+
+    if ( daemon_is_file_present (interface_file.data()))
+    {
+        ifstream iface_file(interface_file);
+        if (iface_file.is_open())
+        {
+            string line;
+
+            // Iterate through the file line by line ...
+            while (getline(iface_file, line))
+            {
+                // search for new 'address' entry where
+                // address is the first word of the line.
+                size_t position = line.find("address");
+                if ( position == 0 )
+                {
+                    istringstream fileStream(line);
+                    string token;
+                    fileStream >> token;           // ignore "address" label
+                    fileStream >> pxeboot_address; // just want the address
+                    ilog ("found pxeboot address in %s", interface_file.c_str());
+                }
+            }
+            // close the file and return the pxeboot address.
+            iface_file.close();
+        }
+        else
+        {
+            wlog ("unable to open %s file for interface:%s",
+                   interface_file.c_str(),
+                   iface.c_str());
+        }
+    }
+    else
+    {
+        // This is normal for a controller before it is unlocked.
+        ilog ("no %s file present", interface_file.c_str() );
+    }
+    return (pxeboot_address);
+}
 
 string get_event_str ( int event_code )
 {
@@ -1534,7 +2093,7 @@ int send_log_message ( msgSock_type * sock_ptr,
     }
     else
     {
-        mlog2 ("%s:%s\n%s", &log.hostname[0], &log.filename[0], log_str );
+        mlog1 ("%s:%s\n%s", &log.hostname[0], &log.filename[0], log_str );
     }
     return rc ;
 }

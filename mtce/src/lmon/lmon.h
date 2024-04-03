@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Wind River Systems, Inc.
+ * Copyright (c) 2019, 2024 Wind River Systems, Inc.
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -23,14 +23,15 @@ using namespace std;
 #endif
 #define __AREA__ "mon"
 
+#ifndef INTERFACES_DIR
 #define INTERFACES_DIR ((const char *)"/sys/class/net/")
+#endif
 #define PLATFORM_DIR   ((const char *)"/etc/platform/platform.conf")
 #define LMON_DIR       ((const char *)"/etc/lmon/lmon.conf")
 
 #define INTERFACES_MAX (4) /* maximum number of interfaces to monitor */
 
-enum interface_type { ethernet = 0, vlan = 1, bond = 2 };
-string iface_type ( interface_type type_enum );
+string iface_type ( iface_type_enum type_enum );
 
 /* daemon only supports the GET request */
 #define HTTP_SUPPORTED_METHODS  (EVHTTP_REQ_GET)
@@ -68,7 +69,7 @@ typedef struct
     /* true if the interface is configured.
      * i.e. the name label shown above is found in platform.conf */
     bool used ;
-    interface_type type_enum ;
+    iface_type_enum type_enum ;
 
     /* true if the link is up ; false otherwise */
     bool interface_one_link_up ;

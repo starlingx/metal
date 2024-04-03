@@ -50,12 +50,6 @@ extern "C"
 #include "amon.h"           /* for ... active monitoring utilities        */
 }
 
-extern char *program_invocation_short_name;
-
-int mtcAlive_mgmnt_sequence = 0 ;
-int mtcAlive_clstr_sequence = 0 ;
-
-
 /************************************************************************
  *
  * Name        : stop pmon
@@ -107,18 +101,18 @@ void stop_pmon( void )
 /* Receive and process commands from controller maintenance */
 int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
 {
-    int bytes = 0 ;
     mtc_message_type msg ;
     int rc = FAIL ;
+    ssize_t bytes_received = 0 ;
     ctrl_type * ctrl_ptr = get_ctrl_ptr() ;
     bool log_ack = true ;
+    const char * iface_name_ptr = get_interface_name_str(interface) ;
 
     if ( interface == CLSTR_INTERFACE )
     {
         if ( ! ctrl_ptr->clstr_iface_provisioned )
         {
-            wlog ("cannot receive from unprovisioned %s interface\n",
-                   get_iface_name_str(interface) );
+            wlog ("cannot receive from unprovisioned %s interface", iface_name_ptr);
             return (rc);
         }
     }
@@ -126,17 +120,57 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
     /* clean the rx/tx buffer */
     memset ((void*)&msg,0,sizeof(mtc_message_type));
     string hostaddr = "" ;
-    if ( interface == MGMNT_INTERFACE )
+    if ( interface == PXEBOOT_INTERFACE )
     {
-        if (( sock_ptr->mtc_client_rx_socket ) &&
-            ( sock_ptr->mtc_client_rx_socket->sock_ok() == true ))
+        if ( sock_ptr->pxeboot_rx_socket )
         {
-            rc       = sock_ptr->mtc_client_rx_socket->read((char*)&msg.hdr[0], sizeof(mtc_message_type));
-            hostaddr = sock_ptr->mtc_client_rx_socket->get_src_str();
+            struct sockaddr_in  client_addr;
+            socklen_t addr_len = sizeof(client_addr);
+
+            // Receive data
+            bytes_received = recvfrom(sock_ptr->pxeboot_rx_socket,
+                                        (char*)&msg.hdr[0],
+                                        sizeof(mtc_message_type), 0,
+                                        (struct sockaddr*)&client_addr, &addr_len);
+            // Terminate the buffer
+            msg.hdr[bytes_received] = '\0' ;
+
+            // Log with debug_msg lane 2
+            if ( daemon_get_cfg_ptr()->debug_msg&2 )
+            {
+                // log the message ; both header and buffer
+                string _buf = msg.buf[0] ? msg.buf : "empty";
+                ilog ("Received %ld bytes (%s) from %s:%d - %s:%s",
+                       bytes_received,
+                       iface_name_ptr,
+                       inet_ntoa(client_addr.sin_addr),
+                       ntohs(client_addr.sin_port),
+                       &msg.hdr[0], _buf.c_str());
+                // dump_memory (&msg.hdr[0], 16, bytes_received);
+            }
+            hostaddr = inet_ntoa(client_addr.sin_addr);
+        }
+    }
+    else if ( interface == MGMNT_INTERFACE )
+    {
+        if (( sock_ptr->mtc_client_mgmt_rx_socket ) &&
+            ( sock_ptr->mtc_client_mgmt_rx_socket->sock_ok() == true ))
+        {
+            rc = bytes_received = sock_ptr->mtc_client_mgmt_rx_socket->read((char*)&msg.hdr[0], sizeof(mtc_message_type));
+            hostaddr = sock_ptr->mtc_client_mgmt_rx_socket->get_src_str();
+
+            // Log with debug_msg lane 2
+            if ( daemon_get_cfg_ptr()->debug_msg&2 )
+            {
+                // Log the message ; both header and buffer
+                string _buf = msg.buf[0] ? msg.buf : "empty";
+                ilog ("Received %ld bytes (%s) from %s - %s:%s", bytes_received,
+                       iface_name_ptr, hostaddr.c_str(), &msg.hdr[0], _buf.c_str());
+            }
         }
         else
         {
-            elog ("cannot read from null or failed 'mtc_client_rx_socket'\n");
+            elog ("cannot read from null or failed 'mtc_client_mgmt_rx_socket'\n");
             return (FAIL_TO_RECEIVE);
         }
     }
@@ -145,8 +179,18 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
         if (( sock_ptr->mtc_client_clstr_rx_socket ) &&
             ( sock_ptr->mtc_client_clstr_rx_socket->sock_ok() == true ))
         {
-            rc       = sock_ptr->mtc_client_clstr_rx_socket->read((char*)&msg.hdr[0], sizeof(mtc_message_type));
+            rc = bytes_received = sock_ptr->mtc_client_clstr_rx_socket->read((char*)&msg.hdr[0], sizeof(mtc_message_type));
             hostaddr = sock_ptr->mtc_client_clstr_rx_socket->get_src_str();
+
+            // Log with debug_msg lane 2
+            if ( daemon_get_cfg_ptr()->debug_msg&2 )
+            {
+               // Log the message ; both header and buffer
+               string _buf = msg.buf[0] ? msg.buf : "empty";
+               ilog ("Received %ld bytes (%s) from %s: %s:%s",
+                      bytes_received, iface_name_ptr,
+                      hostaddr.c_str(), &msg.hdr[0], _buf.c_str());
+            }
         }
         else
         {
@@ -174,10 +218,8 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
     {
         self = true ;
     }
-    string interface_name = get_iface_name_str (interface) ;
+    string interface_name = get_interface_name_str (interface) ;
     string command_name = get_mtcNodeCommand_str(msg.cmd) ;
-
-    print_mtc_message ( get_hostname(), MTC_CMD_RX, msg, interface_name.data(), false );
 
     /* Message version greater than zero have the hosts management
      * mac address appended to the header string */
@@ -186,18 +228,18 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
         /* the minus 1 is to back up from the null char that is accounted for in the hearder size */
         if ( strncmp ( &msg.hdr[MSG_HEADER_SIZE-1], ctrl_ptr->macaddr.data(), MSG_HEADER_SIZE ))
         {
-            wlog ("%s command not for this host (exp:%s det:%s) ; ignoring ...\n",
+            wlog ("%s req command from %s network not for this host (exp:%s det:%s) ; ignoring ...\n",
                       command_name.c_str(),
+                      iface_name_ptr,
                       ctrl_ptr->macaddr.c_str(),
                       &msg.hdr[MSG_HEADER_SIZE-1]);
-            print_mtc_message ( get_hostname(), MTC_CMD_RX, msg, interface_name.data(), true );
+            print_mtc_message ( get_hostname(), MTC_CMD_RX, msg, iface_name_ptr, true );
             return (FAIL_INVALID_DATA);
         }
     }
 
-    print_mtc_message ( hostaddr, MTC_CMD_RX, msg, get_iface_name_str(interface), rc );
-    if ( rc )
-        return rc;
+    if ( ! hostaddr.empty() )
+        print_mtc_message ( hostaddr, MTC_CMD_RX, msg, iface_name_ptr, false );
 
     /* Check for response messages */
     if ( strstr ( &msg.hdr[0], get_cmd_req_msg_header() ) )
@@ -205,20 +247,25 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
         rc = PASS ;
         if ( msg.cmd == MTC_REQ_MTCALIVE )
         {
-            mlog1 ("mtcAlive request received (%s network)\n", interface_name.c_str());
+            ilog ("mtcAlive request received from %s network", iface_name_ptr);
+            if ( interface == PXEBOOT_INTERFACE )
+            {
+                alog2 ("pxeboot mtcAlive buffer: %s", &msg.buf[0]);
+                load_pxebootInfo_msg(msg);
+            }
             return ( send_mtcAlive_msg ( sock_ptr, get_who_i_am(), interface ));
         }
         else if ( msg.cmd == MTC_MSG_INFO )
         {
-            mlog1("mtc 'info' message received (%s network)\n", interface_name.c_str());
+            alog2 ("mtc 'info' message received from %s network", iface_name_ptr);
             load_mtcInfo_msg ( msg );
             return ( PASS ); /* no ack for this message */
         }
         else if ( msg.cmd == MTC_CMD_SYNC )
         {
-            ilog ("mtc '%s' message received (%s network)\n",
+            ilog ("mtc '%s' message received from %s network",
                    get_mtcNodeCommand_str(msg.cmd),
-                   interface_name.c_str());
+                   iface_name_ptr);
 
             ilog ("Sync Start");
             sync ();
@@ -233,7 +280,7 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
             /* Only recreate the file if its not already present */
             if ( daemon_is_file_present ( NODE_LOCKED_FILE ) == false )
             {
-                ilog ("%s locked (%s)", get_hostname().c_str(), interface_name.c_str() );
+                ilog ("%s locked (%s)", get_hostname().c_str(), iface_name_ptr);
                 daemon_log ( NODE_LOCKED_FILE, ADMIN_LOCKED_STR);
             }
 
@@ -254,7 +301,7 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
         }
         else if ( msg.cmd == MTC_MSG_UNLOCKED )
         {
-            ilog ("%s unlocked (%s)", get_hostname().c_str(), interface_name.c_str() );
+            ilog ("%s unlocked received from %s network", get_hostname().c_str(), iface_name_ptr);
 
             /* Only remove the file if it is present */
             if ( daemon_is_file_present ( NODE_LOCKED_FILE ) == true )
@@ -264,7 +311,7 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
             if ( daemon_is_file_present ( NODE_LOCKED_FILE_BACKUP ) == true )
             {
                 daemon_remove_file ( NODE_LOCKED_FILE_BACKUP );
-                ilog ("cleared node locked backup flag (%s)", interface_name.c_str() );
+                ilog ("cleared node locked backup flag (%s)", iface_name_ptr);
             }
         }
         else if ( msg.cmd == MTC_MSG_SUBF_GOENABLED_FAILED )
@@ -297,7 +344,7 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
             }
             else
             {
-                ilog ("GoEnabled request posted (%s)\n", interface_name.c_str());
+                ilog ("GoEnabled request posted (%s)", iface_name_ptr);
                 ctrl_ptr->posted_script_set.push_back ( GOENABLED_MAIN_SCRIPTS );
                 ctrl_ptr->posted_script_set.unique();
             }
@@ -324,7 +371,7 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
             }
             else
             {
-                ilog ("GoEnabled Subf request posted (%s)\n", interface_name.c_str());
+                ilog ("GoEnabled Subf request posted (%s)", iface_name_ptr);
 
                 /* Cleanup test result flag files */
                 if ( daemon_is_file_present ( GOENABLED_SUBF_PASS) )
@@ -345,15 +392,15 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
         }
         else if ( msg.cmd == MTC_CMD_REBOOT )
         {
-            ilog ("%s command received (%s)",
+            ilog ("%s command received from %s network",
                       command_name.c_str(),
-                      interface_name.c_str());
+                      iface_name_ptr);
         }
         else if ( msg.cmd == MTC_CMD_LAZY_REBOOT )
         {
-            ilog ("%s command received (%s) ; delay:%d seconds\n",
+            ilog ("%s command received from %s network ; delay:%d seconds",
                       command_name.c_str(),
-                      interface_name.c_str(),
+                      iface_name_ptr,
                       msg.num ? msg.parm[0] : 0 );
         }
         else if ( is_host_services_cmd ( msg.cmd ) == true )
@@ -378,9 +425,9 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
                 ctrl_ptr->posted_script_set.push_back ( HOSTSERVICES_SCRIPTS );
                 ctrl_ptr->posted_script_set.unique ();
 
-                ilog ("%s request posted (%s)\n",
+                ilog ("%s request posted from %s network",
                           command_name.c_str(),
-                          interface_name.c_str());
+                          iface_name_ptr);
 
                 ctrl_ptr->hostservices.posted  = msg.cmd ;
                 ctrl_ptr->hostservices.monitor = MTC_CMD_NONE ;
@@ -391,17 +438,17 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
             if ( ( daemon_is_file_present ( MTC_CMD_FIT__START_SVCS )))
             {
                 rc = FAIL_FIT ;
-                wlog ("%s Start Services - fit failure (%s)\n",
+                wlog ("%s Start Services - fit failure (%s)",
                           command_name.c_str(),
-                          interface_name.c_str() );
+                          iface_name_ptr);
             }
 
             /* Fault insertion - fail to send host services ACK */
             if ( ( daemon_is_file_present ( MTC_CMD_FIT__NO_HS_ACK )))
             {
-                wlog ("%s Start Services - fit no ACK (%s)\n",
+                wlog ("%s Start Services - fit no ACK (%s)",
                           command_name.c_str(),
-                          interface_name.c_str() );
+                          iface_name_ptr);
                 return (PASS);
             }
 
@@ -421,20 +468,21 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
         }
         else if ( msg.cmd == MTC_CMD_WIPEDISK )
         {
-            ilog ("Reload command received (%s)\n", interface_name.c_str());
+            ilog ("Reload command received from %s network", iface_name_ptr);
         }
         else if ( msg.cmd == MTC_CMD_RESET )
         {
-            ilog ("Reset command received (%s)\n", interface_name.c_str());
+            ilog ("Reset command received from %s network", iface_name_ptr);
         }
         else if ( msg.cmd == MTC_CMD_LOOPBACK )
         {
-            ilog ("Loopback command received (%s)\n", interface_name.c_str());
+            ilog ("Loopback command received from %s network", iface_name_ptr);
         }
         else
         {
             rc = FAIL_BAD_CASE ;
-            elog ( "Unsupported maintenance command (%d)\n", msg.cmd );
+            wlog ( "Unsupported maintenance command (%d) with %ld bytes received from %s network",
+                    msg.cmd, bytes_received, iface_name_ptr );
         }
 
         snprintf ( &msg.hdr[0], MSG_HEADER_SIZE, "%s", get_cmd_rsp_msg_header());
@@ -443,12 +491,12 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
     {
         if ( msg.cmd == MTC_MSG_MAIN_GOENABLED )
         {
-            ilog ("main function goEnabled results acknowledged (%s)\n", interface_name.c_str());
+            ilog ("main function goEnabled results acknowledged from %s network", iface_name_ptr);
             return (PASS);
         }
         else if ( msg.cmd == MTC_MSG_SUBF_GOENABLED )
         {
-            ilog ("sub-function goEnabled results acknowledged (%s)\n", interface_name.c_str());
+            ilog ("sub-function goEnabled results acknowledged from %s network", iface_name_ptr);
             return (PASS);
         }
         else
@@ -460,14 +508,25 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
 
     else if ( strstr ( &msg.hdr[0], get_worker_msg_header()) )
     {
-        elog ("unsupported worker message\n");
-        print_mtc_message ( &msg );
+        if ( msg.cmd == MTC_MSG_MTCALIVE )
+        {
+            wlog ("unexpected mtcAlive message from %s from %s network",
+                   hostaddr.c_str(), iface_name_ptr);
+        }
+        else
+        {
+            wlog ("unsupported worker message from %s from %s network",
+                   hostaddr.c_str(), iface_name_ptr);
+        }
+
+        wlog ("WARNING: mtcClient is receiving mtcAgent bound mtcAlive messages");
+        // dump_memory (&msg, 16, bytes_received);
         return PASS ;
     }
     else
     {
-        elog ("unsupported message\n");
-        print_mtc_message ( &msg );
+        wlog ("unsupported message from %s from %s network", hostaddr.c_str(), iface_name_ptr);
+        // dump_memory (&msg, 16, bytes_received);
         return PASS ;
     }
 
@@ -481,73 +540,109 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
     {
         rc = PASS ;
 
-        bytes = sizeof(mtc_message_type)-BUF_SIZE;
+        int bytes = sizeof(mtc_message_type)-BUF_SIZE;
+
+        if ( interface == PXEBOOT_INTERFACE )
+        {
+            int flags = 0 ; // no tx flags
+            if ( sock_ptr->pxeboot_tx_socket <= 0 )
+            {
+                elog("pxeboot_tx_socket not ok (%d)", sock_ptr->pxeboot_tx_socket);
+                return (FAIL_SOCKET_SENDTO);
+            }
+
+            if ( log_ack )
+            {
+                ilog ("sending %s ack to %s over %s network",
+                       command_name.c_str(),
+                       hostaddr.c_str(),
+                       iface_name_ptr);
+            }
+
+            struct sockaddr_in hostAddr;
+            memset(&hostAddr, 0, sizeof(hostAddr));
+            print_mtc_message ( hostaddr.data(), MTC_CMD_TX, msg, iface_name_ptr, false );
+            hostAddr.sin_addr.s_addr = inet_addr(hostaddr.data());
+            hostAddr.sin_family = AF_INET;
+            hostAddr.sin_port   = htons(sock_ptr->mtc_tx_pxeboot_port);
+
+            ssize_t bytes_sent = sendto(sock_ptr->pxeboot_tx_socket, &msg.hdr[0], bytes, flags,
+                                        (const struct sockaddr*)&hostAddr, sizeof(hostAddr));
+            if (bytes_sent <= 0)
+            {
+                elog ("failed to send %s ack to %s:%d on %s network (rc:%ld) (%d:%m)",
+                        command_name.c_str(),
+                        hostaddr.c_str(),
+                        hostAddr.sin_port,
+                        iface_name_ptr,
+                        bytes_sent, errno);
+            }
+        }
 
         /* send the message back either over the mgmnt or clstr interface */
-        if ( interface == MGMNT_INTERFACE )
+        else if ( interface == MGMNT_INTERFACE )
         {
-            if (( sock_ptr->mtc_client_tx_socket ) &&
-                ( sock_ptr->mtc_client_tx_socket->sock_ok() == true ))
+            if (( sock_ptr->mtc_client_mgmt_tx_socket ) &&
+                ( sock_ptr->mtc_client_mgmt_tx_socket->sock_ok() == true ))
             {
-                rc = sock_ptr->mtc_client_tx_socket->write((char*)&msg.hdr[0], bytes);
+                rc = sock_ptr->mtc_client_mgmt_tx_socket->write((char*)&msg.hdr[0], bytes);
                 if ( rc <= 0 )
                 {
-                    elog ("%s reply send (mtc_client_tx_socket) failed (%s) (rc:%d)",
+                    elog ("%s reply send (mtc_client_mgmt_tx_socket) failed (%s) (rc:%d)",
                               command_name.c_str(),
-                              interface_name.c_str(), rc);
+                              iface_name_ptr, rc);
                 }
                 else if ( log_ack )
                 {
                     ilog ("%s reply send (%s)",
                               command_name.c_str(),
-                              interface_name.c_str());
+                              iface_name_ptr);
                 }
             }
             else
             {
-                elog ("cannot send to null or failed socket (%s network)\n",
-                       interface_name.c_str() );
+                elog ("cannot send to null or failed socket (%s)", iface_name_ptr);
             }
         }
         else if ( interface == CLSTR_INTERFACE )
         {
-            if (( sock_ptr->mtc_client_tx_socket_c0_clstr ) &&
-                ( sock_ptr->mtc_client_tx_socket_c0_clstr->sock_ok() == true ))
+            if (( sock_ptr->mtc_client_clstr_tx_socket_c0 ) &&
+                ( sock_ptr->mtc_client_clstr_tx_socket_c0->sock_ok() == true ))
             {
-                rc = sock_ptr->mtc_client_tx_socket_c0_clstr->write((char*)&msg.hdr[0], bytes);
+                rc = sock_ptr->mtc_client_clstr_tx_socket_c0->write((char*)&msg.hdr[0], bytes);
                 if ( rc <= 0 )
                 {
-                    elog ("%s reply send (mtc_client_tx_socket_c0_clstr) failed (%s) (rc:%d)",
+                    elog ("%s reply send (mtc_client_clstr_tx_socket_c0) failed (%s) (rc:%d)",
                               command_name.c_str(),
-                              interface_name.c_str(), rc);
+                              iface_name_ptr, rc);
                 }
                 else if ( log_ack )
                 {
                     ilog ("%s reply send (%s)",
                               command_name.c_str(),
-                              interface_name.c_str());
+                              iface_name_ptr);
                 }
             }
-            if (( sock_ptr->mtc_client_tx_socket_c1_clstr ) &&
-                ( sock_ptr->mtc_client_tx_socket_c1_clstr->sock_ok() == true ))
+            if (( sock_ptr->mtc_client_clstr_tx_socket_c1 ) &&
+                ( sock_ptr->mtc_client_clstr_tx_socket_c1->sock_ok() == true ))
             {
-                rc = sock_ptr->mtc_client_tx_socket_c1_clstr->write((char*)&msg.hdr[0], bytes);
+                rc = sock_ptr->mtc_client_clstr_tx_socket_c1->write((char*)&msg.hdr[0], bytes);
                 if ( rc <= 0 )
                 {
-                    elog ("%s reply send (mtc_client_tx_socket_c1_clstr) failed (%s) (rc:%d)",
+                    elog ("%s reply send (mtc_client_clstr_tx_socket_c1) failed (%s) (rc:%d)",
                               command_name.c_str(),
-                              interface_name.c_str(), rc);
+                              iface_name_ptr, rc);
                 }
                 else if ( log_ack )
                 {
                     ilog ("%s reply send (%s)",
                               command_name.c_str(),
-                              interface_name.c_str());
+                              iface_name_ptr);
                 }
             }
         }
 
-        print_mtc_message ( get_hostname(), MTC_CMD_TX, msg, interface_name.data(), (rc != bytes) );
+        print_mtc_message ( get_hostname(), MTC_CMD_TX, msg, iface_name_ptr, (rc != bytes) );
 
         /* get the shutdown delay config alue */
         int delay = daemon_get_cfg_ptr()->failsafe_shutdown_delay ;
@@ -560,11 +655,11 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
         {
             if ( daemon_is_file_present ( MTC_CMD_FIT__NO_REBOOT ) )
             {
-                ilog ("Reboot - fit bypass (%s)\n", interface_name.c_str());
+                ilog ("Reboot - fit bypass (%s)", iface_name_ptr);
                 return (PASS);
             }
             stop_pmon();
-            ilog ("Reboot (%s)\n", interface_name.c_str());
+            ilog ("Reboot (%s)", iface_name_ptr);
             daemon_log ( NODE_RESET_FILE, "reboot command" );
             fork_sysreq_reboot ( delay );
             rc = system("/usr/bin/systemctl reboot");
@@ -581,7 +676,7 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
             {
                 do
                 {
-                    ilog ("Lazy Reboot (%s) ; rebooting in %d seconds\n", interface_name.c_str(), msg.num ? msg.parm[0] : 1 );
+                    ilog ("Lazy Reboot (%s) ; rebooting in %d seconds", iface_name_ptr, msg.num ? msg.parm[0] : 1 );
                     sleep (1);
                     if ( msg.parm[0] % 5 )
                     {
@@ -592,7 +687,7 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
             }
             else
             {
-                ilog ("Lazy Reboot (%s) ; now\n", interface_name.c_str() );
+                ilog ("Lazy Reboot (%s) ; now", iface_name_ptr);
             }
 
             fork_sysreq_reboot ( delay );
@@ -602,11 +697,11 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
         {
             if ( daemon_is_file_present ( MTC_CMD_FIT__NO_RESET ) )
             {
-                ilog ("Reset - fit bypass (%s)\n", interface_name.c_str());
+                ilog ("Reset - fit bypass (%s)", iface_name_ptr);
                 return (PASS);
             }
             stop_pmon();
-            ilog ("Reset 'reboot -f' (%s)\n", interface_name.c_str());
+            ilog ("Reset 'reboot -f' (%s)", iface_name_ptr);
             daemon_log ( NODE_RESET_FILE, "reset command" );
             fork_sysreq_reboot ( delay/2 );
             rc = system("/usr/bin/systemctl reboot --force");
@@ -617,7 +712,7 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
 
             if ( daemon_is_file_present ( MTC_CMD_FIT__NO_WIPEDISK ) )
             {
-                ilog ("Wipedisk - fit bypass (%s)\n", interface_name.c_str());
+                ilog ("Wipedisk - fit bypass (%s)", iface_name_ptr);
                 return (PASS);
             }
             /* We fork a reboot as a fail safe.
@@ -636,7 +731,7 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
             }
             else if( 0 == parent ) /* we're the child */
             {
-                ilog ("Disk wipe in progress (%s)\n", interface_name.c_str());
+                ilog ("Disk wipe in progress (%s)", iface_name_ptr);
                 daemon_log ( NODE_RESET_FILE, "wipedisk command" );
                 rc = system("/usr/local/bin/wipedisk --force");
                 ilog ("Disk wipe complete - Forcing Reboot ...\n");
@@ -727,35 +822,35 @@ int mtce_send_event ( mtc_socket_type * sock_ptr, unsigned int cmd , const char 
 
     event.cmd = cmd ;
 
-    if (( sock_ptr->mtc_client_tx_socket ) &&
-        ( sock_ptr->mtc_client_tx_socket->sock_ok() == true ))
+    if (( sock_ptr->mtc_client_mgmt_tx_socket ) &&
+        ( sock_ptr->mtc_client_mgmt_tx_socket->sock_ok() == true ))
     {
         if ( bytes == 0 )
         {
            slog ("message send failed ; message size=0 for cmd:0x%x is 0\n", event.cmd );
            rc = FAIL_NO_DATA ;
         }
-        else if ((rc = sock_ptr->mtc_client_tx_socket->write((char*)&event.hdr[0], bytes))!= bytes )
+        else if ((rc = sock_ptr->mtc_client_mgmt_tx_socket->write((char*)&event.hdr[0], bytes))!= bytes )
         {
             elog ("message send failed. (%d) (%d:%s) \n", rc, errno, strerror(errno));
             elog ("message: %d bytes to <%s:%d>\n", bytes,
-                    sock_ptr->mtc_client_tx_socket->get_dst_str(),
-                    sock_ptr->mtc_client_tx_socket->get_dst_addr()->getPort());
+                    sock_ptr->mtc_client_mgmt_tx_socket->get_dst_str(),
+                    sock_ptr->mtc_client_mgmt_tx_socket->get_dst_addr()->getPort());
             rc = FAIL_TO_TRANSMIT ;
         }
         else
         {
             mlog2 ("Transmit: %x bytes to %s:%d\n", bytes,
-                    sock_ptr->mtc_client_tx_socket->get_dst_str(),
-                    sock_ptr->mtc_client_tx_socket->get_dst_addr()->getPort());
-            print_mtc_message ( get_hostname(), MTC_CMD_TX, event, get_iface_name_str(MGMNT_INTERFACE), false );
+                    sock_ptr->mtc_client_mgmt_tx_socket->get_dst_str(),
+                    sock_ptr->mtc_client_mgmt_tx_socket->get_dst_addr()->getPort());
+            print_mtc_message ( get_hostname(), MTC_CMD_TX, event, get_interface_name_str(MGMNT_INTERFACE), false );
             rc = PASS ;
         }
     }
     else
     {
-       elog ("cannot send to null or failed socket (%s network)\n",
-              get_iface_name_str (MGMNT_INTERFACE) );
+       elog ("cannot send to null or failed socket (%s)",
+              get_interface_name_str (MGMNT_INTERFACE) );
        rc = FAIL_SOCKET_SENDTO ;
     }
     return rc ;
@@ -765,10 +860,23 @@ int mtce_send_event ( mtc_socket_type * sock_ptr, unsigned int cmd , const char 
  *
  * Name       : create_mtcAlive_msg
  *
- * Description: Creates a common mtcAlive message
+ * Description: Creates a common mtcAlive message that consists of the
+ *               - out-of-band health/status flags
+ *               - host uptime
+ *               - json string of some of the host's info
+ *                 {
+ *                   "hostname":"controller-0",
+ *                   "personality":"controller,worker",
+ *                   "pxeboot_ip":"169.254.202.2",
+ *                   "mgmt_ip":"192.168.204.2",
+ *                   "cluster_host_ip":"192.168.206.2",
+ *                   "mgmt_mac":"08:00:27:9f:ef:57",
+ *                   "interface":"Mgmnt",
+ *                   "sequence":145
+ *                 }
  *
  ****************************************************************************/
-int create_mtcAlive_msg ( mtc_message_type & msg, int cmd, string identity, int interface )
+int create_mtcAlive_msg ( ctrl_type * ctrl_ptr, mtc_message_type & msg, int cmd, string identity, int interface )
 {
     static int _sm_unhealthy_debounce_counter [MAX_IFACES] = {0,0} ;
 
@@ -843,7 +951,7 @@ int create_mtcAlive_msg ( mtc_message_type & msg, int cmd, string identity, int 
         if ( ++_sm_unhealthy_debounce_counter[interface] > MAX_SM_UNHEALTHY_DEBOUNCE )
         {
             wlog("SM Unhealthy flag set (%s)",
-                  get_iface_name_str(interface));
+                  get_interface_name_str(interface));
             msg.parm[MTC_PARM_FLAGS_IDX] |= MTC_FLAG__SM_UNHEALTHY ;
         }
         else
@@ -851,7 +959,7 @@ int create_mtcAlive_msg ( mtc_message_type & msg, int cmd, string identity, int 
             wlog("SM Unhealthy debounce %d of %d (%s)",
                   _sm_unhealthy_debounce_counter[interface],
                   MAX_SM_UNHEALTHY_DEBOUNCE,
-                  get_iface_name_str(interface));
+                  get_interface_name_str(interface));
         }
     }
     else
@@ -859,19 +967,32 @@ int create_mtcAlive_msg ( mtc_message_type & msg, int cmd, string identity, int 
         _sm_unhealthy_debounce_counter[interface] = 0 ;
     }
 
-    /* add the interface and sequence number to the mtcAlice message */
+    /* add the interface and sequence number to the mtcAlive message */
     identity.append ( ",\"interface\":\"");
-    identity.append (get_iface_name_str(interface));
+    identity.append (get_interface_name_str(interface));
     identity.append("\",\"sequence\":");
 
-    if ( interface == CLSTR_INTERFACE )
+    if ( interface == PXEBOOT_INTERFACE )
     {
-        identity.append(itos(mtcAlive_clstr_sequence++));
+        ctrl_ptr->mtcAlive_pxeboot_sequence++ ;
+        identity.append(itos(ctrl_ptr->mtcAlive_pxeboot_sequence));
+        msg.parm[MTC_PARM_SEQ_IDX] = ctrl_ptr->mtcAlive_pxeboot_sequence ;
+    }
+    else if ( interface == MGMNT_INTERFACE )
+    {
+        ctrl_ptr->mtcAlive_mgmnt_sequence++ ;
+        identity.append(itos(ctrl_ptr->mtcAlive_mgmnt_sequence));
+        msg.parm[MTC_PARM_SEQ_IDX] = ctrl_ptr->mtcAlive_mgmnt_sequence ;
+    }
+    else if ( interface == CLSTR_INTERFACE )
+    {
+        ctrl_ptr->mtcAlive_clstr_sequence++ ;
+        identity.append(itos(ctrl_ptr->mtcAlive_clstr_sequence));
+        msg.parm[MTC_PARM_SEQ_IDX] = ctrl_ptr->mtcAlive_clstr_sequence ;
     }
     else
-    {
-        identity.append(itos(mtcAlive_mgmnt_sequence++));
-    }
+        identity.append(itos(0));
+
     identity.append("}");
 
     memcpy ( &msg.buf[0], identity.c_str(), identity.size() );
@@ -896,40 +1017,40 @@ int send_mtc_msg ( mtc_socket_type * sock_ptr, int cmd , string identity )
     {
         int interface = MGMNT_INTERFACE ;
         mtc_message_type msg ;
-        int bytes = create_mtcAlive_msg ( msg, cmd, identity, interface );
-        if (( sock_ptr->mtc_client_tx_socket ) &&
-            ( sock_ptr->mtc_client_tx_socket->sock_ok() == true ))
+        int bytes = create_mtcAlive_msg ( get_ctrl_ptr(), msg, cmd, identity, interface );
+        if (( sock_ptr->mtc_client_mgmt_tx_socket ) &&
+            ( sock_ptr->mtc_client_mgmt_tx_socket->sock_ok() == true ))
         {
             /* Send back to requester - TODO: consider sending back to both as multicast */
-            if ((rc = sock_ptr->mtc_client_tx_socket->write((char*)&msg.hdr[0], bytes)) != bytes )
+            if ((rc = sock_ptr->mtc_client_mgmt_tx_socket->write((char*)&msg.hdr[0], bytes)) != bytes )
             {
                 if ( rc == -1 )
                 {
                     wlog_throttled (send_mtc_msg_failed, 100 ,
-                              "failed to send <%s:%d> (%d:%m)\n",
-                              sock_ptr->mtc_client_tx_socket->get_dst_str(),
-                              sock_ptr->mtc_client_tx_socket->get_dst_addr()->getPort(), errno );
+                              "failed to send <%s:%d> (%d:%m)",
+                              sock_ptr->mtc_client_mgmt_tx_socket->get_dst_str(),
+                              sock_ptr->mtc_client_mgmt_tx_socket->get_dst_addr()->getPort(), errno );
                 }
                 else
                 {
                     wlog_throttled ( send_mtc_msg_failed, 100 ,
                               "sent only %d of %d bytes to <%s:%d>\n",
                               rc, bytes,
-                              sock_ptr->mtc_client_tx_socket->get_dst_str(),
-                              sock_ptr->mtc_client_tx_socket->get_dst_addr()->getPort());
+                              sock_ptr->mtc_client_mgmt_tx_socket->get_dst_str(),
+                              sock_ptr->mtc_client_mgmt_tx_socket->get_dst_addr()->getPort());
                 }
             }
             else
             {
                 send_mtc_msg_failed = 0 ;
-                print_mtc_message ( get_hostname(), MTC_CMD_TX, msg, get_iface_name_str(interface), false );
+                print_mtc_message ( get_hostname(), MTC_CMD_TX, msg, get_interface_name_str(interface), false );
                 rc = PASS ;
             }
         }
         else
         {
-           elog ("cannot send to null or failed socket (%s network)\n",
-                  get_iface_name_str (MGMNT_INTERFACE) );
+           elog ("cannot send to null or failed socket (%s)",
+                  get_interface_name_str (MGMNT_INTERFACE) );
         }
     }
     else
@@ -943,57 +1064,134 @@ int send_mtc_msg ( mtc_socket_type * sock_ptr, int cmd , string identity )
 int send_mtcAlive_msg_failed = 0 ;
 int send_mtcAlive_msg ( mtc_socket_type * sock_ptr, string identity, int interface )
 {
+    int flags = 0 ; // no tx flags
+
+    /* get a pointer to the process control structure */
+    ctrl_type * ctrl_ptr = get_ctrl_ptr() ;
+
+    if (( interface == PXEBOOT_INTERFACE ) &&
+        ( ctrl_ptr->pxeboot_iface_provisioned == false ))
+        return (PASS) ;
+
     if (( interface == CLSTR_INTERFACE ) &&
-        ( get_ctrl_ptr()->clstr_iface_provisioned != true ))
+        ( ctrl_ptr->clstr_iface_provisioned != true ))
     {
-        dlog2 ("cannot send to unprovisioned %s interface\n",
-               get_iface_name_str(interface) );
+        dlog2 ("cannot send to unprovisioned %s interface",
+               get_interface_name_str(interface) );
         return (FAIL);
     }
 
     mtc_message_type msg ;
-    int bytes = create_mtcAlive_msg ( msg, MTC_MSG_MTCALIVE, identity, interface );
+    int bytes = create_mtcAlive_msg ( ctrl_ptr, msg, MTC_MSG_MTCALIVE, identity, interface );
 
-    if ( interface == MGMNT_INTERFACE )
+    if ( interface == PXEBOOT_INTERFACE )
+    {
+        /* Send to controller-0 pxeboot address */
+        if ( sock_ptr->pxeboot_tx_socket <= 0 )
+        {
+            elog("pxeboot_tx_socket not ok (%d)", sock_ptr->pxeboot_tx_socket);
+            return (FAIL_SOCKET_SENDTO);
+        }
+
+        // TODO: Consider adding controllers info to ctrl struct
+        string controllers[CONTROLLERS] = {CONTROLLER_0, CONTROLLER_1};
+        alog1 ("sending mtcAlive to both controllers");
+        for (int c = 0 ; c < CONTROLLERS ; c++)
+        {
+            string pxeboot_addr_cx ;
+            struct sockaddr_in hostAddr;
+            memset(&hostAddr, 0, sizeof(hostAddr));
+
+            if (controllers[c] == CONTROLLER_1)
+            {
+                if ( ctrl_ptr->system_type != SYSTEM_TYPE__AIO__SIMPLEX )
+                    pxeboot_addr_cx = ctrl_ptr->pxeboot_addr_c1;
+                else
+                    continue; // skip controller-1 for SX systems
+            }
+            else
+                pxeboot_addr_cx = ctrl_ptr->pxeboot_addr_c0;
+
+            if ( pxeboot_addr_cx.empty() )
+            {
+                if ( ctrl_ptr->pxeboot_address_learned[c] == true )
+                {
+                    ctrl_ptr->pxeboot_address_learned[c] = false ;
+                    wlog ( "%s pxeboot address not learned ; unable to send pxeboot mtcAlive",
+                               controllers[c].c_str() );
+                }
+                continue ;
+            }
+
+            if ( ctrl_ptr->pxeboot_address_learned[c] == false )
+            {
+                // Only log this if the not learned log was produced.
+                // Which is most likely case on process startup.
+                ilog ("sending pxeboot network mtcAlive msg on port %d to %s at %s",
+                       sock_ptr->mtc_tx_pxeboot_port,
+                       controllers[c].c_str(),
+                       pxeboot_addr_cx.c_str());
+                ctrl_ptr->pxeboot_address_learned[c] = true ;
+            }
+
+            print_mtc_message ( controllers[c], MTC_CMD_TX, msg, get_interface_name_str(PXEBOOT_INTERFACE), false );
+            hostAddr.sin_addr.s_addr = inet_addr(pxeboot_addr_cx.data());
+            hostAddr.sin_family = AF_INET;
+            hostAddr.sin_port = htons(sock_ptr->mtc_tx_pxeboot_port); // 2102
+            alog1 ("sending pxeboot network mtcAlive msg to %s", controllers[c].c_str() );
+            ssize_t bytes_sent = sendto(sock_ptr->pxeboot_tx_socket, &msg.hdr[0], bytes, flags,
+                                (const struct sockaddr*)&hostAddr, sizeof(hostAddr));
+            if (bytes_sent <= 0)
+            {
+                elog ("failed to send mtcAlive to %s using %s:%d (pxeboot) (rc:%ld) (%d:%m)",
+                       controllers[c].c_str(), pxeboot_addr_cx.c_str(), hostAddr.sin_port, bytes_sent, errno);
+            }
+        } // for loop
+    }
+
+    else if ( interface == MGMNT_INTERFACE )
     {
         /* Send to controller floating address */
-        if (( sock_ptr->mtc_client_tx_socket ) &&
-            ( sock_ptr->mtc_client_tx_socket->sock_ok() == true ))
+        if (( sock_ptr->mtc_client_mgmt_tx_socket ) &&
+            ( sock_ptr->mtc_client_mgmt_tx_socket->sock_ok() == true ))
         {
-            print_mtc_message ( CONTROLLER, MTC_CMD_TX, msg, get_iface_name_str(MGMNT_INTERFACE), false );
-            sock_ptr->mtc_client_tx_socket->write((char*)&msg.hdr[0], bytes) ;
+            alog1 ("sending mgmt network mtcAlive msg to %s", CONTROLLER);
+            print_mtc_message ( CONTROLLER, MTC_CMD_TX, msg, get_interface_name_str(MGMNT_INTERFACE), false );
+            sock_ptr->mtc_client_mgmt_tx_socket->write((char*)&msg.hdr[0], bytes) ;
         }
         else
         {
-            elog("mtc_client_tx_socket not ok");
+            elog("mtc_client_mgmt_tx_socket not ok");
         }
     }
     else if ( interface == CLSTR_INTERFACE )
     {
         /* Send to controller-0 cluster address */
-        if (( sock_ptr->mtc_client_tx_socket_c0_clstr ) &&
-            ( sock_ptr->mtc_client_tx_socket_c0_clstr->sock_ok() == true ))
+        if (( sock_ptr->mtc_client_clstr_tx_socket_c0 ) &&
+            ( sock_ptr->mtc_client_clstr_tx_socket_c0->sock_ok() == true ))
         {
-            print_mtc_message ( CONTROLLER_0, MTC_CMD_TX, msg, get_iface_name_str(CLSTR_INTERFACE), false );
-            sock_ptr->mtc_client_tx_socket_c0_clstr->write((char*)&msg.hdr[0], bytes ) ;
+            alog1 ("sending clstr network mtcAlive msg to %s", CONTROLLER_0);
+            print_mtc_message ( CONTROLLER_0, MTC_CMD_TX, msg, get_interface_name_str(CLSTR_INTERFACE), false );
+            sock_ptr->mtc_client_clstr_tx_socket_c0->write((char*)&msg.hdr[0], bytes ) ;
         }
         else
         {
-            elog("mtc_client_tx_socket_c0_clstr not ok");
+            elog("mtc_client_clstr_tx_socket_c0 not ok");
         }
 
         /* Send to controller-1 cluster address */
         if ( get_ctrl_ptr()->system_type != SYSTEM_TYPE__AIO__SIMPLEX )
         {
-            if (( sock_ptr->mtc_client_tx_socket_c1_clstr ) &&
-                ( sock_ptr->mtc_client_tx_socket_c1_clstr->sock_ok() == true ))
+            if (( sock_ptr->mtc_client_clstr_tx_socket_c1 ) &&
+                ( sock_ptr->mtc_client_clstr_tx_socket_c1->sock_ok() == true ))
             {
-                print_mtc_message ( CONTROLLER_1, MTC_CMD_TX, msg, get_iface_name_str(CLSTR_INTERFACE), false );
-                sock_ptr->mtc_client_tx_socket_c1_clstr->write((char*)&msg.hdr[0], bytes ) ;
+                alog1 ("sending clstr mtcAlive msg to %s", CONTROLLER_1);
+                print_mtc_message ( CONTROLLER_1, MTC_CMD_TX, msg, get_interface_name_str(CLSTR_INTERFACE), false );
+                sock_ptr->mtc_client_clstr_tx_socket_c1->write((char*)&msg.hdr[0], bytes ) ;
             }
             else
             {
-                elog("mtc_client_tx_socket_c1_clstr not ok");
+                elog("mtc_client_clstr_tx_socket_c1 not ok");
             }
         }
     }
@@ -1040,11 +1238,11 @@ int send_mtcClient_cmd ( mtc_socket_type * sock_ptr, int cmd, string hostname, s
     int rc = FAIL ;
 
     /* Send to controller floating address */
-    if (( sock_ptr->mtc_client_tx_socket ) &&
-        ( sock_ptr->mtc_client_tx_socket->sock_ok() == true ))
+    if (( sock_ptr->mtc_client_mgmt_tx_socket ) &&
+        ( sock_ptr->mtc_client_mgmt_tx_socket->sock_ok() == true ))
     {
-        print_mtc_message ( hostname, MTC_CMD_TX, msg, get_iface_name_str(MGMNT_INTERFACE), false );
-        rc = sock_ptr->mtc_client_tx_socket->write((char*)&msg.hdr[0], bytes, address.data(), port ) ;
+        print_mtc_message ( hostname, MTC_CMD_TX, msg, get_interface_name_str(MGMNT_INTERFACE), false );
+        rc = sock_ptr->mtc_client_mgmt_tx_socket->write((char*)&msg.hdr[0], bytes, address.data(), port ) ;
         if ( 0 >= rc )
         {
             elog("failed to send command to mtcClient (%d) (%d:%s)", rc, errno, strerror(errno));
@@ -1055,7 +1253,7 @@ int send_mtcClient_cmd ( mtc_socket_type * sock_ptr, int cmd, string hostname, s
     }
     else
     {
-        elog("mtc_client_tx_socket not ok");
+        elog("mtc_client_mgmt_tx_socket not ok");
         rc = FAIL_BAD_STATE ;
     }
     return (rc) ;

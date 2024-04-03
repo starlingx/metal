@@ -67,10 +67,11 @@ void daemon_exit ( void );
 #define FAIL_BM_PASSWORD            (122*256)
 
 #define MTC_PARM_LOCK_PERSIST_IDX   (0) // node lock command
-#define MTC_PARM_UPTIME_IDX (0)
-#define MTC_PARM_HEALTH_IDX (1)
-#define MTC_PARM_FLAGS_IDX  (2)
-#define MTC_PARM_MAX_IDX    (3)
+#define MTC_PARM_UPTIME_IDX         (0) // mtcAlive message
+#define MTC_PARM_HEALTH_IDX         (1) // mtcAlive message
+#define MTC_PARM_FLAGS_IDX          (2) // mtcAlive message
+#define MTC_PARM_SEQ_IDX            (3) // mtcAlive message
+#define MTC_PARM_MAX_IDX            (4) // mtcAlive message
 
 /** 'I Am <state>' flags for maintenance.
   *
@@ -111,6 +112,8 @@ void daemon_exit ( void );
 #define SMGMT_UNHEALTHY_FILE    ((const char *)"/var/run/.sm_node_unhealthy")
 #define UNLOCK_READY_FILE       ((const char *)"/etc/platform/.unlock_ready")
 #define STILL_SIMPLEX_FILE      ((const char *)"/etc/platform/simplex")
+#define FIRST_CONTROLLER_FILE   ((const char *)"/etc/platform/.first_controller")
+#define INIT_CONFIG_COMPLETE    ((const char *)"/etc/platform/.initial_config_complete")
 
 /** path to and module init file name */
 #define MTCE_CONF_FILE          ((const char *)"/etc/mtc.conf")
@@ -153,6 +156,8 @@ void daemon_exit ( void );
 #define PMON_CONF_FILE_DIR      ((const char *)"/etc/pmon.d")
 
 #define BM_DNSMASQ_FILENAME     ((const char *)"dnsmasq.bmc_hosts")
+#define OPT_PLATFORM_CONFIG_DIR ((const char *)"/opt/platform/config")
+#define DNSMASQ_HOSTS_FILE      ((const char *)"dnsmasq.hosts")
 
 /* supported BMC communication protocols ; access method */
 typedef enum
@@ -415,6 +420,7 @@ typedef enum
 #define CONTROLLER_1 ((const char *)"controller-1")
 #define CONTROLLER_2 ((const char *)"controller-2")
 #define CONTROLLER   ((const char *)"controller")
+#define CONTROLLERS (2)
 
 #define STORAGE_0   ((const char *)"storage-0")
 #define STORAGE_1   ((const char *)"storage-1")
@@ -461,7 +467,8 @@ typedef enum
 /** Interface Codes **/
 #define MGMNT_INTERFACE (0)
 #define CLSTR_INTERFACE (1)
-
+#define PXEBOOT_INTERFACE (2)
+#define MTCALIVE_INTERFACES_MAX (3)
 
 /** Maintenance Inventory struct */
 typedef struct
@@ -1204,6 +1211,19 @@ typedef enum
 
 /** Return the string representing the specified 'sensor' stage */
 string get_sensorStages_str ( mtc_sensorStages_enum stage );
+
+typedef enum
+{
+    MTC_MTCALIVE__START = 0,
+    MTC_MTCALIVE__MONITOR,
+    MTC_MTCALIVE__WAIT,
+    MTC_MTCALIVE__CHECK,
+    MTC_MTCALIVE__SEND,
+    MTC_MTCALIVE__FAIL,
+    MTC_MTCALIVE__STAGES
+} mtc_mtcAliveStages_enum ;
+
+string get_mtcAliveStages_str ( mtc_mtcAliveStages_enum stage );
 
 typedef enum
 {

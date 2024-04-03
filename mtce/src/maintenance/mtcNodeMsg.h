@@ -1,7 +1,7 @@
 #ifndef __INCLUDE_MTCNODEMSG_HH__
 #define __INCLUDE_MTCNODEMSG_HH__
 /*
- * Copyright (c) 2013, 2016 Wind River Systems, Inc.
+ * Copyright (c) 2013, 2016, 2024 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -53,7 +53,7 @@ using namespace std;
 
 #define MTC_AGENT_RX_BUFF_SIZE (MAX_NODES*MAX_MSG)
 
-#define MAX_RX_MSG_BATCH (20)
+#define MAX_RX_MSG_BATCH (50)
 
 /** Maintenance messaging socket control structure */
 typedef struct
@@ -63,25 +63,26 @@ typedef struct
     /** UDP sockets used by the mtcAgent to transmit and receive
      *  maintenance commands to the client (compute) node and
      *  receive the compute node reply in the receive direction   */
-    msgClassSock*  mtc_agent_tx_socket      ; /**< tx to mtc client mgmnt   */
-    msgClassSock*  mtc_agent_clstr_tx_socket; /**< tx to mtc client clstr   */
-    msgClassSock*  mtc_agent_rx_socket      ; /**< rx from mtc client mgmnt */
-    msgClassSock*  mtc_agent_clstr_rx_socket; /**< rx from mtc client clstr */
-    int  mtc_agent_port                     ; /**< the agent rx port number */
+    msgClassSock*  mtc_agent_mgmt_tx_socket   ; /**< tx to   mtc client mgmnt */
+    msgClassSock*  mtc_agent_mgmt_rx_socket   ; /**< rx from mtc client mgmnt */
+    msgClassSock*  mtc_agent_clstr_tx_socket  ; /**< tx to   mtc client clstr */
+    msgClassSock*  mtc_agent_clstr_rx_socket  ; /**< rx from mtc client clstr */
+    int  mtc_agent_port                       ; /**< the agent rx port number */
+    int  mtc_rx_mgmnt_port                    ; /**< the agent rx port number */
 
     struct sockaddr_in  agent_addr; /**< socket attributes struct */
-    int  mtc_agent_rx_socket_size ;
+    int  mtc_agent_mgmt_rx_socket_size ;
     int  mtc_agent_clstr_rx_socket_size ;
 
     /** UDP sockets used by the mtcClient to receive maintenance
       * commands from and transmit replies to the mtcAgent                           */
-    msgClassSock*  mtc_client_rx_socket          ; /**< rx from controller           */
-    msgClassSock*  mtc_client_tx_socket          ; /**< tx to controller mgmnt       */
-    msgClassSock*  mtc_client_tx_socket_c0_clstr ; /**< tx to controller-0 clstr i/f */
-    msgClassSock*  mtc_client_tx_socket_c1_clstr ; /**< tx to controller-1 clstr i/f */
-    msgClassSock*  mtc_client_clstr_rx_socket    ; /**< rx from controller clstr     */
-    int            mtc_mgmnt_cmd_port            ; /**< mtc command port mgmnt i/f   */
-    int            mtc_clstr_cmd_port            ; /**< mtc command port clstr i/f   */
+    msgClassSock*  mtc_client_mgmt_rx_socket     ; /**< rx from controller   mgmt    */
+    msgClassSock*  mtc_client_mgmt_tx_socket     ; /**< tx to   controller   mgmnt   */
+    msgClassSock*  mtc_client_clstr_tx_socket_c0 ; /**< tx to   controller-0 clstr   */
+    msgClassSock*  mtc_client_clstr_tx_socket_c1 ; /**< tx to   controller-1 clstr   */
+    msgClassSock*  mtc_client_clstr_rx_socket    ; /**< rx from controller   clstr   */
+    int            mtc_mgmnt_cmd_port            ; /**< mtc command port     mgmnt   */
+    int            mtc_clstr_cmd_port            ; /**< mtc command port     clstr   */
     struct sockaddr_in mtc_cmd_addr              ; /**< socket attributes mgmnt      */
 
    /***************************************************************/
@@ -106,6 +107,12 @@ typedef struct
     struct timeval waitd  ;
             fd_set readfds;
 
+    /** IPV4 Pxeboot transmit and receive sockets and ports */
+    int  pxeboot_tx_socket    ;
+    int  mtc_tx_pxeboot_port  ;
+    int  pxeboot_rx_socket    ;
+    int  mtc_rx_pxeboot_port  ;
+
     /** Active Monitor Socket */
     int  amon_socket ;
 
@@ -115,7 +122,7 @@ typedef struct
     int netlink_sock ; /* netlink socket */
     int   ioctl_sock ; /* general ioctl socket */
 
-
+    float msg_rate ;
 } mtc_socket_type ;
 
 
