@@ -223,6 +223,10 @@ typedef enum
 #define MTC_JSON_SEVERITY      "severity"
 #define MTC_JSON_SENSOR        "sensor"
 #define MTC_JSON_PROCESS       "process"
+#define MTC_JSON_FEATURES      "features"
+
+/* Used by the mtcCLient with the MTC_JSON_FEATURES label above */
+#define MTC_PXEBOOT_MTCALIVE   "pxeboot_mtcAlive"
 
 /* Mtce Info Keys */
 #define MTCE_INFO_KEY__BMC_PROTOCOL "bmc_protocol"
@@ -614,6 +618,7 @@ typedef struct
 #define MTC_SERVICE_PMOND               (0xB00BF00D)
 #define MTC_SERVICE_HWMOND              (0xF00BF00D)
 #define MTC_SERVICE_HEARTBEAT           (0xBABEF00D)
+#define MTC_SERVICE_MTCCLIENT           (0xABCDF00D)
 
 /** process to process loopback command */
 #define MTC_EVENT_LOOPBACK              (0x01010101)

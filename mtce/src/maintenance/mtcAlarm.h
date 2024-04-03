@@ -2,7 +2,7 @@
 #define __MTCALARM_H__
 
 /*
- * Copyright (c) 2015-2017 Wind River Systems, Inc.
+ * Copyright (c) 2015-2017, 2024 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -26,6 +26,7 @@ using namespace std;
 typedef enum
 {
     MTC_ALARM_ID__LOCK,
+    MTC_ALARM_ID__MTCALIVE,
     MTC_ALARM_ID__CONFIG,
     MTC_ALARM_ID__ENABLE,
     MTC_ALARM_ID__BM,

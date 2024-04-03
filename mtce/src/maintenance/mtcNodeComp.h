@@ -102,6 +102,7 @@ typedef struct
     string       pxeboot_addr    ;
     string       pxeboot_addr_c0 ;
     string       pxeboot_addr_c1 ;
+    string       pxeboot_addr_active_controller ;
 
     // Assume address is learned to start even though it's likely not.
     // This enabled the first not learned log followed by a learned
@@ -147,6 +148,10 @@ typedef struct
     string mtcAgent_ip ;
 
     peer_ctrlr_reset_type peer_ctrlr_reset;
+
+    /* throttles sending the periodic mtcClient ready event. */
+    int ready_event_counter ;
+
 } ctrl_type ;
 
 ctrl_type * get_ctrl_ptr ( void );

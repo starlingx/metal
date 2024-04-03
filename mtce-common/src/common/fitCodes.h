@@ -120,6 +120,7 @@
 #define FIT_CODE__FORCE_LOCK_HOST                    (32)
 #define FIT_CODE__UNLOCK_HOST                        (33)
 #define FIT_CODE__FAIL_SWACT                         (34)
+#define FIT_CODE__FAIL_PXEBOOT_MTCALIVE              (35)
 
 #define FIT_CODE__FM_SET_ALARM                       (40)
 #define FIT_CODE__FM_GET_ALARM                       (41)

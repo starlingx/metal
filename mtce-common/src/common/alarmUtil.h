@@ -2,7 +2,7 @@
 #define __ALARMUTIL_H__
 
 /*
- * Copyright (c) 2013, 2016 Wind River Systems, Inc.
+ * Copyright (c) 2013, 2016, 2024 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -31,6 +31,7 @@
 
 #define SWERR_ALARM_ID       ((const char *)"200.000") /* Do No Use */
 #define LOCK_ALARM_ID        ((const char *)"200.001")
+#define MTCALIVE_ALARM_ID    ((const char *)"200.003")
 #define ENABLE_ALARM_ID      ((const char *)"200.004")
 #define MGMNT_HB_ALARM_ID    ((const char *)"200.005")
 #define PMOND_ALARM_ID       ((const char *)"200.006")

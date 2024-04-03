@@ -3433,15 +3433,20 @@ int nodeLinkClass::offline_handler ( struct nodeLinkClass::node * node_ptr )
                     plog ("%s offline (external)\n", node_ptr->hostname.c_str());
                     node_ptr->offlineStage = MTC_OFFLINE__IDLE ;
                 }
-                else if ( !node_ptr->mtcAlive_mgmnt && !node_ptr->mtcAlive_clstr )
+                else if ( !node_ptr->mtcAlive_mgmnt && !node_ptr->mtcAlive_clstr && !node_ptr->mtcAlive_pxeboot )
                 {
                     if ( ++node_ptr->offline_search_count > offline_threshold )
                     {
                         node_ptr->mtcAlive_online = false ;
+                        node_ptr->mtcClient_ready = false ;
 
-                        // Clear all the mtcAlive_sequence numbers
+
+                        // Clear all the mtcAlive counts and sequence numbers
+                        node_ptr->mtcAlive_mgmnt_count = 0 ;
+                        node_ptr->mtcAlive_clstr_count = 0 ;
+                        node_ptr->mtcAlive_pxeboot_count = 0 ;
                         for (int i = 0 ; i < MTCALIVE_INTERFACES_MAX ; i++)
-                         node_ptr->mtcAlive_sequence[i] = 0;
+                            node_ptr->mtcAlive_sequence[i] = 0;
 
                         plog ("%s going offline ; (threshold (%d msec * %d)\n",
                                   node_ptr->hostname.c_str(),
@@ -3485,13 +3490,15 @@ int nodeLinkClass::offline_handler ( struct nodeLinkClass::node * node_ptr )
                     **/
 
                     node_ptr->mtcAlive_online = true ;
-                    ilog ("%s still seeing mtcAlive (%d) (Mgmt:%c:%d Clstr:%c:%d) ; restart offline_search_count=%d of %d\n",
+                    ilog ("%s still seeing mtcAlive (%d) (Mgmt:%c:%d Clstr:%c:%d Pxeboot:%c:%d) ; restart offline_search_count=%d of %d\n",
                               node_ptr->hostname.c_str(),
                               node_ptr->mtcAlive_count,
                               node_ptr->mtcAlive_mgmnt ? 'Y' : 'n',
                               node_ptr->mtcAlive_mgmnt_count,
                               node_ptr->mtcAlive_clstr ? 'Y' : 'n',
                               node_ptr->mtcAlive_clstr_count,
+                              node_ptr->mtcAlive_pxeboot ? 'Y' : 'n',
+                              node_ptr->mtcAlive_pxeboot_count,
                               node_ptr->offline_search_count,
                               offline_threshold );
                     node_ptr->offline_search_count = 0 ; /* reset the search count */
@@ -6261,6 +6268,8 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
                 mtcAlarm_state ( node_ptr->hostname, MTC_ALARM_ID__ENABLE);
             EFmAlarmSeverityT config_alarm_severity =
                 mtcAlarm_state ( node_ptr->hostname, MTC_ALARM_ID__CONFIG);
+            EFmAlarmSeverityT mtcAlive_alarm_severity =
+                mtcAlarm_state ( node_ptr->hostname, MTC_ALARM_ID__MTCALIVE);
 
             /* Clear generic enable alarm over process restart.
              * Will get reasserted if the cause condition still exists */
@@ -6282,6 +6291,21 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
                 ilog ("%s found config alarm ; loaded %s",
                           node_ptr->hostname.c_str(),
                           alarmUtil_getSev_str(config_alarm_severity).c_str());
+            }
+
+            /* The mtcAlive alarm is maintained if it exists.
+             * The pxeboot_mtcAlive_monitor will clear the alarm
+             * if it exists and the pxeboot mtcAlive messaging works. */
+            if ( mtcAlive_alarm_severity != FM_ALARM_SEVERITY_CLEAR )
+            {
+                node_ptr->alarms[MTC_ALARM_ID__MTCALIVE] = mtcAlive_alarm_severity ;
+                ilog ("%s found mtcAlive alarm ; loaded %s",
+                          node_ptr->hostname.c_str(),
+                          alarmUtil_getSev_str(mtcAlive_alarm_severity).c_str());
+
+                // Load up the miss and loss counts used for recovery
+                node_ptr->mtcAlive_loss_count[PXEBOOT_INTERFACE] = PXEBOOT_MTCALIVE_LOSS_ALARM_THRESHOLD ;
+                node_ptr->mtcAlive_miss_count[PXEBOOT_INTERFACE] = PXEBOOT_MTCALIVE_LOSS_THRESHOLD ;
             }
 
             if ( is_controller(node_ptr) )
@@ -7571,29 +7595,46 @@ int nodeLinkClass::oos_test_handler ( struct nodeLinkClass::node * node_ptr )
 // Returns    : PASS
 //
 ///////////////////////////////////////////////////////////////////////////////
-#define PXEBOOT_MTCALIVE_MONITOR_RATE_SECS     (10)
-#define PXEBOOT_MTCALIVE_LOSS_THRESHOLD        (6)
-#define PXEBOOT_MTCALIVE_NOT_SEEN_LOG_THROTTLE (6)
-#define PXEBOOT_MTCALIVE_LOSS_LOG_THROTTLE     (6)
 int nodeLinkClass::pxeboot_mtcAlive_monitor ( struct nodeLinkClass::node * node_ptr )
 {
-    // ERIK: TODO: Comment out once verified
     flog ("%s pxeboot mtcAlive fsm stage: %s",
            node_ptr->hostname.c_str(),
            get_mtcAliveStages_str(node_ptr->mtcAliveStage).c_str());
 
-    if ( !this->pxeboot_network_provisioned ) return PASS ;
+
+    // Don't monitor pxeboot mtcAlive messaging while the node is
+    // locked or in the following administrative action states.
+    if (( node_ptr->adminState == MTC_ADMIN_STATE__LOCKED ) ||
+        ( node_ptr->adminAction == MTC_ADMIN_ACTION__UNLOCK ) ||
+        ( node_ptr->adminAction == MTC_ADMIN_ACTION__ENABLE ) ||
+        ( node_ptr->adminAction == MTC_ADMIN_ACTION__RECOVER ) ||
+        ( node_ptr->adminAction == MTC_ADMIN_ACTION__POWERCYCLE ))
+    {
+        // Clear the alarm if the node is locked
+        if (( node_ptr->adminState == MTC_ADMIN_STATE__LOCKED ) &&
+            ( node_ptr->alarms[MTC_ALARM_ID__MTCALIVE] != FM_ALARM_SEVERITY_CLEAR ))
+            alarm_mtcAlive_clear (node_ptr, PXEBOOT_INTERFACE);
+        // Switch to START if not already there
+        if ( node_ptr->mtcAliveStage != MTC_MTCALIVE__START )
+            mtcAliveStageChange (node_ptr, MTC_MTCALIVE__START);
+        return PASS ;
+    }
 
     switch (node_ptr->mtcAliveStage)
     {
+        // Starts from scratch. Clears timer and counts but not alarm.
         case MTC_MTCALIVE__START:
         {
             alog2 ("%s mtcAlive start", node_ptr->hostname.c_str());
-            mtcTimer_reset ( node_ptr->mtcAlive_timer );
+            if ( ! mtcTimer_expired (node_ptr->mtcAlive_timer) )
+                mtcTimer_reset (node_ptr->mtcAlive_timer);
             node_ptr->mtcAlive_sequence[PXEBOOT_INTERFACE] = 0 ;
+            node_ptr->mtcAlive_sequence_save[PXEBOOT_INTERFACE] = 0 ;
             mtcAliveStageChange (node_ptr, MTC_MTCALIVE__SEND);
-            break ;
+            return PASS ;
         }
+        // Reloads the controller's pxeboot info and sends it with a mtcAlive request
+        // telling the remote node to send send mtcAlive to the active controller.
         case MTC_MTCALIVE__SEND:
         {
             /* pxeboot info refresh audit */
@@ -7601,25 +7642,31 @@ int nodeLinkClass::pxeboot_mtcAlive_monitor ( struct nodeLinkClass::node * node_
                 pxebootInfo_loader ();
             alog2 ("%s mtcAlive send", node_ptr->hostname.c_str());
             send_mtc_cmd ( node_ptr->hostname, MTC_REQ_MTCALIVE, PXEBOOT_INTERFACE );
-            node_ptr->mtcAlive_sequence_save[PXEBOOT_INTERFACE] = 0 ;
-            node_ptr->mtcAlive_sequence_miss[PXEBOOT_INTERFACE] = 0 ;
             mtcAliveStageChange (node_ptr, MTC_MTCALIVE__MONITOR);
-            break ;
+            return PASS ;
         }
+        // Start the Wait timer 2x longer than the expected mtcAlive cadence
         case MTC_MTCALIVE__MONITOR:
         {
             alog2 ("%s mtcAlive monitor", node_ptr->hostname.c_str());
             mtcTimer_start ( node_ptr->mtcAlive_timer, mtcTimer_handler,
                              PXEBOOT_MTCALIVE_MONITOR_RATE_SECS );
             mtcAliveStageChange (node_ptr, MTC_MTCALIVE__WAIT);
-            break ;
+            return PASS ;
         }
+        // Wait for the timer to expire
         case MTC_MTCALIVE__WAIT:
         {
             if ( mtcTimer_expired ( node_ptr->mtcAlive_timer ) )
                 mtcAliveStageChange (node_ptr, MTC_MTCALIVE__CHECK);
-            break ;
+            return PASS ;
         }
+        // Check the mtcAlive sequence numbers and handle each possible case
+        // success         - mtcAlive sequence number is greater than the last one - may clear alarm
+        // out-of-sequence - mtcAlive sequence number is less than the last one    - may assert alarm
+        // miss            - mtcAlive sequence number is equal to the last one     - count misses
+        // loss            - mtcAlive messaging miss count exceeded threshold      - assert alarm
+        // not seen        - waiting for first mtcAlive following reboot           - request mtcAlive
         case MTC_MTCALIVE__CHECK:
         {
             if ( node_ptr->mtcAlive_sequence[PXEBOOT_INTERFACE] > node_ptr->mtcAlive_sequence_save[PXEBOOT_INTERFACE] )
@@ -7632,69 +7679,131 @@ int nodeLinkClass::pxeboot_mtcAlive_monitor ( struct nodeLinkClass::node * node_
                            node_ptr->mtcAlive_sequence_save[PXEBOOT_INTERFACE]);
 
                 // Now that we received a message we can dec the missed count
-                if ( node_ptr->mtcAlive_sequence_miss[PXEBOOT_INTERFACE] )
-                    node_ptr->mtcAlive_sequence_miss[PXEBOOT_INTERFACE]-- ;
-                node_ptr->pxeboot_mtcAlive_not_seen_log_throttle = 0 ;
-                node_ptr->pxeboot_mtcAlive_loss_log_throttle = 0 ;
+                // and clear the alarm if it exists
+                if ( node_ptr->mtcAlive_miss_count[PXEBOOT_INTERFACE] )
+                {
+                    // Set miss count to max if we are have reached at least one loss but no alarm yet
+                    if (( node_ptr->alarms[MTC_ALARM_ID__MTCALIVE] == FM_ALARM_SEVERITY_CLEAR ) &&
+                        ( node_ptr->mtcAlive_loss_count[PXEBOOT_INTERFACE] ))
+                    {
+                        node_ptr->mtcAlive_miss_count[PXEBOOT_INTERFACE] = PXEBOOT_MTCALIVE_LOSS_THRESHOLD ;
+                        node_ptr->mtcAlive_loss_count[PXEBOOT_INTERFACE] = 0 ;
+                    }
+
+                    ilog ("%s pxeboot mtcAlive miss count %d ; decrement %s; recovery",
+                              node_ptr->hostname.c_str(),
+                              node_ptr->mtcAlive_miss_count[PXEBOOT_INTERFACE],
+                              node_ptr->alarms[MTC_ALARM_ID__MTCALIVE] ? "; alarm clear when 0 " : "");
+                    node_ptr->mtcAlive_miss_count[PXEBOOT_INTERFACE]-- ;
+                }
+                else
+                {
+                    // Clear alarm and start with a clean loss slate. miss's is already zero
+                    node_ptr->mtcAlive_loss_count[PXEBOOT_INTERFACE] = 0 ;
+                    alarm_mtcAlive_clear ( node_ptr, PXEBOOT_INTERFACE );
+                }
+
+                // Clear the log throttles now that we have received a message
+                if ( node_ptr->pxeboot_mtcAlive_not_seen_log_throttle || node_ptr->pxeboot_mtcAlive_loss_log_throttle )
+                {
+                    node_ptr->pxeboot_mtcAlive_not_seen_log_throttle = 0 ;
+                    node_ptr->pxeboot_mtcAlive_loss_log_throttle = 0 ;
+                }
+
                 mtcAliveStageChange (node_ptr, MTC_MTCALIVE__MONITOR);
             }
             else if ( node_ptr->mtcAlive_sequence[PXEBOOT_INTERFACE] < node_ptr->mtcAlive_sequence_save[PXEBOOT_INTERFACE] )
             {
-                // unexpected case
-                wlog ("%s mtcAlive out-of-sequence ; this:%d  last:%d",
+                // mtcClient restart case
+                if ( ++node_ptr->mtcAlive_miss_count[PXEBOOT_INTERFACE] < PXEBOOT_MTCALIVE_LOSS_THRESHOLD )
+                {
+                    // The mtcClient on this host may have been restarted
+                    mtcAliveStageChange (node_ptr, MTC_MTCALIVE__SEND);
+                }
+                else
+                    mtcAliveStageChange (node_ptr, MTC_MTCALIVE__FAIL);
+
+                wlog ("%s pxeboot mtcAlive miss count %d ; loss count %d ; out-of-sequence ; this:%d  last:%d",
                           node_ptr->hostname.c_str(),
+                          node_ptr->mtcAlive_miss_count[PXEBOOT_INTERFACE],
+                          node_ptr->mtcAlive_loss_count[PXEBOOT_INTERFACE],
                           node_ptr->mtcAlive_sequence[PXEBOOT_INTERFACE],
                           node_ptr->mtcAlive_sequence_save[PXEBOOT_INTERFACE]);
-                node_ptr->mtcAlive_sequence_miss[PXEBOOT_INTERFACE]++ ;
-                mtcAliveStageChange (node_ptr, MTC_MTCALIVE__START);
             }
-            else if ( ++node_ptr->mtcAlive_sequence_miss[PXEBOOT_INTERFACE] < PXEBOOT_MTCALIVE_LOSS_THRESHOLD )
+            else if ( ++node_ptr->mtcAlive_miss_count[PXEBOOT_INTERFACE] < PXEBOOT_MTCALIVE_LOSS_THRESHOLD )
             {
                 // Missing pxeboot mtcAlive
-                alog ("%s pxeboot mtcAlive miss count %d ; sending request",
+                wlog ("%s pxeboot mtcAlive miss count %d ; loss count %d ; sending request",
                           node_ptr->hostname.c_str(),
-                          node_ptr->mtcAlive_sequence_miss[PXEBOOT_INTERFACE]);
-                send_mtc_cmd ( node_ptr->hostname, MTC_REQ_MTCALIVE, PXEBOOT_INTERFACE );
-                mtcAliveStageChange (node_ptr, MTC_MTCALIVE__MONITOR);
-            }
-            else if ( node_ptr->mtcAlive_pxeboot == true )
-            {
-                wlog_throttled (node_ptr->pxeboot_mtcAlive_loss_log_throttle,
-                                PXEBOOT_MTCALIVE_LOSS_LOG_THROTTLE,
-                                "%s pxeboot mtcAlive loss ; missed: %d ; last: count:%d seq: %d ; sending request",
-                                node_ptr->hostname.c_str(),
-                                node_ptr->mtcAlive_sequence_miss[PXEBOOT_INTERFACE],
-                                node_ptr->mtcAlive_pxeboot_count,
-                                node_ptr->mtcAlive_sequence_save[PXEBOOT_INTERFACE]);
+                          node_ptr->mtcAlive_miss_count[PXEBOOT_INTERFACE],
+                          node_ptr->mtcAlive_loss_count[PXEBOOT_INTERFACE]);
+                // The mtcClient on this host may have been restarted
                 mtcAliveStageChange (node_ptr, MTC_MTCALIVE__SEND);
             }
             else
             {
-                ilog_throttled (node_ptr->pxeboot_mtcAlive_not_seen_log_throttle,
-                                PXEBOOT_MTCALIVE_NOT_SEEN_LOG_THROTTLE,
-                                "%s pxeboot mtcAlive not seen yet ; sending request",
-                                node_ptr->hostname.c_str());
-                mtcAliveStageChange (node_ptr, MTC_MTCALIVE__SEND);
+                if ( node_ptr->mtcAlive_pxeboot == true )
+                {
+                    // If we get there its a loss
+                    wlog_throttled (node_ptr->pxeboot_mtcAlive_loss_log_throttle,
+                                    PXEBOOT_MTCALIVE_LOSS_LOG_THROTTLE,
+                                    "%s pxeboot mtcAlive lost ; missed: %d ; last: count:%d seq: %d ; sending request",
+                                    node_ptr->hostname.c_str(),
+                                    node_ptr->mtcAlive_miss_count[PXEBOOT_INTERFACE],
+                                    node_ptr->mtcAlive_pxeboot_count,
+                                    node_ptr->mtcAlive_sequence_save[PXEBOOT_INTERFACE]);
+                }
+                else
+                {
+                    // Otherwise still searching beyond threshold for the first mtcAlive after reboot or graceful recovery
+                    ilog_throttled (node_ptr->pxeboot_mtcAlive_not_seen_log_throttle,
+                                    PXEBOOT_MTCALIVE_NOT_SEEN_LOG_THROTTLE,
+                                    "%s pxeboot mtcAlive not seen yet ; sending request",
+                                    node_ptr->hostname.c_str());
+                }
+                mtcAliveStageChange (node_ptr, MTC_MTCALIVE__FAIL);
             }
+
+            // Prevent the miss count from being larger than the loss, and therfore the alarm clear recovery, threshold.
+            if (node_ptr->mtcAlive_miss_count[PXEBOOT_INTERFACE] > PXEBOOT_MTCALIVE_LOSS_THRESHOLD)
+                node_ptr->mtcAlive_miss_count[PXEBOOT_INTERFACE] = PXEBOOT_MTCALIVE_LOSS_THRESHOLD;
+
             node_ptr->mtcAlive_sequence_save[PXEBOOT_INTERFACE] = node_ptr->mtcAlive_sequence[PXEBOOT_INTERFACE] ;
-
-            // TODO (emacdona): Need to handle loss case that manages raising the alarm
-            //                  Transition to MTC_MTCALIVE__FAIL
-
             break ;
         }
         case MTC_MTCALIVE__FAIL:
-        {
-            wlog ("%s mtcAlive fail", node_ptr->hostname.c_str());
-            mtcAliveStageChange (node_ptr, MTC_MTCALIVE__START);
-            break ;
-        }
         default:
         {
-            slog ("%s mtcAlive fsm default", node_ptr->hostname.c_str());
+            alog2 ("%s mtcAlive fail", node_ptr->hostname.c_str());
+            if ( node_ptr->alarms[MTC_ALARM_ID__MTCALIVE] == FM_ALARM_SEVERITY_CLEAR )
+            {
+                if ( ++node_ptr->mtcAlive_loss_count[PXEBOOT_INTERFACE] < PXEBOOT_MTCALIVE_LOSS_ALARM_THRESHOLD )
+                {
+                    wlog ("%s pxeboot mtcAlive lost ; %d more loss before alarm assertion",
+                              node_ptr->hostname.c_str(),
+                              PXEBOOT_MTCALIVE_LOSS_ALARM_THRESHOLD - node_ptr->mtcAlive_loss_count[PXEBOOT_INTERFACE] );
+
+                    // Start the misses counter over again after each loss debounce
+                    node_ptr->mtcAlive_miss_count[PXEBOOT_INTERFACE] = 0 ;
+                }
+                else
+                {
+                    ilog ("%s pxeboot mtcAlive alarm assert (%d)",
+                              node_ptr->hostname.c_str(),
+                              node_ptr->mtcAlive_loss_count[PXEBOOT_INTERFACE]);
+                    alarm_mtcAlive_failure ( node_ptr, PXEBOOT_INTERFACE );
+                }
+            }
             mtcAliveStageChange (node_ptr, MTC_MTCALIVE__START);
             break ;
         }
+    }
+    if ( node_ptr->mtcAlive_miss_count[PXEBOOT_INTERFACE] || node_ptr->mtcAlive_loss_count[PXEBOOT_INTERFACE] )
+    {
+        alog2 ("%s pxeboot mtcAlive: Miss: %d of %d  ,  Loss: %d of %d",
+                  node_ptr->hostname.c_str(),
+                  node_ptr->mtcAlive_miss_count[PXEBOOT_INTERFACE], PXEBOOT_MTCALIVE_LOSS_THRESHOLD,
+                  node_ptr->mtcAlive_loss_count[PXEBOOT_INTERFACE], PXEBOOT_MTCALIVE_LOSS_ALARM_THRESHOLD);
     }
     return (PASS);
 }

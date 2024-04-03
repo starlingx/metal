@@ -19,7 +19,7 @@
 #include <errno.h>  /* for ENODEV, EFAULT and ENXIO */
 #include <unistd.h> /* for close and usleep */
 #include <algorithm>
-
+#include <json-c/json.h> /* for ... json_tokener_parse and other json utils */
 using namespace std;
 
 #ifdef  __AREA__
@@ -564,6 +564,11 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
     ptr->mtcAlive_clstr = false ;
     ptr->mtcAlive_pxeboot = false ;
 
+    /* Assume the node's mtcClient does not support pxeboot mtcAlive
+     * messaging until that mtcClient reports that it does.
+     * This bool blocks the pxeboot_mtcAlive_monitor fsm. */
+    ptr->pxeboot_mtcAlive_supported = false ;
+
     /* These counts are incremented in the set_mtcAlive member
      * function and cleared in the reset progression handler. */
     ptr->mtcAlive_mgmnt_count = 0 ;
@@ -574,8 +579,9 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
     for (int i = 0 ; i < MTCALIVE_INTERFACES_MAX ; i++)
     {
         ptr->mtcAlive_sequence[i] =
+        ptr->mtcAlive_loss_count[i] =
         ptr->mtcAlive_sequence_save[i] =
-        ptr->mtcAlive_sequence_miss[i] =
+        ptr->mtcAlive_miss_count[i] =
         ptr->mtcAlive_log_throttle [i] = 0 ;
     }
     ptr->pxeboot_mtcAlive_not_seen_log_throttle = 0 ;
@@ -1886,6 +1892,66 @@ int nodeLinkClass::alarm_compute_clear ( struct nodeLinkClass::node * node_ptr, 
     return (PASS);
 }
 
+/*****************************************************************************
+ *
+ * Name       : alarm_mtcAlive_failure, alarm_mtcAlive_clear
+ *
+ * Purpose    : Generate a log and assert minor or clear alarm for mtcAlive
+ *              messaging failures.
+ *
+ * Assumptions: Degrade not supported for minor alarms.
+ *
+ * Limitations: Only pxeboot messaging is currently supported.
+ *              Need to introduce an network mtcAlive alarm array to track which
+ *              ones are active if/when it comes time to support alarming of
+ *              mtcAlive failures on other networks.
+ *
+ *****************************************************************************/
+int nodeLinkClass::alarm_mtcAlive_failure (  struct nodeLinkClass::node * node_ptr, int network )
+{
+    int rc = PASS ;
+    if ( network != PXEBOOT_INTERFACE )
+    {
+        slog ("%s mtcAlive alarm not supported for %s network",
+                  node_ptr->hostname.c_str(),
+                  get_iface_name_str(network));
+        rc = FAIL_INVALID_OPERATION ;
+    }
+    else if ( node_ptr->alarms[MTC_ALARM_ID__MTCALIVE] != FM_ALARM_SEVERITY_MINOR )
+    {
+        wlog ("%s minor %s mtcAlive messaging failure",
+                  node_ptr->hostname.c_str(),
+                  get_iface_name_str(network));
+
+        mtcAlarm_minor ( node_ptr->hostname, MTC_ALARM_ID__MTCALIVE );
+        node_ptr->alarms[MTC_ALARM_ID__MTCALIVE] = FM_ALARM_SEVERITY_MINOR ;
+    }
+    return (rc);
+}
+
+int nodeLinkClass::alarm_mtcAlive_clear (  struct nodeLinkClass::node * node_ptr, int network )
+{
+    int rc = PASS ;
+    if ( network != PXEBOOT_INTERFACE )
+    {
+        slog ("%s mtcAlive alarm not supported for %s network",
+                  node_ptr->hostname.c_str(),
+                  get_iface_name_str(network));
+        rc = FAIL_INVALID_OPERATION ;
+    }
+    else if ( node_ptr->alarms[MTC_ALARM_ID__MTCALIVE] != FM_ALARM_SEVERITY_CLEAR )
+    {
+        ilog ("%s minor %s mtcAlive messaging failure",
+                  node_ptr->hostname.c_str(),
+                  get_iface_name_str(network));
+
+        mtcAlarm_clear ( node_ptr->hostname, MTC_ALARM_ID__MTCALIVE );
+        node_ptr->alarms[MTC_ALARM_ID__MTCALIVE] = FM_ALARM_SEVERITY_CLEAR ;
+        node_ptr->mtcAlive_loss_count[network] = 0 ;
+    }
+    return (rc);
+}
+
 /** Host Operational State Change public member function */
 int nodeLinkClass::oper_subf_state_change ( string hostname, string newOperState )
 {
@@ -3086,6 +3152,7 @@ void nodeLinkClass::clear_service_readies ( struct nodeLinkClass::node * node_pt
             ilog ("%s clearing service ready events\n", node_ptr->hostname.c_str());
             node_ptr->hbsClient_ready = false ;
             node_ptr->pmond_ready     = false ;
+            node_ptr->mtcClient_ready = false ;
         }
     }
 }
@@ -3952,6 +4019,25 @@ int nodeLinkClass::set_clstr_hostaddr ( string & hostname, string & ip )
     return ( rc );
 }
 
+int nodeLinkClass::set_pxeboot_mtcAlive_support ( string hostname, bool state )
+{
+    int rc = FAIL_HOSTNAME_LOOKUP ;
+    nodeLinkClass::node* node_ptr = nodeLinkClass::getNode ( hostname );
+    if ( node_ptr != NULL )
+    {
+        if ( state != node_ptr->pxeboot_mtcAlive_supported )
+            mtcAliveStageChange (node_ptr, MTC_MTCALIVE__START);
+
+        dlog ("%s pxeboot mtcAlive %s supported",
+                  node_ptr->hostname.c_str(),
+                  state ? "is" : "is not");
+
+        node_ptr->pxeboot_mtcAlive_supported = state ;
+        rc = PASS ;
+    }
+    return ( rc );
+}
+
 string nodeLinkClass::get_hostname ( string hostaddr )
 {
     if (( hostaddr == LOOPBACK_IPV6 ) ||
@@ -4197,7 +4283,7 @@ void nodeLinkClass::set_mtcAlive ( struct nodeLinkClass::node * node_ptr, unsign
             }
             if ( state_change )
             {
-                ilog ("%s mtcAlive received from %s network with uptime:%d ; seq:%d",
+                ilog ("%s mtcAlive received from %s network with uptime:%d ; seq:%d ; state change",
                           node_ptr->hostname.c_str(),
                           get_iface_name_str(iface),
                           node_ptr->uptime,
@@ -4208,22 +4294,32 @@ void nodeLinkClass::set_mtcAlive ( struct nodeLinkClass::node * node_ptr, unsign
             {
                 if ( sequence < node_ptr->mtcAlive_sequence[iface]+1 )
                 {
-                    wlog ("%s mtcAlive received from %s network with uptime:%d ; out-of-sequence ; expect:%d detect:%d ; correcting",
-                              node_ptr->hostname.c_str(),
-                              get_iface_name_str(iface),
-                              node_ptr->uptime,
-                              node_ptr->mtcAlive_sequence[iface]+1,
-                              sequence);
+                    // Don't warn log for mtcClient restart cases.
+                    // ... indicated by a very low sequence number.
+                    if ( sequence > 2 )
+                    {
+                        wlog ("%s mtcAlive received from %s network with uptime:%d ; out-of-sequence ; expect:%d detect:%d ; correcting",
+                                  node_ptr->hostname.c_str(),
+                                  get_iface_name_str(iface),
+                                  node_ptr->uptime,
+                                  node_ptr->mtcAlive_sequence[iface]+1,
+                                  sequence);
+                    }
                 }
                 else
                 {
-                    wlog ("%s mtcAlive received from %s network with uptime:%d ; missed %d mtcalive msgs ; expect:%d detect:%d ; correcting",
-                              node_ptr->hostname.c_str(),
-                              get_iface_name_str(iface),
-                              node_ptr->uptime,
-                              sequence-(node_ptr->mtcAlive_sequence[iface]+1),
-                              node_ptr->mtcAlive_sequence[iface]+1,
-                              sequence);
+                    // Don't warn log for mtcAgent restart cases.
+                    // ... indicated by expecting 1 and detecting a large number.
+                    if ( node_ptr->mtcAlive_sequence[iface] > 0 )
+                    {
+                        wlog ("%s mtcAlive received from %s network with uptime:%d ; missed %d mtcAlive msgs ; expect:%d detect:%d ; correcting",
+                                  node_ptr->hostname.c_str(),
+                                  get_iface_name_str(iface),
+                                  node_ptr->uptime,
+                                  sequence-(node_ptr->mtcAlive_sequence[iface]+1),
+                                  node_ptr->mtcAlive_sequence[iface]+1,
+                                  sequence);
+                    }
                 }
             }
             else
@@ -5659,13 +5755,66 @@ void nodeLinkClass::manage_heartbeat_minor ( string hostname, iface_enum iface, 
 /** Interface to declare that a key service on the
   * specified host is up, running and ready */
 int nodeLinkClass::declare_service_ready  ( string & hostname,
-                                            unsigned int service )
+                                            unsigned int service,
+                                            string feature_list )
 {
     nodeLinkClass::node * node_ptr = nodeLinkClass::getNode ( hostname );
     if ( node_ptr == NULL )
     {
         wlog ("%s Unknown Host\n", hostname.c_str());
         return FAIL_UNKNOWN_HOSTNAME ;
+    }
+    else if ( service == MTC_SERVICE_MTCCLIENT )
+    {
+
+        if ( ! feature_list.empty() )
+        {
+            /* features is expected to be a list - ["feature 0", "feature 1", ..."] */
+            struct json_object *json_obj = json_tokener_parse(feature_list.data());
+            if ( json_obj != NULL )
+            {
+                /* how many featiures are present ? */
+                int features = json_object_array_length(json_obj);
+
+                dlog ("%s %s offers %d features", hostname.c_str(), MTC_SERVICE_MTCCLIENT_NAME, features);
+
+                for ( int f = 0 ; f < features ; f++ )
+                {
+                    /* get the first element at index 0 */
+                    struct json_object *feature_obj_ptr = json_object_array_get_idx(json_obj, f);
+
+                    /* convert each element to a string */
+                    string feature = json_object_get_string(feature_obj_ptr);
+                    dlog ("mtcClient feature %d: %s", f, feature.c_str());
+                    if ( feature == MTC_PXEBOOT_MTCALIVE )
+                    {
+                        dlog ("%s %s supports pxeboot mtcAlive", hostname.c_str(), MTC_SERVICE_MTCCLIENT_NAME);
+                        set_pxeboot_mtcAlive_support (hostname, true);
+                    }
+                }
+                /* free the json object */
+                json_object_put(json_obj);
+            }
+            else
+            {
+                dlog ("%s json object is NULL", hostname.c_str());
+            }
+        }
+        else
+        {
+            dlog ("%s feature list is empty", hostname.c_str());
+        }
+
+        if ( node_ptr->mtcClient_ready == false )
+        {
+            ilog ("%s %s ready %s", hostname.c_str(),
+                                    MTC_SERVICE_MTCCLIENT_NAME,
+                                    node_ptr->pxeboot_mtcAlive_supported ? "; with pxeboot mtcAlive support" : "");
+            node_ptr->mtcClient_ready = true ;
+        }
+        if ( node_ptr->pxeboot_mtcAlive_supported )
+            send_mtc_cmd ( node_ptr->hostname, MTC_REQ_MTCALIVE, PXEBOOT_INTERFACE );
+        return (PASS);
     }
     else if ( service == MTC_SERVICE_PMOND )
     {
@@ -9580,7 +9729,7 @@ void nodeLinkClass::mem_log_mtcalive_pxeboot ( struct nodeLinkClass::node * node
                 this->pxeboot_network_provisioned ? 'Y' : 'N',
                 node_ptr->mtcAlive_pxeboot        ? 'Y' : 'N',
                 node_ptr->mtcAlive_timer.ring     ? 'Y' : 'N',
-                node_ptr->mtcAlive_sequence_miss  [PXEBOOT_INTERFACE],
+                node_ptr->mtcAlive_miss_count     [PXEBOOT_INTERFACE],
                 node_ptr->mtcAlive_sequence       [PXEBOOT_INTERFACE],
                 node_ptr->mtcAlive_sequence_save  [PXEBOOT_INTERFACE]);
 
@@ -9590,9 +9739,10 @@ void nodeLinkClass::mem_log_mtcalive_pxeboot ( struct nodeLinkClass::node * node
 void nodeLinkClass::mem_log_alarm1 ( struct nodeLinkClass::node * node_ptr )
 {
     char str[MAX_MEM_LOG_DATA] ;
-    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tAlarm List:%s%s%s%s%s\n",
+    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\tAlarm List:%s%s%s%s%s%s\n",
                node_ptr->hostname.c_str(),
                node_ptr->alarms[MTC_ALARM_ID__LOCK    ] ? " Locked"   : " .",
+               node_ptr->alarms[MTC_ALARM_ID__MTCALIVE] ? " mtcAlive" : " .",
                node_ptr->alarms[MTC_ALARM_ID__CONFIG  ] ? " Config"   : " .",
                node_ptr->alarms[MTC_ALARM_ID__ENABLE  ] ? " Enable"   : " .",
                node_ptr->alarms[MTC_ALARM_ID__CH_COMP ] ? " Compute"  : " .",

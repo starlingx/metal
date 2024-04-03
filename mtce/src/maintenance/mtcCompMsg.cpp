@@ -247,13 +247,20 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
         rc = PASS ;
         if ( msg.cmd == MTC_REQ_MTCALIVE )
         {
-            ilog ("mtcAlive request received from %s network", iface_name_ptr);
+            alog1 ("mtcAlive request received from %s network", iface_name_ptr);
             if ( interface == PXEBOOT_INTERFACE )
             {
                 alog2 ("pxeboot mtcAlive buffer: %s", &msg.buf[0]);
                 load_pxebootInfo_msg(msg);
+
+#ifdef WANT_FIT_TESTING
+                if ( ! daemon_want_fit ( FIT_CODE__FAIL_PXEBOOT_MTCALIVE ) )
+#endif
+                {
+                    send_mtcAlive_msg ( sock_ptr, ctrl_ptr->who_i_am, interface );
+                }
             }
-            return ( send_mtcAlive_msg ( sock_ptr, get_who_i_am(), interface ));
+            return (rc);
         }
         else if ( msg.cmd == MTC_MSG_INFO )
         {
@@ -749,6 +756,7 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
 int mtce_send_event ( mtc_socket_type * sock_ptr, unsigned int cmd , const char * mtce_name_ptr )
 {
     mtc_message_type event ;
+    ctrl_type *ctrl_ptr = get_ctrl_ptr();
 
     int rc    = PASS ;
     int bytes = 0    ;
@@ -772,13 +780,21 @@ int mtce_send_event ( mtc_socket_type * sock_ptr, unsigned int cmd , const char 
         event_info.append(MTC_JSON_SERVICE);
         event_info.append("\":\"");
         event_info.append(MTC_SERVICE_MTCCLIENT_NAME );
-        event_info.append("\"}");
+
+        event_info.append("\",\"active_controller_pxeboot_address\":\"");
+        event_info.append(ctrl_ptr->pxeboot_addr_active_controller);
+
+        event_info.append("\",\"");
+        event_info.append(MTC_JSON_FEATURES);
+        event_info.append("\":[\"");
+        event_info.append(MTC_PXEBOOT_MTCALIVE);
+        event_info.append("\"]}");
 
         size_t len =  event_info.length()+1 ;
         snprintf ( &event.hdr[0], MSG_HEADER_SIZE, "%s", get_mtce_event_header());
         snprintf ( &event.buf[0], len, "%s", event_info.data());
         bytes = ((sizeof(mtc_message_type))-(BUF_SIZE-len));
-        ilog ("%s %s ready", get_hostname().c_str(), MTC_SERVICE_MTCCLIENT_NAME);
+        dlog ("%s %s ready", get_hostname().c_str(), MTC_SERVICE_MTCCLIENT_NAME);
     }
     else if (( cmd == MTC_EVENT_AVS_CLEAR    ) ||
              ( cmd == MTC_EVENT_AVS_MAJOR    ) ||
@@ -849,9 +865,36 @@ int mtce_send_event ( mtc_socket_type * sock_ptr, unsigned int cmd , const char 
     }
     else
     {
-       elog ("cannot send to null or failed socket (%s)",
+       elog ("cannot send to null or failed management network socket (%s)",
               get_interface_name_str (MGMNT_INTERFACE) );
        rc = FAIL_SOCKET_SENDTO ;
+    }
+
+    // Only the events sent on the pxeboot network are:
+    // - ready event
+    if (( cmd == MTC_EVENT_MONITOR_READY ) &&
+        ( sock_ptr->pxeboot_tx_socket > 0 ) &&
+        ( !ctrl_ptr->pxeboot_addr_active_controller.empty()))
+    {
+        int flags = 0 ; // no tx flags
+        struct sockaddr_in hostAddr;
+        memset(&hostAddr, 0, sizeof(hostAddr));
+        print_mtc_message ( ctrl_ptr->pxeboot_addr_active_controller.data(), MTC_CMD_TX, event, get_interface_name_str(PXEBOOT_INTERFACE), false);
+        hostAddr.sin_addr.s_addr = inet_addr(ctrl_ptr->pxeboot_addr_active_controller.data());
+        hostAddr.sin_family = AF_INET;
+        hostAddr.sin_port   = htons(sock_ptr->mtc_tx_pxeboot_port);
+
+        ssize_t bytes_sent = sendto(sock_ptr->pxeboot_tx_socket, &event.hdr[0], bytes, flags,
+                                    (const struct sockaddr*)&hostAddr, sizeof(hostAddr));
+        if (bytes_sent <= 0)
+        {
+            elog ("failed to send %s to %s:%d on %s network (rc:%ld) (%d:%m)",
+                    get_mtcNodeCommand_str(event.cmd),
+                    ctrl_ptr->pxeboot_addr_active_controller.c_str(),
+                    hostAddr.sin_port,
+                    get_interface_name_str(PXEBOOT_INTERFACE),
+                    bytes_sent, errno);
+        }
     }
     return rc ;
 }

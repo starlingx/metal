@@ -443,6 +443,7 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
         string service = "" ;
         string sensor  = "" ;
         string process = "" ;
+
         hostname = "unknown" ;
 
         int rc1 = FAIL ;
@@ -493,7 +494,17 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
                 }
                 else if ( service == MTC_SERVICE_MTCCLIENT_NAME )
                 {
-                    ilog ("%s %s ready", hostname.c_str(), MTC_SERVICE_MTCCLIENT_NAME);
+                    string features= "" ;
+                    if ( jsonUtil_get_key_val(&msg.buf[0], MTC_JSON_FEATURES, features ) == PASS )
+                    {
+                        dlog ("%s %s features: %s", hostname.c_str(), service.c_str(), features.c_str());
+                    }
+                    else
+                    {
+                        ilog ("%s %s not offering feature list ; node may have upgrade pending",
+                                  hostname.c_str(), MTC_SERVICE_MTCCLIENT_NAME);
+                    }
+                    obj_ptr->declare_service_ready ( hostname, MTC_SERVICE_MTCCLIENT, features );
 
                     /* if this ready event is from the mtcClient of a
                      * controller that has valid bmc access info then
@@ -697,7 +708,9 @@ int send_mtc_cmd ( string & hostname, int cmd , int interface, string json_dict 
                  * controller's pxeboot ip addresses so it knows where to send. */
                 obj_ptr->pxebootInfo_loader();
                 data = "{\"pxebootInfo\":{" ;
-                data.append ("\"address\":\"");
+                data.append ("\"");
+                data.append (CONTROLLER);
+                data.append ("\":\"");
                 data.append (obj_ptr->my_pxeboot_ip);
                 data.append ("\",\"");
                 data.append (CONTROLLER_0);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2017 Wind River Systems, Inc.
+ * Copyright (c) 2015-2017, 2024 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -63,6 +63,32 @@ void mtcAlarm_init ( void )
 
     snprintf( ptr->alarm.proposed_repair_action, FM_MAX_BUFFER_LENGTH,
               "Administratively unlock Host to bring it back in-service.");
+
+    /** pxeboot mtcAlive Alarm **************************************************/
+
+    ptr = &alarm_list[MTC_ALARM_ID__MTCALIVE];
+    memset  (&ptr->alarm, 0, (sizeof(SFmAlarmDataT)));
+    snprintf(&ptr->alarm.alarm_id[0], FM_MAX_BUFFER_LENGTH, "%s", LOCK_ALARM_ID);
+
+    ptr->name = "mtcAlive" ;
+    ptr->instc_prefix = "" ;
+
+    ptr->critl_reason =
+    ptr->major_reason =
+    ptr->minor_reason = "pxeboot network communication failure";
+    ptr->clear_reason = "pxeboot network communication recovered";
+
+    ptr->alarm.alarm_type         = FM_ALARM_COMM ;
+    ptr->alarm.probable_cause     = FM_ALARM_CAUSE_UNKNOWN;
+    ptr->alarm.inhibit_alarms     = FM_FALSE;
+    ptr->alarm.service_affecting  = FM_FALSE;
+    ptr->alarm.suppression        = FM_TRUE ;
+
+    ptr->alarm.severity           = FM_ALARM_SEVERITY_CLEAR ; /* Dynamic */
+    ptr->alarm.alarm_state        = FM_ALARM_STATE_CLEAR    ; /* Dynamic */
+
+    snprintf( ptr->alarm.proposed_repair_action, FM_MAX_BUFFER_LENGTH,
+              "Administratively Lock and Unlock host to recover. If problem persists, contact next level of support.");
 
     /** Enable Alarm ************************************************************/
 
@@ -339,6 +365,7 @@ string _getIdentity ( mtc_alarm_id_enum id )
     switch ( id )
     {
         case MTC_ALARM_ID__LOCK:      return (LOCK_ALARM_ID);
+        case MTC_ALARM_ID__MTCALIVE:  return (MTCALIVE_ALARM_ID);
         case MTC_ALARM_ID__CONFIG:    return (CONFIG_ALARM_ID);
         case MTC_ALARM_ID__ENABLE:    return (ENABLE_ALARM_ID);
         case MTC_ALARM_ID__BM:        return (BM_ALARM_ID);
@@ -348,7 +375,7 @@ string _getIdentity ( mtc_alarm_id_enum id )
         case MTC_LOG_ID__COMMAND:     return (COMMAND_LOG_ID);
         case MTC_LOG_ID__STATECHANGE: return (STATECHANGE_LOG_ID);
         case MTC_LOG_ID__CONFIG:      return (CONFIG_LOG_ID);
-        default: return ("200.000");
+        default: return (SWERR_ALARM_ID);
     }
 }
 

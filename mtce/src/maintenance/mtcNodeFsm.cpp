@@ -90,14 +90,15 @@ int nodeLinkClass::fsm ( struct nodeLinkClass::node * node_ptr )
      *   with mtcAlive debouncing
      */
     nodeLinkClass::online_handler ( node_ptr );
-
-    /*
-     * Always run the mtcAlive handler.
-     *
+    /* pxeboot_mtcAlive_monitor
      * - monitor host's mtcAlive messaging
      * - manage  host's mtcAlive missing alarm
-     */
-    nodeLinkClass::pxeboot_mtcAlive_monitor ( node_ptr );
+     *
+     * Don't monitor pxeboot mtcAlive messaging while the pxeboot network is
+     * not provisioned or that node has not yet reported that it supports
+     * pxeboot mtcAlive messaging */
+    if ( this->pxeboot_network_provisioned && node_ptr->pxeboot_mtcAlive_supported )
+        nodeLinkClass::pxeboot_mtcAlive_monitor ( node_ptr );
 
     if ( node_ptr->adminAction == MTC_ADMIN_ACTION__DELETE )
     {
@@ -105,7 +106,6 @@ int nodeLinkClass::fsm ( struct nodeLinkClass::node * node_ptr )
         nodeLinkClass::delete_handler ( node_ptr );
         return (PASS);
     }
-
 
     /* Run the config FSM if the configAction bool is set.
      * We keep this as a separate action unto itself so that

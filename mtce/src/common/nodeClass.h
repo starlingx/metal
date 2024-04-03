@@ -335,8 +335,21 @@ private:
         /* tracks the sequence number of the last <iface> mtcAlive message */
         unsigned int mtcAlive_sequence     [MTCALIVE_INTERFACES_MAX] ;
         unsigned int mtcAlive_sequence_save[MTCALIVE_INTERFACES_MAX] ;
-        unsigned int mtcAlive_sequence_miss[MTCALIVE_INTERFACES_MAX] ;
+        unsigned int mtcAlive_miss_count   [MTCALIVE_INTERFACES_MAX] ;
         unsigned int mtcAlive_log_throttle [MTCALIVE_INTERFACES_MAX] ;
+
+        /* mtcAlive miss, loss, alarm and log throttle definitions */
+        #define PXEBOOT_MTCALIVE_MONITOR_RATE_SECS     (MTC_ALIVE_TIMER*2) // monitor every 10 seconds
+        #define PXEBOOT_MTCALIVE_LOSS_THRESHOLD        (6)  // 6 misses or 1 minute if back-2-back
+        #define PXEBOOT_MTCALIVE_LOSS_ALARM_THRESHOLD  (2)  // 2 losses before recovery is 2 minutes
+        #define PXEBOOT_MTCALIVE_NOT_SEEN_LOG_THROTTLE (60) // not seen log every 10 minutes
+        #define PXEBOOT_MTCALIVE_LOSS_LOG_THROTTLE     (60) // loss log every 10 minutes
+
+        /* used to debounce mtcAlive loss alarm */
+        unsigned int mtcAlive_loss_count   [MTCALIVE_INTERFACES_MAX] ;
+
+        /* indicates boolean support for pxeboot mtcAlive messaging */
+        bool pxeboot_mtcAlive_supported ;
 
         /* pxeboot mtcAlive monitor log throttles */
         int pxeboot_mtcAlive_not_seen_log_throttle ;
@@ -660,6 +673,9 @@ private:
 
         /** Host degraded due to loss of Process Monitor running flag */
         bool pmon_degraded ;
+
+        /* Maintenance Client Ready */
+        bool mtcClient_ready ;
 
         /** Process Monitor Ready flag and degrade list */
         bool pmond_ready ;
@@ -1139,6 +1155,9 @@ private:
     int alarm_compute_clear   ( struct nodeLinkClass::node * node_ptr, bool force );
     int alarm_compute_failure ( struct nodeLinkClass::node * node_ptr , EFmAlarmSeverityT sev );
 
+    int alarm_mtcAlive_clear  (  struct nodeLinkClass::node * node_ptr, int network );
+    int alarm_mtcAlive_failure(  struct nodeLinkClass::node * node_ptr, int network );
+
     void clear_subf_failed_bools ( struct nodeLinkClass::node * node_ptr );
     void clear_main_failed_bools ( struct nodeLinkClass::node * node_ptr );
     void clear_hostservices_ctls ( struct nodeLinkClass::node * node_ptr );
@@ -1496,6 +1515,9 @@ public:
     /* set the pxeboot network address for any hostname */
     int set_pxeboot_hostaddr ( string hostname, string ip );
 
+    /* set the state of this node's pxeboot mtcAlive support */
+    int set_pxeboot_mtcAlive_support ( string hostname, bool state );
+
     /** get hostname for any hostname */
     string get_hostname ( string hostaddr );
 
@@ -1732,6 +1754,13 @@ public:
      *  interface is on the 'lo' (localhost) interface. */
     bool pxeboot_network_provisioned ;
 
+    /** A boolean that is used to indicate whether this node supports
+     *  pxeboot mtcAlive messaging.
+     *  This is needed to support upgrades to nodes that don't support
+     *  this feature prior to their upgrade.
+     *  Assuming controllers are upgraded first.*/
+    bool pxeboot_mtcAlive_supported ;
+
     /** A debug bool hat allows cluster-host heartbeat failures to only
      *  cause host degrade rather than failure */
     bool clstr_degrade_only ;
@@ -1925,7 +1954,7 @@ public:
 
     /** Interface to declare that a key service on the
       * specified host is up, running and ready */
-    int declare_service_ready  ( string & hostname, unsigned int service );
+    int declare_service_ready  ( string & hostname, unsigned int service, string features="" );
 
     /** Process Monitor 'Clear' Event handler.
       *

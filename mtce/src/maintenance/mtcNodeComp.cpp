@@ -337,6 +337,7 @@ int daemon_configure ( void )
 
         rc  = PASS ;
     }
+    daemon_load_fit();
     return (rc);
 }
 
@@ -1267,6 +1268,9 @@ int daemon_init ( string iface, string nodetype_str )
     ctrl.clstr_iface_provisioned = false ;
     ctrl.pxeboot_iface_provisioned = false ;
     ctrl.peer_ctrlr_reset.sync = false ;
+    ctrl.pxeboot_addr_c0 = "" ;
+    ctrl.pxeboot_addr_c1 = "" ;
+    ctrl.pxeboot_addr_active_controller = "" ;
 
     /* convert node type to integer */
     ctrl.nodetype = get_host_function_mask ( nodetype_str ) ;
@@ -1295,9 +1299,12 @@ int daemon_init ( string iface, string nodetype_str )
         }
         else
         {
-            // Ready to do pxeboot messaging
+            ilog ("Mgmnt iface : %s", ctrl.mgmnt_iface.c_str());
+
+            // Not on LO, assume pxeboot provisioning starting with it being
+            // equal to the management interface, until otherwise updated due
+            // to bonding or vlan modes.
             ctrl.pxeboot_iface = ctrl.mgmnt_iface ;
-            ilog ("Pxeboot iface %s", ctrl.pxeboot_iface.c_str());
             ctrl.pxeboot_iface_provisioned = true ;
         }
     }
@@ -1437,7 +1444,9 @@ void daemon_service_run ( void )
                          ctrl.peer_ctrlr_reset.audit_period );
     }
 
+    /* Send the mtcClient ready event and clear the periodic event counter */
     mtce_send_event ( sock_ptr, MTC_EVENT_MONITOR_READY, NULL );
+    ctrl.ready_event_counter = 0 ;
 
     /* lets go select so that the sock does not go crazy */
     dlog ("%s running main loop with %d msecs socket timeout\n",
@@ -1646,7 +1655,7 @@ void daemon_service_run ( void )
                 }
             }
         }
-        if ( ctrl.timer.ring == true )
+        if ( mtcTimer_expired ( ctrl.timer ) )
         {
             bool socket_reinit = true ;
 
@@ -1745,7 +1754,13 @@ void daemon_service_run ( void )
                 string who_i_am = _self_identify ( ctrl.nodetype_str );
             }
             alog1 ("sending mtcAlive on all provisioned mtcAlive networks");
-            send_mtcAlive_msg ( sock_ptr, ctrl.who_i_am, PXEBOOT_INTERFACE );
+
+#ifdef WANT_FIT_TESTING
+            if ( ! daemon_want_fit ( FIT_CODE__FAIL_PXEBOOT_MTCALIVE ) )
+#endif
+            {
+                send_mtcAlive_msg ( sock_ptr, ctrl.who_i_am, PXEBOOT_INTERFACE );
+            }
             send_mtcAlive_msg ( sock_ptr, ctrl.who_i_am, MGMNT_INTERFACE );
             if (( ctrl.clstr_iface_provisioned == true ) &&
                 ( mtc_sock.mtc_client_clstr_rx_socket != NULL ) &&
@@ -1800,6 +1815,22 @@ void daemon_service_run ( void )
                 {
                     _close_amon_sock ();
                 }
+            }
+
+            // Purpose: mtcClient ready event audit
+            //
+            // Send the ready event every minute just in case the first
+            // process startup event was missed by the mtcAgent or
+            // the mtcAgent was restarted.
+            //.
+            // Needed to ensure that pxeboot mtcAlive messaging monitoring
+            // gets started over a mtcagent process restart.
+            if ( ++ctrl.ready_event_counter >= (MTC_MINS_1/MTC_ALIVE_TIMER) )
+            {
+
+                dlog ("sending mtcClient ready event");
+                mtce_send_event ( sock_ptr, MTC_EVENT_MONITOR_READY, NULL );
+                ctrl.ready_event_counter = 0 ;
             }
         }
 
@@ -2388,8 +2419,9 @@ void load_mtcInfo_msg ( mtc_message_type & msg )
  *              Address can be empty of an unprovisioned controller.
  *
  *              { "pxebootInfo":{
- *                   "controller-0":"169.254.202.2",
- *                   "controller-1":"169.254.202.3"
+ *                   "controller"   : "169.254.202.2"
+ *                   "controller-0" : "169.254.202.2",
+ *                   "controller-1" : "169.254.202.3"
  *                 }
  *              }
  *
@@ -2398,18 +2430,43 @@ void load_mtcInfo_msg ( mtc_message_type & msg )
  ***************************************************************************/
 void load_pxebootInfo_msg ( mtc_message_type & msg )
 {
-    struct json_object *_obj = json_tokener_parse( &msg.buf[0] );
-    if ( _obj )
+    struct json_object *json_obj = json_tokener_parse( &msg.buf[0] );
+    if ( json_obj )
     {
         const char dict_label [] = "pxebootInfo" ;
         struct json_object *info_obj = (struct json_object *)(NULL);
-        json_bool json_rc = json_object_object_get_ex( _obj,
+        json_bool json_rc = json_object_object_get_ex( json_obj,
                                             &dict_label[0],
                                             &info_obj );
 
         if ( ( json_rc == true ) && ( info_obj ) )
         {
+            jlog ("%s: %s ", &dict_label[0], json_object_get_string(info_obj));
             struct json_object *ctrl_obj = (struct json_object *)(NULL);
+            json_rc = json_object_object_get_ex( info_obj, CONTROLLER, &ctrl_obj );
+            if (( json_rc == true ) && ( ctrl_obj ))
+            {
+                string active_controller = json_object_get_string(ctrl_obj);
+                if ( ctrl.pxeboot_addr_active_controller != active_controller )
+                {
+                    string prefix = "controller pxeboot address" ;
+                    if ( ctrl.pxeboot_addr_active_controller.empty() )
+                    {
+                        ilog ("%s: %s",
+                               prefix.c_str(),
+                               active_controller.c_str());
+                    }
+                    else
+                    {
+                        ilog ("%s: %s ; was %s",
+                               prefix.c_str(),
+                               active_controller.c_str(),
+                               ctrl.pxeboot_addr_active_controller.c_str());
+                    }
+                    ctrl.pxeboot_addr_active_controller = active_controller ;
+                }
+            }
+            // now get the individual controller addresses
             string pxeboot_addr_cx[CONTROLLERS] = {CONTROLLER_0, CONTROLLER_1};
             for (int c = 0 ; c < CONTROLLERS ; c++)
             {
@@ -2423,8 +2480,7 @@ void load_pxebootInfo_msg ( mtc_message_type & msg )
                 // get the current pxeboot address for the in loop controller
                 cur_pxeboot_addr = (controller == CONTROLLER_0) ? ctrl.pxeboot_addr_c0 : ctrl.pxeboot_addr_c1;
 
-                json_bool json_rc =
-                json_object_object_get_ex( info_obj, controller.data(), &ctrl_obj );
+                json_rc = json_object_object_get_ex( info_obj, controller.data(), &ctrl_obj );
                 if (( json_rc == true ) && (ctrl_obj))
                 {
                     jlog ("controller-x obj data: %s", json_object_get_string(ctrl_obj));
@@ -2477,7 +2533,7 @@ void load_pxebootInfo_msg ( mtc_message_type & msg )
             elog("Failed to parse '%s' from mtcAlive request message: %s",
                   &dict_label[0], &msg.buf[0]);
         }
-        json_object_put(_obj);
+        json_object_put(json_obj);
     }
     else
     {
