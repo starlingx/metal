@@ -688,7 +688,7 @@ int send_mtc_cmd ( string & hostname, int cmd , int interface, string json_dict 
             mtc_cmd.cmd = cmd ;
             mtc_cmd.num = 0 ;
             data = "{\"mtcInfo\":" + json_dict + "}";
-            ilog("%s mtc info update: %s", hostname.c_str(), data.c_str());
+            dlog("%s mtc info update: %s", hostname.c_str(), data.c_str());
             rc = PASS ;
             break ;
         }
