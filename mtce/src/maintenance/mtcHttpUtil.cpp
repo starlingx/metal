@@ -1,8 +1,8 @@
 /*
- * Copyright (c) 2013-2018 Wind River Systems, Inc.
-*
-* SPDX-License-Identifier: Apache-2.0
-*
+ * Copyright (c) 2013-2018, 2024 Wind River Systems, Inc.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  */
 
 /**
@@ -433,11 +433,11 @@ int mtcHttpUtil_status ( libEvent & event )
             event.status = PASS ;
             break;
         }
-        /* Authentication error - refresh the token */
+        /* Authentication error - need to renew the token */
         case 401:
         {
             keyToken_type * token_ptr = tokenUtil_get_ptr() ;
-            token_ptr->delay = true ;
+            token_ptr->renew = true ;
             rc = FAIL_AUTHENTICATION ;
             break ;
         }
@@ -944,15 +944,15 @@ mtcHttpUtil_api_request_done:
         mtcHttpUtil_free_base ( event );
 
         /**
-         *  If tere is an authentication error then request a new token and
-         *  return the error to the caller so that the request can be retried
+         *  If there is an authentication error then free the event, force a refresh
+         *  and return the error to the caller so that the request can be retried.
          **/
         if (( event.status == FAIL_AUTHENTICATION ) ||
             ( event.status == MTC_HTTP_UNAUTHORIZED ))
         {
             /* Find the host this handler instance is being run against */
             nodeLinkClass * obj_ptr = get_mtcInv_ptr () ;
-            tokenUtil_new_token ( obj_ptr->tokenEvent, obj_ptr->my_hostname );
+            tokenUtil_token_renew ( );
             mtcHttpUtil_free_conn ( obj_ptr->tokenEvent );
             mtcHttpUtil_free_base ( obj_ptr->tokenEvent );
             event.status = FAIL_AUTHENTICATION ;
@@ -1068,13 +1068,6 @@ int mtcHttpUtil_get_length ( libEvent & event )
                 event.log_prefix.c_str());
         event.status = FAIL_JSON_ZERO_LEN ;
     }
-//    else if ( event.response_len > MAX_EVENT_LEN )
-//    {
-//        elog ("%s Request Failed - Length Too Long (%d:%ld)\n",
-//                  event.log_prefix.c_str(), MAX_EVENT_LEN, event.response_len );
-//        
-//        event.status = FAIL_JSON_TOO_LONG ;
-//    }
     return ( event.response_len );
 }
 
@@ -1370,31 +1363,20 @@ _handler_done:
 
    gettime   ( event.done_time );
    timedelta ( event.send_time, event.done_time, event.diff_time );
-
-// Redundant log - already logged in the work queue FSM
-//   if ( event.status )
-//   {
-//       elog ( "%s Failed (rc:%d)\n",
-//                  event.log_prefix.c_str(),
-//                  event.status );
-//   }
    mtcHttpUtil_log_event ( event );
 
    if ( event.blocking == false )
    {
-       // mtcHttpUtil_free_conn ( event );
-       // mtcHttpUtil_free_base ( event );
-
-       /**
-        *  If tere is an authentication error then request a new token and
-        *  return the error to the caller so that the request can be retried
-        **/
+        /**
+         *  If there is an authentication error then free the event, force a refresh
+         *  and return the error to the caller so that the request can be retried.
+         **/
        if (( event.status == FAIL_AUTHENTICATION ) ||
            ( event.status == MTC_HTTP_UNAUTHORIZED ))
        {
            /* Find the host this handler instance is being run against */
            nodeLinkClass * obj_ptr = get_mtcInv_ptr () ;
-           tokenUtil_new_token ( obj_ptr->tokenEvent, obj_ptr->my_hostname );
+           tokenUtil_token_renew ( );
            mtcHttpUtil_free_conn ( obj_ptr->tokenEvent );
            mtcHttpUtil_free_base ( obj_ptr->tokenEvent );
            event.status = FAIL_AUTHENTICATION ;

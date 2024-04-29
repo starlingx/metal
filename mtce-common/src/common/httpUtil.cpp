@@ -1,8 +1,8 @@
 /*
- * Copyright (c) 2015-2016 Wind River Systems, Inc.
-*
-* SPDX-License-Identifier: Apache-2.0
-*
+ * Copyright (c) 2015-2016, 2024 Wind River Systems, Inc.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  */
 
 /**
@@ -109,7 +109,7 @@ int httpUtil_event_init ( libEvent * ptr ,
     ptr->token.token.clear();
     ptr->token.issued.clear();
     ptr->token.expiry.clear();
-    ptr->token.delay = false ;
+    ptr->token.renew = false ;
     ptr->token.refreshed = false ;
 
     /* Instance Specific Request Data Data */
@@ -494,7 +494,7 @@ int httpUtil_status ( libEvent & event )
         {
             keyToken_type * token_ptr = tokenUtil_get_ptr() ;
             rc = FAIL_AUTHENTICATION ;
-            token_ptr->delay = true ; /* force delayed token renewal on authentication error */
+            token_ptr->renew = true ; /* force delayed token renewal on authentication error */
             break ;
         }
         case 0:

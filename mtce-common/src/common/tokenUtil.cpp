@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2017 Wind River Systems, Inc.
+ * Copyright (c) 2015-2017, 2024 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -39,10 +39,12 @@ keyToken_type * tokenUtil_get_ptr   ( void ) { return &__token__ ; };
 keyToken_type   tokenUtil_get_token ( void ) { return __token__ ; };
 
 
-/* hold off for TOKEN_REFRESH_RETRY_DELAY seconds before trying again. */
+/* Hold off for TOKEN_REFRESH_RETRY_DELAY seconds before trying again.
+ * This applies to getting the first token only. */
 static int __retries = 0 ;
 static void __retry_holdoff( int delay )
 {
+    __retries = 0 ;
     for ( int i = 0 ; i < delay ; i++ )
     {
         daemon_signal_hdlr ();
@@ -227,7 +229,7 @@ void tokenUtil_get_first ( libEvent & event, string & hostname )
  *              token must periodicslly call this API as part of its main loop.
  *
  *              All error conditions are handled with a small hold-off retry
- *              by timer rater than inline wait like in get_first.
+ *              by timer rather than inline wait like in get_first.
  *
  * Returns    : Nothing
  *
@@ -255,37 +257,50 @@ void tokenUtil_manage_token ( libEvent         & event,
         int rc = tokenUtil_new_token ( event, hostname, blocking );
         if ( rc )
         {
-            /* go for a retry by delayed refresh if the request fails */
-            __token__.delay = true ;
+            /* go for a retry by delayed renewal if the request fails */
+            __token__.renew = true ;
+
+            /* Override the default refresh timer duration to be at least
+             * the timeout value just in case the above request managed
+             * to launch something (even though it failed). */
+            _rr = event.timeout ;
+
         }
 
-#ifdef WANT_FIT_TESTING
-        else if ( daemon_want_fit ( FIT_CODE__TOKEN, hostname, "null_base" ))
-            httpUtil_free_base ( event );
-#endif
-
-        if ( __token__.delay == true )
+        /* Clear the renewal flag */
+        if ( __token__.renew == true )
         {
-            __token__.delay = false ;
-            _rr = TOKEN_REFRESH_RETRY_DELAY ;
+            ilog ("Token renew in %d seconds", _rr);
+            __token__.renew = false ;
+
+        }
+        else
+        {
+            dlog ("Token refresh in %d seconds", _rr);
         }
         mtcTimer_start(token_refresh_timer,handler,_rr );
     }
+    /* Handle an unexpected state case */
     else if ( token_refresh_timer.active == false )
     {
         slog ("%s no active token refresh timer ; starting new\n", hostname.c_str());
         mtcTimer_start(token_refresh_timer,handler,TOKEN_REFRESH_RETRY_DELAY);
     }
-    else if ( __token__.delay == true )
+    /* Handle the forced token renewal case
+     * set by receiving a Authentication response 404 */
+    else if ( __token__.renew == true )
     {
-        ilog ( "Token Refresh in %d seconds\n", TOKEN_REFRESH_RETRY_DELAY );
-        mtcTimer_stop ( token_refresh_timer );
+        ilog ( "%s Token Renewal in %d seconds",
+                   hostname.c_str(),
+                   TOKEN_REFRESH_RETRY_DELAY);
+        if ( token_refresh_timer.ring == false )
+            mtcTimer_reset ( token_refresh_timer );
+        __token__.renew = false ;
 
-        __token__.delay = false ;
-
-        /* force refresh of token in 5 seconds */
-        mtcTimer_start(token_refresh_timer,handler,TOKEN_REFRESH_RETRY_DELAY);
+        /* force refresh of token in TOKEN_REFRESH_RETRY_DELAY seconds */
+        mtcTimer_start(token_refresh_timer,handler, TOKEN_REFRESH_RETRY_DELAY);
     }
+    /* launch the event */
     else if ( event.active == true )
     {
         /* Look for the response */
@@ -295,18 +310,19 @@ void tokenUtil_manage_token ( libEvent         & event,
         }
         else
         {
+            slog ("%s token renew libevent base is null ; cannot launch '%s' request",
+                      hostname.c_str(), event.operation.c_str());
             /* should not get here. event active while base is null
              *    try and recover from this error case. */
-            __token__.delay = true ;
+            __token__.renew = true ;
             event.active = false ;
         }
     }
+    /* Look for the received token and free the event objects */
     else if ( event.base )
     {
-
 #ifdef WANT_FIT_TESTING
-        string data = "" ;
-        if ( daemon_want_fit ( FIT_CODE__TOKEN, hostname, "refresh", data ))
+        if ( daemon_want_fit ( FIT_CODE__TOKEN, hostname, "refresh" ))
             __token__.token.clear();
 #endif
 
@@ -314,9 +330,9 @@ void tokenUtil_manage_token ( libEvent         & event,
         if ( __token__.token.empty() )
         {
             elog ("%s no token ; %d second hold-off before retry\n",
-                      hostname.c_str(), TOKEN_REFRESH_RETRY_DELAY );
+                      hostname.c_str(), event.timeout );
 
-            /* force refresh of token in 5 seconds */
+            /* force refresh of token in TOKEN_REFRESH_RETRY_DELAY seconds */
             mtcTimer_reset(token_refresh_timer);
             mtcTimer_start(token_refresh_timer,handler,TOKEN_REFRESH_RETRY_DELAY);
         }
@@ -345,30 +361,10 @@ void tokenUtil_log_refresh ( void )
     }
 }
 
-/* Handle refreshing the authentication token */
-int tokenUtil_token_refresh ( libEvent & event, string hostname )
+/* Handle renewing the token ; due to authentication error */
+void tokenUtil_token_renew ( void )
 {
-    struct tm tokenExpiry;     // given token expired time (UTC)
-    time_t cTime = time(NULL); // current time (UTC)
-    double diffTime = 0;
-
-    if ( event.status != PASS )
-    {
-        event.status = tokenUtil_new_token( event, hostname );
-    }
-    else
-    {
-        strptime( __token__.expiry.c_str(), "%Y-%m-%dT%H:%M:%S", &tokenExpiry );
-
-        /* Get a new authentication token if the given token is about to expire */
-        diffTime = difftime( mktime( &tokenExpiry ), cTime );
-        if ( diffTime <= STALE_TOKEN_DURATION )
-        {
-            ilog ("The given token will expire in %f seconds\n", diffTime);
-            event.status = tokenUtil_new_token( event, hostname );
-        }
-    }
-    return (event.status);
+    __token__.renew = true ;
 }
 
 string _get_ip ( void )
@@ -454,34 +450,46 @@ int tokenUtil_handler ( libEvent & event )
     {
         elog ( "%s Token Request Failed - Error Code (%d) \n", hn.c_str(), event.status );
     }
-    if ( event.request == KEYSTONE_GET_TOKEN )
+    else if ( event.request == KEYSTONE_GET_TOKEN )
     {
         /* get the token from response header*/
         struct evkeyvalq *header_ptr = evhttp_request_get_input_headers(event.req);
         const char * header_token_ptr  = evhttp_find_header (header_ptr, MTC_JSON_AUTH_ID);
+
+#ifdef WANT_FIT_TESTING
+        if ( daemon_want_fit ( FIT_CODE__TOKEN, hn , "header" ))
+        {
+            slog ("%s FIT token header", hn.c_str());
+            header_token_ptr = NULL ;
+        }
+#endif
+
         if ( !header_token_ptr )
         {
-            rc = FAIL_JSON_PARSE ;
-            elog ( "%s Token Request Failed - no token in header\n", hn.c_str());
-        }
-        std::string token_str(header_token_ptr);
-
-        if ( jsonApi_auth_load ( hn, (char*)event.response.data(), info ) )
-        {
-            rc = FAIL_JSON_PARSE ;
-            elog ( "%s Token Request Failed - Json Parse Error\n", hn.c_str());
+            elog ( "%s Token Request Failed - no token in header", hn.c_str());
+            event.status = FAIL_TOKEN_GET ;
         }
         else
         {
-            jlog ("%s Token Exp: %s\n", hn.c_str(), info.expiry.c_str() );
-            jlog ("%s Admin URL: %s\n" ,hn.c_str(), info.adminURL.c_str() );
-            jlog ("%s Token Len: %ld\n",hn.c_str(), token_str.length() );
-            token_ptr->issued = info.issued   ;
-            token_ptr->expiry = info.expiry   ;
-            token_ptr->token  = token_str ;
-            token_ptr->url    = info.adminURL ;
-            token_ptr->refreshed = true ;
+            std::string token_str(header_token_ptr);
 
+            if ( jsonApi_auth_load ( hn, (char*)event.response.data(), info ) )
+            {
+                elog ( "%s Token Request Failed - Json Parse Error", hn.c_str());
+                event.status = FAIL_JSON_PARSE ;
+            }
+            else
+            {
+                jlog ("%s Token Exp: %s", hn.c_str(), info.expiry.c_str() );
+                jlog ("%s Admin URL: %s" ,hn.c_str(), info.adminURL.c_str() );
+                jlog ("%s Token Len: %ld",hn.c_str(), token_str.length() );
+                token_ptr->issued = info.issued   ;
+                token_ptr->expiry = info.expiry   ;
+                token_ptr->token  = token_str     ;
+                token_ptr->url    = info.adminURL ;
+                token_ptr->refreshed = true ;
+                event.status = PASS ;
+            }
         }
     }
     else if ( event.request == KEYSTONE_GET_ENDPOINT_LIST )
@@ -527,6 +535,7 @@ int tokenUtil_handler ( libEvent & event )
                             wlog ("%s '%s' failed to get interface type from endpoint list (%d)\n",
                                    event.hostname.c_str(),
                                    event.information.c_str(), rc);
+                            event.status = FAIL_OPERATION ;
                          }
                         else if ( interface_type == "admin" )
                         {
@@ -544,17 +553,23 @@ int tokenUtil_handler ( libEvent & event )
                     else
                     {
                        wlog ("%s '%s' service endpoint not found\n", event.hostname.c_str(), event.information.c_str());
+                       event.status = FAIL_NOT_FOUND ;
                     }
                 }
                 else
                 {
                    elog ("%s Parse service endpoint list failed (rc:%d)\n", event.hostname.c_str(), rc);
                    elog ("%s Response: %s\n", event.hostname.c_str(), event.response.c_str() );
-                   event.status = rc ;
+                   event.status = FAIL_INVALID_DATA ;
                 }
             }
 
-            if ( rc1 | rc2 | rc3 )
+            if ( event.status )
+            {
+                /* error already logged above */
+                dlog ("%s endpoint list get failed ; rc:%d", event.hostname.c_str(), event.status);
+            }
+            else if ( rc1 | rc2 | rc3 )
             {
                 wlog ("%s '%s' one or mode endpoint parse failure (%d:%d:%d)\n",
                 event.hostname.c_str(),
@@ -580,13 +595,12 @@ int tokenUtil_handler ( libEvent & event )
         }
         else
         {
-        wlog ("%s '%s' service not found using '%s' label\n",
-               event.hostname.c_str(),
-               event.information.c_str(),
-               event.label.c_str());
+            wlog ("%s '%s' service not found using '%s' label",
+                   event.hostname.c_str(),
+                   event.information.c_str(),
+                   event.label.c_str());
+            event.status = FAIL_NOT_FOUND ;
         }
-        event.active = false ;
-        return (event.status);
     }
     else if ( event.request == KEYSTONE_GET_SERVICE_LIST )
     {
@@ -626,7 +640,6 @@ int tokenUtil_handler ( libEvent & event )
                             wlog ("%s '%s' service uuid not found\n",
                                        event.hostname.c_str(),
                                        event.information.c_str());
-                            event.status = FAIL_KEY_VALUE_PARSE ;
                         }
                     }
                 }
@@ -657,30 +670,40 @@ int tokenUtil_handler ( libEvent & event )
                       event.label.c_str());
             event.status = FAIL_NOT_FOUND ;
         }
-        return (event.status);
     }
     else
     {
-        wlog ("%s Keystone Request Failed - Unsupported Request (%d)\n", hn.c_str(), event.request );
+        wlog ("%s Unsupported Token Request (%d)\n", hn.c_str(), event.request );
     }
 
-    /* Check for a response string */
-    if ( token_ptr->token.empty() )
+    /* check for failed event status */
+    if ( event.status )
+        rc = event.status ;
+
+    else if ( event.request == KEYSTONE_GET_TOKEN )
     {
-        elog ("%s Failed to get token\n", hn.c_str());
-        rc = FAIL_TOKEN_GET;
+        /* Check for a response string */
+        if ( token_ptr->token.empty() )
+        {
+            elog ("%s Failed to get token", hn.c_str());
+            rc = FAIL_TOKEN_GET;
+        }
+
+        /* Check for Key URL */
+        else if ( token_ptr->url.empty() )
+        {
+            elog ("%s Failed to get token URL", hn.c_str());
+            rc = FAIL_TOKEN_URL;
+        }
+        else
+        {
+            dlog ("%s Token Refresh O.K.", event.hostname.c_str());
+            rc = PASS ;
+        }
     }
 
-    /* Check for Key URL */
-    else if ( token_ptr->url.empty() )
-    {
-        elog ("%s Failed to get token URL\n", hn.c_str());
-        rc = FAIL_TOKEN_URL;
-    }
-    else
-    {
-        dlog ("%s Token Refresh O.K.\n", event.hostname.c_str());
-    }
+    /* retry the token request if it failed */
+    if ( rc ) __token__.renew = true ;
     event.active = false ;
     return (rc);
 }
@@ -708,7 +731,6 @@ int tokenUtil_new_token ( libEvent & event, string hostname, bool blocking )
 
     event.prefix_path = _get_keystone_prefix_path();
     event.blocking    = blocking ;
-    // event.blocking    = true ;
     event.request     = KEYSTONE_GET_TOKEN ;
     event.operation   = "get new" ;
     event.type        = EVHTTP_REQ_POST ;

@@ -1421,7 +1421,9 @@ void nodeLinkClass::fsm ( void )
         mtcInv.mtcInfo_handler();
     }
 }
-
+#ifdef WANT_FIT_TESTING
+static int token_corrupt_holdoff = 0 ;
+#endif
 void daemon_service_run ( void )
 {
     int rc ;
@@ -1736,7 +1738,24 @@ void daemon_service_run ( void )
             sleep (1);
             continue ;
         }
-
+#ifdef WANT_FIT_TESTING
+        if ( daemon_is_file_present (MTC_CMD_FIT__CORRUPT_TOKEN))
+        {
+            // The value in /var/run/fit/corrupt_token specifies the corruption cadence in seconds
+            if ( token_corrupt_holdoff == 0 )
+            {
+                token_corrupt_holdoff = daemon_get_file_int (MTC_CMD_FIT__CORRUPT_TOKEN) ;
+                slog ("FIT corrupting token and making sysinv request");
+                tokenUtil_fail_token();
+                mtcInv.mtcInvApi_force_states ( CONTROLLER_0, "unlocked", "enabled", "degraded" );
+            }
+            else
+            {
+                token_corrupt_holdoff-- ;
+                sleep (1);
+            }
+        }
+#endif
         /* Handle recovery from MNFA */
         mtcInv.mnfa_recovery_handler ( mtcInv.my_hostname );
 

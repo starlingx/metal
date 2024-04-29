@@ -109,7 +109,7 @@ typedef struct
     string expiry   ; /**< Timestamp when token is expired    */
     string token    ; /**< The huge 3kb token                 */
     bool   refreshed; /**< set true when refreshed            */
-    bool   delay    ; /**< trigger renew with small delay
+    bool   renew    ; /**< trigger renew with small delay
                            error renewal - flood avoidance    */
 } keyToken_type ;
 

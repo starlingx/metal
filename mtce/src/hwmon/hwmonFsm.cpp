@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016 Wind River Systems, Inc.
+ * Copyright (c) 2013, 2016, 2024 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -18,6 +18,10 @@
 #include "hwmonThreads.h" /* for ... bmc_thread                      */
 #include "secretUtil.h"
 
+#ifdef WANT_FIT_TESTING
+#include "tokenUtil.h"
+static int token_corrupt_holdoff = 0 ;
+#endif
 
 /**************************************************************************
  *
@@ -177,6 +181,31 @@ void hwmonHostClass::hwmon_fsm ( void )
                     {
                          thread_kill ( host_ptr->bmc_thread_ctrl, host_ptr->bmc_thread_info );
                     }
+#ifdef WANT_FIT_TESTING
+                    if ((host_ptr->hostname == CONTROLLER_0 ) &&
+                        (host_ptr->bm_provisioned ) &&
+                        (daemon_is_file_present (MTC_CMD_FIT__CORRUPT_TOKEN)))
+                    {
+                        // The value in /var/run/fit/corrupt_token specifies the corruption cadence in seconds
+                        if ( token_corrupt_holdoff == 0 )
+                        {
+
+                            token_corrupt_holdoff = daemon_get_file_int (MTC_CMD_FIT__CORRUPT_TOKEN) ;
+                            slog ("FIT corrupting token and making sysinv request");
+                            tokenUtil_fail_token();
+                            hwmonHttp_mod_sensor ( host_ptr->hostname,
+                                                   host_ptr->event,
+                                                   host_ptr->sensor[0].uuid,
+                                                   "status",
+                                                   host_ptr->sensor[0].status);
+                        }
+                        else
+                        {
+                            token_corrupt_holdoff-- ;
+                            sleep (1);
+                        }
+                    }
+#endif
                 }
                 if ( host_ptr->want_degrade_audit )
                 {

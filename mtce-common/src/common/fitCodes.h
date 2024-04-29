@@ -68,8 +68,9 @@
 #define MTC_CMD_FIT__GOENABLE_AUDIT ("/var/run/fit/goenable_audit") /* mtcAgent  */
 #define MTC_CMD_FIT__JSON_LEAK_SOAK ("/var/run/fit/json_leak_soak") /* mtcAgent  */
 #define MTC_CMD_FIT__BMC_ACC_FAIL   ("/var/run/fit/bmc_access_fail")/* mtcAgent  */
-#define MTC_CMD_FIT__MEM_LEAK_DEBUG ("/var/run/fit/mem_leak_debug")/* mtcAgent  */
+#define MTC_CMD_FIT__MEM_LEAK_DEBUG ("/var/run/fit/mem_leak_debug") /* mtcAgent  */
 #define MTC_CMD_FIT__FM_ERROR_CODE  ("/var/run/fit/fm_error_code")  /* mtcAgent  */
+#define MTC_CMD_FIT__CORRUPT_TOKEN  ("/var/run/fit/corrupt_token")  /* mtcAgent & hwmond */
 
 /*****************************************************
  *           Fault Insertion Codes
