@@ -1386,9 +1386,17 @@ int daemon_init ( string iface, string nodetype_str )
      * restart in the no-reboot patching case */
     if ( daemon_is_file_present ( GOENABLED_MAIN_PASS ) == false )
     {
+        ilog ("posting main-function goenable tests");
         ctrl.posted_script_set.push_front(GOENABLED_MAIN_SCRIPTS);
     }
 
+    if (( ctrl.nodetype     & CONTROLLER_TYPE ) &&
+        ( ctrl.system_type != SYSTEM_TYPE__NORMAL ) &&
+        ( daemon_is_file_present ( GOENABLED_SUBF_PASS ) == false ))
+    {
+        ilog ("posting  sub-function goenable tests");
+        ctrl.posted_script_set.push_back(GOENABLED_SUBF_SCRIPTS);
+    }
     return (rc) ;
 }
 
@@ -1397,6 +1405,10 @@ void daemon_service_run ( void )
 {
     int rc = PASS ;
     int file_not_present_count = 0 ;
+
+    /* Bool to track whether the start host services scripts run has
+     * been attempted at least once since last process startup. */
+    bool start_host_services_needs_to_be_run = true ;
 
     if ( daemon_is_file_present ( NODE_RESET_FILE ) )
     {
@@ -1895,6 +1907,78 @@ void daemon_service_run ( void )
 
                 // Service signal handler just in case the loaded loops number is big
                 daemon_signal_hdlr ();
+            }
+        }
+
+        if (( start_host_services_needs_to_be_run == true) &&
+            ( ctrl.posted_script_set.size() == 0 ))
+        {
+            bool run_start_host_services = false ;
+            dlog1 ("Start Host Services needs to be run");
+            if ( ctrl.system_type == SYSTEM_TYPE__NORMAL )
+            {
+                /* Any node on a standard system */
+                if ( daemon_is_file_present ( GOENABLED_MAIN_PASS ) )
+                {
+                    ilog ("start host services on standard system accepted");
+                    run_start_host_services = true ;
+                }
+                else if ( daemon_is_file_present ( GOENABLED_MAIN_FAIL ) )
+                {
+                    /* Don't run start host services if any goenabled failed */
+                    wlog ("start host services on standard system rejected ; goenabled failed");
+                    start_host_services_needs_to_be_run = false ;
+                }
+            }
+            else if ( ctrl.nodetype & CONTROLLER_TYPE )
+            {
+                /* AIO controller */
+                if ( daemon_is_file_present ( GOENABLED_SUBF_PASS ) )
+                {
+                    ilog ("start host services on all-in-one controller accepted");
+                    run_start_host_services = true ;
+                }
+                else if (( daemon_is_file_present ( GOENABLED_MAIN_FAIL ) ||
+                         ( daemon_is_file_present ( GOENABLED_SUBF_FAIL ))))
+                {
+                    /* Don't run start host services if any goenabled failed */
+                    wlog ("start host services on all-in-one controller rejected ; goenabled failed ");
+                    start_host_services_needs_to_be_run = false ;
+                }
+            }
+            else
+            {
+                /* AIO plus : worker and storage */
+                if ( daemon_is_file_present ( GOENABLED_MAIN_PASS ) )
+                {
+                    ilog ("start host services on all-in-one plus node accepted");
+                    run_start_host_services = true ;
+                }
+                else if ( daemon_is_file_present ( GOENABLED_MAIN_FAIL ) )
+                {
+                    /* Don't run start host services if any goenabled failed */
+                    wlog ("start host services on all-in-one plus node rejected ; goenabled failed");
+                    start_host_services_needs_to_be_run = false ;
+                }
+            }
+
+            if ( run_start_host_services )
+            {
+                ctrl.posted_script_set.push_back ( HOSTSERVICES_SCRIPTS );
+
+                int cmd = MTC_CMD_NONE ;
+                if ( ctrl.nodetype & CONTROLLER_TYPE)
+                    cmd = MTC_CMD_START_CONTROL_SVCS ;
+                else if ( ctrl.nodetype & WORKER_TYPE )
+                    cmd = MTC_CMD_START_WORKER_SVCS ;
+                else if ( ctrl.nodetype & STORAGE_TYPE )
+                    cmd = MTC_CMD_START_STORAGE_SVCS ;
+
+                ctrl.hostservices.posted  = cmd ;
+                ctrl.hostservices.monitor = MTC_CMD_NONE ;
+                ilog ("posted start host services ; from process startup ; cmd:%s", get_mtcNodeCommand_str(cmd));
+
+                start_host_services_needs_to_be_run = false ;
             }
         }
         daemon_signal_hdlr ();
