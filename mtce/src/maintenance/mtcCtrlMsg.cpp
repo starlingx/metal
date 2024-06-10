@@ -506,27 +506,23 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
                     }
                     obj_ptr->declare_service_ready ( hostname, MTC_SERVICE_MTCCLIENT, features );
 
-                    /* if this ready event is from the mtcClient of a
-                     * controller that has valid bmc access info then
-                     * build the 'peer controller kill' mtcInfo and
-                     * send it to that mtcClient */
-                    if ( obj_ptr->get_nodetype ( hostname ) & CONTROLLER_TYPE )
+                    /* The mtcInfo in this context currently only contains
+                     * bmc provisioning info for the purpose of telling
+                     * the mtcClient what its peer bmc priovisioning data is.
+                     *
+                     * No need to send this on an SX system as there
+                     * is no peer controller.
+                     *
+                     * The network check avoids sending duplicate on
+                     * the pxeboot network.
+                     *
+                     * Only applies to mtcClients that run on controllers */
+                    if (( iface == MGMNT_INTERFACE ) &&
+                        ( obj_ptr->system_type != SYSTEM_TYPE__AIO__SIMPLEX ) &&
+                        ( obj_ptr->get_nodetype ( hostname ) & CONTROLLER_TYPE ))
                     {
-                        string bm_pw = obj_ptr->get_bm_pw ( hostname ) ;
-                        if ( !bm_pw.empty() && ( bm_pw != NONE ))
-                        {
-                            string bm_un = obj_ptr->get_bm_un ( hostname ) ;
-                            string bm_ip = obj_ptr->get_bm_ip ( hostname ) ;
-                            if (( hostUtil_is_valid_username  ( bm_un )) &&
-                                ( hostUtil_is_valid_ip_addr   ( bm_ip )))
-                            {
-                                send_mtc_cmd ( hostname,
-                                               MTC_MSG_INFO,
-                                               MGMNT_INTERFACE,
-                                               obj_ptr->build_mtcInfo_dict (
-                                MTC_INFO_CODE__PEER_CONTROLLER_KILL_INFO));
-                            }
-                        }
+                        send_mtc_cmd ( hostname, MTC_MSG_INFO, MGMNT_INTERFACE,
+                                       obj_ptr->build_mtcInfo_dict ( MTC_INFO_CODE__PEER_CONTROLLER_KILL_INFO));
                     }
                     return (PASS);
                 }

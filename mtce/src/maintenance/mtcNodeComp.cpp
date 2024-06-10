@@ -2459,16 +2459,20 @@ void load_mtcInfo_msg ( mtc_message_type & msg )
                     peer_controller.bm_un = jsonUtil_get_key_value_string(ctrl_obj, "bm_un");
                     peer_controller.bm_pw = jsonUtil_get_key_value_string(ctrl_obj, "bm_pw");
 
-                    /* log the mc info but not the bmc password ; only
-                     * indicate that it looks 'ok' or 'is 'none' */
-                    ilog ("%s is my peer [host:%s bmc:%s:%s:%s]",
-                           peer_controller.hostname.c_str(),
-                           peer_controller.host_ip.c_str(),
-                           peer_controller.bm_ip.c_str(),
-                           peer_controller.bm_un.c_str(),
-                           hostUtil_is_valid_pw(peer_controller.bm_pw) ? "ok":"none");
+                    /* Log the mc info but not the bmc password.
+                     * Only indicate that it looks 'ok' or 'is 'none'.
+                     * However, don't log if the bmc ip is none */
+                    if ( peer_controller.bm_ip.compare("none") )
+                    {
+                        ilog ("%s is my peer [host:%s bmc:%s:%s:%s]",
+                               peer_controller.hostname.c_str(),
+                               peer_controller.host_ip.c_str(),
+                               peer_controller.bm_ip.c_str(),
+                               peer_controller.bm_un.c_str(),
+                               hostUtil_is_valid_pw(peer_controller.bm_pw) ? "ok":"none");
+                    }
                 }
-                else
+                else if ( ctrl.system_type != SYSTEM_TYPE__AIO__SIMPLEX )
                 {
                     wlog("peer mtcInfo missing (rc:%d) ; %s",
                           json_rc, &msg.buf[0]);
