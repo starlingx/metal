@@ -1,4 +1,0 @@
-BUILDER=docker
-LABEL=rvmc
-DOCKER_CONTEXT=../docker
-DOCKER_FILE=./Dockerfile
