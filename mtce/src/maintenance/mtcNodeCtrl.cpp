@@ -249,8 +249,11 @@ static void mtc_socket_fini(void)
     set_inotify_close(mtcInv.inotify_shadow_file_fd,
                       mtcInv.inotify_shadow_file_wd);
 
-    pxeboot_tx_socket_close();
-    pxeboot_rx_socket_close();
+    if ( mtcInv.pxeboot_network_provisioned )
+    {
+        pxeboot_tx_socket_close();
+        pxeboot_rx_socket_close();
+    }
     mtc_agent_clstr_tx_socket_close();
     mtc_agent_clstr_rx_socket_close();
     mtc_agent_mgmt_tx_socket_close();
@@ -1469,7 +1472,12 @@ void daemon_service_run ( void )
         get_iface_macaddr ( mtc_config.mgmnt_iface , my_mac );
         dlog ("Mgmt IF mac: %s", my_mac.c_str());
         mtcInv.my_pxeboot_if = daemon_mgmnt_iface() ;
-        if (( mtcInv.my_pxeboot_if != LOOPBACK_IF ) && ( !my_mac.empty() ))
+
+        if ( mtcInv.system_type == SYSTEM_TYPE__AIO__SIMPLEX )
+        {
+            ilog ("Simplex Mode: Pxeboot network not provisioned");
+        }
+        else if (( mtcInv.my_pxeboot_if != LOOPBACK_IF ) && ( !my_mac.empty()))
         {
             mtcInv.pxeboot_network_provisioned = true ;
             mtc_config.pxeboot_iface = daemon_get_iface_master ((char*)mtcInv.my_pxeboot_if.data());
@@ -1593,9 +1601,14 @@ void daemon_service_run ( void )
     // service_events
     socks.push_front (mtc_sock.mtc_event_rx_sock->getFD());
 
-    // mtc_service_inbox - receive sockets from Pxeboot, Mgmt and Clstr network
-    if ( mtc_sock.pxeboot_rx_socket )
-        socks.push_front (mtc_sock.pxeboot_rx_socket);
+    if ( mtcInv.pxeboot_network_provisioned )
+    {
+        // mtc_service_inbox - receive sockets from Pxeboot, Mgmt and Clstr network
+        if ( mtc_sock.pxeboot_rx_socket )
+        {
+            socks.push_front (mtc_sock.pxeboot_rx_socket);
+        }
+    }
     socks.push_front (mtc_sock.mtc_agent_mgmt_rx_socket->getFD());
     if ( mtcInv.clstr_network_provisioned == true )
     {
@@ -1769,10 +1782,13 @@ void daemon_service_run ( void )
         {
             FD_SET(mtc_sock.mtc_agent_clstr_rx_socket->getFD(),&mtc_sock.readfds);
         }
-        // Listen to the pxeboot rx socket if it is setup
-        if ( mtc_sock.pxeboot_rx_socket > 0 )
+        if ( mtcInv.pxeboot_network_provisioned == true )
         {
-            FD_SET(mtc_sock.pxeboot_rx_socket, &mtc_sock.readfds);
+            // Listen to the pxeboot rx socket if it is setup
+            if ( mtc_sock.pxeboot_rx_socket > 0 )
+            {
+                FD_SET(mtc_sock.pxeboot_rx_socket, &mtc_sock.readfds);
+            }
         }
         if ( mtce_event.fd )
         {
@@ -1838,7 +1854,8 @@ void daemon_service_run ( void )
                 mlog3 ("events handling done");
             }
 
-            if ( mtc_sock.pxeboot_rx_socket && FD_ISSET(mtc_sock.pxeboot_rx_socket, &mtc_sock.readfds))
+            if (( mtcInv.pxeboot_network_provisioned == true ) &&
+                ( mtc_sock.pxeboot_rx_socket && FD_ISSET(mtc_sock.pxeboot_rx_socket, &mtc_sock.readfds)))
             {
                 int cnt = 0 ;
                 /* Service up to MAX_RX_MSG_BATCH of messages at once */

@@ -659,8 +659,11 @@ int mtc_socket_init ( void )
     /************************************************************/
     /* Setup Pxeboot Network messaging sockets to/from mtcAgent */
     /************************************************************/
-    setup_pxeboot_rx_socket ();
-    setup_pxeboot_tx_socket ();
+    if ( ctrl.pxeboot_iface_provisioned )
+    {
+        setup_pxeboot_rx_socket ();
+        setup_pxeboot_tx_socket ();
+    }
 
     /* Manage Cluster-host network setup */
     string mgmnt_iface_name = daemon_mgmnt_iface();
@@ -1305,7 +1308,14 @@ int daemon_init ( string iface, string nodetype_str )
             // equal to the management interface, until otherwise updated due
             // to bonding or vlan modes.
             ctrl.pxeboot_iface = ctrl.mgmnt_iface ;
-            ctrl.pxeboot_iface_provisioned = true ;
+            if ( ctrl.system_type != SYSTEM_TYPE__AIO__SIMPLEX )
+            {
+                ctrl.pxeboot_iface_provisioned = true ;
+            }
+            else
+            {
+                ilog ("Simplex Mode: Pxeboot network not provisioned");
+            }
         }
     }
     if ( daemon_files_init () != PASS )
@@ -1336,9 +1346,12 @@ int daemon_init ( string iface, string nodetype_str )
         rc = FAIL_NODETYPE;
     }
 
-    if (( rc = learn_my_pxeboot_address () ) != PASS )
+    if ( ctrl.system_type != SYSTEM_TYPE__AIO__SIMPLEX )
     {
-        wlog ("failed to learn my pxeboot address ; rc:%d", rc );
+        if (( rc = learn_my_pxeboot_address () ) != PASS )
+        {
+            wlog ("failed to learn my pxeboot address ; rc:%d", rc );
+        }
     }
 
     /* Setup the heartbeat service messaging sockets */
@@ -1487,7 +1500,8 @@ void daemon_service_run ( void )
             FD_SET(mtc_sock.mtc_client_clstr_rx_socket->getFD(), &mtc_sock.readfds);
         }
 
-        if ( mtc_sock.pxeboot_rx_socket )
+        if (( ctrl.pxeboot_iface_provisioned ) &&
+            ( mtc_sock.pxeboot_rx_socket ))
         {
             socks.push_front (mtc_sock.pxeboot_rx_socket);
             FD_SET(mtc_sock.pxeboot_rx_socket, &mtc_sock.readfds);
@@ -1522,9 +1536,11 @@ void daemon_service_run ( void )
         }
         else
         {
+
             // Is there a Pxeboot network message present ?
-            if (mtc_sock.pxeboot_rx_socket &&
-                FD_ISSET(mtc_sock.pxeboot_rx_socket, &mtc_sock.readfds))
+            if (( ctrl.pxeboot_iface_provisioned ) &&
+                ( mtc_sock.pxeboot_rx_socket )     &&
+                ( FD_ISSET(mtc_sock.pxeboot_rx_socket, &mtc_sock.readfds)))
             {
                 mlog3 ("pxeboot rx socket fired");
                 mtc_service_command ( sock_ptr, PXEBOOT_INTERFACE );
@@ -1759,9 +1775,12 @@ void daemon_service_run ( void )
 
             if ( socket_reinit )
             {
-                if (( mtc_sock.pxeboot_tx_socket <= 0 ) || ( mtc_sock.pxeboot_rx_socket <= 0 ))
+                if (( ctrl.pxeboot_iface_provisioned ) &&
+                    (( mtc_sock.pxeboot_tx_socket <= 0 ) ||
+                     ( mtc_sock.pxeboot_rx_socket <= 0 )))
+                {
                     learn_my_pxeboot_address ();
-
+                }
                 /* re-get identity if interfaces are re-initialized */
                 string who_i_am = _self_identify ( ctrl.nodetype_str );
             }
@@ -1771,7 +1790,10 @@ void daemon_service_run ( void )
             if ( ! daemon_want_fit ( FIT_CODE__FAIL_PXEBOOT_MTCALIVE ) )
 #endif
             {
-                send_mtcAlive_msg ( sock_ptr, ctrl.who_i_am, PXEBOOT_INTERFACE );
+                if ( ctrl.pxeboot_iface_provisioned )
+                {
+                    send_mtcAlive_msg ( sock_ptr, ctrl.who_i_am, PXEBOOT_INTERFACE );
+                }
             }
             send_mtcAlive_msg ( sock_ptr, ctrl.who_i_am, MGMNT_INTERFACE );
             if (( ctrl.clstr_iface_provisioned == true ) &&
@@ -1788,12 +1810,14 @@ void daemon_service_run ( void )
 
             if ( daemon_is_file_present ( MTC_CMD_FIT__DIR ) )
             {
-                /* fault insertion testing */
-                if ( daemon_is_file_present ( MTC_CMD_FIT__PXEBOOT_RXSOCK ))
-                    _close_pxeboot_rx_socket();
-                if ( daemon_is_file_present ( MTC_CMD_FIT__PXEBOOT_TXSOCK ))
-                    _close_pxeboot_tx_socket ();
-
+                if ( ctrl.pxeboot_iface_provisioned )
+                {
+                    /* fault insertion testing */
+                    if ( daemon_is_file_present ( MTC_CMD_FIT__PXEBOOT_RXSOCK ))
+                        _close_pxeboot_rx_socket();
+                    if ( daemon_is_file_present ( MTC_CMD_FIT__PXEBOOT_TXSOCK ))
+                        _close_pxeboot_tx_socket ();
+                }
                 /* fault insertion testing */
                 if ( daemon_is_file_present ( MTC_CMD_FIT__MGMNT_RXSOCK ))
                 {
@@ -1901,7 +1925,10 @@ void daemon_service_run ( void )
             slog ("mtcAlive Stress Test: Sending %d mtcAlive on each network.", loops);
             for ( int loop = 0 ; loop < loops ; loop++ )
             {
-                send_mtcAlive_msg ( sock_ptr, ctrl.who_i_am, PXEBOOT_INTERFACE );
+                if ( ctrl.pxeboot_iface_provisioned )
+                {
+                    send_mtcAlive_msg ( sock_ptr, ctrl.who_i_am, PXEBOOT_INTERFACE );
+                }
                 send_mtcAlive_msg ( sock_ptr, ctrl.who_i_am, MGMNT_INTERFACE );
                 send_mtcAlive_msg ( sock_ptr, ctrl.who_i_am, CLSTR_INTERFACE );
 
