@@ -40,14 +40,3 @@ submenu 'UEFI Debian All-in-one Install' --id=aio {
     initrdefi xxxPXEBOOTxxx/initrd
   }
 }
-
-submenu 'UEFI Debian All-in-one (lowlatency) Install' --id=aio-lowlat {
-  menuentry 'Serial Console' --id=serial {
-    linuxefi xxxPXEBOOTxxx/bzImage-rt rdinit=/install defaultkernel=vmlinuz-*-rt-amd64 instname=debian instbr=starlingx instab=0 traits=controller,worker,lowlatency efi=runtime BOOTIF=$net_default_mac instdev=xxxINSTDEVxxx inst_ostree_root=/dev/mapper/cgts--vg-root--lv inst_ostree_var=/dev/mapper/cgts--vg-var--lv ks=xxxBASE_URLxxx/xxxFEEDxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/xxxFEEDxxx/ostree_repo console=ttyS0,115200 biosdevname=0 biosplusefi=1
-    initrdefi xxxPXEBOOTxxx/initrd
-  }
-  menuentry 'Graphical Console' --id=graphical {
-    linuxefi xxxPXEBOOTxxx/bzImage-rt rdinit=/install defaultkernel=vmlinuz-*-rt-amd64 instname=debian instbr=starlingx instab=0 traits=controller,worker,lowlatency efi=runtime BOOTIF=$net_default_mac instdev=xxxINSTDEVxxx inst_ostree_root=/dev/mapper/cgts--vg-root--lv inst_ostree_var=/dev/mapper/cgts--vg-var--lv ks=xxxBASE_URLxxx/xxxFEEDxxx/kickstart/kickstart.cfg insturl=xxxBASE_URLxxx/xxxFEEDxxx/ostree_repo console=tty1 biosdevname=0 biosplusefi=1
-    initrdefi xxxPXEBOOTxxx/initrd
-  }
-}

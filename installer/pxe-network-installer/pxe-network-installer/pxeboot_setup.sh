@@ -46,8 +46,7 @@
 #
 #                 0 - disk boot
 #                 1 - controller
-#                 2 - All-in-one (standard)
-#                 3 - All-in-one (lowlatency)
+#                 2 - All-in-one
 #
 # Refer to usage function for option details.
 #
@@ -87,9 +86,7 @@ UEFI_SYSTEM_TYPES_str=('disk' \
                         'standard>serial' \
                         'standard>graphical' \
                         'aio>serial' \
-                        'aio>graphical' \
-                        'aio-lowlat>serial' \
-                        'aio-lowlat>graphical')
+                        'aio>graphical')
 
 BACKUP=false
 
@@ -122,8 +119,6 @@ function usage {
     echo "        2 = Controller Install - Graphical Console"
     echo "        3 = All-in-one Install - Serial Console       (default)"
     echo "        4 = All-in-one Install - Graphical Console"
-    echo "        5 = All-in-one (lowlatency) Install - Serial Console"
-    echo "        6 = All-in-one (lowlatency) Install - Graphical Console"
     echo ""
     echo ""
     echo "Example:"
@@ -193,7 +188,7 @@ while true; do
         ;;
 
     -s|--system)
-        if echo "${2}" | grep -q -x '[0-9]\+' && [ ${2} -ge 0 ] && [ ${2} -le 6 ]; then
+        if echo "${2}" | grep -q -x '[0-9]\+' && [ ${2} -ge 0 ] && [ ${2} -le 4 ]; then
             SYSTEM=${2}
             # UEFI: Translate the incoming system type to a string that
             #       specifies the 'default' menu path to be taken.
@@ -202,7 +197,7 @@ while true; do
             # BIOS menu uses the system type number directly.
             BIOS_SYSTEM="${2}"
         else
-            echo "Error: system install type '${2}' is out of range [0..6]"
+            echo "Error: system install type '${2}' is out of range [0..4]"
             usage 1
         fi
         shift 2
