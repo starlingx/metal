@@ -4097,7 +4097,7 @@ void nodeLinkClass::set_cmd_resp ( string & hostname, mtc_message_type & msg, in
              * Host Services Request's Response Handling
              *****************************************************/
             node_ptr->host_services_req.status = msg.parm[0] ;
-            if ( msg.cmd == node_ptr->host_services_req.cmd )
+            if (( msg.cmd == node_ptr->host_services_req.cmd ) || ( msg.cmd == MTC_CMD_HOST_SVCS_RESULT ))
             {
                 // print_mtc_message ( &msg, true );
 
@@ -4122,7 +4122,7 @@ void nodeLinkClass::set_cmd_resp ( string & hostname, mtc_message_type & msg, in
                  * services extension. */
                 else if (( msg.num > 1 ) && ( msg.parm[1] == MTC_ENHANCED_HOST_SERVICES ))
                 {
-                    dlog ("%s %s request ack\n",
+                    ilog ("%s %s request ack",
                               hostname.c_str(),
                               node_ptr->host_services_req.name.c_str());
                     node_ptr->host_services_req.ack = true ;
