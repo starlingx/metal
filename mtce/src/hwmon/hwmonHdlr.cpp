@@ -460,6 +460,10 @@ int hwmonHostClass::add_host_handler ( struct hwmonHostClass::hwmon_host * host_
         case HWMON_ADD__DONE:
         {
             ilog ("%s add complete ; %d sensors %d groups\n", host_ptr->hostname.c_str(), host_ptr->sensors, host_ptr->groups );
+
+            if (( host_ptr->sensors ) && ( host_ptr->groups ) && ( host_ptr->alarmed_config == true ))
+                hwmonAlarm_clear ( host_ptr->hostname, HWMON_ALARM_ID__SENSORCFG, "profile", REASON_OK );
+
             break ;
         }
         default:
@@ -2064,28 +2068,17 @@ bool hwmonHostClass::manage_startup_states ( struct hwmonHostClass::hwmon_host *
     int rc = PASS ;
     if ( host_ptr )
     {
-
+        string profile="profile";
         std::list<hwmonAlarm_entity_status_type>::iterator _iter_ptr ;
         std::list<hwmonAlarm_entity_status_type> alarm_list ;
         alarm_list.clear();
 
-        /**********************    Manage Profile Alarms    ***********************/
+        /**********************    Manage Profile Alarm    ***********************/
 
-        /* clear this config alarm as it is not used anymore - handles patchback case.
-         * Its cheaper to send a clear than it is to query for it first */
-        hwmonAlarm_clear ( host_ptr->hostname, HWMON_ALARM_ID__SENSORCFG, "sensor", REASON_OK );
-
-#ifdef WANT_QUERY_SENSOR_CONFIG_ALARM
         /* We don't degrade for sensor config error - this is similar to a
          * BMC access error in mtcAgent where we only raise a minor alarm */
-        if ( hwmon_alarm_query ( host_ptr->hostname, HWMON_ALARM_ID__SENSORCFG, "profile" ) != FM_ALARM_SEVERITY_CLEAR )
-             host_ptr->alarmed_config = true ;
-#endif
-        if ( host_ptr->alarmed_config == false )
-        {
-            hwmonAlarm_clear ( host_ptr->hostname, HWMON_ALARM_ID__SENSORCFG, "profile", REASON_OK );
-            host_ptr->alarmed_config = false ;
-        }
+        if ( hwmon_alarm_query ( host_ptr->hostname, HWMON_ALARM_ID__SENSORCFG, profile ) != FM_ALARM_SEVERITY_CLEAR )
+            host_ptr->alarmed_config = true ;
 
         /**********************    Manage Group Alarms    ***********************/
         string entity = "host=" + host_ptr->hostname + ".sensorgroup=" ;

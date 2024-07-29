@@ -494,7 +494,7 @@ void hwmonHostClass::clear_bm_assertions ( struct hwmonHostClass::hwmon_host * h
     /* Bug Fix: This was outside the if bm_provisioned clause causing it
      *          to be called even if the bmc was not already provisioned
      */
-    hwmonAlarm_clear ( host_ptr->hostname, HWMON_ALARM_ID__SENSORCFG, "sensors", REASON_DEPROVISIONED );
+    hwmonAlarm_clear ( host_ptr->hostname, HWMON_ALARM_ID__SENSORCFG, "profile", REASON_DEPROVISIONED );
 }
 
 int hwmonHostClass::set_bm_prov ( struct hwmonHostClass::hwmon_host * host_ptr, bool state )
@@ -672,10 +672,16 @@ int hwmonHostClass::mod_host ( node_inv_type & inv )
                 need_relearn = false ;
             }
 
-            if (( need_relearn == true ) && ( host_ptr->groups ))
+            if ( need_relearn == true )
             {
-                ilog ("%s sensor model will be deleted and relearned", inv.name.c_str());
-                bmc_learn_sensor_model (hostBase.get_uuid( inv.name ));
+                if ( host_ptr->alarmed_config == true )
+                    hwmonAlarm_clear ( host_ptr->hostname, HWMON_ALARM_ID__SENSORCFG, "profile", REASON_OK );
+
+                if ( host_ptr->groups )
+                {
+                    ilog ("%s sensor model will be deleted and relearned", inv.name.c_str());
+                    bmc_learn_sensor_model (hostBase.get_uuid( inv.name ));
+                }
             }
         }
         else
