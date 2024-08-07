@@ -494,14 +494,18 @@ void * hwmonThread_ipmitool ( void * arg )
             /****************************************************************
              *
              * This fault insertion case is added for PV.
-             * If MTC_CMD_FIT__SENSOR_DATA file is present then no ipmitool
+             * If MTC_CMD_FIT__SENSOR_DATA file is present and
+             * there is an existing datafile then no ipmitool
              * sensor read is performed. Instead, a raw output file can be
-             * placed in /var/run/fit/<hostname>_sensor_data and used to
-             * perform sensor fault insertion that way.
+             * manually updated and used to perform sensor fault insertion.
              *
              *****************************************************************/
-            if ( daemon_is_file_present ( MTC_CMD_FIT__SENSOR_DATA ))
+            if (( daemon_is_file_present ( MTC_CMD_FIT__SENSOR_DATA )) &&
+                ( daemon_is_file_present ( sensor_datafile.data())))
             {
+                ilog_t ("%s bypass sensor data read ; %s FIT file is present",
+                            info_ptr->hostname.c_str(),
+                            MTC_CMD_FIT__SENSOR_DATA);
                 rc = PASS ;
             }
 #ifdef WANT_FIT_TESTING
@@ -810,6 +814,7 @@ static void _set_default_unit_type_for_sensor( thread_info_type * info_ptr,
         strcpy( _sample_list[samples].unit, BMC_SENSOR_DEFAULT_UNIT_TYPE_TEMP);
     }
     else if (( label == REDFISH_SENSOR_LABEL_POWER_CTRL ) ||
+             ( label == REDFISH_SENSOR_LABEL_POWER_REDUNDANCY ) ||
              ( label == REDFISH_SENSOR_LABEL_POWER_SUPPLY ))
     {
         strcpy( _sample_list[samples].unit, BMC_SENSOR_DEFAULT_UNIT_TYPE_POWER);
@@ -879,6 +884,10 @@ static int _parse_redfish_sensor_data( char * json_str_ptr, thread_info_type * i
         string temp_str;
         std::list<string>::iterator iter_curr_ptr ;
 
+        // Required for special case handling of the Power Supply Redundancy Sensor
+        bool is_power_supply_redundancy_sensor = false ;
+        int  redundancy_count = 0 ;
+
         for ( iter_curr_ptr  = sensor_list.begin();
               iter_curr_ptr != sensor_list.end() ;
             ++iter_curr_ptr )
@@ -926,13 +935,22 @@ static int _parse_redfish_sensor_data( char * json_str_ptr, thread_info_type * i
                  strcpy( _sample_list[samples].unit, BMC_SENSOR_DEFAULT_UNIT_TYPE_FANS);
             }
 
-            GET_SENSOR_DATA_VALUE( temp_str, json_obj, "LowerThresholdNonRecoverable", lnr )
-            GET_SENSOR_DATA_VALUE( temp_str, json_obj, "LowerThresholdCritical", lcr )
-            GET_SENSOR_DATA_VALUE( temp_str, json_obj, "LowerThresholdNonCritical", lnc )
-            GET_SENSOR_DATA_VALUE( temp_str, json_obj, "UpperThresholdNonCritical", unc )
-            GET_SENSOR_DATA_VALUE( temp_str, json_obj, "UpperThresholdCritical", ucr )
-            GET_SENSOR_DATA_VALUE( temp_str, json_obj, "UpperThresholdNonRecoverable", unr )
-
+            /* The Redundancy sensor does not have Upper/Lower threshold labels */
+            if ( label.compare(REDFISH_SENSOR_LABEL_POWER_REDUNDANCY ) )
+            {
+                GET_SENSOR_DATA_VALUE( temp_str, json_obj, "LowerThresholdNonRecoverable", lnr )
+                GET_SENSOR_DATA_VALUE( temp_str, json_obj, "LowerThresholdCritical", lcr )
+                GET_SENSOR_DATA_VALUE( temp_str, json_obj, "LowerThresholdNonCritical", lnc )
+                GET_SENSOR_DATA_VALUE( temp_str, json_obj, "UpperThresholdNonCritical", unc )
+                GET_SENSOR_DATA_VALUE( temp_str, json_obj, "UpperThresholdCritical", ucr )
+                GET_SENSOR_DATA_VALUE( temp_str, json_obj, "UpperThresholdNonRecoverable", unr )
+            }
+            else
+            {
+                is_power_supply_redundancy_sensor = true ;
+                redundancy_count = atoi(_sample_list[samples].value);
+                blog2_t ("%s redundancy count is %d", info_ptr->hostname.c_str(), redundancy_count );
+            }
             /* Set default unit type if can not get unit type from json string */
             if ( !strcmp(_sample_list[samples].unit, "na") )
             {
@@ -948,9 +966,42 @@ static int _parse_redfish_sensor_data( char * json_str_ptr, thread_info_type * i
                 {
                     string state = jsonUtil_get_key_value_string ( json_status_obj, "State" );
                     string health = jsonUtil_get_key_value_string ( json_status_obj, "Health" );
-                    // string healthRollup = jsonUtil_get_key_value_string ( json_status_obj, "HealthRollup" );
                     if ( !strcmp (state.data(),"Enabled" ))
                     {
+                        // This condition is to override the reported health status
+                        // of the Power Supply Redundancy sensor from Critical,
+                        // or not OK, to Major.
+                        //
+                        // Some servers report a Critical status when there is only
+                        // a single power supply installed. We don't want to do that
+                        // here because some systems may be intentionally provisioned
+                        // with a single power supply to save cost. We don't want to
+                        // alarm in that case.
+                        //
+                        // Furthermore, when there are 2 installed power supplies
+                        // and one is failing or not plugged in some servers report
+                        // that as Critical. We don't want to raise a Critical alarm
+                        // simply due to a lack of redundancy. Critical alarms are
+                        // reserved for service affecting error conditions.
+                        //
+                        // System administrators that wish to have an alarm for this
+                        // case can choose to modify the hardware monitor server power
+                        // group major action handling from the default 'log' to 'alarm'.
+                        //
+                        // In Summary, only assert the redundancy failure status if
+                        //  - redundancy count of 2 and
+                        //  - health reading is not OK
+                        if (( is_power_supply_redundancy_sensor == true ) &&
+                            ( strcmp (health.data(), REDFISH_SEVERITY__GOOD)))
+                        {
+                            if ( redundancy_count > 1 )
+                                health = REDFISH_SEVERITY__MAJOR ;
+                            else if ( redundancy_count == 0 )
+                                health = "" ;
+                            else
+                                health = REDFISH_SEVERITY__GOOD ;
+                        }
+
                         if ( !strcmp (health.data(), REDFISH_SEVERITY__GOOD ))
                         {
                             strcpy(_sample_list[samples].status, "ok");
@@ -1065,8 +1116,12 @@ static int _redfishUtil_send_request( thread_info_type * info_ptr, string & data
                 request.c_str());
 
     if (( info_ptr->command == BMC_THREAD_CMD__READ_SENSORS ) &&
-        ( daemon_is_file_present ( MTC_CMD_FIT__SENSOR_DATA )))
+        ( daemon_is_file_present ( MTC_CMD_FIT__SENSOR_DATA )) &&
+        ( daemon_is_file_present ( datafile.data())))
     {
+        ilog_t ("%s bypass sensor data read ; %s FIT file is present",
+                    info_ptr->hostname.c_str(),
+                    MTC_CMD_FIT__SENSOR_DATA);
         rc = PASS ;
     }
     else
@@ -1178,6 +1233,8 @@ static int _parse_redfish_sensor_data_output_file( thread_info_type * info_ptr,
             {
                 _parse_redfish_sensor_data( buffer, info_ptr, REDFISH_SENSOR_LABEL_VOLT,
                                         REDFISH_SENSOR_LABEL_VOLT_READING, samples);
+                _parse_redfish_sensor_data( buffer, info_ptr, REDFISH_SENSOR_LABEL_POWER_REDUNDANCY,
+                                        REDFISH_SENSOR_LABEL_REDUNDANCY_READING, samples);
                 _parse_redfish_sensor_data( buffer, info_ptr, REDFISH_SENSOR_LABEL_POWER_SUPPLY,
                                         REDFISH_SENSOR_LABEL_POWER_SUPPLY_READING, samples);
                 _parse_redfish_sensor_data( buffer, info_ptr, REDFISH_SENSOR_LABEL_POWER_CTRL,

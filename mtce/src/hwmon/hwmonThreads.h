@@ -2,7 +2,7 @@
 #define __INCLUDE_HWMONTHREAD_HH__
 
 /*
- * Copyright (c) 2016-2017 Wind River Systems, Inc.
+ * Copyright (c) 2016-2017, 2024 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -23,12 +23,14 @@
 #define REDFISH_SENSOR_LABEL_FANS           "Fans"
 #define REDFISH_SENSOR_LABEL_POWER_SUPPLY   "PowerSupplies"
 #define REDFISH_SENSOR_LABEL_POWER_CTRL     "PowerControl"
+#define REDFISH_SENSOR_LABEL_POWER_REDUNDANCY      "Redundancy"
 
 #define REDFISH_SENSOR_LABEL_VOLT_READING          "ReadingVolts"
 #define REDFISH_SENSOR_LABEL_TEMP_READING          "ReadingCelsius"
 #define REDFISH_SENSOR_LABEL_FANS_READING          "Reading"
 #define REDFISH_SENSOR_LABEL_POWER_SUPPLY_READING  "None"
 #define REDFISH_SENSOR_LABEL_POWER_CTRL_READING    "PowerConsumedWatts"
+#define REDFISH_SENSOR_LABEL_REDUNDANCY_READING    "RedundancySet@odata.count"  // keep generic ; don't imply power
 
 #define REDFISH_SEVERITY__GOOD     "OK"
 #define REDFISH_SEVERITY__MAJOR    "Warning"
