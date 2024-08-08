@@ -413,29 +413,28 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
         else if ( is_host_services_cmd ( msg.cmd ) == true )
         {
             ctrl_type * ctrl_ptr = get_ctrl_ptr () ;
-
-            /* Check to see if this command is already running.
-             * hostservices.posted is set to command on launch
-             * hostservices.monitor is set to command while monitoring */
-            if (( ctrl_ptr->hostservices.posted  == msg.cmd ) ||
-                ( ctrl_ptr->hostservices.monitor == msg.cmd ))
-            {
-                wlog ("%s already in progress (%d:%d)\n",
+                ilog ("%s request from %s network", 
                           command_name.c_str(),
-                          ctrl_ptr->hostservices.posted,
-                          ctrl_ptr->hostservices.monitor );
-
+                          iface_name_ptr);
+            if ( msg.cmd == MTC_CMD_START_CONTROL_SVCS )
+            {
+                ctrl_ptr->start_controller_hostservices = true ;
+                rc = PASS ;
+            }
+            else if ( msg.cmd == MTC_CMD_START_WORKER_SVCS  )
+            {
+                ctrl_ptr->start_worker_hostservices = true ;
+                rc = PASS ;
+            }
+            else if ( msg.cmd == MTC_CMD_START_STORAGE_SVCS )
+            {
+                ctrl_ptr->start_storage_hostservices = true ;
                 rc = PASS ;
             }
             else
             {
                 ctrl_ptr->posted_script_set.push_back ( HOSTSERVICES_SCRIPTS );
                 ctrl_ptr->posted_script_set.unique ();
-
-                ilog ("%s request posted from %s network",
-                          command_name.c_str(),
-                          iface_name_ptr);
-
                 ctrl_ptr->hostservices.posted  = msg.cmd ;
                 ctrl_ptr->hostservices.monitor = MTC_CMD_NONE ;
                 rc = PASS ;

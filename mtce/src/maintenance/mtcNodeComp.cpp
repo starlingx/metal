@@ -784,7 +784,7 @@ void _scripts_cleanup ( script_set_enum script_set )
             script_ptr = &ctrl.hostservices ;
             break ;
         default:
-            slog ("invalid script set (%d)\n", script_set );
+            dlog ("invalid script set (%d)\n", script_set );
             return ;
     }
 
@@ -838,7 +838,7 @@ void _manage_services_scripts ( void )
     if ( ! ctrl.hostservices.scripts )
     {
         /* send a PASS result */
-        mtce_send_event ( sock_ptr, MTC_CMD_HOST_SVCS_RESULT, NULL );
+        ctrl.active_script_set = NO_SCRIPTS ;
         return ;
     }
 
@@ -870,9 +870,10 @@ void _manage_services_scripts ( void )
         }
         else
         {
-            ilog ("Host Services Complete ; all passed\n");
+            ilog ("Host Services Complete ; all passed ; %s", get_mtcNodeCommand_str(ctrl.current_hostservices_command));
             mtce_send_event ( sock_ptr, MTC_CMD_HOST_SVCS_RESULT, NULL );
         }
+        ctrl.active_script_set = NO_SCRIPTS ;
     }
 
     /* do if have we timed out ? */
@@ -1937,18 +1938,25 @@ void daemon_service_run ( void )
             }
         }
 
-        if (( start_host_services_needs_to_be_run == true) &&
-            ( ctrl.posted_script_set.size() == 0 ))
+        /* This is a process startup handling case.
+         * Need to ensure that the appropriate host
+         * services are started for the system/node
+         * type. */
+        if ( start_host_services_needs_to_be_run == true ) 
         {
-            bool run_start_host_services = false ;
-            dlog1 ("Start Host Services needs to be run");
             if ( ctrl.system_type == SYSTEM_TYPE__NORMAL )
             {
                 /* Any node on a standard system */
                 if ( daemon_is_file_present ( GOENABLED_MAIN_PASS ) )
                 {
                     ilog ("start host services on standard system accepted");
-                    run_start_host_services = true ;
+                    if ( ctrl.nodetype & CONTROLLER_TYPE )
+                        ctrl.start_controller_hostservices = true ;
+                    else if ( ctrl.nodetype & WORKER_TYPE )
+                        ctrl.start_worker_hostservices = true ;
+                    else if ( ctrl.nodetype & STORAGE_TYPE )
+                        ctrl.start_storage_hostservices = true ;
+                    start_host_services_needs_to_be_run = false ; 
                 }
                 else if ( daemon_is_file_present ( GOENABLED_MAIN_FAIL ) )
                 {
@@ -1963,7 +1971,11 @@ void daemon_service_run ( void )
                 if ( daemon_is_file_present ( GOENABLED_SUBF_PASS ) )
                 {
                     ilog ("start host services on all-in-one controller accepted");
-                    run_start_host_services = true ;
+                    if ( ctrl.nodetype & CONTROLLER_TYPE)
+                        ctrl.start_controller_hostservices = true ;
+                    if ( ctrl.nodetype & WORKER_TYPE )
+                        ctrl.start_worker_hostservices = true ;
+                    start_host_services_needs_to_be_run = false ; 
                 }
                 else if (( daemon_is_file_present ( GOENABLED_MAIN_FAIL ) ||
                          ( daemon_is_file_present ( GOENABLED_SUBF_FAIL ))))
@@ -1979,7 +1991,11 @@ void daemon_service_run ( void )
                 if ( daemon_is_file_present ( GOENABLED_MAIN_PASS ) )
                 {
                     ilog ("start host services on all-in-one plus node accepted");
-                    run_start_host_services = true ;
+                    if ( ctrl.nodetype & WORKER_TYPE )
+                        ctrl.start_worker_hostservices = true ;
+                    else if ( ctrl.nodetype & STORAGE_TYPE )
+                        ctrl.start_storage_hostservices = true ;
+                    start_host_services_needs_to_be_run = false ; 
                 }
                 else if ( daemon_is_file_present ( GOENABLED_MAIN_FAIL ) )
                 {
@@ -1989,24 +2005,43 @@ void daemon_service_run ( void )
                 }
             }
 
-            if ( run_start_host_services )
-            {
-                ctrl.posted_script_set.push_back ( HOSTSERVICES_SCRIPTS );
-
-                int cmd = MTC_CMD_NONE ;
-                if ( ctrl.nodetype & CONTROLLER_TYPE)
-                    cmd = MTC_CMD_START_CONTROL_SVCS ;
-                else if ( ctrl.nodetype & WORKER_TYPE )
-                    cmd = MTC_CMD_START_WORKER_SVCS ;
-                else if ( ctrl.nodetype & STORAGE_TYPE )
-                    cmd = MTC_CMD_START_STORAGE_SVCS ;
-
-                ctrl.hostservices.posted  = cmd ;
-                ctrl.hostservices.monitor = MTC_CMD_NONE ;
-                ilog ("posted start host services ; from process startup ; cmd:%s", get_mtcNodeCommand_str(cmd));
-
-                start_host_services_needs_to_be_run = false ;
-            }
+        }
+        
+        // Handle auto start of node personality services.
+        // - prioritize controller first
+        // - prevent more than one being posted at once
+        if (( ctrl.start_controller_hostservices ) &&
+            ( ctrl.posted_script_set.empty()) &&
+            ( ctrl.active_script_set == NO_SCRIPTS ))
+        {
+            ctrl.posted_script_set.push_front ( HOSTSERVICES_SCRIPTS );
+            ctrl.current_hostservices_command =
+            ctrl.hostservices.posted  = MTC_CMD_START_CONTROL_SVCS ;
+            ctrl.hostservices.monitor = MTC_CMD_NONE ;
+            ilog ("scheduling %s", get_mtcNodeCommand_str(ctrl.hostservices.posted));
+            ctrl.start_controller_hostservices = false ;
+        }
+        if (( ctrl.start_worker_hostservices ) &&
+            ( ctrl.posted_script_set.empty()) &&
+            ( ctrl.active_script_set == NO_SCRIPTS ))
+        {
+            ctrl.posted_script_set.push_front ( HOSTSERVICES_SCRIPTS );
+            ctrl.current_hostservices_command =
+            ctrl.hostservices.posted  = MTC_CMD_START_WORKER_SVCS ;
+            ctrl.hostservices.monitor = MTC_CMD_NONE ;
+            ilog ("scheduling %s", get_mtcNodeCommand_str(ctrl.hostservices.posted));
+            ctrl.start_worker_hostservices = false ;
+        }
+        if (( ctrl.start_storage_hostservices ) &&
+            ( ctrl.posted_script_set.empty()) &&
+            ( ctrl.active_script_set == NO_SCRIPTS ))
+        {
+            ctrl.posted_script_set.push_front ( HOSTSERVICES_SCRIPTS );
+            ctrl.current_hostservices_command =
+            ctrl.hostservices.posted  = MTC_CMD_START_STORAGE_SVCS ;
+            ctrl.hostservices.monitor = MTC_CMD_NONE ;
+            ilog ("scheduling %s", get_mtcNodeCommand_str(ctrl.hostservices.posted));
+            ctrl.start_storage_hostservices = false ;
         }
         daemon_signal_hdlr ();
     }
@@ -2246,7 +2281,6 @@ int run_hostservices_scripts ( unsigned int cmd )
     {
         ilog ("no service scripts\n");
         ctrl.hostservices.scripts = 0 ;
-        _manage_services_scripts ();
         ctrl.active_script_set = NO_SCRIPTS ;
         return (PASS);
     }

@@ -297,7 +297,7 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
             /* log if not locked message */
             if ( msg.cmd != MTC_MSG_LOCKED )
             {
-                ilog ("%s '%s' ACK (rc:%d) (%s)",
+                ilog ("%s %s request ACK (rc:%d) (%s)",
                           hostname.c_str(),
                           get_mtcNodeCommand_str(msg.cmd),
                           msg.parm[0],
@@ -305,7 +305,7 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
             }
             else
             {
-                mlog ("%s '%s' ACK (rc:%d) (%s)",
+                mlog ("%s %s request ACK (rc:%d) (%s)",
                           hostname.c_str(),
                           get_mtcNodeCommand_str(msg.cmd),
                           msg.parm[0],

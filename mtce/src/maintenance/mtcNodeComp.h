@@ -134,6 +134,10 @@ typedef struct
 
     /* Start/Stop Hosts Services execution control timing and completion status */
     script_ctrl_type hostservices ;
+    int    current_hostservices_command  = MTC_CMD_NONE ;
+    bool   start_controller_hostservices = false ;
+    bool   start_worker_hostservices     = false ;
+    bool   start_storage_hostservices    = false ;
 
     /* The script set that is executing */
     script_set_enum active_script_set ;
