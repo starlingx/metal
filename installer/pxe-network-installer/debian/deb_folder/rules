@@ -38,16 +38,12 @@ override_dh_install:
 	install -p -D -m 700     debian-pxe-smallsystem-install $(ROOT)/var/pxeboot/pxelinux.cfg.files/pxe-smallsystem-install-${platform_release}
 	install -p -D -m 700     debian-pxe-storage-install     $(ROOT)/var/pxeboot/pxelinux.cfg.files/pxe-storage-install-${platform_release}
 	install -p -D -m 700     debian-pxe-worker-install      $(ROOT)/var/pxeboot/pxelinux.cfg.files/pxe-worker-install-${platform_release}
-	install -p -D -m 700     debian-pxe-worker_lowlatency-install $(ROOT)/var/pxeboot/pxelinux.cfg.files/pxe-worker_lowlatency-install-${platform_release}
-	install -p -D -m 700     debian-pxe-smallsystem_lowlatency-install $(ROOT)/var/pxeboot/pxelinux.cfg.files/pxe-smallsystem_lowlatency-install-${platform_release}
 
 	# UEFI System Node Install grub menus
 	install -p -D -m 700 efi-debian-pxe-controller-install  $(ROOT)/var/pxeboot/pxelinux.cfg.files/efi-pxe-controller-install-${platform_release}
 	install -p -D -m 700 efi-debian-pxe-smallsystem-install $(ROOT)/var/pxeboot/pxelinux.cfg.files/efi-pxe-smallsystem-install-${platform_release}
 	install -p -D -m 700 efi-debian-pxe-storage-install     $(ROOT)/var/pxeboot/pxelinux.cfg.files/efi-pxe-storage-install-${platform_release}
 	install -p -D -m 700 efi-debian-pxe-worker-install      $(ROOT)/var/pxeboot/pxelinux.cfg.files/efi-pxe-worker-install-${platform_release}
-	install -p -D -m 700 efi-debian-pxe-worker_lowlatency-install $(ROOT)/var/pxeboot/pxelinux.cfg.files/efi-pxe-worker_lowlatency-install-${platform_release}
-	install -p -D -m 700 efi-debian-pxe-smallsystem_lowlatency-install $(ROOT)/var/pxeboot/pxelinux.cfg.files/efi-pxe-smallsystem_lowlatency-install-${platform_release}
 
 	# Package pxeboot utilities in /var/pxeboot
 	install -d -m 755 $(ROOT)/var/pxeboot
