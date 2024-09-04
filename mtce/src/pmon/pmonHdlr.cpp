@@ -1496,20 +1496,12 @@ int manage_alarm ( process_config_type * ptr, int action )
     pmon_ctrl_type * ctrl_ptr = get_ctrl_ptr () ;
 
     string processInfo = ptr->process;
-    // check for  extra text
-    if((ptr->status_monitoring ) && (ptr->status_failure_text_file))
-    {
-        string extra_text = get_status_failure_text(ptr);
-        if(!extra_text.empty())
-        {
-            processInfo.append(" (");
-            processInfo.append(extra_text);
-            processInfo.append(")");
-        }
-    }
 
     if ( action == PMON_CLEAR )
     {
+        // Currently, there is no need to include the full entity_instance_id
+        // to delete an alarm. The process name (without additional text) will be sent instead
+        // to avoid mismatches due to file errors.
         if ( ptr->alarm_severity != FM_ALARM_SEVERITY_CLEAR )
         {
             ilog ("%s from '%s' to 'clear'\n", ptr->process, alarmUtil_getSev_str(ptr->alarm_severity).c_str());
@@ -1534,6 +1526,17 @@ int manage_alarm ( process_config_type * ptr, int action )
     }
     else
     {
+        // check for extra text.
+        if((ptr->status_monitoring ) && (ptr->status_failure_text_file))
+        {
+            string extra_text = get_status_failure_text(ptr);
+            if(!extra_text.empty())
+            {
+                processInfo.append(" (");
+                processInfo.append(extra_text);
+                processInfo.append(")");
+            }
+        }
         if ( ptr->restart == true )
         {
             /* handle as error now rather than command */
