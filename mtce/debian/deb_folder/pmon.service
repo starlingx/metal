@@ -21,5 +21,10 @@ TimeoutStopSec=10s
 Restart=always
 RestartSec=2
 
+# cgroup engineering
+CPUShares=150
+CPUQuota=15%
+CPUQuotaPeriodSec=10ms
+
 [Install]
 WantedBy=multi-user.target
