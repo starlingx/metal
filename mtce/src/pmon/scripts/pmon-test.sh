@@ -43,7 +43,6 @@
 # skipping 'sm' process
 # sm-eru                          restart PASSED [8904]:[10993]
 # skipping 'sshd' process
-# sw-patch-agent                  restart PASSED [2740]:[17461]
 # sw-patch-controller-daemon      restart PASSED [2558]:[21336]
 # sysinv-agent                    restart PASSED [2757]:[25128]
 # syslog-ng                       restart PASSED [684]:[28125]
