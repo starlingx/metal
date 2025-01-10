@@ -6215,8 +6215,13 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
 
     switch ( node_ptr->addStage )
     {
-        case MTC_ADD__START:
         case MTC_ADD__START_DELAY:
+        {
+            if ( mtcTimer_expired (node_ptr->mtcTimer) )
+                node_ptr->addStage = MTC_ADD__START ;
+            break ;
+        }
+        case MTC_ADD__START:
         {
             bool timer_set = false ;
             plog ("%s Host Add\n", node_ptr->hostname.c_str());

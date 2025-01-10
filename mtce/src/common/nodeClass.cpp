@@ -639,7 +639,7 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
     ptr->swactStage        = MTC_SWACT__START    ;
     ptr->offlineStage      = MTC_OFFLINE__IDLE   ;
     ptr->onlineStage       = MTC_ONLINE__START   ;
-    ptr->addStage          = MTC_ADD__START      ;
+    ptr->addStage          = MTC_ADD__START_DELAY;
     ptr->delStage          = MTC_DEL__START      ;
     ptr->recoveryStage     = MTC_RECOVERY__START ;
     ptr->insvTestStage     = MTC_INSV_TEST__RUN  ; /* Start wo initial delay */
@@ -3137,7 +3137,17 @@ int nodeLinkClass::add_host ( node_inv_type & inv )
 
     if (( rc == PASS ) && ( node_ptr ))
     {
-        node_ptr->addStage = MTC_ADD__START ;
+        int delay = daemon_get_cfg_ptr()->host_add_delay ;
+        if ( delay > 0 )
+        {
+            mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, delay );
+            node_ptr->addStage = MTC_ADD__START_DELAY ;
+        }
+        else
+        {
+            node_ptr->addStage = MTC_ADD__START ;
+        }
+        ilog ("Host add delay is %d seconds", delay );
         adminActionChange ( node_ptr , MTC_ADMIN_ACTION__ADD );
     }
     return (rc);
