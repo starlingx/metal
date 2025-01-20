@@ -1439,6 +1439,17 @@ void daemon_service_run ( void )
         }
     }
 
+    /* Cleanup the old obsoleted persistent node locked file */
+    #define OBSOLETED_NODE_LOCKED_FILE_BACKUP ((const char *)"/etc/mtc/tmp/.node_locked")
+    if ( strcmp (NODE_LOCKED_FILE_BACKUP, OBSOLETED_NODE_LOCKED_FILE_BACKUP ) )
+    {
+        if ( daemon_is_file_present ( OBSOLETED_NODE_LOCKED_FILE_BACKUP ) )
+        {
+            ilog ("removing obsoleted %s file", OBSOLETED_NODE_LOCKED_FILE_BACKUP );
+            daemon_remove_file ( OBSOLETED_NODE_LOCKED_FILE_BACKUP );
+        }
+    }
+
     /* If the mtcClient starts up and finds that its persistent node
      * locked backup file is present then make sure the volatile one
      * is also present. */

@@ -23,6 +23,7 @@ etc/services.d/storage/mtcTest
 etc/services.d/worker/mtcTest
 etc/syslog-ng/conf.d/mtce.conf
 etc/systemd/system-preset/
+usr/lib/tmpfiles.d/mtc.conf
 usr/lib/ocf/resource.d/platform/mtcAgent
 usr/local/bin/fsmond
 usr/local/bin/hbsAgent

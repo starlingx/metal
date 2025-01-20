@@ -17,7 +17,8 @@ export COLLECTDIR = $(SYSCONFDIR)/collect.d
 export INITDIR =$(SYSCONFDIR)/init.d
 export LOGDIR = $(SYSCONFDIR)/logrotate.d
 export SERVICESDIR = $(SYSCONFDIR)/services.d
-
+export TMPFILESDIR = $(ROOT)/usr/lib/tmpfiles.d
+export PERSISTDIR = $(ROOT)/var/persist
 export DEB_VERSION = $(shell dpkg-parsechangelog | egrep '^Version:' | cut -f 2 -d ' ')
 export MAJOR = $(shell echo $(DEB_VERSION) | cut -d. -f1)
 export MINOR = $(shell echo $(shell echo $(DEB_VERSION) | cut -d. -f2) | cut -d- -f1)
@@ -28,8 +29,8 @@ export MINOR = $(shell echo $(shell echo $(DEB_VERSION) | cut -d. -f2) | cut -d-
 override_dh_auto_install:
 	# Resource agent files
 	install -m 755 -d $(SYSCONFDIR)
-	install -m 755 -d $(SYSCONFDIR)/mtc
 	install -m 755 -d $(SYSCONFDIR)/mtc/tmp
+	install -m 755 -d $(PERSISTDIR)/mtc
 	install -m 755 -d $(OCFPLATFORMDIR)
 	install -m 755 -p -D scripts/mtcAgent $(OCFPLATFORMDIR)/mtcAgent
 	install -m 755 -p -D hwmon/scripts/ocf/hwmon $(OCFPLATFORMDIR)/hwmon
@@ -43,7 +44,7 @@ override_dh_auto_install:
 	install -m 600 -p -D pmon/scripts/pmond.conf $(SYSCONFDIR)/mtc/pmond.conf
 	install -m 600 -p -D lmon/scripts/lmond.conf $(SYSCONFDIR)/mtc/lmond.conf
 	install -m 600 -p -D hostw/scripts/hostwd.conf $(SYSCONFDIR)/mtc/hostwd.conf
-
+	install -m 600 -p -D scripts/tmpfiles.conf $(TMPFILESDIR)/mtc.conf
 	install -m 755 -d $(BMCCONFDIR)
 	install -m 644 -p -D scripts/sensor_hp360_v1_ilo_v4.profile $(BMCCONFDIR)/sensor_hp360_v1_ilo_v4.profile
 	install -m 644 -p -D scripts/sensor_hp380_v1_ilo_v4.profile $(BMCCONFDIR)/sensor_hp380_v1_ilo_v4.profile
