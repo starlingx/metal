@@ -3,10 +3,7 @@
     <version>xxxSW_VERSIONxxx</version>
     <supported_upgrades>
         <upgrade>
-            <version>22.12</version>
-        </upgrade>
-        <upgrade>
-            <version>24.03</version>
+            <version>24.09</version>
         </upgrade>
     </supported_upgrades>
 </build>
