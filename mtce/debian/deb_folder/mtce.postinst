@@ -7,17 +7,24 @@ case "$1" in
     configure)
         # Replace the default hwclock.sh with our copy
         if [ -e /etc/init.d/hwclock.sh ]; then
+            if [ -e /etc/init.d/hwclock.sh.dpkg-bak ]; then
+                rm -f /etc/init.d/hwclock.sh.dpkg-bak
+            fi
             mv -f /etc/init.d/hwclock.sh /etc/init.d/hwclock.sh.dpkg-bak
         fi
         cp -a /usr/share/mtce/hwclock.sh /etc/init.d/hwclock.sh
+
         # Replace the default hwclock.service with our copy
         if [ -e /lib/systemd/system/hwclock.service ]; then
+            if [ -e /lib/systemd/system/hwclock.service.bak ]; then
+                rm -f /lib/systemd/system/hwclock.service.bak
+            fi
             mv -f /lib/systemd/system/hwclock.service /lib/systemd/system/hwclock.service.bak
         fi
         cp -a /usr/share/mtce/hwclock.service /lib/systemd/system/hwclock.service
         ;;
     *)
-        echo "mtce postinst called with an unknown argument \`$1'" >&2
+        echo "mtce postinst called with an unsupported argument \`$1'" >&2
         exit 1
         ;;
 esac

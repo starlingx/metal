@@ -106,7 +106,7 @@ void daemon_exit ( void );
 #define CONFIG_PASS_FILE        ((const char *)"/var/run/.config_pass")
 #define CONFIG_FAIL_FILE        ((const char *)"/var/run/.config_fail")
 #define NODE_LOCKED_FILE        ((const char *)"/var/run/.node_locked")
-#define NODE_LOCKED_FILE_BACKUP ((const char *)"/etc/mtc/tmp/.node_locked")
+#define NODE_LOCKED_FILE_BACKUP ((const char *)"/var/persist/mtc/.node_locked")
 #define NODE_RESET_FILE         ((const char *)"/var/run/.node_reset")
 #define SMGMT_DEGRADED_FILE     ((const char *)"/var/run/.sm_degraded")
 #define SMGMT_UNHEALTHY_FILE    ((const char *)"/var/run/.sm_node_unhealthy")
