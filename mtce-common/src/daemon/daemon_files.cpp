@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2019 Wind River Systems, Inc.
+ * Copyright (c) 2013-2019, 2025 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -1149,9 +1149,12 @@ int daemon_wait_for_file ( const char * filename, int timeout )
 
 int daemon_files_init ( void )
 {
+    struct timespec ts ;
+    clock_gettime (CLOCK_MONOTONIC, &ts );
+
     /* Create PID file */
     pid_t mypid = getpid();
-    ilog   ("--- Daemon Start-Up --- pid:%d\n", mypid);
+    ilog   ("--- Daemon Start-Up --- pid:%d uptime:%ld", mypid, ts.tv_sec);
     daemon_init_fit ();
     return ( PASS );
 }

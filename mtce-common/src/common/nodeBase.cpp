@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016, 2023-2024 Wind River Systems, Inc.
+ * Copyright (c) 2013, 2016, 2023-2025 Wind River Systems, Inc.
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -348,8 +348,6 @@ void mtc_stages_init ( void )
    enableStages_str  [MTC_ENABLE__GOENABLED_TIMER      ] = "GoEnable-Start";
    enableStages_str  [MTC_ENABLE__GOENABLED_WAIT       ] = "GoEnable-Wait";
    enableStages_str  [MTC_ENABLE__PMOND_READY_WAIT     ] = "PmondReady-Wait";
-   enableStages_str  [MTC_ENABLE__HOST_SERVICES_START  ] = "HostServices-Start";
-   enableStages_str  [MTC_ENABLE__HOST_SERVICES_WAIT   ] = "HostServices-Wait";
    enableStages_str  [MTC_ENABLE__SERVICES_START_WAIT  ] = "Services-Start";
    enableStages_str  [MTC_ENABLE__HEARTBEAT_WAIT       ] = "Heartbeat-Wait";
    enableStages_str  [MTC_ENABLE__HEARTBEAT_SOAK       ] = "Heartbeat-Soak";
@@ -375,8 +373,6 @@ void mtc_stages_init ( void )
    recoveryStages_str[MTC_RECOVERY__MTCALIVE_WAIT      ] = "MtcAlive-Wait";
    recoveryStages_str[MTC_RECOVERY__GOENABLED_TIMER    ] = "GoEnable-Timer";
    recoveryStages_str[MTC_RECOVERY__GOENABLED_WAIT     ] = "GoEnable-Wait";
-   recoveryStages_str[MTC_RECOVERY__HOST_SERVICES_START] = "HostServices-Start";
-   recoveryStages_str[MTC_RECOVERY__HOST_SERVICES_WAIT ] = "HostServices-Wait";
    recoveryStages_str[MTC_RECOVERY__CONFIG_COMPLETE_WAIT]= "Compute-Config-Wait";
    recoveryStages_str[MTC_RECOVERY__SUBF_GOENABLED_TIMER]= "Subf-GoEnable-Timer";
    recoveryStages_str[MTC_RECOVERY__SUBF_GOENABLED_WAIT] = "Subf-GoEnable-Wait";

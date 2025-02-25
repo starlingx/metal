@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2020, 2023-2024 Wind River Systems, Inc.
+ * Copyright (c) 2013-2020, 2023-2025 Wind River Systems, Inc.
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -796,7 +796,6 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
             /* clear all the past enable failure bools */
             clear_main_failed_bools ( node_ptr );
             clear_subf_failed_bools ( node_ptr );
-            clear_hostservices_ctls ( node_ptr );
 
             /* Clear all degrade flags except for the HWMON one */
             clear_host_degrade_causes ( node_ptr->degrade_mask );
@@ -829,18 +828,12 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                 case MTC_AVAIL_STATUS__INTEST:
                 case MTC_AVAIL_STATUS__FAILED:
 
-                   /* enable auto recovery if the inactive controller
-                    * is out of service */
-                   //if (( is_controller (node_ptr) ) && ( NOT_THIS_HOST ))
-                   //    node_ptr->ar_disabled = false ;
-                   // this->autorecovery_enabled = true ;
-
                     /* fall through */
 
                 case MTC_AVAIL_STATUS__DEGRADED:
                 case MTC_AVAIL_STATUS__AVAILABLE:
                 {
-                    if (( is_active_controller ( node_ptr->hostname )) &&
+                    if ( ( NOT_SIMPLEX ) && ( is_active_controller ( node_ptr->hostname )) &&
                         ( is_inactive_controller_main_insv() == false ))
                     {
                         wlog ("%s recovering active controller from %s-%s-%s\n",
@@ -1068,6 +1061,12 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
             node_ptr->goEnabled               = false ;
             node_ptr->ar_cause = MTC_AR_DISABLE_CAUSE__NONE ;
 
+            if ( node_ptr->forcing_full_enable == true )
+            {
+                ilog ("%s clearing force full enable recursion prevention flag", node_ptr->hostname.c_str());
+                node_ptr->forcing_full_enable = false ;
+            }
+
             /* Set uptime to zero in mtce and in the database */
             node_ptr->uptime_save = 0 ;
             set_uptime ( node_ptr, 0 , false );
@@ -1159,8 +1158,8 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                 }
                 else
                 {
-                    plog ("%s is MTCALIVE (uptime:%d secs)\n",
-                              node_ptr->hostname.c_str(), node_ptr->uptime );
+                    plog ("%s is MTCALIVE (uptime:%d secs) (oob:%08X)",
+                              node_ptr->hostname.c_str(), node_ptr->uptime, node_ptr->mtce_flags );
                     if ((NOT_THIS_HOST) &&
                         ( node_ptr->uptime > ((unsigned int)(node_ptr->mtcalive_timeout*2))))
                     {
@@ -1198,7 +1197,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                     node_ptr->unlock_cmd_ack = false ;
                     send_mtc_cmd ( node_ptr->hostname , MTC_MSG_UNLOCKED, MGMNT_INTERFACE );
 
-                    /* Request Out-Of--Service test execution */
+                    /* Request Out-Of-Service test execution */
                     send_mtc_cmd ( node_ptr->hostname, MTC_REQ_MAIN_GOENABLED, MGMNT_INTERFACE );
 
                     /* now officially in the In-Test state */
@@ -1257,7 +1256,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
 
             node_ptr->goEnabled = false ;
 
-            /* start waiting fhr the ENABLE READY message */
+            /* start waiting for the ENABLE READY message */
             enableStageChange ( node_ptr, MTC_ENABLE__GOENABLED_WAIT );
 
             break ;
@@ -1298,7 +1297,24 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                 mtcInvApi_update_task ( node_ptr, MTC_TASK_INITIALIZING );
 
                 /* ok. great, got the go-enabled message, lets move on */
-                enableStageChange ( node_ptr, MTC_ENABLE__HOST_SERVICES_START );
+
+                /* Don't start the self heartbeat for the active controller.
+                 * Also, in AIO , hosts that have a controller function also
+                 * have a worker function and the heartbeat for those hosts
+                 * are started at the end of the subfunction handler. */
+                if (( THIS_HOST ) ||
+                   (( AIO_SYSTEM ) && ( is_controller(node_ptr)) ))
+                {
+                    enableStageChange ( node_ptr, MTC_ENABLE__STATE_CHANGE );
+                }
+                else
+                {
+                    /* allow the fsm to wait for up to 1 minute for the
+                     * hbsClient's ready event before starting heartbeat
+                     * test. */
+                    mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_MINS_1 );
+                    enableStageChange ( node_ptr, MTC_ENABLE__HEARTBEAT_WAIT );
+                }
             }
             else if ( mtcTimer_expired ( node_ptr->mtcTimer ))
             {
@@ -1327,102 +1343,6 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
             break ;
         }
 
-        case  MTC_ENABLE__HOST_SERVICES_START:
-        {
-            bool start = true ;
-
-            plog ("%s Starting Host Services\n", node_ptr->hostname.c_str());
-            if ( this->launch_host_services_cmd ( node_ptr, start ) != PASS )
-            {
-                elog ("%s %s failed ; launch\n",
-                          node_ptr->hostname.c_str(),
-                          node_ptr->host_services_req.name.c_str());
-
-                node_ptr->hostservices_failed = true ;
-                alarm_enabled_failure ( node_ptr, true );
-                enableStageChange ( node_ptr, MTC_ENABLE__FAILURE );
-                mtcInvApi_update_task ( node_ptr, MTC_TASK_MAIN_SERVICE_FAIL );
-
-                /* handle auto recovery for this failure */
-                if ( ar_manage ( node_ptr,
-                                 MTC_AR_DISABLE_CAUSE__HOST_SERVICES,
-                                 MTC_TASK_AR_DISABLED_SERVICES ) != PASS )
-                    break ;
-            }
-            else
-            {
-                mtcInvApi_update_task ( node_ptr, MTC_TASK_ENABLING );
-                enableStageChange ( node_ptr, MTC_ENABLE__HOST_SERVICES_WAIT );
-            }
-            break ;
-        }
-
-        case MTC_ENABLE__HOST_SERVICES_WAIT:
-        {
-            /* Wait for host services to complete - pass or fail.
-             * The host_services_handler manages timeout. */
-            rc = this->host_services_handler ( node_ptr );
-            if ( rc == RETRY )
-            {
-                /* wait for the mtcClient's response ... */
-                break ;
-            }
-            else if ( rc != PASS )
-            {
-                node_ptr->hostservices_failed = true ;
-                alarm_enabled_failure ( node_ptr, true );
-                enableStageChange ( node_ptr, MTC_ENABLE__FAILURE );
-
-
-                /* distinguish 'timeout' from other 'execution' failures */
-                if ( rc == FAIL_TIMEOUT )
-                {
-                    elog ("%s %s failed ; timeout\n",
-                              node_ptr->hostname.c_str(),
-                              node_ptr->host_services_req.name.c_str());
-
-                    mtcInvApi_update_task ( node_ptr,
-                                            MTC_TASK_MAIN_SERVICE_TO );
-                }
-                else
-                {
-                    elog ("%s %s failed ; rc:%d\n",
-                              node_ptr->hostname.c_str(),
-                              node_ptr->host_services_req.name.c_str(),
-                              rc);
-
-                    mtcInvApi_update_task ( node_ptr,
-                                            MTC_TASK_MAIN_SERVICE_FAIL );
-                }
-
-                /* handle auto recovery for this failure */
-                if ( ar_manage ( node_ptr,
-                                 MTC_AR_DISABLE_CAUSE__HOST_SERVICES,
-                                 MTC_TASK_AR_DISABLED_SERVICES ) != PASS )
-                    break ;
-            }
-            else /* success path */
-            {
-                /* Don't start the self heartbeat for the active controller.
-                 * Also, in AIO , hosts that have a controller function also
-                 * have a worker function and the heartbeat for those hosts
-                 * are started at the end of the subfunction handler. */
-                if (( THIS_HOST ) ||
-                   (( AIO_SYSTEM ) && ( is_controller(node_ptr)) ))
-                {
-                    enableStageChange ( node_ptr, MTC_ENABLE__STATE_CHANGE );
-                }
-                else
-                {
-                    /* allow the fsm to wait for up to 1 minute for the
-                     * hbsClient's ready event before starting heartbeat
-                     * test. */
-                    mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_MINS_1 );
-                    enableStageChange ( node_ptr, MTC_ENABLE__HEARTBEAT_WAIT );
-                }
-            }
-            break ;
-        }
 
         case MTC_ENABLE__HEARTBEAT_WAIT:
         {
@@ -1708,7 +1628,6 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
             /* clear all the past enable failure bools */
             clear_main_failed_bools ( node_ptr );
             clear_subf_failed_bools ( node_ptr );
-            clear_hostservices_ctls ( node_ptr );
 
             /* Disable the heartbeat service for Graceful Recovery */
             send_hbs_command   ( node_ptr->hostname, MTC_CMD_STOP_HOST );
@@ -2331,77 +2250,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
                 /* O.K. clearing the state now that we got it */
                 node_ptr->goEnabled = false ;
 
-                recoveryStageChange ( node_ptr, MTC_RECOVERY__HOST_SERVICES_START );
-            }
-            else if ( node_ptr->mtcTimer.ring == true )
-            {
-                elog ("%s has GOENABLED Timeout\n", node_ptr->hostname.c_str());
-                mtcInvApi_update_task ( node_ptr, MTC_TASK_MAIN_INTEST_TO );
-
-                node_ptr->mtcTimer.ring = false ;
-
-                this->force_full_enable ( node_ptr );
-            }
-            break;
-        }
-
-        case MTC_RECOVERY__HOST_SERVICES_START:
-        {
-            bool start = true ;
-
-            plog ("%s Starting Host Services\n", node_ptr->hostname.c_str());
-            if ( this->launch_host_services_cmd ( node_ptr, start ) != PASS )
-            {
-                elog ("%s %s failed ; launch\n",
-                          node_ptr->hostname.c_str(),
-                          node_ptr->host_services_req.name.c_str());
-                node_ptr->hostservices_failed = true ;
-                this->force_full_enable ( node_ptr );
-            }
-            else
-            {
-                recoveryStageChange ( node_ptr, MTC_RECOVERY__HOST_SERVICES_WAIT );
-            }
-            break ;
-        }
-        case MTC_RECOVERY__HOST_SERVICES_WAIT:
-        {
-            /* Wait for host services to complete - pass or fail.
-             * The host_services_handler manages timeout. */
-            rc = this->host_services_handler ( node_ptr );
-            if ( rc == RETRY )
-            {
-                /* wait for the mtcClient's response ... */
-                break ;
-            }
-            else if ( rc != PASS )
-            {
-                node_ptr->hostservices_failed = true ;
-                if ( rc == FAIL_TIMEOUT )
-                {
-                    elog ("%s %s failed ; timeout\n",
-                              node_ptr->hostname.c_str(),
-                              node_ptr->host_services_req.name.c_str());
-
-                    mtcInvApi_update_task ( node_ptr,
-                                            MTC_TASK_START_SERVICE_TO );
-                }
-                else
-                {
-                    elog ("%s %s failed ; rc=%d\n",
-                              node_ptr->hostname.c_str(),
-                              node_ptr->host_services_req.name.c_str(),
-                              rc);
-
-                    mtcInvApi_update_task ( node_ptr,
-                                            MTC_TASK_START_SERVICE_FAIL );
-                }
-                this->force_full_enable ( node_ptr );
-            }
-            else /* success path */
-            {
-                /* The active controller would never get/be here but
-                 * if it did then just fall through to change state. */
+                /* Manage state change */
                 if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
                 {
                     /* Here we need to run the sub-fnction goenable and start
@@ -2436,7 +2285,16 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
                     recoveryStageChange ( node_ptr, MTC_RECOVERY__STATE_CHANGE );
                 }
             }
-            break ;
+            else if ( node_ptr->mtcTimer.ring == true )
+            {
+                elog ("%s has GOENABLED Timeout\n", node_ptr->hostname.c_str());
+                mtcInvApi_update_task ( node_ptr, MTC_TASK_MAIN_INTEST_TO );
+
+                node_ptr->mtcTimer.ring = false ;
+
+                this->force_full_enable ( node_ptr );
+            }
+            break;
         }
         case MTC_RECOVERY__CONFIG_COMPLETE_WAIT:
         {
@@ -2504,7 +2362,9 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
                 node_ptr->goEnabled_subf        = false ;
 
                 /* ok. great, got the go-enabled message, lets move on */
-                recoveryStageChange ( node_ptr, MTC_RECOVERY__SUBF_SERVICES_START );
+                mtcTimer_reset ( node_ptr->mtcTimer );
+                mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_WORKER_CONFIG_TIMEOUT );
+                recoveryStageChange ( node_ptr, MTC_RECOVERY__HEARTBEAT_START );
             }
             else if ( node_ptr->mtcTimer.ring == true )
             {
@@ -2520,72 +2380,6 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
             break ;
         }
 
-        case MTC_RECOVERY__SUBF_SERVICES_START:
-        {
-            bool start = true ;
-            bool subf  = true ;
-
-            plog ("%s-worker Starting Host Services\n", node_ptr->hostname.c_str());
-
-            if ( this->launch_host_services_cmd ( node_ptr, start, subf ) != PASS )
-            {
-                elog ("%s-worker %s failed ; launch\n",
-                          node_ptr->hostname.c_str(),
-                          node_ptr->host_services_req.name.c_str());
-                node_ptr->hostservices_failed_subf = true ;
-                mtcInvApi_update_task ( node_ptr, MTC_TASK_RECOVERY_FAIL );
-                this->force_full_enable ( node_ptr );
-            }
-            else
-            {
-                recoveryStageChange ( node_ptr, MTC_RECOVERY__SUBF_SERVICES_WAIT );
-            }
-            break ;
-        }
-        case MTC_RECOVERY__SUBF_SERVICES_WAIT:
-        {
-            /* Wait for host services to complete - pass or fail.
-             * The host_services_handler manages timeout. */
-            rc = this->host_services_handler ( node_ptr );
-            if ( rc == RETRY )
-            {
-                /* wait for the mtcClient's response ... */
-                break ;
-            }
-            else if ( rc != PASS )
-            {
-                node_ptr->hostservices_failed_subf = true ;
-                if ( rc == FAIL_TIMEOUT )
-                {
-                    elog ("%s-worker %s failed ; timeout\n",
-                              node_ptr->hostname.c_str(),
-                              node_ptr->host_services_req.name.c_str());
-
-                    mtcInvApi_update_task ( node_ptr,
-                                            MTC_TASK_START_SERVICE_TO );
-                }
-                else
-                {
-                    elog ("%s-worker %s failed ; rc=%d\n",
-                              node_ptr->hostname.c_str(),
-                              node_ptr->host_services_req.name.c_str(),
-                              rc);
-
-                    mtcInvApi_update_task ( node_ptr,
-                                            MTC_TASK_START_SERVICE_FAIL );
-                }
-                this->force_full_enable ( node_ptr );
-            }
-            else /* success path */
-            {
-                /* allow the fsm to wait for up to 'worker config timeout'
-                 * for the hbsClient's ready event before starting heartbeat
-                 * test. */
-                mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_WORKER_CONFIG_TIMEOUT );
-                recoveryStageChange ( node_ptr, MTC_RECOVERY__HEARTBEAT_START );
-            }
-            break ;
-        }
         case MTC_RECOVERY__HEARTBEAT_START:
         {
             if ( mtcTimer_expired ( node_ptr->mtcTimer ) )
@@ -2858,7 +2652,6 @@ int nodeLinkClass::disable_handler  ( struct nodeLinkClass::node * node_ptr )
             /* clear all the enable failure bools */
             clear_main_failed_bools ( node_ptr );
             clear_subf_failed_bools ( node_ptr );
-            clear_hostservices_ctls ( node_ptr );
 
             enableStageChange  ( node_ptr, MTC_ENABLE__START ) ;
             disableStageChange ( node_ptr, MTC_DISABLE__DIS_SERVICES_WAIT) ;
@@ -2972,6 +2765,12 @@ int nodeLinkClass::disable_handler  ( struct nodeLinkClass::node * node_ptr )
 
                     /* proceed to handle force lock if the launch fails */
                     disableStageChange ( node_ptr, MTC_DISABLE__HANDLE_FORCE_LOCK );
+                }
+                else
+                {
+                    ilog ("%s %s launched",
+                              node_ptr->hostname.c_str(),
+                              node_ptr->host_services_req.name.c_str())
                 }
             }
             break ;
@@ -6499,26 +6298,8 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
                     }
                 }
             }
-            /* default retries counter to zero before START_SERVICES */
+            /* default retries counter to zero before MTC_SERVICES */
             node_ptr->retries = 0 ;
-            node_ptr->addStage = MTC_ADD__START_SERVICES ;
-            break ;
-        }
-
-        case MTC_ADD__START_SERVICES:
-        {
-            if (( node_ptr->adminState   == MTC_ADMIN_STATE__UNLOCKED ) &&
-                ( node_ptr->operState    == MTC_OPER_STATE__ENABLED ) &&
-                (( node_ptr->availStatus == MTC_AVAIL_STATUS__AVAILABLE ) ||
-                 ( node_ptr->availStatus == MTC_AVAIL_STATUS__DEGRADED )))
-            {
-                ilog ("%s scheduling start host services\n",
-                          node_ptr->hostname.c_str());
-
-                node_ptr->start_services_needed  = true ;
-                node_ptr->start_services_retries = 0    ;
-            }
-
             node_ptr->addStage = MTC_ADD__MTC_SERVICES ;
             break ;
         }
@@ -6620,7 +6401,6 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
                      * to start host services. */
                     if ( this->dor_mode_active )
                     {
-                        node_ptr->start_services_needed_subf = true ;
                         adminActionChange ( node_ptr , MTC_ADMIN_ACTION__ENABLE_SUBF );
                     }
                 }
@@ -7486,22 +7266,6 @@ int nodeLinkClass::oos_test_handler ( struct nodeLinkClass::node * node_ptr )
                 bool start = false ;
                 this->launch_host_services_cmd ( node_ptr, start );
             }
-            else if ( daemon_want_fit ( FIT_CODE__START_HOST_SERVICES, node_ptr->hostname ))
-            {
-                if (( node_ptr->start_services_needed == false ) &&
-                    ( node_ptr->start_services_running_main == false ))
-                {
-                    node_ptr->start_services_needed  = true ;
-                    node_ptr->start_services_retries = 0    ;
-                }
-                else
-                {
-                    ilog ("%s start host services (FIT) rejected (%d:%d)\n",
-                              node_ptr->hostname.c_str(),
-                              node_ptr->start_services_needed,
-                              node_ptr->start_services_running_main);
-                }
-            }
 
             if (( daemon_is_file_present ( MTC_CMD_FIT__GOENABLE_AUDIT )) &&
                 ( node_ptr->adminState == MTC_ADMIN_STATE__UNLOCKED ) &&
@@ -7608,8 +7372,9 @@ int nodeLinkClass::pxeboot_mtcAlive_monitor ( struct nodeLinkClass::node * node_
 
 
     // Don't monitor pxeboot mtcAlive messaging while the node is
-    // locked or in the following administrative action states.
+    // locked, disabled or in the following administrative action states.
     if (( node_ptr->adminState == MTC_ADMIN_STATE__LOCKED ) ||
+        ( node_ptr->operState == MTC_OPER_STATE__DISABLED ) ||
         ( node_ptr->adminAction == MTC_ADMIN_ACTION__UNLOCK ) ||
         ( node_ptr->adminAction == MTC_ADMIN_ACTION__ENABLE ) ||
         ( node_ptr->adminAction == MTC_ADMIN_ACTION__RECOVER ) ||
@@ -7822,20 +7587,7 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
         case MTC_INSV_TEST__START:
         {
             mtcTimer_reset ( node_ptr->insvTestTimer );
-
-            /* Run the inservice test more frequently while
-             * start_services_needed is true and we are not
-             * in failure retry mode */
-            if (( node_ptr->start_services_needed == true ) &&
-                ( node_ptr->hostservices_failed == false ) &&
-                ( node_ptr->hostservices_failed_subf == false ))
-            {
-                mtcTimer_start ( node_ptr->insvTestTimer, mtcTimer_handler, MTC_SECS_2 );
-            }
-            else
-            {
-                mtcTimer_start ( node_ptr->insvTestTimer, mtcTimer_handler, insv_test_period );
-            }
+            mtcTimer_start ( node_ptr->insvTestTimer, mtcTimer_handler, insv_test_period );
             insvTestStageChange ( node_ptr, MTC_INSV_TEST__WAIT );
             break ;
         }
@@ -7957,147 +7709,6 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
                                      "DOR mode active\n");
                 }
 
-               /*************************************************************
-                * Handle Main Function Start Host Services if it's 'needed'
-                ************************************************************/
-                else if ( node_ptr->start_services_needed == true )
-                {
-                    /* If Main Start Host Services is not already running
-                     * then launch it */
-                    if ( node_ptr->start_services_running_main == false )
-                    {
-                        /* Only launch if the node is successfully configured
-                         * and tested */
-                        if (( node_ptr->mtce_flags & MTC_FLAG__I_AM_HEALTHY  ) &&
-                            ( node_ptr->mtce_flags & MTC_FLAG__I_AM_CONFIGURED ) &&
-                            ( node_ptr->mtce_flags & MTC_FLAG__MAIN_GOENABLED ))
-                        {
-                            /* Launch 'start' for this node type */
-                            bool start = true ;
-                            if ( this->launch_host_services_cmd ( node_ptr , start ) != PASS )
-                            {
-                                /* failed -> retry */
-                                node_ptr->hostservices_failed = true ;
-                                node_ptr->start_services_running_main = false ;
-                                node_ptr->start_services_retries++ ;
-                            }
-                            else
-                            {
-                                /* launched successfully */
-                                node_ptr->start_services_running_main = true ;
-                                node_ptr->hostservices_failed = false ;
-                            }
-                        }
-                        else
-                        {
-                            ilog("%s start host services ; waiting to launch (%x)",
-                                     node_ptr->hostname.c_str(),
-                                     node_ptr->mtce_flags);
-                        }
-                    }
-                    /* Handle Main start host services response */
-                    else
-                    {
-                        /* Wait for host services to complete - pass or fail.
-                         * The host_services_handler manages timeout. */
-                        int rc = this->host_services_handler ( node_ptr );
-                        if ( rc == RETRY )
-                        {
-                            /* wait for the mtcClient's response ... */
-                            break ;
-                        }
-                        else if ( rc != PASS )
-                        {
-                            node_ptr->hostservices_failed = true ;
-                            node_ptr->start_services_retries++ ;
-                            wlog ("%s %s request failed ; (retry %d)\n",
-                                      node_ptr->hostname.c_str(),
-                                      node_ptr->host_services_req.name.c_str(),
-                                      node_ptr->start_services_retries);
-                        }
-                        else /* success path */
-                        {
-                            node_ptr->start_services_needed  = false ;
-                            node_ptr->hostservices_failed = false ;
-                            node_ptr->start_services_retries = 0  ;
-                        }
-                        node_ptr->start_services_running_main = false ;
-                    }
-                }
-               /*************************************************************
-                * Handle Sub Function Start Host Services if it's 'needed'
-                ************************************************************/
-                else if ( node_ptr->start_services_needed_subf == true )
-                {
-                    /* If Subf Start Host Services is not already running
-                     * then launch it */
-                    if ( node_ptr->start_services_running_subf == false )
-                    {
-                        /* Only launch if the node and subfunction are
-                         * successfully configured and tested */
-                        if (( node_ptr->mtce_flags & MTC_FLAG__I_AM_HEALTHY ) &&
-                            ( node_ptr->mtce_flags & MTC_FLAG__I_AM_CONFIGURED ) &&
-                            ( node_ptr->mtce_flags & MTC_FLAG__MAIN_GOENABLED ) &&
-                            ( node_ptr->mtce_flags & MTC_FLAG__SUBF_CONFIGURED ) &&
-                            ( node_ptr->mtce_flags & MTC_FLAG__SUBF_GOENABLED ))
-                        {
-                            /* Launch 'start' for this subfunction  type */
-                            bool start = true ;
-                            bool subf  = true ;
-                            if ( this->launch_host_services_cmd ( node_ptr, start, subf ) != PASS )
-                            {
-                                /* failed -> retry */
-                                node_ptr->hostservices_failed_subf = true ;
-                                node_ptr->start_services_running_subf = false ;
-                                node_ptr->start_services_retries++ ;
-                            }
-                            else
-                            {
-                                /* launched successfully */
-                                node_ptr->hostservices_failed_subf = false ;
-                                node_ptr->start_services_running_subf = true ;
-                            }
-                        }
-                        else
-                        {
-                            ilog("%s subf start host services ; waiting to launch (%x)",
-                                     node_ptr->hostname.c_str(),
-                                     node_ptr->mtce_flags);
-                        }
-                    }
-                    /* Handle Subf start host services response */
-                    else
-                    {
-                        /* Wait for host services to complete - pass or fail.
-                         * The host_services_handler manages timeout. */
-                        int rc = this->host_services_handler ( node_ptr );
-                        if ( rc == RETRY )
-                        {
-                            /* wait for the mtcClient's response ... */
-                            break ;
-                        }
-                        node_ptr->start_services_running_subf = false ;
-                        if ( rc != PASS )
-                        {
-                            node_ptr->start_services_running_subf = false ;
-                            node_ptr->hostservices_failed_subf = true ;
-                            node_ptr->start_services_retries++ ;
-
-                            wlog ("%s %s request failed ; (retry %d)\n",
-                                      node_ptr->hostname.c_str(),
-                                      node_ptr->host_services_req.name.c_str(),
-                                      node_ptr->start_services_retries);
-                        }
-                        else /* success path */
-                        {
-                            node_ptr->start_services_needed_subf = false ;
-                            node_ptr->hostservices_failed_subf = false ;
-                            node_ptr->start_services_running_subf = false ;
-                            node_ptr->start_services_retries = 0  ;
-                        }
-                        node_ptr->start_services_running_subf = false ;
-                    }
-                }
                 if ( NOT_THIS_HOST )
                 {
                     if ((( node_ptr->availStatus == MTC_AVAIL_STATUS__AVAILABLE ) ||
@@ -8169,8 +7780,7 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
                      *
                      **/
                     if (( node_ptr->operState_subf == MTC_OPER_STATE__DISABLED ) &&
-                        ( node_ptr->ar_disabled == false ) &&
-                        ( node_ptr->start_services_needed == false ))
+                        ( node_ptr->ar_disabled == false ))
                     {
                         if (( node_ptr->adminAction != MTC_ADMIN_ACTION__ENABLE_SUBF ) &&
                             ( node_ptr->adminAction != MTC_ADMIN_ACTION__ENABLE ))
@@ -8195,28 +7805,6 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
                         {
                             ilog ("%s-worker ... waiting on current goEnable completion\n", node_ptr->hostname.c_str() );
                         }
-                    }
-                }
-                /* Only raise this alarm while in simplex */
-                if (( num_controllers_enabled() < 2 ) &&
-                    (( node_ptr->goEnabled_failed_subf == true ) ||
-                     ( node_ptr->inservice_failed_subf == true ) ||
-                     ( node_ptr->hostservices_failed_subf == true )))
-                {
-                    if ( node_ptr->alarms[MTC_ALARM_ID__CH_COMP] == FM_ALARM_SEVERITY_CLEAR )
-                    {
-                        wlog ("%s insv test detected subfunction failure ; degrading host\n",
-                                  node_ptr->hostname.c_str());
-
-                        alarm_compute_failure ( node_ptr , FM_ALARM_SEVERITY_MAJOR );
-
-                        allStateChange ( node_ptr, MTC_ADMIN_STATE__UNLOCKED,
-                                                   MTC_OPER_STATE__ENABLED,
-                                                   MTC_AVAIL_STATUS__DEGRADED );
-
-                        subfStateChange ( node_ptr, MTC_OPER_STATE__DISABLED,
-                                                    MTC_AVAIL_STATUS__FAILED );
-
                     }
                 }
             }
@@ -8631,6 +8219,98 @@ int nodeLinkClass::cfg_handler ( struct nodeLinkClass::node * node_ptr )
             node_ptr->configStage = MTC_CONFIG__START ;
             break ;
         }
+    }
+    return (PASS);
+}
+
+/*****************************************************************************
+ * Name       : self_fail_handler
+ *
+ * Purpose    : Handle force failure of self for Fully DX enabled or SX systems
+ *
+ * Description: Wait for mtcTimer  to expire giving the the active controller
+ *              time to flush any outstanding state change updates to the
+ *              database. Then trigger a force shutdown of SM services.
+ *
+ * Simplex System behavior: issue a lazy reboot
+ * Duplex System behavior : wait for swact to the enabled standby controller.
+ *
+ * Assumptions: Only called in a DX system if the standby controller is enabled.
+ *              Do a last second check for the enabled standby controller.
+ *              Otherwise, abort and revert back to enabled-degraded.
+ *
+ * Parameters :
+ * @param node_ptr - pointed toi this host's nodeLinkClass control structure
+ *
+ *****************************************************************************/
+int nodeLinkClass::self_fail_handler ( struct nodeLinkClass::node * node_ptr )
+{
+    /* Wait for this Simplex node to lazy reboot */
+    if (this->self_reboot_wait)
+    {
+        ilog_throttled ( node_ptr->ar_log_throttle, AR_HANDLER_LOG_THROTTLE_THRESHOLD,
+                         "%s ... waiting on lazy reboot", node_ptr->hostname.c_str());
+        return (PASS);
+    }
+    /* Wait for SM to shut down the mtcAgent */
+    else if (this->force_swact_wait)
+    {
+        ilog_throttled ( node_ptr->ar_log_throttle, AR_HANDLER_LOG_THROTTLE_THRESHOLD,
+                         "%s ... waiting on force swact", node_ptr->hostname.c_str());
+        return (PASS);
+    }
+    
+    /* Wait for the database update */
+    else if ( node_ptr->mtcTimer.ring )
+    {
+        // Last second check for an active standby controller in a DX system
+        if (( NOT_SIMPLEX ) && ( is_inactive_controller_main_insv () == false ))
+        {
+            // ERIK: TEST ME: Force this test case
+            wlog ("%s refusing to self reboot with no enabled standby controller", node_ptr->hostname.c_str());
+            wlog ("%s ... critical enable alarm raised", node_ptr->hostname.c_str());
+            wlog ("%s ... recommend enabling a standby controller.", node_ptr->hostname.c_str());
+            allStateChange ( node_ptr,
+                             node_ptr->adminState,
+                             MTC_OPER_STATE__ENABLED,
+                             MTC_AVAIL_STATUS__DEGRADED );
+            alarm_enabled_failure ( node_ptr, true );
+            mtcInvApi_update_task ( node_ptr, MTC_TASK_FAILED_NO_BACKUP);
+            this->delayed_swact_required = false ;
+        }
+        else
+        {
+            /* Force an uncontrolled SWACT to enabled standby controller */
+            /* Tell SM we are unhealthy so that it shuts down all its services */
+            wlog ("%s forcing SM to shut down services by %s", node_ptr->hostname.c_str(), SMGMT_UNHEALTHY_FILE);
+            daemon_log ( SMGMT_UNHEALTHY_FILE, "Maintenance force swact due to self failure");
+            node_ptr->ar_log_throttle = 0 ;
+            if ( SIMPLEX )
+            {
+                wlog ("%s commanding lazy reboot", node_ptr->hostname.c_str());
+
+                send_mtc_cmd ( node_ptr->hostname, MTC_CMD_LAZY_REBOOT, MGMNT_INTERFACE) ;
+
+                /* pxeboot network is not currently provisioned in SX
+                 * auto handle if that changes in the future */
+                if ( this->pxeboot_network_provisioned == true )
+                    send_mtc_cmd ( node_ptr->hostname, MTC_CMD_LAZY_REBOOT, PXEBOOT_INTERFACE) ;
+
+                this->self_reboot_wait = true ;
+            }
+            else
+            {
+                this->force_swact_wait = true ;
+            }
+        }
+    }
+    else
+    {
+        ilog_throttled (node_ptr->ar_log_throttle, AR_HANDLER_LOG_THROTTLE_THRESHOLD,
+                        "%s ... waiting on database update before %s",
+                         node_ptr->hostname.c_str(),
+                        SIMPLEX ? "lazy reboot of this simplex system" :
+                                  "force swact to unlocked-enabled standby controller");
     }
     return (PASS);
 }

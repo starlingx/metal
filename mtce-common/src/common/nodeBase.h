@@ -1,7 +1,7 @@
 #ifndef __INCLUDE_NODEBASE_HH__
 #define __INCLUDE_NODEBASE_HH__
 /*
- * Copyright (c) 2013-2020, 2023-2024 Wind River Systems, Inc.
+ * Copyright (c) 2013-2020, 2023-2025 Wind River Systems, Inc.
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -77,18 +77,25 @@ void daemon_exit ( void );
   *
   * These flags are shipped in the parm[2] if the
   * mtcAlive message from each host. */
-#define MTC_FLAG__I_AM_CONFIGURED  (0x00000001)
-#define MTC_FLAG__I_AM_NOT_HEALTHY (0x00000002)
-#define MTC_FLAG__I_AM_HEALTHY     (0x00000004)
-#define MTC_FLAG__I_AM_LOCKED      (0x00000008)
-#define MTC_FLAG__SUBF_CONFIGURED  (0x00000010)
-#define MTC_FLAG__MAIN_GOENABLED   (0x00000020)
-#define MTC_FLAG__SUBF_GOENABLED   (0x00000040)
-#define MTC_FLAG__SM_DEGRADED      (0x00000080)
-#define MTC_FLAG__PATCHING         (0x00000100) /* Patching in progress */
-#define MTC_FLAG__PATCHED          (0x00000200) /* Patched but not reset */
-#define MTC_FLAG__LUKS_VOL_FAILED  (0x00000400)
-#define MTC_FLAG__SM_UNHEALTHY     (0x00001000)
+#define MTC_FLAG__I_AM_CONFIGURED    (0x00000001)
+#define MTC_FLAG__I_AM_NOT_HEALTHY   (0x00000002)
+#define MTC_FLAG__I_AM_HEALTHY       (0x00000004)
+#define MTC_FLAG__I_AM_LOCKED        (0x00000008)
+#define MTC_FLAG__SUBF_CONFIGURED    (0x00000010)
+#define MTC_FLAG__MAIN_GOENABLED     (0x00000020)
+#define MTC_FLAG__SUBF_GOENABLED     (0x00000040)
+#define MTC_FLAG__SM_DEGRADED        (0x00000080)
+#define MTC_FLAG__PATCHING           (0x00000100) /* Patching in progress */
+#define MTC_FLAG__PATCHED            (0x00000200) /* Patched but not reset */
+#define MTC_FLAG__LUKS_VOL_FAILED    (0x00000400)
+#define MTC_FLAG__SM_UNHEALTHY       (0x00001000)
+#define MTC_FLAG__RESERVED_2000      (0x00002000)
+#define MTC_FLAG__RESERVED_4000      (0x00004000)
+#define MTC_FLAG__RESERVED_8000      (0x00008000)
+#define MTC_FLAG__MAIN_GOENABLE_FAIL (0x00010000)
+#define MTC_FLAG__SUBF_GOENABLE_FAIL (0x00020000)
+#define MTC_FLAG__MAIN_SERVICES_FAIL (0x00040000)
+#define MTC_FLAG__SUBF_SERVICES_FAIL (0x00080000)
 
 #define MTC_UNHEALTHY_THRESHOLD    (3)
 
@@ -98,7 +105,7 @@ void daemon_exit ( void );
 #define NODE_UNHEALTHY          (2)
 
 #define AUTO_RECOVERY_FILE_SUFFIX  ((const char *)"_ar_count")
-#define TMP_DIR_PATH               ((const char *)"/etc/mtc/tmp/")
+#define MTC_PERSIST_PATH           ((const char *)"/var/persist/mtc/")
 
 #define HOST_IS_VIRTUAL        ((const char *)"/var/run/virtual.host")
 
@@ -158,6 +165,10 @@ void daemon_exit ( void );
 #define BM_DNSMASQ_FILENAME     ((const char *)"dnsmasq.bmc_hosts")
 #define OPT_PLATFORM_CONFIG_DIR ((const char *)"/opt/platform/config")
 #define DNSMASQ_HOSTS_FILE      ((const char *)"dnsmasq.hosts")
+
+/* maintenance log files */
+#define MTCAGENT_LOG_FILE  ((const char *)"/var/log/mtcAgent.log")
+#define MTCCLIENT_LOG_FILE ((const char *)"/var/log/mtcClient.log")
 
 /* supported BMC communication protocols ; access method */
 typedef enum
@@ -294,8 +305,7 @@ typedef enum
 #define MTC_TASK_SUBF_CONFIG_TO    "Worker Configuration Timeout, re-enabling"
 #define MTC_TASK_SUBF_INTEST_FAIL  "Worker In-Test Failed, re-enabling"
 #define MTC_TASK_SUBF_INTEST_TO    "Worker In-Test Timeout, re-enabling"
-#define MTC_TASK_SUBF_SERVICE_FAIL "Worker Start Services Failed, re-enabling"
-#define MTC_TASK_SUBF_SERVICE_TO   "Worker Start Services Timeout, re-enabling"
+#define MTC_TASK_SUBF_SERVICE_FAIL "Start Worker Services Failed, re-enabling"
 
 #define MTC_TASK_AR_DISABLED_CONFIG    "Configuration failure, threshold reached, Lock/Unlock to retry"
 #define MTC_TASK_AR_DISABLED_GOENABLE  "In-Test Failure, threshold reached, Lock/Unlock to retry"
@@ -904,8 +914,6 @@ typedef enum
     MTC_ENABLE__GOENABLED_TIMER      = 12,
     MTC_ENABLE__GOENABLED_WAIT       = 13,
     MTC_ENABLE__PMOND_READY_WAIT     = 14,
-    MTC_ENABLE__HOST_SERVICES_START  = 15,
-    MTC_ENABLE__HOST_SERVICES_WAIT   = 16,
     MTC_ENABLE__SERVICES_START_WAIT  = 17,
     MTC_ENABLE__HEARTBEAT_WAIT       = 18,
     MTC_ENABLE__HEARTBEAT_SOAK       = 19,
@@ -987,8 +995,6 @@ typedef enum
     MTC_RECOVERY__MTCALIVE_WAIT,
     MTC_RECOVERY__GOENABLED_TIMER,
     MTC_RECOVERY__GOENABLED_WAIT,
-    MTC_RECOVERY__HOST_SERVICES_START,
-    MTC_RECOVERY__HOST_SERVICES_WAIT,
 
     /* Subfunction stages */
     MTC_RECOVERY__CONFIG_COMPLETE_WAIT,
