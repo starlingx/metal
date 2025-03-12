@@ -194,6 +194,7 @@ void nodeLinkClass::timer_handler ( int sig, siginfo_t *si, void *uc)
     {
         mtcTimer_stop_int_safe ( mtcTimer_dor );
         mtcTimer_dor.ring = true ;
+        this->dor_mode_active_log_throttle = 0 ;
         return ;
     }
 
@@ -488,7 +489,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                          AR_LOG_THROTTLE_THRESHOLD,
                          "%s auto recovery disabled cause:%d",
                          node_ptr->hostname.c_str(), node_ptr->ar_cause );
-         return (RETRY); ;
+         return (RETRY);
     }
 
     if ( THIS_HOST )
@@ -787,11 +788,10 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
         }
         case MTC_ENABLE__START:
         {
-            manage_dor_recovery ( node_ptr, FM_ALARM_SEVERITY_CLEAR );
 
             plog ("%s Main Enable FSM (from start)%s\n",
                       node_ptr->hostname.c_str(),
-                      node_ptr->was_dor_recovery_mode ? " (from DOR)" : "" );
+                      this->dor_mode_active ? " (DOR active)" : "" );
 
             /* clear all the past enable failure bools */
             clear_main_failed_bools ( node_ptr );
@@ -1547,10 +1547,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                 /* Inform the VIM that this host is enabled */
                 mtcVimApi_state_change ( node_ptr, VIM_HOST_ENABLED, 3 );
 
-                plog ("%s is ENABLED%s\n", node_ptr->hostname.c_str(),
-                          node_ptr->was_dor_recovery_mode ? " (from DOR)" : "");
-                node_ptr->dor_recovery_mode = false ;
-                node_ptr->was_dor_recovery_mode = false ;
+                plog ("%s is ENABLED", node_ptr->hostname.c_str());
                 node_ptr->http_retries_cur = 0 ;
 
                 adminActionChange ( node_ptr, MTC_ADMIN_ACTION__NONE );
@@ -1718,13 +1715,12 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
         {
             if ( node_ptr->mtcAlive_online == true )
             {
-                manage_dor_recovery ( node_ptr, FM_ALARM_SEVERITY_CLEAR );
 
                 mtcTimer_stop ( node_ptr->mtcTimer );
 
                 ilog ("%s got requested mtcAlive%s\n",
                           node_ptr->hostname.c_str(),
-                          node_ptr->was_dor_recovery_mode ? " (DOR)" : "" );
+                          this->dor_mode_active ? " (DOR mode)" : "" );
 
                 stop_offline_handler ( node_ptr );
 
@@ -1793,7 +1789,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
                     /* did not reboot case */
                     wlog ("%s Connectivity Recovered ; host did not reset%s (uptime:%d)",
                               node_ptr->hostname.c_str(),
-                              node_ptr->was_dor_recovery_mode ? " (DOR)" : "",
+                              this->dor_mode_active ? " (DOR mode)" : "",
                               node_ptr->uptime);
 
                     wlog ("%s ... continuing with graceful recovery\n", node_ptr->hostname.c_str());
@@ -1808,9 +1804,9 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
                 else
                 {
                     wlog ("%s Connectivity Recovered ; host has reset\n", node_ptr->hostname.c_str());
-                    ilog ("%s ... continuing%sgraceful recovery ; (OOB: %08x)\n",
+                    ilog ("%s ... continuing graceful recovery%s ; (OOB: %08x)",
                               node_ptr->hostname.c_str(),
-                              node_ptr->was_dor_recovery_mode ? " (DOR) " : " ",
+                              this->dor_mode_active ? " (DOR mode)" : "",
                               node_ptr->mtce_flags);
                     ilog ("%s ... without additional reboot %s (uptime:%d)\n",
                               node_ptr->hostname.c_str(),
@@ -1845,7 +1841,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
                 wlog ("%s Loss Of Communication for %d seconds ; disabling host%s\n",
                           node_ptr->hostname.c_str(),
                           loc_recovery_timeout,
-                          node_ptr->dor_recovery_mode ? " (DOR)" : "" );
+                          this->dor_mode_active ? " (DOR mode)" : "" );
                 wlog ("%s ... stopping host services\n", node_ptr->hostname.c_str());
                 wlog ("%s ... continuing with graceful recovery\n", node_ptr->hostname.c_str());
 
@@ -1898,7 +1894,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
 
             /* Only try and issue in-line recovery reboot or reset if
              * NOT in Dead Office Recovery (DOR) mode. */
-            if ( node_ptr->dor_recovery_mode == false )
+            if ( this->dor_mode_active )
             {
                 ilog ("%s issuing one time graceful recovery reboot over management network\n",
                           node_ptr->hostname.c_str());
@@ -1945,7 +1941,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
                 LOAD_NODETYPE_TIMERS ;
 
                 /* load the mtcAlive timeout to accomodate for dor recovery */
-                timeout = node_ptr->mtcalive_timeout + daemon_get_cfg_ptr()->dor_recovery_timeout_ext ;
+                timeout = node_ptr->mtcalive_timeout ;
             }
 
             /* start the timer that waits for MTCALIVE */
@@ -1955,7 +1951,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
                       node_ptr->hostname.c_str(),
                       MTC_TASK_RECOVERY_WAIT,
                       timeout,
-                      node_ptr->dor_recovery_mode ? " (DOR) " : " " ,
+                      this->dor_mode_active ? " (DOR) " : " " ,
                       node_ptr->uptime_save );
 
             clear_service_readies ( node_ptr );
@@ -2024,7 +2020,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
                           node_ptr->hostname.c_str(),
                           MTC_TASK_RECOVERY_WAIT,
                           timeout,
-                          node_ptr->dor_recovery_mode ? " (DOR) " : " " ,
+                          this->dor_mode_active ? " (DOR mode) " : " " ,
                           node_ptr->uptime_save );
 
                 clear_service_readies ( node_ptr );
@@ -2075,7 +2071,6 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
             {
                 mtcTimer_stop ( node_ptr->mtcTimer );
 
-                manage_dor_recovery ( node_ptr, FM_ALARM_SEVERITY_CLEAR );
 
                 /* If the host's uptime is bigger than the saved uptime then
                  * the host has not reset yet we have disabled services
@@ -2084,7 +2079,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
                 if ((( node_ptr->uptime_save != 0 ) &&
                      ( node_ptr->uptime >= node_ptr->uptime_save )) ||
                     (( node_ptr->uptime_save == 0 ) &&
-                     ( node_ptr->uptime > MTC_MINS_15 )))
+                     ( node_ptr->uptime > MTC_MINS_20 )))
                 {
                     ilog ("%s regained MTCALIVE from host that did not reboot (uptime:%d)\n",
                                   node_ptr->hostname.c_str(), node_ptr->uptime );
@@ -2121,7 +2116,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
                                   node_ptr->hostname.c_str(), node_ptr->uptime, node_ptr->uptime_save );
                     ilog ("%s ... continuing with graceful recovery %s\n",
                                   node_ptr->hostname.c_str(),
-                                  node_ptr->dor_recovery_mode ? "(DOR)" : " ");
+                                  this->dor_mode_active ? "(DOR mode)" : "");
                     ilog ("%s ... without additional reboot %s\n",
                                   node_ptr->hostname.c_str(), node_ptr->bm_ip.empty() ? "or reset" : "" );
 
@@ -2138,7 +2133,6 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
             }
             else if ( node_ptr->mtcTimer.ring == true )
             {
-                manage_dor_recovery ( node_ptr, FM_ALARM_SEVERITY_CLEAR );
 
                 /* Set the FSM task state to init failed */
                 mtcInvApi_update_task ( node_ptr, "Graceful Recovery Failed" );
@@ -2523,15 +2517,13 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
             node_ptr->http_retries_cur = 0 ;
 
             doneQueue_purge ( node_ptr );
-            if ( node_ptr->was_dor_recovery_mode )
+            if ( this->dor_mode_active )
             {
-                report_dor_recovery (  node_ptr , "is ENABLED" );
+                report_dor_recovery (  node_ptr , "is ENABLED", "recovery" );
             }
-            else
-            {
-                plog ("%s is ENABLED (Gracefully Recovered)\n",
-                          node_ptr->hostname.c_str());
-            }
+            plog ("%s is ENABLED (Gracefully Recovered%s)",
+                      node_ptr->hostname.c_str(),
+                      this->dor_mode_active ? " in DOR mode" : "");
             alarm_enabled_clear ( node_ptr, false );
             break ;
         }
@@ -6023,11 +6015,26 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
         case MTC_ADD__START:
         {
             bool timer_set = false ;
-            plog ("%s Host Add\n", node_ptr->hostname.c_str());
+            if ( THIS_HOST )
+            {
+                struct timespec ts ;
+                clock_gettime (CLOCK_MONOTONIC, &ts );
+                node_ptr->uptime = ts.tv_sec ;
+            }
+            else if ( ! node_ptr->mtcClient_ready )
+            {
+                /* If we have not received a mtcAlive event from the
+                 * mtcClient already then lets request it since that
+                 * is how we get its uptime.
+                 * Don't trust what is in the database since it will
+                 * be stale. Best to default to zero so the logs will
+                 * show that there has been no mtcAlive received */
+                node_ptr->uptime = 0 ;
+                send_mtc_cmd ( node_ptr->hostname, MTC_REQ_MTCALIVE, MGMNT_INTERFACE );
+                send_mtc_cmd ( node_ptr->hostname, MTC_REQ_MTCALIVE, PXEBOOT_INTERFACE );
+            }
 
-            /* Request a mtcAlive message ; gives us uptime ; don't trust what is in the database */
-            node_ptr->uptime = 0 ;
-            send_mtc_cmd ( node_ptr->hostname, MTC_REQ_MTCALIVE, MGMNT_INTERFACE );
+            plog ("%s Host Add (uptime:%d)", node_ptr->hostname.c_str(), node_ptr->uptime );
 
             ilog ("%s %s %s-%s-%s (%s)\n",
                 node_ptr->hostname.c_str(),
@@ -6075,14 +6082,31 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
             EFmAlarmSeverityT mtcAlive_alarm_severity =
                 mtcAlarm_state ( node_ptr->hostname, MTC_ALARM_ID__MTCALIVE);
 
-            /* Clear generic enable alarm over process restart.
-             * Will get reasserted if the cause condition still exists */
+            /* Manage an existing enable alarm */
             if ( enable_alarm_severity != FM_ALARM_SEVERITY_CLEAR )
             {
-                ilog ("%s found enable alarm ; clearing %s",
+                /* Added the unlocked-disabled check to avoid clearing the
+                 * enabled alarm when the node is found to be unlocked-disabled
+                 * with the enable alarm already asserted.
+                 * We don't want to clear it in that case. */
+                if (( node_ptr->adminState == MTC_ADMIN_STATE__UNLOCKED ) &&
+                    ( node_ptr->operState == MTC_OPER_STATE__DISABLED ))
+                {
+                    node_ptr->degrade_mask |= DEGRADE_MASK_ENABLE ;
+                    node_ptr->alarms[MTC_ALARM_ID__ENABLE] = enable_alarm_severity ;
+                    wlog ("%s found enable alarm while unlocked-disabled ; loaded %s",
                           node_ptr->hostname.c_str(),
-                          alarmUtil_getSev_str(enable_alarm_severity).c_str());
-                mtcAlarm_clear ( node_ptr->hostname, MTC_ALARM_ID__ENABLE );
+                           alarmUtil_getSev_str(enable_alarm_severity).c_str());
+                }
+                else
+                {
+                    ilog ("%s found enable alarm while %s-%s ; clearing %s",
+                              node_ptr->hostname.c_str(),
+                              adminState_enum_to_str (node_ptr->adminState).c_str(),
+                              operState_enum_to_str  (node_ptr->operState_subf).c_str(),
+                              alarmUtil_getSev_str(enable_alarm_severity).c_str());
+                    mtcAlarm_clear ( node_ptr->hostname, MTC_ALARM_ID__ENABLE );
+                }
             }
 
             /* The config alarm is maintained if it exists.
@@ -6230,6 +6254,7 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
                         alarm_luks_failure ( node_ptr );
                     }
                     node_ptr->ar_disabled = true ;
+                    this->report_dor_recovery ( node_ptr, "is DISABLED" , "auto recovery disabled");
 
                     if ( THIS_HOST )
                         mtcInvApi_update_states ( node_ptr, "unlocked", "enabled", "degraded" );
@@ -6341,22 +6366,6 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
             /* Stop the work queue wait timer */
             mtcTimer_reset ( node_ptr->mtcTimer );
 
-            /* Only start it on this add operation if host is
-             * already unlocked and enabled and not the active controller */
-            if (( node_ptr->adminState == MTC_ADMIN_STATE__UNLOCKED ) &&
-                ( node_ptr->operState  == MTC_OPER_STATE__ENABLED ))
-            {
-                /* start the heartbeat service in all cases except for
-                 * THIS host and AIO controller hosts */
-                if ( NOT_THIS_HOST )
-                {
-                    if (( LARGE_SYSTEM ) ||
-                        (( AIO_SYSTEM ) && ( this->dor_mode_active == false )))
-                    {
-                        send_hbs_command ( node_ptr->hostname, MTC_CMD_START_HOST );
-                    }
-                }
-            }
 
             /* Only run hardware monitor if the bm ip is provisioned */
             if (( hostUtil_is_valid_bm_type  ( node_ptr->bm_type )) &&
@@ -6367,8 +6376,62 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
             }
 
             this->ctl_mtcAlive_gate(node_ptr, false) ;
-            node_ptr->addStage = MTC_ADD__DONE ;
+            if (( NOT_THIS_HOST ) &&
+                ((( AIO_SYSTEM ) && ( is_controller(node_ptr) == false )) || ( LARGE_SYSTEM )) &&
+                ( this->hbs_failure_action != HBS_FAILURE_ACTION__NONE ) &&
+                ( node_ptr->adminState == MTC_ADMIN_STATE__UNLOCKED ) &&
+                ( node_ptr->operState  == MTC_OPER_STATE__ENABLED ))
+            {
+                mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_MINS_5 );
+                if ( ! node_ptr->hbsClient_ready )
+                {
+                    ilog ("%s waiting for hbsClient ready event (%d secs)", node_ptr->hostname.c_str(), MTC_MINS_5);
+                }
+                node_ptr->addStage = MTC_ADD__HEARTBEAT_WAIT ;
+            }
+            else
+            {
+                node_ptr->addStage = MTC_ADD__DONE ;
+            }
             break;
+        }
+        case MTC_ADD__HEARTBEAT_WAIT:
+        {
+            /* Wait for hbsClient ready event */
+            if ( mtcTimer_expired ( node_ptr->mtcTimer ) )
+            {
+                wlog ("%s hbsClient ready event timeout\n", node_ptr->hostname.c_str());
+            }
+            else if ( node_ptr->hbsClient_ready == false )
+            {
+                break ;
+            }
+            else
+            {
+                mtcTimer_reset ( node_ptr->mtcTimer );
+            }
+            plog ("%s Starting %d sec Heartbeat Soak (with%s)\n",
+                        node_ptr->hostname.c_str(),
+                        MTC_HEARTBEAT_SOAK_DURING_ADD,
+                        node_ptr->hbsClient_ready ? " ready event" : "out ready event" );
+
+            /* allow heartbeat to run for MTC_HEARTBEAT_SOAK_DURING_ADD
+             * seconds before we declare enable */
+            send_hbs_command ( node_ptr->hostname, MTC_CMD_START_HOST );
+            mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_HEARTBEAT_SOAK_DURING_ADD );
+            node_ptr->addStage = MTC_ADD__HEARTBEAT_SOAK ;
+            break ;
+        }
+        case MTC_ADD__HEARTBEAT_SOAK:
+        {
+            if ( node_ptr->mtcTimer.ring == true )
+            {
+                plog ("%s heartbeating", node_ptr->hostname.c_str());
+                /* if heartbeat is not working then we will
+                 * never get here */
+                node_ptr->addStage = MTC_ADD__DONE ;
+            }
+            break ;
         }
         case MTC_ADD__DONE:
         default:
@@ -6396,16 +6459,55 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
                 if (( node_ptr->adminState == MTC_ADMIN_STATE__UNLOCKED ) &&
                     ( node_ptr->operState  == MTC_OPER_STATE__ENABLED ))
                 {
-                    /* In AIO if in DOR mode and the host is unlocked enabled
-                     * we need to run the subfunction handler and request
-                     * to start host services. */
+                    /* Need to run the subfunction enable handler
+                     * for AIO controllers while in DOR mode */
                     if ( this->dor_mode_active )
                     {
+                        ilog ("%s running subfunction enable for unlocked-enabled AIO controller (DOR mode)", node_ptr->hostname.c_str());
                         adminActionChange ( node_ptr , MTC_ADMIN_ACTION__ENABLE_SUBF );
+                        break ;
                     }
                 }
             }
 
+            else if ( this->dor_mode_active )
+            {
+                /* The Enable SUBF handler will do this so lets not do it twice */
+                if ( node_ptr->adminState == MTC_ADMIN_STATE__UNLOCKED )
+                {
+                    string state_str = "" ;
+                    if ( node_ptr->operState  == MTC_OPER_STATE__ENABLED )
+                    {
+                        state_str = "is ENABLED" ;
+                        if ( node_ptr->availStatus == MTC_AVAIL_STATUS__DEGRADED )
+                            state_str = "is DEGRADED" ;
+                    }
+                    else if ( node_ptr->availStatus == MTC_AVAIL_STATUS__FAILED )
+                    {
+                        state_str = "is FAILED" ;
+                    }
+                    else if ( node_ptr->availStatus == MTC_AVAIL_STATUS__OFFLINE )
+                    {
+                        state_str = "is OFFLINE" ;
+                    }
+                    if ( ! state_str.empty() )
+                    {
+                        report_dor_recovery ( node_ptr , state_str, "" ) ;
+                    }
+                    else
+                    {
+                        ilog ("%-12s is waiting ; DOR Recovery ; %s-%s-%s ; mtcClient:%c hbsClient:%c uptime:%3d task:%s",
+                                 node_ptr->hostname.c_str(),
+                                 adminState_enum_to_str (node_ptr->adminState).c_str(),
+                                 operState_enum_to_str  (node_ptr->operState).c_str(),
+                                 availStatus_enum_to_str(node_ptr->availStatus).c_str(),
+                                 node_ptr->mtcClient_ready ? 'Y':'N',
+                                 node_ptr->hbsClient_ready ? 'Y':'N',
+                                 node_ptr->uptime,
+                                 node_ptr->task.empty() ? "empty" : node_ptr->task.c_str());
+                    }
+                }
+            }
             node_ptr->addStage = MTC_ADD__START;
 
             plog ("%s Host Add Completed (uptime:%d)\n", node_ptr->hostname.c_str(), node_ptr->uptime );
@@ -7597,35 +7699,6 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
             {
                 insvTestStageChange ( node_ptr, MTC_INSV_TEST__RUN );
             }
-            /* manage degrade state and alarms */
-            if ((  node_ptr->adminState  == MTC_ADMIN_STATE__UNLOCKED ) &&
-                (  node_ptr->operState   == MTC_OPER_STATE__ENABLED   ) &&
-                (  node_ptr->ar_disabled == false ))
-            {
-                /************************************************************
-                 *               Manage In-Service Alarms                   *
-                 ***********************************************************/
-
-                /* Manage Inservice Enable Alarm */
-                if ( node_ptr->hostservices_failed )
-                {
-                    alarm_insv_failure ( node_ptr );
-                }
-                else
-                {
-                    alarm_insv_clear ( node_ptr, false );
-                }
-
-                /* Manage Compute Subfunction Failure Alarm */
-                if ( node_ptr->hostservices_failed_subf )
-                {
-                    alarm_compute_failure ( node_ptr, FM_ALARM_SEVERITY_MAJOR );
-                }
-                else
-                {
-                    alarm_compute_clear ( node_ptr, false );
-                }
-            }
             break ;
         }
         case MTC_INSV_TEST__RUN:
@@ -7694,16 +7767,7 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
             if ((  node_ptr->adminState  == MTC_ADMIN_STATE__UNLOCKED ) &&
                 (  node_ptr->operState   == MTC_OPER_STATE__ENABLED   ))
             {
-                /************************************************************
-                 * Prevent the start host services from running while in DOR
-                 ***********************************************************/
-                if ( node_ptr->dor_recovery_mode == true )
-                {
-                    /* wait longer for the host to boot up */
-                    wlog ("%s DOR recovery active ; waiting on host\n",
-                              node_ptr->hostname.c_str());
-                }
-                else if ( this->dor_mode_active == true )
+                if ( this->dor_mode_active == true )
                 {
                     ilog_throttled ( this->dor_mode_active_log_throttle, 20,
                                      "DOR mode active\n");

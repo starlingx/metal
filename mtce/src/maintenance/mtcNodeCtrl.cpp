@@ -710,6 +710,15 @@ int daemon_configure ( void )
     else
         mtcInv.node_reinstall_timeout = MTC_REINSTALL_TIMEOUT_DEFAULT ;
 
+    if ( mtc_config.dor_mode_detect <= 0 )
+    {
+        wlog ("DOR mode detect timeout is invalid (%d), setting to default (%d)",
+                mtc_config.dor_mode_detect,
+                DEFAULT_DOR_MODE_DETECT);
+
+        mtc_config.dor_mode_detect = DEFAULT_DOR_MODE_DETECT ;
+    }
+
     if ( mtc_config.dor_mode_timeout <= 0 )
     {
         slog ("DOR Mode Timeout is invalid (%d), setting to default (%d)\n",
@@ -1653,7 +1662,7 @@ void daemon_service_run ( void )
     }
 #endif
 
-    if ( ts.tv_sec < MTC_MINS_15 )
+    if ( ts.tv_sec < mtc_config.dor_mode_detect )
     {
         /* AIO DOR window is much greater in AIO since heartbeat
          * cannot start until the inactive AIO has run both manifests */
@@ -1669,16 +1678,16 @@ void daemon_service_run ( void )
         mtcInv.dor_mode_active = true ;
         mtcInv.dor_start_time  = ts.tv_sec ;
 
-        ilog ("%-12s ---------- ; DOR Recovery ---------------------- -------------------\n", mtcInv.my_hostname.c_str());
-        ilog ("%-12s is ACTIVE  ; DOR Recovery %2d:%02d mins (%4d secs) (duration %3d secs)\n",
+        ilog ("%-12s ----------- ; DOR Recovery ---------------------- -------------------\n", mtcInv.my_hostname.c_str());
+        ilog ("%-12s  is ACTIVE  ; DOR Recovery %2d:%02d mins (%4d secs) (dor timeout in %3d secs)\n",
                 mtcInv.my_hostname.c_str(),
                 mtcInv.dor_start_time/60,
                 mtcInv.dor_start_time%60,
                 mtcInv.dor_start_time,
                 timeout );
-        ilog ("%-12s ---------- ; DOR Recovery ---------------------- -------------------\n", mtcInv.my_hostname.c_str());
-        ilog ("%-12s host state ; DOR Recovery    controller uptime         host uptime    \n", mtcInv.my_hostname.c_str());
-        ilog ("%-12s ---------- ; DOR Recovery ---------------------- -------------------\n", mtcInv.my_hostname.c_str());
+        ilog ("%-12s ----------- ; DOR Recovery ---------------------- -------------------", mtcInv.my_hostname.c_str());
+        ilog ("%-12s host  state ; DOR Recovery    controller uptime         host uptime  ", mtcInv.my_hostname.c_str());
+        ilog ("%-12s ----------- ; DOR Recovery ---------------------- -------------------", mtcInv.my_hostname.c_str());
         mtcTimer_start ( mtcInv.mtcTimer_dor, mtcTimer_handler, timeout );
     }
 
@@ -1992,7 +2001,12 @@ void daemon_service_run ( void )
          * then exit DOR mode. We do it here instead of  */
         if (( mtcInv.dor_mode_active == true ) && ( mtcInv.mtcTimer_dor.tid == NULL ))
         {
-            ilog ("DOR mode disable\n");
+            wlog ("%s DOR mode disabled ; DOR Recovery Timeout ; %d of %d unlocked hosts ; active controller uptime:%d",
+                      mtcInv.my_hostname.c_str(),
+                      mtcInv.dor_recovered_nodes,
+                      mtcInv.unlocked_nodes(),
+                      mtcInv.get_uptime(mtcInv.my_hostname));
+            mtcInv.dor_mode_active_log_throttle = 0 ;
             mtcInv.dor_mode_active = false ;
         }
     }

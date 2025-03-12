@@ -368,10 +368,8 @@ private:
         /* the fault handling offline handler timer */
         struct mtc_timer offline_timer ;
 
-        /* Host level DOR recovery mode time and bools */
+        /* Host level DOR recovery time */
         int              dor_recovery_time  ;
-        bool             dor_recovery_mode  ;
-        bool         was_dor_recovery_mode  ;
 
         /** Integer code representing the host health */
         int  health ;
@@ -1275,7 +1273,7 @@ private:
 
     /* Dead Office Recovery - system level controls */
     void manage_dor_recovery ( struct nodeLinkClass::node * node_ptr, EFmAlarmSeverityT severity );
-    void report_dor_recovery ( struct nodeLinkClass::node * node_ptr, string node_state_log_prefix );
+    void report_dor_recovery ( struct nodeLinkClass::node * node_ptr, string node_state_log_prefix, string extra );
 
     struct {
         struct node * head_ptr ; /**< Pulse Linked List Head pointer */
@@ -1398,6 +1396,7 @@ public:
     bool dor_mode_active ;
     unsigned int dor_start_time  ;
     int  dor_mode_active_log_throttle ;
+    int  dor_recovered_nodes = 0; /**< DOR node recovery count            */
 
     bool hbs_disabled          ; /**< Control heartbeat service state    */
     bool hbs_state_change      ; /**< Flag service state change          */
@@ -1701,6 +1700,9 @@ public:
 
     /** Remove a host from Node list */
     int rem_host ( string & hostname );
+
+    /** Get the number of unlocked nodes */
+    int unlocked_nodes ( void );
 
     /** Get the number of worker hosts that are operationally 'enabled' */
     int enabled_compute_nodes ( void );
