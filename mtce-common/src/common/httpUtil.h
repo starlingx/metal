@@ -2,7 +2,7 @@
 #define __INCLUDE_HTTPUTIL_H__
 
 /*
- * Copyright (c) 2013, 2016, 2024 Wind River Systems, Inc.
+ * Copyright (c) 2013, 2016, 2024, 2025 Wind River Systems, Inc.
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -52,7 +52,7 @@ using namespace std;
 #define HTTP_KEYSTONE_GET_TIMEOUT  (10)
 #define HTTP_SMGR_TIMEOUT          (20)
 #define HTTP_VIM_TIMEOUT           (20)
-#define HTTP_SECRET_TIMEOUT        (5)
+#define HTTP_SECRET_TIMEOUT        (20)
 
 #define SMGR_MAX_RETRIES    (3)
 
