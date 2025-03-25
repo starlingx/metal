@@ -1179,7 +1179,7 @@ int daemon_init ( string iface, string nodetype )
     mtcTimer_init ( mtcInv.mtcTimer, mtcInv.my_hostname, "mtc timer" ); /* Init general mtc timer */
     mtcAlarm_init  ();
     mtc_stages_init ();
-    threadUtil_init ( mtcTimer_handler ) ;
+    threadUtil_init ( mtcTimer_handler, MTCAGENT_STACK_SIZE ) ;
 
     /* Bind signal handlers */
     rc = daemon_signal_init () ;

@@ -982,7 +982,7 @@ int httpUtil_api_request ( libEvent & event )
     }
 
 httpUtil_api_request_done:
-
+    daemon_signal_hdlr ();
     httpUtil_free_conn ( event );
     httpUtil_free_base ( event );
 
@@ -1085,7 +1085,7 @@ void httpUtil_log_event ( libEvent * event_ptr )
     }
 
     snprintf (&rest_api_log_str[0], MAX_API_LOG_LEN-1,
-          "%s [%5d] %s %s '%s' seq:%d -> Status  : %d {execution time %ld.%06ld secs}\n",
+          "%s [%5d] %s %s '%s' seq:%d -> Status  : %d {execution time %ld.%ld secs}\n",
           pt(), getpid(),
           event_ptr->hostname.c_str(),
           event_ptr->service.c_str(),

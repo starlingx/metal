@@ -50,7 +50,7 @@ static unsigned int  __thread_init_sig ;
 
 static std::string threadStages_str[THREAD_STAGE__STAGES+1];
 
-int threadUtil_init ( void (*handler)(int, siginfo_t*, void* ))
+int threadUtil_init ( void (*handler)(int, siginfo_t*, void* ), size_t stack_size )
 {
     /* preserve parent process timer handler */
     thread_timer_handler = handler ;
@@ -67,24 +67,23 @@ int threadUtil_init ( void (*handler)(int, siginfo_t*, void* ))
     /* setup to create a 'detached' threads */
     pthread_attr_init(&__attr);
     pthread_attr_setdetachstate(&__attr, PTHREAD_CREATE_DETACHED);
-    threadUtil_setstack_size   ();
+    threadUtil_setstack_size   ( stack_size );
 
     __thread_init_sig = THREAD_INIT_SIG ;
 
     return (PASS);
 }
 
-#define MTCE_PTHREAD_MAX_STACK_SIZE (0x20000) /* 128K */
-void threadUtil_setstack_size ( void )
+void threadUtil_setstack_size ( size_t stack_size )
 {
     size_t stack_size_before = 0 ;
     size_t stack_size_after = 0 ;
     /* manage pthread stack size */
     if ( pthread_attr_getstacksize (&__attr,&stack_size_before) == PASS )
     {
-        if ( stack_size_before > MTCE_PTHREAD_MAX_STACK_SIZE )
+        if ( stack_size_before > stack_size )
         {
-            if ( pthread_attr_setstacksize ( &__attr, MTCE_PTHREAD_MAX_STACK_SIZE ) == PASS )
+            if ( pthread_attr_setstacksize ( &__attr, stack_size ) == PASS )
             {
                 if ( pthread_attr_getstacksize (&__attr,&stack_size_after) == PASS )
                 {

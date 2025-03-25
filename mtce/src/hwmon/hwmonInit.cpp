@@ -272,8 +272,6 @@ int daemon_init ( string iface, string nodetype )
 
     obj_ptr->system_type = daemon_system_type ();
 
-    threadUtil_init ( hwmonTimer_handler ) ;
-
     /* Bind signal handlers */
     if ( daemon_signal_init () != PASS )
     {
@@ -295,7 +293,7 @@ int daemon_init ( string iface, string nodetype )
         rc = FAIL_SOCKET_INIT ;
     }
 
-    threadUtil_init ( hwmonTimer_handler ) ;
+    threadUtil_init ( hwmonTimer_handler, HWMOND_STACK_SIZE ) ;
 
     /* override the config reload for the startup case */
     obj_ptr->config_reload = false ;
