@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Wind River Systems, Inc.
+ * Copyright (c) 2019,2025 Wind River Systems, Inc.
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -247,6 +247,9 @@ barbicanSecret_type * secretUtil_manage_secret ( libEvent & event,
         case MTC_SECRET__GET_REF_FAIL:
         case MTC_SECRET__GET_PWD_FAIL:
         {
+            // Random number between 10 and 100 assuming SECRET_RETRY_DELAY is 10
+            // The 91 ensures the result is between 0 and 90
+            int random_retry_delay = (rand() % 91) + SECRET_RETRY_DELAY ;
             if ( it->second.stage == MTC_SECRET__GET_REF_FAIL )
             {
                 wlog ( "%s failed to get secret reference \n", hostname.c_str() );
@@ -257,7 +260,8 @@ barbicanSecret_type * secretUtil_manage_secret ( libEvent & event,
             }
             it->second.stage = MTC_SECRET__START ;
             mtcTimer_reset ( secret_timer );
-            mtcTimer_start ( secret_timer, handler, SECRET_RETRY_DELAY );
+            mtcTimer_start ( secret_timer, handler, random_retry_delay );
+            ilog ("%s bmc secret query will retry in %d seconds", hostname.c_str(), random_retry_delay );
             httpUtil_free_conn ( event );
             httpUtil_free_base ( event );
             break ;
