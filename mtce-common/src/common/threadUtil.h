@@ -257,7 +257,7 @@ typedef struct
 
 /* module init/fini */
 void threadUtil_fini ( void );
-int  threadUtil_init ( void (*handler)(int, siginfo_t*, void* ));
+int  threadUtil_init ( void (*handler)(int, siginfo_t*, void* ), size_t stack_size);
 
 #define DEFAULT_SYSTEM_REQUEST_LATENCY_SECS (unsigned long long)(15)
 int threadUtil_bmcSystemCall (string hostname,
@@ -265,7 +265,7 @@ int threadUtil_bmcSystemCall (string hostname,
                               string datafile,
                               unsigned long long latency_threshold_secs);
 
-void threadUtil_setstack_size ( void );
+void threadUtil_setstack_size ( size_t stack_size );
 
 /* Onetime thread init setup */
 void   thread_init   ( thread_ctrl_type & ctrl,

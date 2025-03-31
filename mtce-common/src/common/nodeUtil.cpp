@@ -2500,8 +2500,10 @@ static void redirect_stdout_stderr(const string& hostname,
     stdout_copy = -1;
     stderr_copy = -1;
 
+    // Open file with explicit permissions: rw-r--r-- (0644)
     int redirect_fd = open(output_filename.c_str(),
-                           O_CREAT | O_WRONLY | O_TRUNC);
+                           O_CREAT | O_WRONLY | O_TRUNC,
+                           S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);  // 0644
     if ( redirect_fd < 0 )
     {
         elog ("%s failed to open output filename: [%s] - error code = %d (%s)",

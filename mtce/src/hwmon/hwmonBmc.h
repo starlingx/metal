@@ -41,9 +41,9 @@
 #define MAX_IPMITOOL_PARSE_ERRORS                     (20)
 
 void sensor_data_init  (       sensor_data_type & data );
-void sensor_data_print ( const sensor_data_type & data );
+void sensor_data_print ( string & hostname, const sensor_data_type & data );
 void sensor_data_copy  ( sensor_data_type & from, sensor_data_type & to );
 
-int bmc_load_json_sensor ( sensor_data_type & sensor_data , string json_sensor_data );
+int bmc_load_json_sensor ( string & hostname, sensor_data_type & sensor_data , string json_sensor_data );
 
 #endif

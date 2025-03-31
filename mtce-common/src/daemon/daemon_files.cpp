@@ -121,6 +121,69 @@ bool daemon_is_file_present ( const char * filename )
         return (false);
 }
 
+static void get_current_date_as_string ( char *date_str, size_t size )
+{
+    time_t now = time(NULL);
+    struct tm *t = localtime(&now);
+
+    // Suffix Format: _YYYY-MM-DD_HH-MM-SS
+    strftime(date_str, size, "%Y-%m-%d_%H-%M-%S", t);
+}
+
+// 16KB buffer for efficient copying
+#define MAX_FILE_CONTENT_BUFFER_SIZE 0x4000 // 16 KBytes
+int daemon_copy_file ( string hostname, const char *source )
+{
+    // Open source file in binary mode
+    FILE *src = fopen (source, "rb");
+    if (!src)
+    {
+        // Error path
+        wlog ("%s unable to open source file: %s ; (%d:%m)", hostname.c_str(), source, errno);
+        return FAIL ;
+    }
+
+    // Generate the destination filename with date suffix
+
+    // Format: _YYYY-MM-DD_HH-MM-SS needs 21 chars with null termination
+    char date_suffix[21];
+    get_current_date_as_string (date_suffix, sizeof(date_suffix));
+
+    // Max hostname size is 256 plus extra for path and the rest
+    // of the filename size with the dated suffix. 512 is ample.
+    // Example /var/run/bmc/redfishtool/hwmond_controller-0_thermal_sensor_data
+    char destination[512];
+
+    // Create the date suffixed destination filename
+    snprintf(destination, sizeof(destination), "%s_%s", source, date_suffix);
+
+    // Open destination file in binary mode
+    FILE *dest = fopen(destination, "wb");
+    if (!dest)
+    {
+        // Error path
+        wlog ("%s failed to open destination file '%s' for copy operation",
+                  hostname.c_str(), destination);
+
+        fclose (src);
+        return FAIL ;
+    }
+
+    char buffer [MAX_FILE_CONTENT_BUFFER_SIZE];
+    size_t bytes_read;
+
+    // Read from source and write to destination in chunks
+    while ((bytes_read = fread(buffer, 1, MAX_FILE_CONTENT_BUFFER_SIZE, src)) > 0)
+        fwrite(buffer, 1, bytes_read, dest);
+
+    // Close files
+    fclose (src);
+    fclose (dest);
+
+    ilog ("%s file '%s' copied to '%s'\n", hostname.c_str(), source, destination);
+    return PASS ;
+}
+
 void daemon_healthcheck ( const char * sig )
 {
     FILE * hc_file_stream ;

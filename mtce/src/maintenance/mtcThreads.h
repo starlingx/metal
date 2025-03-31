@@ -22,6 +22,8 @@ typedef struct
     string bm_cmd ;
 } thread_extra_info_type ;
 
+#define MTCAGENT_STACK_SIZE (0x20000) // 128 kBytes
+
 void * mtcThread_bmc ( void * );
 void * mtcThread_bmc_test ( void * arg );
 

@@ -38,17 +38,55 @@ using namespace std;
 #include "hwmonClass.h"      /* for ... thread_extra_info_type            */
 #include "nodeUtil.h"        /* for ... fork_execv                        */
 
-/***************************************************************************
- *
- * Name       : bmc_sample_type
- *
- * Description: An array of sensor data.
- *
- *    _sample_list
- *
- ***************************************************************************/
 
-static bmc_sample_type   _sample_list[MAX_HOST_SENSORS] ;
+/* One instance per thread. Uses the memory allocated for the stack.
+ *
+ * Although thread_local variables are not on the stack, they still
+ * consume memory that’s tied to the thread’s overall resources,
+ * and that memory often comes from the same per-thread allocation
+ * that includes the stack ; refer to TLS (Thread-Local Storage).
+ * The TLS area is often allocated adjacent to or within the thread's
+ * stack mapping. A large thread_local variable increases the TLS
+ * memory requirement, and if it exceeds the reserved space or
+ * overlaps with the stack space, the OS may fail to allocate the
+ * thread with a errno "Resource temporarily unavailable".
+ * This allocation required the per thread stack to be increased. */
+thread_local bmc_sample_type _sample_list[MAX_HOST_SENSORS];
+
+// #define WANT_SAMPLE_LIST_DEBUG
+#ifdef WANT_SAMPLE_LIST_DEBUG
+void print_sample_list ( string & hostname )
+{
+    bool empty = false ;
+    for ( int i = 0 ; i < MAX_HOST_SENSORS ; i++)
+    {
+        if ( strlen ( _sample_list[i].name ) != 0 )
+        {
+            if ( empty )
+            {
+                slog ("%s has sparse sensor list ; gap at %d", hostname.c_str(), i);
+                empty = false ;
+            }
+            ilog ("%s Sample %d: %s - %s - %s - %s ... %s - %s - %s - %s - %s - %s",
+                hostname.c_str(), i,
+                _sample_list[i].name,
+                _sample_list[i].value,
+                _sample_list[i].unit,
+                _sample_list[i].status,
+                _sample_list[i].lnr,
+                _sample_list[i].lcr,
+                _sample_list[i].lnc,
+                _sample_list[i].unc,
+                _sample_list[i].ucr,
+                _sample_list[i].unr);
+        }
+        else
+        {
+            empty = true ;
+        }
+    }
+}
+#endif // WANT_SAMPLE_LIST_DEBUG
 
 /***************************************************************************
  *
@@ -164,6 +202,11 @@ static void _parse_sensor_data ( thread_info_type * info_ptr )
         info_ptr->data.append (",\"");
         info_ptr->data.append (BMC_JSON__SENSORS_LABEL);
         info_ptr->data.append ("\":[");
+
+#ifdef WANT_SAMPLE_LIST_DEBUG
+        print_sample_list ( info_ptr->hostname );
+#endif // WANT_SAMPLE_LIST_DEBUG
+
         for ( int i = 0 ; i < samples ; )
         {
             _add_json_sensor_tuple ( &_sample_list[i], info_ptr->data ) ;
@@ -331,6 +374,7 @@ void * hwmonThread_ipmitool ( void * arg )
 
     /* the number of sensors are learned */
     extra_ptr->samples = samples = 0 ;
+    MEMSET_ZERO (_sample_list);
     switch ( info_ptr->command )
     {
         case BMC_THREAD_CMD__POWER_STATUS:
@@ -542,7 +586,17 @@ void * hwmonThread_ipmitool ( void * arg )
 
             unlink(info_ptr->password_file.data());
             daemon_remove_file (info_ptr->password_file.data());
-            // info_ptr->password_file.clear();
+
+            /* Debug Option - enable lane debug_bmgt3 = 8 and touch
+            * /var/run/bmc/ipmitool/want_dated_sensor_data_files for ipmi
+            * or
+            * /var/run/bmc/redfishtool/want_dated_sensor_data_files for redfish
+            *
+            * ... to save ther current sensor read file with a dated extension
+            *     so that a read history is maintained for debug purposes. */
+            if(daemon_get_cfg_ptr()->debug_bmgmt&8)
+                if ( daemon_is_file_present (WANT_DATED_IPMI_SENSOR_DATA_FILES))
+                    daemon_copy_file(info_ptr->hostname, sensor_datafile.data());
 
             /* check for system call error case */
             if ( rc != PASS )
@@ -1227,6 +1281,17 @@ static int _parse_redfish_sensor_data_output_file( thread_info_type * info_ptr,
         fread(buffer,(st.st_size + 2), 1, _fp);
         fclose(_fp);
 
+        /* Debug Option - enable lane debug_bmgt3 = 8 and touch
+         * /var/run/bmc/ipmitool/want_dated_sensor_data_files for ipmi
+         * or
+         * /var/run/bmc/redfishtool/want_dated_sensor_data_files for redfish
+         *
+         * ... to save ther current sensor read file with a dated extension
+         *     so that a read history is maintained for debug purposes. */
+        if(daemon_get_cfg_ptr()->debug_bmgmt&8)
+            if ( daemon_is_file_present (WANT_DATED_REDFISH_SENSOR_DATA_FILES))
+                 daemon_copy_file(info_ptr->hostname, datafile.data());
+
         switch (sensor_group)
         {
             case BMC_SENSOR_POWER_GROUP:
@@ -1311,6 +1376,7 @@ void * hwmonThread_redfish ( void * arg )
 
     /* the number of sensors learned */
     extra_ptr->samples = samples = 0 ;
+    MEMSET_ZERO (_sample_list);
 
     switch ( info_ptr->command )
     {

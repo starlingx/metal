@@ -62,7 +62,7 @@ void daemon_remove_pidfile ( void );
 void daemon_remove_file    ( const char * filename );
 void daemon_rename_file    ( const char * path, const char * old_filename, const char * new_filename );
 void daemon_make_dir       ( const char * dir );
-
+int  daemon_copy_file      (string hostname, const char *source );
 string daemon_read_file    ( const char * filename );
 
 void daemon_logfile_close ( void );
