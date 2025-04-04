@@ -4671,6 +4671,7 @@ void nodeLinkClass::set_mtce_flags ( string hostname, int flags, int iface )
                 {
                     wlog ("%s mtcAlive reporting unlocked while locked ; correcting",
                               node_ptr->hostname.c_str());
+                    send_mtc_cmd ( node_ptr->hostname , MTC_MSG_LOCKED, PXEBOOT_INTERFACE );
                 }
                 send_mtc_cmd ( node_ptr->hostname , MTC_MSG_LOCKED, MGMNT_INTERFACE );
                 send_mtc_cmd ( node_ptr->hostname , MTC_MSG_LOCKED, CLSTR_INTERFACE );

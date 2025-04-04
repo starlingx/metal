@@ -651,12 +651,6 @@ int mtc_socket_init ( void )
     ilog ("Controller  : %s\n", ctrl.mtcAgent_ip.c_str());
 
     /************************************************************/
-    /* Setup Mgmnt Network messaging sockets to/from mtcAgent   */
-    /************************************************************/
-    setup_mgmt_rx_socket ();
-    setup_mgmt_tx_socket ();
-
-    /************************************************************/
     /* Setup Pxeboot Network messaging sockets to/from mtcAgent */
     /************************************************************/
     if ( ctrl.pxeboot_iface_provisioned )
@@ -664,6 +658,12 @@ int mtc_socket_init ( void )
         setup_pxeboot_rx_socket ();
         setup_pxeboot_tx_socket ();
     }
+
+    /************************************************************/
+    /* Setup Mgmnt Network messaging sockets to/from mtcAgent   */
+    /************************************************************/
+    setup_mgmt_rx_socket ();
+    setup_mgmt_tx_socket ();
 
     /* Manage Cluster-host network setup */
     string mgmnt_iface_name = daemon_mgmnt_iface();
@@ -1697,7 +1697,7 @@ void daemon_service_run ( void )
         }
         if ( mtcTimer_expired ( ctrl.timer ) )
         {
-            bool socket_reinit = true ;
+            bool socket_reinit = false ;
 
             /**
              *  Look for failing sockets and try to recover them,
@@ -1716,8 +1716,8 @@ void daemon_service_run ( void )
             }
 
             /* Mgmt Tx */
-            else if (( mtc_sock.mtc_client_mgmt_tx_socket == NULL  ) ||
-                     ( mtc_sock.mtc_client_mgmt_tx_socket->sock_ok() == false ))
+            if (( mtc_sock.mtc_client_mgmt_tx_socket == NULL  ) ||
+                ( mtc_sock.mtc_client_mgmt_tx_socket->sock_ok() == false ))
             {
                 wlog ("calling setup_mgmt_tx_socket (auto-recovery)");
                 setup_mgmt_tx_socket();
@@ -1725,7 +1725,7 @@ void daemon_service_run ( void )
             }
 
             /* Pxeboot Rx */
-            else if ((ctrl.pxeboot_iface_provisioned == true) && (mtc_sock.pxeboot_rx_socket <= 0))
+            if ((ctrl.pxeboot_iface_provisioned == true) && (mtc_sock.pxeboot_rx_socket <= 0))
             {
                 wlog ("calling setup_pxeboot_rx_socket (auto-recovery)");
                 setup_pxeboot_rx_socket();
@@ -1733,7 +1733,7 @@ void daemon_service_run ( void )
             }
 
             /* Pxeboot Tx */
-            else if ((ctrl.pxeboot_iface_provisioned == true) && (mtc_sock.pxeboot_tx_socket == 0))
+            if ((ctrl.pxeboot_iface_provisioned == true) && (mtc_sock.pxeboot_tx_socket == 0))
             {
                 wlog ("calling setup_pxeboot_tx_socket (auto-recovery)");
                 setup_pxeboot_tx_socket();
@@ -1741,9 +1741,9 @@ void daemon_service_run ( void )
             }
 
             /* Clstr Rx */
-            else if (( ctrl.clstr_iface_provisioned == true ) &&
-                     (( mtc_sock.mtc_client_clstr_rx_socket == NULL ) ||
-                      ( mtc_sock.mtc_client_clstr_rx_socket->sock_ok() == false )))
+            if (( ctrl.clstr_iface_provisioned == true ) &&
+                (( mtc_sock.mtc_client_clstr_rx_socket == NULL ) ||
+                 ( mtc_sock.mtc_client_clstr_rx_socket->sock_ok() == false )))
             {
                 wlog ("calling setup_clstr_rx_socket (auto-recovery)");
                 setup_clstr_rx_socket();
@@ -1751,10 +1751,10 @@ void daemon_service_run ( void )
             }
 
             /* Clstr Tx ; AIO SX */
-            else if ((ctrl.system_type == SYSTEM_TYPE__AIO__SIMPLEX) &&
-                     ( ctrl.clstr_iface_provisioned == true ) &&
-                     (( mtc_sock.mtc_client_clstr_tx_socket_c0 == NULL ) ||
-                      ( mtc_sock.mtc_client_clstr_tx_socket_c0->sock_ok() == false )))
+            if ((ctrl.system_type == SYSTEM_TYPE__AIO__SIMPLEX) &&
+                ( ctrl.clstr_iface_provisioned == true ) &&
+                (( mtc_sock.mtc_client_clstr_tx_socket_c0 == NULL ) ||
+                 ( mtc_sock.mtc_client_clstr_tx_socket_c0->sock_ok() == false )))
             {
                 wlog ("calling setup_clstr_tx_sockets (auto-recovery)");
                 setup_clstr_tx_sockets();
@@ -1762,27 +1762,23 @@ void daemon_service_run ( void )
             }
 
             /* Clstr Tx ; not AIO SX */
-            else if ((ctrl.system_type != SYSTEM_TYPE__AIO__SIMPLEX) &&
-                     ( ctrl.clstr_iface_provisioned == true ) &&
-                     (( mtc_sock.mtc_client_clstr_tx_socket_c0 == NULL ) ||
-                      ( mtc_sock.mtc_client_clstr_tx_socket_c1 == NULL ) ||
-                      ( mtc_sock.mtc_client_clstr_tx_socket_c0->sock_ok() == false ) ||
-                      ( mtc_sock.mtc_client_clstr_tx_socket_c1->sock_ok() == false )))
+            if ((ctrl.system_type != SYSTEM_TYPE__AIO__SIMPLEX) &&
+                ( ctrl.clstr_iface_provisioned == true ) &&
+                (( mtc_sock.mtc_client_clstr_tx_socket_c0 == NULL ) ||
+                ( mtc_sock.mtc_client_clstr_tx_socket_c1 == NULL ) ||
+                ( mtc_sock.mtc_client_clstr_tx_socket_c0->sock_ok() == false ) ||
+                ( mtc_sock.mtc_client_clstr_tx_socket_c1->sock_ok() == false )))
             {
                 wlog ("calling setup_clstr_tx_sockets (auto-recovery)");
                 setup_clstr_tx_sockets();
                 socket_reinit = true ;
             }
 
-            else if ( mtc_sock.amon_socket <= 0 )
+            if ( mtc_sock.amon_socket <= 0 )
             {
                 setup_amon_socket ();
                 wlog ("calling setup_amon_socket (auto-recovery)");
                 socket_reinit = true ;
-            }
-            else
-            {
-                socket_reinit = false ;
             }
 
             if ( socket_reinit )
@@ -1796,7 +1792,6 @@ void daemon_service_run ( void )
                 /* re-get identity if interfaces are re-initialized */
                 string who_i_am = _self_identify ( ctrl.nodetype_str );
             }
-            alog1 ("sending mtcAlive on all provisioned mtcAlive networks");
 
 #ifdef WANT_FIT_TESTING
             if ( ! daemon_want_fit ( FIT_CODE__FAIL_PXEBOOT_MTCALIVE ) )
