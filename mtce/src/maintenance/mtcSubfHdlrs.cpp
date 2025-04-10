@@ -411,12 +411,6 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
             }
             else
             {
-                if ( node_ptr->dor_recovery_mode || node_ptr->was_dor_recovery_mode )
-                {
-                    node_ptr->dor_recovery_mode = false ;
-                    node_ptr->was_dor_recovery_mode = true ;
-                }
-
                 if (( node_ptr->alarms[MTC_ALARM_ID__CH_COMP] != FM_ALARM_SEVERITY_CLEAR ) ||
                     ( node_ptr->alarms[MTC_ALARM_ID__ENABLE] != FM_ALARM_SEVERITY_CLEAR ) ||
                     ( node_ptr->alarms[MTC_ALARM_ID__CONFIG] != FM_ALARM_SEVERITY_CLEAR ))
@@ -454,9 +448,9 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
 
             node_ptr->subf_enabled = true ;
             node_ptr->inservice_failed_subf    = false ;
-            if ( node_ptr->was_dor_recovery_mode )
+            if ( this->dor_mode_active )
             {
-                report_dor_recovery (  node_ptr , "is ENABLED" );
+                report_dor_recovery (  node_ptr , "is ENABLED", "subf" );
             }
             else
             {
@@ -488,9 +482,9 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
                                        MTC_OPER_STATE__ENABLED,
                                        MTC_AVAIL_STATUS__DEGRADED );
 
-            if ( node_ptr->was_dor_recovery_mode )
+            if ( this->dor_mode_active )
             {
-                report_dor_recovery (  node_ptr , "is ENABLED-degraded" );
+                report_dor_recovery (  node_ptr , "is DEGRADED", "subf" );
             }
             else
             {
@@ -511,16 +505,6 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
                                        MTC_OPER_STATE__ENABLED,
                                        MTC_AVAIL_STATUS__DEGRADED );
 
-            if ( node_ptr->was_dor_recovery_mode )
-            {
-                report_dor_recovery (  node_ptr , "is DISABLED-failed" );
-            }
-            else
-            {
-                elog ("%s is DISABLED-failed (subfunction failed)\n",
-                          name.c_str() );
-            }
-            this->dor_mode_active = false ;
 
             alarm_compute_failure ( node_ptr , FM_ALARM_SEVERITY_CRITICAL ) ;
 
@@ -552,9 +536,6 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
             node_ptr->enabled_count++ ;
             node_ptr->health_threshold_counter = 0 ;
 
-            node_ptr->was_dor_recovery_mode = false ;
-            node_ptr->dor_recovery_mode = false ;
-            this->dor_mode_active = false ;
 
             ar_enable ( node_ptr );
 

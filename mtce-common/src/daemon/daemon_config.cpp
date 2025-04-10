@@ -191,10 +191,10 @@ int timeout_config_handler (       void * user,
         config_ptr->dor_mode_timeout = atoi(value);
         ilog ("DOR Mode TO : %3d secs\n", config_ptr->dor_mode_timeout );
     }
-    else if (MATCH("timeouts", "dor_recovery_timeout_ext"))
+    else if (MATCH("timeouts", "dor_mode_detect"))
     {
-        config_ptr->dor_recovery_timeout_ext = atoi(value);
-        ilog ("DOR Time Ext: %3d secs\n", config_ptr->dor_recovery_timeout_ext );
+        config_ptr->dor_mode_detect = atoi(value);
+        ilog ("DOR Mode Det: %3d secs", config_ptr->dor_mode_detect );
     }
     else if (MATCH("timeouts", "bmc_audit_period"))
     {
