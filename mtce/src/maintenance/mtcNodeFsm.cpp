@@ -69,6 +69,11 @@ int nodeLinkClass::fsm ( struct nodeLinkClass::node * node_ptr )
         return RETRY ;
     }
 
+    /* Check for a 'delayed self reboot required' condition */
+    if ( this->delayed_swact_required )
+        if ( node_ptr->hostname == this->my_hostname )
+            return ( this->self_fail_handler ( node_ptr ));
+
     /* manage the host connected state and board management alarms */
     nodeLinkClass::bmc_handler ( node_ptr );
 

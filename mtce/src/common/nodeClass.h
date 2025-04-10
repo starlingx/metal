@@ -1,7 +1,7 @@
 #ifndef __INCLUDE_NODECLASS_H__
 #define __INCLUDE_NODECLASS_H__
 /*
- * Copyright (c) 2013-2016, 2023-2024 Wind River Systems, Inc.
+ * Copyright (c) 2013-2016, 2023-2025 Wind River Systems, Inc.
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -66,6 +66,9 @@ using namespace std;
 #endif
 #define SIMPLEX \
     ( daemon_is_file_present ( PLATFORM_SIMPLEX_MODE ) == true )
+
+#define NOT_SIMPLEX \
+    ( daemon_is_file_present ( PLATFORM_SIMPLEX_MODE ) == false )
 
 #define THIS_HOST \
     ( node_ptr->hostname == this->my_hostname )
@@ -208,19 +211,6 @@ private:
         int    node_unlocked_counter ;
 
         int    mtcalive_timeout ;
-
-        /* start host service retry controls */
-        int  start_services_retries ;
-
-        bool start_services_running_main ;
-        bool start_services_running_subf ;
-
-        bool start_services_needed  ;
-        bool start_services_needed_subf ; /* for the add handler that defers
-                                             start to the inservice test handler.
-                                             this provides a means of telling
-                                             maintenance that the subfunction
-                                             start needs to also be run. */
 
         /** Pointer to the previous node in the list */
         struct node *prev;
@@ -404,8 +394,8 @@ private:
 
         /* Boolean indicating the main or subfunction has start host services
          * failure. */
-        bool hostservices_failed      ;
-        bool hostservices_failed_subf ;
+        bool hostservices_failed      = false ;
+        bool hostservices_failed_subf = false ;
 
         /* Boolean indicating the main or subfunction has inservice failure */
         bool inservice_failed      ;
@@ -442,7 +432,11 @@ private:
         /* throttles the ar_disabled log to periodically indicate auto
          * recovery disabled state but avoid flooding that same message. */
         #define AR_LOG_THROTTLE_THRESHOLD (100000)
+        #define AR_HANDLER_LOG_THROTTLE_THRESHOLD (1000)
         unsigned int ar_log_throttle ;
+
+        /** Bool to prevent nested force_full_enable and auto recovery management handling */
+        bool forcing_full_enable = false ;
 
         /** Host's mtc timer struct. Use to time handler stages.
          *
@@ -876,6 +870,7 @@ private:
     int stress_handler     ( struct nodeLinkClass::node * node_ptr );
     int bmc_handler        ( struct nodeLinkClass::node * node_ptr );
     int degrade_handler    ( struct nodeLinkClass::node * node_ptr );
+    int self_fail_handler  ( struct nodeLinkClass::node * node_ptr );
 
     int uptime_handler     ( void );
 
@@ -984,6 +979,12 @@ private:
     int  ar_manage ( struct nodeLinkClass::node * node_ptr,
                      autorecovery_disable_cause_enum cause,
                      string ar_disable_banner );
+
+    /* handle auto recovery
+     * - adds common handling functionality on top of ar_manage */
+    int ar_handler ( struct nodeLinkClass::node * node_ptr,
+                     autorecovery_disable_cause_enum cause,
+                     string ar_disable_banner);
 
     /** ***********************************************************************
       *
@@ -1160,7 +1161,6 @@ private:
 
     void clear_subf_failed_bools ( struct nodeLinkClass::node * node_ptr );
     void clear_main_failed_bools ( struct nodeLinkClass::node * node_ptr );
-    void clear_hostservices_ctls ( struct nodeLinkClass::node * node_ptr );
 
     /* Enables/Clears dynamic auto recovery state. start fresh !
      * called in disabled_handler (lock) and in the DONE stages
@@ -1253,28 +1253,6 @@ private:
     * A variable storing the accumulated node memory
     */
     int memory_used   ;
-
-   /** Inservice memory management audit.
-    *
-    * Verifies that the node_ptr list and memory_allocs jive as well
-    * as all the node pointers point to a node in the linked list.
-    *
-    * @return
-    *  an integer representing a PASS or TODO: list other error codes.
-    */
-    int memory_audit   ( void );
-
-
-    /* Simplex mode auto recovery bools
-     *
-     * Set to true when the autorecovery threshold is reached
-     * and we want to avoid taking further autorecovery action
-     * even though it may be requested. */
-    bool autorecovery_disabled = false ;
-
-    /* Set to true by fault detection methods that are
-     * autorecoverable when in simplex mode. */
-    bool autorecovery_enabled = false ;
 
     /** Tracks the number of hosts that 'are currently' in service trouble
      *  wrt heartbeat (above minor threshold).
@@ -2191,7 +2169,14 @@ public:
      */
     unsigned int ar_interval[MTC_AR_DISABLE_CAUSE__LAST]  ;
 
-    int  unknown_host_throttle ;
+    /* Used by the auto recovery algorithm for self-reboot.
+     * This is a flag indicating a delayed self-reboot is required.
+     * This ensures the FSM enters the self_reboot_handler, allowing sufficient time
+     * for operational and availability state changes to be committed to the database
+     * before initiating the reboot. */
+    bool delayed_swact_required = false ;
+    bool self_reboot_wait = false ;
+    bool force_swact_wait = false ;
 };
 
 /**
