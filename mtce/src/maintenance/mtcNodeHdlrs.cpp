@@ -3635,6 +3635,22 @@ int nodeLinkClass::swact_handler  ( struct nodeLinkClass::node * node_ptr )
                         nodeLinkClass::smgrEvent.cur_retries = 0 ;
                         node_ptr->swactStage = MTC_SWACT__SWACT ;
 
+                        /* Stop heartbeat of all unlocked-enabled system nodes during swact.
+                         * The newly active controller will restart heartbeat on these nodes.
+                         *
+                         * Avoids transient management network heartbeat loss alarm set/clear
+                         * during IPSec policy migration from one controller other */
+                        for ( struct node * _ptr = head ; _ptr != NULL ; _ptr = _ptr->next )
+                        {
+                            if (( _ptr->hostname != this->my_hostname ) &&
+                                ( _ptr->adminState == MTC_ADMIN_STATE__UNLOCKED ) &&
+                                ( _ptr->operState == MTC_OPER_STATE__ENABLED ))
+                            {
+                                ilog ("%s heartbeat stop ; swacting", _ptr->hostname.c_str())
+                                send_hbs_command  ( _ptr->hostname, MTC_CMD_STOP_HOST );
+                            }
+                        }
+
                         /* Tell the user what we are doing */
                         mtcInvApi_force_task ( node_ptr, MTC_TASK_SWACT_INPROGRESS );
                     }
