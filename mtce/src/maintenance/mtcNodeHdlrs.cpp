@@ -6465,7 +6465,6 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
                     {
                         ilog ("%s running subfunction enable for unlocked-enabled AIO controller (DOR mode)", node_ptr->hostname.c_str());
                         adminActionChange ( node_ptr , MTC_ADMIN_ACTION__ENABLE_SUBF );
-                        break ;
                     }
                 }
             }
