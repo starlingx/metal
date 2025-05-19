@@ -170,6 +170,12 @@ void daemon_exit ( void );
 #define MTCAGENT_LOG_FILE  ((const char *)"/var/log/mtcAgent.log")
 #define MTCCLIENT_LOG_FILE ((const char *)"/var/log/mtcClient.log")
 
+/* common binaries */
+#define SYSTEMD_RUN                     "/usr/bin/systemd-run"
+
+/* maintenance scripts */
+#define MTC_DELAYED_SYSRQ_REBOOT_SCRIPT "/usr/local/sbin/delayed_sysrq_reboot"
+
 /* supported BMC communication protocols ; access method */
 typedef enum
 {

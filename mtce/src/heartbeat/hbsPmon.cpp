@@ -174,7 +174,7 @@ int hbs_self_recovery ( unsigned int cmd )
     /* Forced Self Reset Now */
     else if ( cmd == STALL_SYSREQ_CMD )
     {
-        fork_sysreq_reboot ( 60 ) ;
+        launch_failsafe_reboot ( 60 ) ;
 
         /* parent returns */
         return (PASS);
