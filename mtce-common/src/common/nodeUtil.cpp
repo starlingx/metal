@@ -47,6 +47,9 @@ using namespace std;
 #endif
 #define __AREA__ "com"
 
+/* allow import of this process name */
+extern char *program_invocation_short_name;
+
 /***************************************************************************
  *
  * Name       : nodeUtil_latency_log
@@ -1005,87 +1008,61 @@ int double_fork ( void )
 
 /***************************************************************************
  *
- * Name    : fork_sysreq_reboot
+ * Name       : launch_failsafe_reboot
  *
- * Purpose : Timed SYSREQ Reset service used as a backup mechanism
- *           to force a self reset after a specified period of time.
+ * Purpose    : Launches a systemd-run-based timed SYSRQ reset service
+ *              used as a backup mechanism to force a self-reset after
+ *              a specified delay period (in seconds) in the event that
+ *              systemd shutdown hangs with no reset.
+ *
+ * Description: Uses double-fork to ensure child detachment. Also uses
+ *              dynamic service unit naming based on the process name to
+ *              allow coexistence across multiple invocations from other
+ *              maintenance processes, namely mtcAgent/mtcClient.
+ *
+ * Parameter: int delay_in_secs - seconds to wait before sysrq reset
  *
  **************************************************************************/
 
-/* This is a common utility that forces a sysreq reboot */
-void fork_sysreq_reboot ( int delay_in_secs )
+ void launch_failsafe_reboot ( int delay_in_secs )
 {
     int parent = 0 ;
 
-    /* Fork child to do a sysreq reboot. */
+    // Double fork in prep to run MTC_DELAYED_SYSRQ_REBOOT_SCRIPT as a
+    // detached grandchild using systemd-run command. The script does
+    // the SysRq reset.
     if ( 0 > ( parent = double_fork()))
     {
         elog ("failed to fork fail-safe (backup) sysreq reboot\n");
         return ;
     }
-    else if( 0 == parent ) /* we're the child */
+    else if( 0 == parent ) /* we're the grandchild */
     {
-        int sysrq_handler_fd;
-        int sysrq_tigger_fd ;
-        size_t temp ;
+        char delay_str [MAX_CHARS_IN_INT]; /* for the int to str conversion */
+        char unit_arg  [MAX_FILENAME_LEN]; /* for the dynamic unit name     */
 
-        setup_child ( false ) ;
+        // Convert the calling int parameter to a string so it can be passed to execv
+        snprintf(delay_str, sizeof(delay_str), "%d", delay_in_secs);
 
-        dlog ("*** Failsafe Reset Thread ***\n");
+        // Create a dynamic unit name using the current program name.
+        // Do this so that if multiple maintenance processes use this
+        // API they don't nave a unit name collision.
+        snprintf(unit_arg, sizeof(unit_arg),
+                 "--unit=%s-delayed-failsafe-reboot",
+                 program_invocation_short_name);
 
-        /* Commented this out because blocking SIGTERM in systemd environment
-         * causes any processes that spawn this sysreq will stall shutdown
-         *
-         * sigset_t mask , mask_orig ;
-         * sigemptyset (&mask);
-         * sigaddset (&mask, SIGTERM );
-         * sigprocmask (SIG_BLOCK, &mask, &mask_orig );
-         *
-         */
-
-        // Enable sysrq handling.
-        sysrq_handler_fd = open( "/proc/sys/kernel/sysrq", O_RDWR | O_CLOEXEC );
-        if( 0 > sysrq_handler_fd )
-        {
-            elog ( "failed sysrq_handler open\n");
-            return ;
-        }
-
-        temp = write( sysrq_handler_fd, "1", 1 );
-        close( sysrq_handler_fd );
-
-        for ( int i = delay_in_secs ; i >= 0 ; --i )
-        {
-            sleep (1);
-            {
-                if ( 0 == (i % 5) )
-                {
-                    dlog ( "sysrq reset in %d seconds\n", i );
-                }
-            }
-        }
-
-        // Trigger sysrq command.
-        sysrq_tigger_fd = open( "/proc/sysrq-trigger", O_RDWR | O_CLOEXEC );
-        if( 0 > sysrq_tigger_fd )
-        {
-            elog ( "failed sysrq_trigger open\n");
-            return ;
-        }
-
-        temp = write( sysrq_tigger_fd, "b", 1 );
-        close( sysrq_tigger_fd );
-
-        dlog ( "sysreq rc:%ld\n", temp );
-
-        UNUSED(temp);
-
-        sleep (10);
-
-        // Shouldn't get this far, else there was an error.
-        exit(-1);
+        const char *cmd[] = {
+            SYSTEMD_RUN,
+            unit_arg,
+            MTC_DELAYED_SYSRQ_REBOOT_SCRIPT,
+            delay_str,
+            NULL
+        };
+        execv(cmd[0], (char * const *)cmd);
+        exit(EXIT_FAILURE);
     }
-    ilog ("Forked Fail-Safe (Backup) Reboot Action\n");
+    ilog ("failsafe reboot script launched ; reboot in %d seconds ; calling pid:%d",
+           delay_in_secs, parent);
 }
 
 /***************************************************************************

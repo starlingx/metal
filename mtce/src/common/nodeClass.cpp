@@ -1643,7 +1643,7 @@ int nodeLinkClass::lazy_graceful_fs_reboot ( struct nodeLinkClass::node * node_p
 {
     /* issue a lazy reboot to the mtcClient and as a backup launch a sysreq reset thresd */
     send_mtc_cmd ( node_ptr->hostname, MTC_CMD_LAZY_REBOOT, MGMNT_INTERFACE ) ;
-    fork_sysreq_reboot ( daemon_get_cfg_ptr()->failsafe_shutdown_delay );
+    launch_failsafe_reboot ( daemon_get_cfg_ptr()->failsafe_shutdown_delay );
 
     /* loop until reboot */
     for ( ; ; )
@@ -3114,7 +3114,7 @@ int nodeLinkClass::add_host ( node_inv_type & inv )
         if ( delay > 0 )
         {
             mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, delay );
-            ilog ("Host add delay is %d seconds", delay );
+            ilog ("%s Host add delay is %d seconds", node_ptr->hostname.c_str(), delay );
             node_ptr->addStage = MTC_ADD__START_DELAY ;
         }
         else

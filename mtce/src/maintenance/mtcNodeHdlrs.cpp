@@ -4664,7 +4664,7 @@ int nodeLinkClass::reboot_handler ( struct nodeLinkClass::node * node_ptr )
                 node_ptr->resetProgStage = MTC_RESETPROG__WAIT ;
 
                 /* Launch a backup sysreq thread */
-                fork_sysreq_reboot ( daemon_get_cfg_ptr()->failsafe_shutdown_delay );
+                launch_failsafe_reboot ( daemon_get_cfg_ptr()->failsafe_shutdown_delay );
 
                 /* Tell SM we are unhealthy so that it shuts down all its services */
                 daemon_log ( SMGMT_UNHEALTHY_FILE, "Active Controller Reboot request" );

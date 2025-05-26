@@ -1460,7 +1460,7 @@ void daemon_service_run ( void )
     if ( daemon_is_file_present ( NODE_RESET_FILE ) )
     {
         wlog ("mtce reboot required");
-        fork_sysreq_reboot ( daemon_get_cfg_ptr()->failsafe_shutdown_delay );
+        launch_failsafe_reboot ( daemon_get_cfg_ptr()->failsafe_shutdown_delay );
         for ( ; ; )
         {
             wlog ("issuing reboot");

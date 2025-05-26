@@ -33,6 +33,7 @@ usr/local/bin/mtcClient
 usr/local/bin/mtcalarmd
 usr/local/bin/mtclogd
 usr/local/bin/wipedisk
+usr/local/sbin/delayed_sysrq_reboot
 usr/sbin/crash-dump-manager
 usr/sbin/dmemchk.sh
 usr/sbin/fsync

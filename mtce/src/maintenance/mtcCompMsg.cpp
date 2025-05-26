@@ -667,7 +667,7 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
             stop_pmon();
             ilog ("Reboot (%s)", iface_name_ptr);
             daemon_log ( NODE_RESET_FILE, "reboot command" );
-            fork_sysreq_reboot ( delay );
+            launch_failsafe_reboot ( delay );
             rc = system("/usr/bin/systemctl reboot");
         }
         if ( msg.cmd == MTC_CMD_LAZY_REBOOT )
@@ -696,7 +696,7 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
                 ilog ("Lazy Reboot (%s) ; now", iface_name_ptr);
             }
 
-            fork_sysreq_reboot ( delay );
+            launch_failsafe_reboot ( delay );
             rc = system("/usr/bin/systemctl reboot");
         }
         else if ( msg.cmd == MTC_CMD_RESET )
@@ -709,7 +709,7 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
             stop_pmon();
             ilog ("Reset 'reboot -f' (%s)", iface_name_ptr);
             daemon_log ( NODE_RESET_FILE, "reset command" );
-            fork_sysreq_reboot ( delay/2 );
+            launch_failsafe_reboot ( delay/2 );
             rc = system("/usr/bin/systemctl reboot --force");
         }
         else if ( msg.cmd == MTC_CMD_WIPEDISK )
@@ -725,7 +725,7 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
              * If something goes wrong we should reboot anyway
              */
             stop_pmon();
-            fork_sysreq_reboot ( delay/2 );
+            launch_failsafe_reboot ( delay/2 );
 
             /* We fork the wipedisk command as it may take upwards of 30s
              * If we hold this thread for that long pmon will kill mtcClient
