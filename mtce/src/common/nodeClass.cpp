@@ -522,6 +522,7 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
     ptr->cmdRsp_status_string = "" ;
 
     ptr->add_completed        = false ;
+    ptr->add_heartbeat_soak_failed = false ;
 
     /* init the hwmon reset and powercycle recovery control structures */
     recovery_ctrl_init ( ptr->hwmon_reset );
@@ -5602,6 +5603,18 @@ void nodeLinkClass::manage_heartbeat_failure ( string hostname, iface_enum iface
             }
             return ;
         }
+        else if ( node_ptr->addStage == MTC_ADD__HEARTBEAT_SOAK )
+        {
+            elog ("%s %s *** Heartbeat Loss *** (during add soak)\n",
+                      hostname.c_str(),
+                      get_iface_name_str(iface));
+            node_ptr->add_heartbeat_soak_failed = true ;
+
+            /* start graceful recovery */
+            recoveryStageChange ( node_ptr, MTC_RECOVERY__START );
+
+            return ;
+        }
         else if ( node_ptr->recoveryStage == MTC_RECOVERY__HEARTBEAT_SOAK )
         {
             elog ("%s %s *** Heartbeat Loss *** (during recovery soak)\n",
@@ -7022,7 +7035,8 @@ int nodeLinkClass::adminActionChange ( struct nodeLinkClass::node * node_ptr,
          *  other action can take effect.
          *  If its not one of these action then just proceed with it
          **/
-        if ( node_ptr->adminAction != MTC_ADMIN_ACTION__FORCE_LOCK )
+        if (( node_ptr->adminAction != MTC_ADMIN_ACTION__ADD ) &&
+            ( node_ptr->adminAction != MTC_ADMIN_ACTION__FORCE_LOCK ))
         {
             clog ("%s Administrative Action '%s' -> '%s'\n",
                       node_ptr->hostname.c_str(),

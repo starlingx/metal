@@ -6436,18 +6436,36 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
             send_hbs_command ( node_ptr->hostname, MTC_CMD_START_HOST );
             mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_HEARTBEAT_SOAK_DURING_ADD );
             node_ptr->addStage = MTC_ADD__HEARTBEAT_SOAK ;
+            node_ptr->add_heartbeat_soak_failed = false ;
             break ;
         }
         case MTC_ADD__HEARTBEAT_SOAK:
         {
-            if ( node_ptr->mtcTimer.ring == true )
+            if ( node_ptr->add_heartbeat_soak_failed == true )
+            {
+                /* The 'add_heartbeat_soak_failed' bool is set true in the
+                 * manage_heartbeat_failure member function.
+                 * Doing so gives the 'add_handler' a chance to complete.
+                 * It does so by switching to DONE (for clarity)
+                 * and falls into it.*/
+                mtcTimer_reset (node_ptr->mtcTimer );
+                wlog ("%s heartbeat soak failed %s",
+                          node_ptr->hostname.c_str(),
+                          this->dor_mode_active ? "(DOR mode)" : "");
+
+                node_ptr->addStage = MTC_ADD__DONE ;
+                // fall through to DONE
+            }
+            else if ( node_ptr->mtcTimer.ring == true )
             {
                 plog ("%s heartbeating", node_ptr->hostname.c_str());
-                /* if heartbeat is not working then we will
-                 * never get here */
                 node_ptr->addStage = MTC_ADD__DONE ;
+                // speed up the DONE stage by just fall into it
             }
-            break ;
+            else
+            {
+                break ; /* wait longer*/
+            }
         }
         case MTC_ADD__DONE:
         default:
@@ -6491,7 +6509,11 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
                 if ( node_ptr->adminState == MTC_ADMIN_STATE__UNLOCKED )
                 {
                     string state_str = "" ;
-                    if ( node_ptr->operState  == MTC_OPER_STATE__ENABLED )
+                    if ( node_ptr->add_heartbeat_soak_failed == true )
+                    {
+                       ; /* Force default to waiting if add handler heartbeat soak failed */
+                    }
+                    else if ( node_ptr->operState  == MTC_OPER_STATE__ENABLED )
                     {
                         state_str = "is ENABLED" ;
                         if ( node_ptr->availStatus == MTC_AVAIL_STATUS__DEGRADED )
@@ -6505,13 +6527,14 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
                     {
                         state_str = "is OFFLINE" ;
                     }
+
                     if ( ! state_str.empty() )
                     {
                         report_dor_recovery ( node_ptr , state_str, "" ) ;
                     }
                     else
                     {
-                        ilog ("%-12s is waiting ; DOR Recovery ; %s-%s-%s ; mtcClient:%c hbsClient:%c uptime:%3d task:%s",
+                        ilog ("%-12s is waiting  ; DOR Recovery ; %s-%s-%s ; mtcClient:%c hbsClient:%c uptime:%3d task:%s",
                                  node_ptr->hostname.c_str(),
                                  adminState_enum_to_str (node_ptr->adminState).c_str(),
                                  operState_enum_to_str  (node_ptr->operState).c_str(),

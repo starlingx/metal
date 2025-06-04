@@ -202,6 +202,9 @@ private:
         /** Set to true once the host's add FSM is done  */
         bool   add_completed ;
 
+        /** Set true if the add handler heartbeat soak fails */
+        bool   add_heartbeat_soak_failed ;
+
         int uptime_refresh_counter ;
 
         /** Counts the number of times this node was unlocked.
