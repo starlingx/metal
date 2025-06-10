@@ -225,12 +225,12 @@ int daemon_log_value ( const char * filename , const char * str, int val )
     return (FAIL_FILE_OPEN);
 }
 
-int daemon_log_value ( const char * filename , int val )
+int daemon_log_value ( const char * filename , unsigned int val )
 {
     FILE * file_stream = fopen (filename, "w" ) ;
     if ( file_stream != NULL )
     {
-        fprintf ( file_stream,"%d\n", val );
+        fprintf ( file_stream,"%u\n", val );
         fflush (file_stream);
         fclose (file_stream);
         return (PASS);
@@ -249,6 +249,43 @@ int daemon_log ( const char * filename , const char * str )
         return (PASS);
     }
     return (FAIL_FILE_OPEN);
+}
+
+/* reads the first line of a file and if it contains a string
+ * that represents an integer value then return it */
+unsigned int daemon_get_file_uint ( const char * filename )
+{
+    unsigned int value = 0 ;
+    FILE * __stream = fopen ( filename, "r" );
+    if ( __stream != NULL )
+    {
+        int rc ;
+
+        char   buffer     [MAX_CHARS_IN_INT];
+        memset(buffer, 0 , MAX_CHARS_IN_INT);
+        if ( fgets (buffer,MAX_CHARS_IN_INT, __stream) != NULL )
+        {
+            rc = sscanf ( &buffer[0], "%u",  &value );
+            if ( rc >= 1 )
+            {
+                dlog ("%s contains number %u\n", filename, value );
+            }
+            else
+            {
+                wlog ("failed to sscanf integer from file:%s\n", filename );
+            }
+        }
+        else
+        {
+            wlog ("failed to read integer from file:%s\n", filename );
+        }
+        fclose(__stream);
+    }
+    else
+    {
+        wlog ("failed to open file:%s\n", filename );
+    }
+    return ( value );
 }
 
 /* reads the first line of a file and if it contains a string

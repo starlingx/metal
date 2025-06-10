@@ -724,9 +724,27 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
 
             /* Inform the VIM of the failure */
             mtcVimApi_state_change ( node_ptr, VIM_HOST_FAILED, 3 );
+            enableStageChange ( node_ptr, MTC_ENABLE__FAILURE_TIMER );
+            break ;
+        }
+        case MTC_ENABLE__FAILURE_TIMER:
+        {
+            /* Give the bmc some time to connect
+             * Wait for the bmc host power state until there is a bmc alarm */
+            if (( node_ptr->bmc_provisioned == true ) &&
+                ((node_ptr->power_status_query_done == false ) || ( node_ptr->power_on == false )) &&
+                ( node_ptr->alarms[MTC_ALARM_ID__BM] == FM_ALARM_SEVERITY_CLEAR ))
+            {
+                if ( node_ptr->power_status_query_done == false )
+                {
+                    ilog ("%s waiting on bmc power query ; exit wait on alarm", node_ptr->hostname.c_str());
+                }
 
+                /* Wait this failure cause's retry delay */
+                mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_SECS_10 );
+            }
             /* handle thresholded auto recovery retry delay interval */
-            if ( node_ptr->ar_cause < MTC_AR_DISABLE_CAUSE__LAST )
+            else if ( node_ptr->ar_cause < MTC_AR_DISABLE_CAUSE__LAST )
             {
                 unsigned int interval = this->ar_interval[node_ptr->ar_cause] ;
                 if ( interval )
@@ -772,6 +790,22 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
         {
             if ( mtcTimer_expired ( node_ptr->mtcTimer ) == false )
             {
+                /* While waiting ... check for power off condition.
+                 * The bmc_handler is always running to try and
+                 * connect and manage alarms. */
+                if (( node_ptr->bmc_provisioned == true ) &&
+                    ( node_ptr->power_status_query_done == true ) &&
+                    ( node_ptr->power_on == false ))
+                {
+                    if ( node_ptr->power_on_needed == false )
+                    {
+                        wlog ("%s triggering insv test power on", node_ptr->hostname.c_str());
+                        node_ptr->power_on_needed = true ;
+                    }
+                    /* Don't start the enable handler if the power is off.
+                     * Retry the wait */
+                    enableStageChange ( node_ptr, MTC_ENABLE__FAILURE_TIMER );
+                }
                 break ;
             }
             /* Stop the enable sequence if the locked now;
@@ -942,8 +976,22 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                 node_ptr->heartbeat_failed[iface] = false ;
             }
 
-            /* now reset/reboot the node by running reset progression */
-            enableStageChange ( node_ptr, MTC_ENABLE__RESET_PROGRESSION );
+            /* Don't do reset progression if the node was recently powered on. */
+            time_t now_time_secs = time(NULL);
+            if ( (now_time_secs-node_ptr->power_on_time_secs) < MTC_MINS_2 )
+            {
+                ilog ("%s bypassing reset progression for recently powered on host",
+                            node_ptr->hostname.c_str());
+
+                /* Set the FSM task state to booting */
+                mtcInvApi_update_task ( node_ptr, MTC_TASK_BOOTING );
+                enableStageChange ( node_ptr, MTC_ENABLE__INTEST_START );
+            }
+            else
+            {
+                /* now reset/reboot the node by running reset progression */
+                enableStageChange ( node_ptr, MTC_ENABLE__RESET_PROGRESSION );
+            }
 
             break ;
         }
@@ -964,8 +1012,22 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
         {
             if ( node_ptr->mtcTimer.ring == true )
             {
-                enableStageChange ( node_ptr, MTC_ENABLE__RESET_PROGRESSION );
+                /* Don't do reset progression if the node was recently powered on. */
+                time_t now_time_secs = time(NULL);
+                if ( (now_time_secs-node_ptr->power_on_time_secs) < MTC_MINS_2 )
+                {
+                    ilog ("%s bypassing reset progression for recently powered on host",
+                              node_ptr->hostname.c_str());
 
+                    /* Set the FSM task state to booting */
+                    mtcInvApi_update_task ( node_ptr, MTC_TASK_BOOTING );
+                    enableStageChange ( node_ptr, MTC_ENABLE__INTEST_START );
+                }
+                else
+                {
+                    /* now reset/reboot the node by running reset progression */
+                    enableStageChange ( node_ptr, MTC_ENABLE__RESET_PROGRESSION );
+                }
                 node_ptr->mtcTimer.ring = false ;
             }
             if ( node_ptr->availStatus != MTC_AVAIL_STATUS__FAILED )
@@ -1547,7 +1609,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                 /* Inform the VIM that this host is enabled */
                 mtcVimApi_state_change ( node_ptr, VIM_HOST_ENABLED, 3 );
 
-                plog ("%s is ENABLED", node_ptr->hostname.c_str());
+                plog ("%s is ENABLED%s", node_ptr->hostname.c_str(), node_ptr->unlocking ? " ; from unlock" : "");
                 node_ptr->http_retries_cur = 0 ;
 
                 adminActionChange ( node_ptr, MTC_ADMIN_ACTION__NONE );
@@ -1555,11 +1617,35 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                 node_ptr->health_threshold_counter = 0 ;
 
                 ar_enable ( node_ptr );
-            }
 
+                if ( node_ptr->hostname == this->my_hostname )
+                {
+                    if ( daemon_is_file_present ( NODE_UNLOCK_SECS_FILE ) )
+                    {
+                        unsigned int self_unlock_secs = daemon_get_file_uint ( NODE_UNLOCK_SECS_FILE );
+                        if ( self_unlock_secs )
+                        {
+                            kpi_log ( node_ptr->hostname, KPI_AREA__ACTION,
+                                                          KPI_ACTION__UNLOCK,
+                                                          KPI_STR__START,
+                                                          KPI_STR__COMPLETE,
+                                                          self_unlock_secs);
+                        }
+                        daemon_remove_file(NODE_UNLOCK_SECS_FILE);
+                    }
+                }
+                else if ( node_ptr->unlocking == true )
+                {
+                    kpi_log ( node_ptr->hostname, KPI_AREA__ACTION,
+                                                  KPI_ACTION__UNLOCK,
+                                                  KPI_STR__START,
+                                                  KPI_STR__COMPLETE,
+                                                  node_ptr->start_unlock_time);
+                    node_ptr->unlocking = false ;
+                }
+            }
             break ;
         }
-
         default:
             rc = FAIL_BAD_CASE ;
     }
@@ -1849,10 +1935,15 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
                  * mtcAlive message upon recovery */
                 node_ptr->mtce_flags = 0 ;
 
-                /* Set node as unlocked-disabled-failed */
-                allStateChange ( node_ptr, MTC_ADMIN_STATE__UNLOCKED,
-                                           MTC_OPER_STATE__DISABLED,
-                                           MTC_AVAIL_STATUS__FAILED );
+                /* Maintain the power off status so that the recovery handler will
+                 * power it back on in the MTC_RECOVERY__MTCALIVE_WAIT stage below */
+                if ( node_ptr->availStatus != MTC_AVAIL_STATUS__POWERED_OFF )
+                {
+                    /* Set node as unlocked-disabled-failed */
+                    allStateChange ( node_ptr, MTC_ADMIN_STATE__UNLOCKED,
+                                               MTC_OPER_STATE__DISABLED,
+                                               MTC_AVAIL_STATUS__FAILED );
+                }
 
                 if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
                 {
@@ -1876,25 +1967,22 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
                                   node_ptr->hostname.c_str() );
                     }
                 }
-                recoveryStageChange ( node_ptr, MTC_RECOVERY__MTCALIVE_TIMER );
+                recoveryStageChange ( node_ptr, MTC_RECOVERY__SETUP );
             }
             break ;
         }
-        case MTC_RECOVERY__MTCALIVE_TIMER:
+        case MTC_RECOVERY__SETUP:
         {
-            int timeout = 0 ;
-
             /* Set the FSM task state to 'Graceful Recovery Wait' */
             node_ptr->uptime = 0 ;
             mtcInvApi_update_task ( node_ptr, MTC_TASK_RECOVERY_WAIT );
 
             start_offline_handler ( node_ptr );
 
-            timeout = node_ptr->mtcalive_timeout ;
-
             /* Only try and issue in-line recovery reboot or reset if
              * NOT in Dead Office Recovery (DOR) mode. */
-            if ( this->dor_mode_active )
+            if (( this->dor_mode_active == false ) &&
+                ( node_ptr->availStatus != MTC_AVAIL_STATUS__POWERED_OFF ))
             {
                 ilog ("%s issuing one time graceful recovery reboot over management network\n",
                           node_ptr->hostname.c_str());
@@ -1915,48 +2003,137 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
                               node_ptr->hostname.c_str());
                     send_mtc_cmd ( node_ptr->hostname, MTC_CMD_REBOOT, CLSTR_INTERFACE ) ;
                 }
-
-                if ( node_ptr->bmc_provisioned )
+                /* If the BMC is provisioned then lets query the power state */
+                if (( node_ptr->bmc_provisioned ) && ( node_ptr->bmc_accessible ))
                 {
-                    ilog ("%s posting one time board management graceful recovery reset",
-                              node_ptr->hostname.c_str());
-                    ilog ("%s ... node may be rebooting or running kdump",
-                              node_ptr->hostname.c_str());
-                    ilog ("%s ... give kdump time to complete ; reset in %d secs",
-                              node_ptr->hostname.c_str(), bmc_reset_delay );
-                    mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, bmc_reset_delay );
-                    recoveryStageChange ( node_ptr, MTC_RECOVERY__RESET_SEND_WAIT );
-                    break ;
+                    ilog ("%s power status query", node_ptr->hostname.c_str());
+                    recoveryStageChange ( node_ptr, MTC_RECOVERY__POWER_QUERY ) ;
                 }
                 else
                 {
-                    wlog ("%s cannot issue Reset\n", node_ptr->hostname.c_str() );
+                    wlog ("%s cannot issue Reset", node_ptr->hostname.c_str() );
                     wlog ("%s ... board management not provisioned or accessible\n", node_ptr->hostname.c_str() );
+                    recoveryStageChange ( node_ptr, MTC_RECOVERY__MTCALIVE_TIMER );
                 }
             }
             else
             {
-                /* Just allow Graceful Recovery to take its course. */
-                /* Load configured mtcAlive and goEnabled timers */
-                LOAD_NODETYPE_TIMERS ;
-
-                /* load the mtcAlive timeout to accomodate for dor recovery */
-                timeout = node_ptr->mtcalive_timeout ;
+                if ( node_ptr->bmc_provisioned && node_ptr->bmc_accessible )
+                {
+                    wlog ("%s power is off ; powering on", node_ptr->hostname.c_str());
+                    recoveryStageChange ( node_ptr , MTC_RECOVERY__POWER_ON );
+                }
+                else
+                {
+                    recoveryStageChange ( node_ptr, MTC_RECOVERY__MTCALIVE_TIMER );
+                }
             }
+            break ;
+        }
+        case MTC_RECOVERY__POWER_QUERY:
+        {
+            /* Query Host Power Status - no retries */
+            int rc = bmc_command_send ( node_ptr, BMC_THREAD_CMD__POWER_STATUS );
+            if ( rc != PASS )
+            {
+                wlog ("%s failed to send 'power status query' to provisioned and accessible BMC", node_ptr->hostname.c_str());
+                wlog ("%s ... forcing a BMC reconnect", node_ptr->hostname.c_str());
+                node_ptr->bmc_accessible = false ;
 
-            /* start the timer that waits for MTCALIVE */
-            mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, timeout );
-
-            plog ("%s %s (%d secs)%s(uptime was %d) \n",
-                      node_ptr->hostname.c_str(),
-                      MTC_TASK_RECOVERY_WAIT,
-                      timeout,
-                      this->dor_mode_active ? " (DOR) " : " " ,
-                      node_ptr->uptime_save );
-
-            clear_service_readies ( node_ptr );
-
-            recoveryStageChange ( node_ptr, MTC_RECOVERY__MTCALIVE_WAIT );
+                wlog ("%s ... assuming power is on ; gracefully waiting for mtcAlive", node_ptr->hostname.c_str());
+                recoveryStageChange ( node_ptr, MTC_RECOVERY__MTCALIVE_TIMER );
+            }
+            else
+            {
+                recoveryStageChange ( node_ptr , MTC_RECOVERY__POWER_QUERY_RECV );
+                mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_FIRST_WAIT );
+            }
+            break ;
+        }
+        case MTC_RECOVERY__POWER_QUERY_RECV:
+        {
+            if ( mtcTimer_expired ( node_ptr->mtcTimer ) )
+            {
+                int rc = bmc_command_recv ( node_ptr ) ;
+                if ( rc == RETRY )
+                {
+                    dlog ("%s power query receive retry in %d seconds", node_ptr->hostname.c_str(), MTC_RETRY_WAIT);
+                    mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_RETRY_WAIT );
+                }
+                else if ( rc )
+                {
+                    wlog ("%s power query failed ; rc:%d", node_ptr->hostname.c_str(), rc );
+                    recoveryStageChange ( node_ptr, MTC_RECOVERY__MTCALIVE_TIMER );
+                }
+                else if ( node_ptr->bmc_thread_info.data.empty() )
+                {
+                    wlog ("%s power query failed ; no response data", node_ptr->hostname.c_str());
+                    recoveryStageChange ( node_ptr, MTC_RECOVERY__MTCALIVE_TIMER );
+                }
+                else
+                {
+                    int rc = bmcUtil_is_power_on ( node_ptr->hostname,
+                                                   node_ptr->bmc_protocol,
+                                                   node_ptr->bmc_thread_info.data,
+                                                   node_ptr->power_on);
+                    if ( rc == PASS )
+                    {
+                        if ( node_ptr->power_on == true )
+                        {
+                            ilog ("%s power is on ; posting one time board management graceful recovery reset",
+                                      node_ptr->hostname.c_str());
+                            ilog ("%s ... node may be rebooting or running kdump",
+                                      node_ptr->hostname.c_str());
+                            ilog ("%s ... give kdump time to complete ; reset in %d secs",
+                                      node_ptr->hostname.c_str(), bmc_reset_delay );
+                            mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, bmc_reset_delay );
+                            recoveryStageChange ( node_ptr, MTC_RECOVERY__RESET_SEND_WAIT );
+                            node_ptr->mtcAlive_mgmnt = false ;
+                        }
+                        else
+                        {
+                            wlog ("%s power is off ; powering on", node_ptr->hostname.c_str());
+                            recoveryStageChange ( node_ptr , MTC_RECOVERY__POWER_ON );
+                        }
+                    }
+                    else
+                    {
+                        elog ("%s power query failed (rc:%d)", node_ptr->hostname.c_str(), rc );
+                        recoveryStageChange ( node_ptr, MTC_RECOVERY__MTCALIVE_TIMER );
+                    }
+                }
+            }
+            else
+            {
+                ; /* wait longer */
+            }
+            break ;
+        }
+        case MTC_RECOVERY__POWER_ON:
+        {
+            gettime (node_ptr->start_poweron_time);
+            node_ptr->power_action_retries = MTC_POWER_ACTION_RETRY_COUNT ;
+            powerStageChange ( node_ptr , MTC_POWERON__REQ_SEND );
+            recoveryStageChange ( node_ptr, MTC_RECOVERY__POWER_ON_RECV );
+            break ;
+        }
+        case MTC_RECOVERY__POWER_ON_RECV:
+        {
+            /* The power handler manages timeout */
+            if ( node_ptr->powerStage == MTC_POWER__DONE )
+            {
+                if ( node_ptr->power_on == false )
+                {
+                    elog ("%s power is off ; failed to power on host.", node_ptr->hostname.c_str());
+                }
+                recoveryStageChange ( node_ptr, MTC_RECOVERY__MTCALIVE_TIMER );
+            }
+            else
+            {
+                /* run the power handler till the host's power is on or
+                 * the power-on handler times out */
+                power_handler ( node_ptr );
+            }
             break ;
         }
         case MTC_RECOVERY__RESET_SEND_WAIT:
@@ -1985,6 +2162,15 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
                           node_ptr->hostname.c_str());
 
             }
+            /* Note: With the introduction of IPSec on management it is possible that
+             *       the reboot ACK messages are lost. For that reason, accept the
+             *       mtcAlive to cancel the one time reset */
+            else if ( node_ptr->mtcAlive_mgmnt == true )
+            {
+                reset_aborted = true ;
+                ilog ("%s backup bmc reset aborted due to mgmt network mtcAlive RX",
+                          node_ptr->hostname.c_str());
+            }
             else if ( mtcTimer_expired ( node_ptr->mtcTimer ))
             {
                 if ( node_ptr->bmc_accessible )
@@ -2012,19 +2198,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
             }
             if ( reset_aborted )
             {
-                int timeout = node_ptr->mtcalive_timeout ;
-                /* start the timer that waits for MTCALIVE */
-                mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, timeout );
-
-                plog ("%s %s (%d secs)%s(uptime was %d) \n",
-                          node_ptr->hostname.c_str(),
-                          MTC_TASK_RECOVERY_WAIT,
-                          timeout,
-                          this->dor_mode_active ? " (DOR mode) " : " " ,
-                          node_ptr->uptime_save );
-
-                clear_service_readies ( node_ptr );
-                recoveryStageChange ( node_ptr, MTC_RECOVERY__MTCALIVE_WAIT );
+                recoveryStageChange ( node_ptr, MTC_RECOVERY__MTCALIVE_TIMER );
             }
             break ;
         }
@@ -2049,19 +2223,25 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
                     ilog ("%s is Resetting\n", node_ptr->hostname.c_str());
                 }
 
-                /* start the timer that waits for MTCALIVE */
-                mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, node_ptr->mtcalive_timeout );
-
-                plog ("%s %s (%d secs) (uptime was %d)\n",
-                          node_ptr->hostname.c_str(),
-                          MTC_TASK_RECOVERY_WAIT,
-                          node_ptr->mtcalive_timeout,
-                          node_ptr->uptime_save );
-
-                clear_service_readies ( node_ptr );
-
-                recoveryStageChange ( node_ptr, MTC_RECOVERY__MTCALIVE_WAIT );
+                recoveryStageChange ( node_ptr, MTC_RECOVERY__MTCALIVE_TIMER );
             }
+            break ;
+        }
+        case MTC_RECOVERY__MTCALIVE_TIMER:
+        {
+            /* start the timer that waits for MTCALIVE */
+            mtcTimer_reset ( node_ptr->mtcTimer );
+            mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, node_ptr->mtcalive_timeout );
+
+            plog ("%s %s (%d secs) (uptime was %d)\n",
+                      node_ptr->hostname.c_str(),
+                      MTC_TASK_RECOVERY_WAIT,
+                      node_ptr->mtcalive_timeout,
+                      node_ptr->uptime_save );
+
+            clear_service_readies ( node_ptr );
+
+            recoveryStageChange ( node_ptr, MTC_RECOVERY__MTCALIVE_WAIT );
             break ;
         }
         case MTC_RECOVERY__MTCALIVE_WAIT:
@@ -2148,7 +2328,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
             else if (( node_ptr->availStatus == MTC_AVAIL_STATUS__POWERED_OFF ) &&
                      ( node_ptr->adminState == MTC_ADMIN_STATE__UNLOCKED ) &&
                      ( node_ptr->bmc_provisioned == true ) &&
-                     ( node_ptr->bmc_accessible == true ) &&
+                     ( node_ptr->power_status_query_done == true ) &&
                      ( node_ptr->hwmon_powercycle.state == RECOVERY_STATE__INIT ) &&
                      ( thread_idle ( node_ptr->bmc_thread_ctrl )) &&
                      ( node_ptr->bmc_thread_info.command != BMC_THREAD_CMD__POWER_ON ))
@@ -2170,6 +2350,7 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
             {
                 if ( bmc_command_recv ( node_ptr ) == PASS )
                 {
+                    node_ptr->power_on = true ;
                     ilog ("%s powered on\n",  node_ptr->hostname.c_str());
                     availStatusChange ( node_ptr, MTC_AVAIL_STATUS__OFFLINE );
                 }
@@ -2829,6 +3010,7 @@ int nodeLinkClass::disable_handler  ( struct nodeLinkClass::node * node_ptr )
                 else
                 {
                     ilog ("%s is Powering On\n", node_ptr->hostname.c_str());
+                    node_ptr->power_on = true ;
                 }
                 disableStageChange ( node_ptr, MTC_DISABLE__HANDLE_FORCE_LOCK) ;
             }
@@ -4314,6 +4496,7 @@ int nodeLinkClass::reinstall_handler ( struct nodeLinkClass::node * node_ptr )
 
         case MTC_REINSTALL__POWEROFF:
         {
+            gettime (node_ptr->start_poweroff_time);
             node_ptr->power_action_retries = MTC_POWER_ACTION_RETRY_COUNT ;
             mtcTimer_reset ( node_ptr->mtcTimer ) ;
             powerStageChange ( node_ptr, MTC_POWEROFF__REQ_SEND );
@@ -4442,6 +4625,7 @@ int nodeLinkClass::reinstall_handler ( struct nodeLinkClass::node * node_ptr )
             if ( ! mtcTimer_expired ( node_ptr->mtcTimer ))
                 break ;
 
+            gettime (node_ptr->start_poweron_time);
             node_ptr->power_action_retries = MTC_POWER_ACTION_RETRY_COUNT ;
             powerStageChange ( node_ptr , MTC_POWERON__REQ_SEND );
             reinstallStageChange ( node_ptr , MTC_REINSTALL__POWERON_WAIT );
@@ -4627,6 +4811,12 @@ int nodeLinkClass::reinstall_handler ( struct nodeLinkClass::node * node_ptr )
             recovery_ctrl_init ( node_ptr->hwmon_powercycle );
 
             mtcInvApi_force_task ( node_ptr, "" );
+
+            kpi_log ( node_ptr->hostname, KPI_AREA__ACTION,
+                                          KPI_ACTION__REINSTALL,
+                                          KPI_STR__START,
+                                          KPI_STR__COMPLETE,
+                                          node_ptr->start_reinstall_time);
             break ;
         }
     }
@@ -4818,6 +5008,7 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
         }
         case MTC_POWEROFF__START:
         {
+            gettime (node_ptr->start_poweroff_time);
             plog ("%s Administrative 'Power-Off' Action\n", node_ptr->hostname.c_str());
             mtcInvApi_force_task ( node_ptr, "Power-Off Requested" );
 
@@ -5012,6 +5203,12 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
                         {
                             ilog ("%s Power-Off Verified",
                                       node_ptr->hostname.c_str());
+                            node_ptr->power_on = false ;
+                            kpi_log ( node_ptr->hostname, KPI_AREA__ACTION,
+                                                          KPI_ACTION__POWEROFF,
+                                                          KPI_STR__START,
+                                                          KPI_STR__COMPLETE,
+                                                          node_ptr->start_poweroff_time);
                             powerStageChange ( node_ptr , MTC_POWEROFF__DONE );
                             mtcTimer_reset ( node_ptr->mtcTimer );
                             break ;
@@ -5068,7 +5265,6 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
                 availStatusChange ( node_ptr, MTC_AVAIL_STATUS__POWERED_OFF );
 
                 powerStageChange ( node_ptr , MTC_POWER__DONE );
-                node_ptr->power_on = false ;
             }
             break ;
         }
@@ -5097,6 +5293,7 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
         }
         case MTC_POWERON__START:
         {
+            gettime ( node_ptr->start_poweron_time );
             plog ("%s Administrative 'Power-On' Action (%d:%d:%lu:%lu:%d:idle:%s)",
                       node_ptr->hostname.c_str(),
                       node_ptr->bmc_thread_ctrl.done,
@@ -5265,6 +5462,13 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
                 else
                 {
                     ilog ("%s is Powering On\n", node_ptr->hostname.c_str() );
+                    node_ptr->power_on = true ;
+                    node_ptr->power_on_time_secs = time(NULL);
+                    kpi_log ( node_ptr->hostname, KPI_AREA__ACTION,
+                                                  KPI_ACTION__POWERON,
+                                                  KPI_STR__START,
+                                                  KPI_STR__COMPLETE,
+                                                  node_ptr->start_poweron_time);
                     if ( node_ptr->adminAction != MTC_ADMIN_ACTION__REINSTALL )
                     {
                         mtcInvApi_update_task ( node_ptr, "Powering On" );
@@ -5313,7 +5517,20 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
                 availStatusChange ( node_ptr, MTC_AVAIL_STATUS__OFFLINE );
 
                 powerStageChange ( node_ptr , MTC_POWER__DONE );
-                node_ptr->power_on = true ;
+
+                /* If we are powering on a node then there is no need for any further reset progression */
+                if ( node_ptr->mtcCmd_work_fifo.size() )
+                {
+                    node_ptr->mtcCmd_work_fifo_ptr = node_ptr->mtcCmd_work_fifo.begin ();
+                    if (( node_ptr->mtcCmd_work_fifo_ptr->stage >= MTC_CMD_STAGE__RESET_PROGRESSION_START ) &&
+                        ( node_ptr->mtcCmd_work_fifo_ptr->stage <= MTC_CMD_STAGE__RESET_PROGRESSION_RETRY ))
+                    {
+                        ilog ("%s posting cancel request of in-progress reset progression (stage:%d)",
+                                node_ptr->hostname.c_str(),
+                                node_ptr->mtcCmd_work_fifo_ptr->stage);
+                        node_ptr->bm_cancel_reset_progression  = true ;
+                    }
+                }
             }
             break ;
         }
@@ -6285,6 +6502,25 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
                               node_ptr->hostname.c_str(), node_ptr->uptime );
                     break ;
                 }
+
+/*********************************************************************************
+ * Note: This code is intentionally left here but predefined out.
+ *
+ * Restoring the Graceful Recovery state during a DOR event is problematic.
+ * During a power outage, different nodes shut down at different times.
+ * The mtcAgent may detect the first few and place them into Graceful Recovery.
+ * Nodes that went into Graceful Recovery at the start of the DOR event
+ * are handled differently from those that do not.
+ *
+ * The inconsistency this causes outweighs the minimal benefit it provides.
+ * This is legacy code that, given the many enhancements made to the
+ * recovery_handler over the years, now serves little to no purpose.
+ *
+ * If a node remains unreachable during a DOR or swact, it will be placed
+ * back into Graceful Recovery by the newly active controller regardless.
+ *
+ ********************************************************************************/
+#ifdef WANT_GRACEFUL_RECOVERY_RESTORE
                 /* Handle catching and recovering/restoring hosts that might
                  * have been in the Graceful Recovery Wait state.
                  *
@@ -6319,6 +6555,7 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
                     recoveryStageChange ( node_ptr, MTC_RECOVERY__MTCALIVE_WAIT );
                     break ;
                 }
+#endif // WANT_GRACEFUL_RECOVERY_RESTORE
                 else
                 {
                     if ( is_controller(node_ptr) )
@@ -6382,15 +6619,6 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
             /* Stop the work queue wait timer */
             mtcTimer_reset ( node_ptr->mtcTimer );
 
-
-            /* Only run hardware monitor if the bm ip is provisioned */
-            if (( hostUtil_is_valid_bm_type  ( node_ptr->bm_type )) &&
-                ( hostUtil_is_valid_ip_addr  ( node_ptr->bm_ip )) &&
-                ( hostUtil_is_valid_username ( node_ptr->bm_un )))
-            {
-                set_bm_prov ( node_ptr, true ) ;
-            }
-
             this->ctl_mtcAlive_gate(node_ptr, false) ;
             if (( NOT_THIS_HOST ) &&
                 ((( AIO_SYSTEM ) && ( is_controller(node_ptr) == false )) || ( LARGE_SYSTEM )) &&
@@ -6398,10 +6626,23 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
                 ( node_ptr->adminState == MTC_ADMIN_STATE__UNLOCKED ) &&
                 ( node_ptr->operState  == MTC_OPER_STATE__ENABLED ))
             {
-                mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_MINS_5 );
                 if ( ! node_ptr->hbsClient_ready )
                 {
-                    ilog ("%s waiting for hbsClient ready event (%d secs)", node_ptr->hostname.c_str(), MTC_MINS_5);
+                    int max_wait_before_timeout = 0 ;
+                    if ( this->dor_mode_active == true )
+                    {
+                        max_wait_before_timeout = MTC_MINS_5 ;
+                    }
+                    else
+                    {
+                        /* If this is not a DOR condition the wait is still needed
+                         * to allow IPSec to be stabalize and BMC provisioning to complete.
+                         * However, that wait can be much smaller */
+                        max_wait_before_timeout = MTC_SECS_30 ;
+                    }
+                    mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, max_wait_before_timeout );
+                    ilog ("%s waiting for hbsClient ready event (%d secs) %s",
+                              node_ptr->hostname.c_str(), max_wait_before_timeout, this->dor_mode_active ? "(DOR mode)" : "");
                 }
                 node_ptr->addStage = MTC_ADD__HEARTBEAT_WAIT ;
             }
@@ -6418,6 +6659,18 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
             {
                 wlog ("%s hbsClient ready event timeout\n", node_ptr->hostname.c_str());
             }
+            else if (( node_ptr->bmc_provisioned == true ) &&
+                     ( node_ptr->power_status_query_done == true ) &&
+                     ( node_ptr->power_on == false ))
+            {
+                elog ("%s is disabled due to being unlocked-enabled with power-off", node_ptr->hostname.c_str());
+                allStateChange ( node_ptr, node_ptr->adminState, MTC_OPER_STATE__DISABLED, MTC_AVAIL_STATUS__POWERED_OFF );
+                recoveryStageChange ( node_ptr, MTC_RECOVERY__START );
+                adminActionChange ( node_ptr, MTC_ADMIN_ACTION__RECOVER );
+                node_ptr->addStage = MTC_ADD__DONE ;
+                mtcTimer_reset (node_ptr->mtcTimer );
+                break ;
+            }
             else if ( node_ptr->hbsClient_ready == false )
             {
                 break ;
@@ -6425,6 +6678,15 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
             else
             {
                 mtcTimer_reset ( node_ptr->mtcTimer );
+
+                /* If we got a hbsClient ready event then we know the power is on so set it that way */
+                ilog ("%s power is on ; inferred by hbsClient ready event (uptime:%d)", node_ptr->hostname.c_str(), node_ptr->uptime );
+                if (( node_ptr->uptime < MTC_MINS_15 ) && ( this->dor_mode_active == false ))
+                {
+                    /* don't print this log while in DOR mode */
+                    wlog ("%s ... appears to have reset ; allowing recovery", node_ptr->hostname.c_str());
+                }
+                node_ptr->power_on = true ;
             }
             plog ("%s Starting %d sec Heartbeat Soak (with%s)\n",
                         node_ptr->hostname.c_str(),
@@ -6452,6 +6714,9 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
                 wlog ("%s heartbeat soak failed %s",
                           node_ptr->hostname.c_str(),
                           this->dor_mode_active ? "(DOR mode)" : "");
+
+                recoveryStageChange ( node_ptr, MTC_RECOVERY__START );
+                adminActionChange ( node_ptr, MTC_ADMIN_ACTION__RECOVER );
 
                 node_ptr->addStage = MTC_ADD__DONE ;
                 // fall through to DONE
@@ -6509,9 +6774,15 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
                 if ( node_ptr->adminState == MTC_ADMIN_STATE__UNLOCKED )
                 {
                     string state_str = "" ;
+                    string extra_str = "" ;
                     if ( node_ptr->add_heartbeat_soak_failed == true )
                     {
                        ; /* Force default to waiting if add handler heartbeat soak failed */
+                    }
+                    else if ( node_ptr->operState == MTC_OPER_STATE__DISABLED )
+                    {
+                        state_str = "is DISABLED" ;
+                        extra_str = availStatus_enum_to_str(node_ptr->availStatus) ;
                     }
                     else if ( node_ptr->operState  == MTC_OPER_STATE__ENABLED )
                     {
@@ -6527,10 +6798,14 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
                     {
                         state_str = "is OFFLINE" ;
                     }
+                    else if ( node_ptr->availStatus == MTC_AVAIL_STATUS__POWERED_OFF )
+                    {
+                        state_str = "is POWEROFF" ;
+                    }
 
                     if ( ! state_str.empty() )
                     {
-                        report_dor_recovery ( node_ptr , state_str, "" ) ;
+                        report_dor_recovery ( node_ptr , state_str, extra_str ) ;
                     }
                     else
                     {
@@ -6825,6 +7100,24 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
                     }
                     else
                     {
+                        node_ptr->power_on = node_ptr->bmc_info.power_on ;
+                        if (( node_ptr->adminAction == MTC_ADMIN_ACTION__ADD ) && ( this->dor_mode_active ))
+                        {
+                            kpi_log ( node_ptr->hostname, KPI_AREA__BMC,
+                                                          KPI_AREA__REDFISH,
+                                                          KPI_STR__PROCESS_STARTUP,
+                                                          KPI_STR__POWER_STATE_LEARNED,
+                                                          this->start_process_time);
+                        }
+                        else
+                        {
+                            kpi_log ( node_ptr->hostname, KPI_AREA__BMC,
+                                                          KPI_AREA__REDFISH,
+                                                          KPI_STR__PROVISIONING,
+                                                          KPI_STR__POWER_STATE_LEARNED,
+                                                          node_ptr->start_bmc_prov_time);
+                        }
+                        node_ptr->power_status_query_done = true ;
                         node_ptr->bmc_info_query_done = true ;
                         node_ptr->bmc_info_query_active = false ;
                     }
@@ -7015,6 +7308,12 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
                 plog ("%s bmc is accessible using redfish",
                           node_ptr->hostname.c_str());
 
+                kpi_log ( node_ptr->hostname, KPI_AREA__BMC,
+                                              KPI_AREA__REDFISH,
+                                              KPI_STR__PROVISIONING,
+                                              KPI_STR__ACCESSIBLE,
+                                              node_ptr->start_bmc_prov_time );
+
                 node_ptr->bmc_thread_ctrl.done = true  ;
                 node_ptr->bmc_thread_info.command = 0  ;
 
@@ -7053,58 +7352,142 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
                   ( mtcTimer_expired (node_ptr->bm_timer ) == true ))
         {
             int rc = PASS ;
-            if (( node_ptr->bmc_info_query_active == false ) &&
-                ( node_ptr->bmc_info_query_done   == false ))
+            /* Start with querying server 'Power Status' */
+            if ( node_ptr->power_status_query_done == false )
             {
-                if ( bmc_command_send ( node_ptr, BMC_THREAD_CMD__BMC_INFO ) != PASS )
+                if ( node_ptr->power_status_query_active == false )
                 {
-                    elog ("%s %s send failed\n",
-                              node_ptr->hostname.c_str(),
-                              bmcUtil_getCmd_str(
-                              node_ptr->bmc_thread_info.command).c_str());
-                    mtcTimer_start ( node_ptr->bm_timer, mtcTimer_handler, MTC_POWER_ACTION_RETRY_DELAY );
+                    if ( bmc_command_send ( node_ptr, BMC_THREAD_CMD__POWER_STATUS ) != PASS )
+                    {
+                        wlog ("%s %s command send failed",
+                                  node_ptr->hostname.c_str(),
+                                  bmcUtil_getCmd_str(
+                                  node_ptr->bmc_thread_info.command).c_str());
+                        mtcTimer_start ( node_ptr->bm_timer, mtcTimer_handler, MTC_POWER_ACTION_RETRY_DELAY );
+                    }
+                    else
+                    {
+                        dlog ("%s %s", node_ptr->hostname.c_str(),
+                                       bmcUtil_getCmd_str(
+                                       node_ptr->bmc_thread_info.command).c_str());
+                        mtcTimer_start ( node_ptr->bm_timer, mtcTimer_handler, MTC_FIRST_WAIT );
+                        node_ptr->power_status_query_active = true ;
+                    }
                 }
-                else
+                else if ( mtcTimer_expired (node_ptr->bm_timer) )
                 {
-                    blog ("%s %s\n", node_ptr->hostname.c_str(),
-                              bmcUtil_getCmd_str(node_ptr->bmc_thread_info.command).c_str());
-                    mtcTimer_start ( node_ptr->bm_timer, mtcTimer_handler, MTC_FIRST_WAIT );
-                    node_ptr->bmc_info_query_active = true ;
+                    if (( rc = bmc_command_recv ( node_ptr )) == RETRY )
+                    {
+                        ilog ("%s ipmi '%s' receive retry", node_ptr->hostname.c_str(),
+                                  bmcUtil_getCmd_str(node_ptr->bmc_thread_info.command).c_str());
+                        mtcTimer_start ( node_ptr->bm_timer, mtcTimer_handler, MTC_FIRST_WAIT );
+                    }
+                    else if ( rc )
+                    {
+                        /* Update stage controls - failure path - will retry in MTC_BMC_REQUEST_DELAY secs */
+                        node_ptr->power_status_query_active = false ;
+                        node_ptr->bmc_thread_ctrl.done = true ;
+                        mtcTimer_start ( node_ptr->bm_timer, mtcTimer_handler, MTC_BMC_REQUEST_DELAY );
+                    }
+                    else
+                    {
+                        /* Update stage controls - success path */
+                        node_ptr->power_status_query_active = false ;
+                        node_ptr->power_status_query_done   = true  ;
+                        node_ptr->bmc_thread_ctrl.done = true  ;
+                        node_ptr->bmc_thread_info.command = 0  ;
+
+                        blog ("%s %s", node_ptr->hostname.c_str(), node_ptr->bmc_thread_info.data.c_str());
+
+                        /* set host power state ; on or off */
+                        if ( node_ptr->bmc_thread_info.data.find (IPMITOOL_POWER_ON_STATUS) != std::string::npos )
+                            node_ptr->power_on = true ;
+                        else
+                            node_ptr->power_on = false ;
+
+                        if (( node_ptr->adminAction == MTC_ADMIN_ACTION__ADD ) && ( this->dor_mode_active ))
+                        {
+                            kpi_log ( node_ptr->hostname, KPI_AREA__BMC,
+                                                          KPI_AREA__IPMI,
+                                                          KPI_STR__PROCESS_STARTUP,
+                                                          KPI_STR__POWER_STATE_LEARNED,
+                                                          this->start_process_time);
+                        }
+                        else
+                        {
+                            kpi_log ( node_ptr->hostname, KPI_AREA__BMC,
+                                                          KPI_AREA__IPMI,
+                                                          KPI_STR__PROVISIONING,
+                                                          KPI_STR__POWER_STATE_LEARNED,
+                                                          node_ptr->start_bmc_prov_time);
+                        }
+                        ilog ("%s power is %s", node_ptr->hostname.c_str(), node_ptr->power_on ? "on" : "off" );
+
+                        if ( node_ptr->power_on == false )
+                        {
+                            availStatusChange ( node_ptr, MTC_AVAIL_STATUS__POWERED_OFF );
+
+                            if ( node_ptr->adminState == MTC_ADMIN_STATE__UNLOCKED )
+                            {
+                                wlog ("%s is powered off while in the unlocked state", node_ptr->hostname.c_str());
+                            }
+                        }
+                    }
+                } /* else wait longer */
+            } /* end power query operation */
+            else if ( node_ptr->bmc_info_query_done == false )
+            {
+                if ( node_ptr->bmc_info_query_active == false )
+                {
+                    if ( bmc_command_send ( node_ptr, BMC_THREAD_CMD__BMC_INFO ) != PASS )
+                    {
+                        wlog ("%s %s command send failed",
+                                  node_ptr->hostname.c_str(),
+                                  bmcUtil_getCmd_str( node_ptr->bmc_thread_info.command).c_str());
+                        mtcTimer_start ( node_ptr->bm_timer, mtcTimer_handler, MTC_POWER_ACTION_RETRY_DELAY );
+                    }
+                    else
+                    {
+                        blog ("%s %s\n", node_ptr->hostname.c_str(),
+                                bmcUtil_getCmd_str(node_ptr->bmc_thread_info.command).c_str());
+                        mtcTimer_start ( node_ptr->bm_timer, mtcTimer_handler, MTC_FIRST_WAIT );
+                        node_ptr->bmc_info_query_active = true ;
+                    }
+                }
+                else if ( mtcTimer_expired (node_ptr->bm_timer) )
+                {
+                    if (( rc = bmc_command_recv ( node_ptr )) == RETRY )
+                    {
+                        ilog ("%s ipmi '%s' receive retry",
+                                  node_ptr->hostname.c_str(),
+                                  bmcUtil_getCmd_str(node_ptr->bmc_thread_info.command).c_str());
+                        mtcTimer_start ( node_ptr->bm_timer, mtcTimer_handler, MTC_RETRY_WAIT );
+                    }
+                    else if ( rc != PASS )
+                    {
+                        /* Update stage controls - failure path - will retry in MTC_BMC_REQUEST_DELAY secs */
+                        node_ptr->bmc_info_query_active = false ;
+                        node_ptr->bmc_thread_ctrl.done = true ;
+                        mtcTimer_start ( node_ptr->bm_timer, mtcTimer_handler, MTC_BMC_REQUEST_DELAY );
+                    }
+                    else
+                    {
+                        node_ptr->bmc_info_query_active = false ;
+                        node_ptr->bmc_info_query_done = true ;
+                        node_ptr->bmc_thread_ctrl.done = true ;
+                        ipmiUtil_bmc_info_load ( node_ptr->hostname,
+                                                node_ptr->bmc_thread_info.data.data(),
+                                                node_ptr->bmc_info );
+                    }
                 }
             }
-            else if (( node_ptr->bmc_info_query_active == true ) &&
-                     ( node_ptr->bmc_info_query_done   == false))
+            else if ( node_ptr->reset_cause_query_done == false)
             {
-                if ( ( rc = bmc_command_recv ( node_ptr ) ) == RETRY )
-                {
-                    mtcTimer_start ( node_ptr->bm_timer, mtcTimer_handler, MTC_RETRY_WAIT );
-                }
-                else if ( rc != PASS )
-                {
-                    /* this error is reported by the bmc receive driver */
-                    node_ptr->bmc_info_query_active = false ;
-                    node_ptr->bmc_thread_ctrl.done = true ;
-                    mtcTimer_start ( node_ptr->bm_timer, mtcTimer_handler, MTC_BMC_REQUEST_DELAY );
-                }
-                else
-                {
-                    node_ptr->bmc_info_query_active = false ;
-                    node_ptr->bmc_info_query_done = true ;
-                    node_ptr->bmc_thread_ctrl.done = true ;
-                    ipmiUtil_bmc_info_load ( node_ptr->hostname,
-                                             node_ptr->bmc_thread_info.data.data(),
-                                             node_ptr->bmc_info );
-                }
-            }
-            else if (( node_ptr->bmc_info_query_active == false ) &&
-                     ( node_ptr->bmc_info_query_done   == true  ))
-            {
-                if (( node_ptr->reset_cause_query_active == false ) &&
-                    ( node_ptr->reset_cause_query_done   == false ))
+                if ( node_ptr->reset_cause_query_active == false )
                 {
                     if ( bmc_command_send ( node_ptr, BMC_THREAD_CMD__RESTART_CAUSE ) != PASS )
                     {
-                        elog ("%s %s send failed\n",
+                        wlog ("%s %s send failed\n",
                                   node_ptr->hostname.c_str(),
                                   bmcUtil_getCmd_str(
                                   node_ptr->bmc_thread_info.command).c_str());
@@ -7119,113 +7502,54 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
                         node_ptr->reset_cause_query_active = true ;
                     }
                 }
-                else if (( node_ptr->reset_cause_query_active == true ) &&
-                         ( node_ptr->reset_cause_query_done   == false ))
+                else if ( mtcTimer_expired (node_ptr->bm_timer) )
                 {
                     if ( ( rc = bmc_command_recv ( node_ptr ) ) == RETRY )
                     {
+                        ilog ("%s ipmi bmc 'restart cause query' receive retry", node_ptr->hostname.c_str());
                         mtcTimer_start ( node_ptr->bm_timer, mtcTimer_handler, MTC_RETRY_WAIT );
                     }
                     else if ( rc != PASS )
                     {
+                        /* Update stage controls - failure path - will retry in MTC_BMC_REQUEST_DELAY secs */
+                        node_ptr->reset_cause_query_active = false ;
+                        node_ptr->bmc_thread_ctrl.done = true ;
+
                         elog ("%s %s command failed\n",
                                   node_ptr->hostname.c_str(),
                                   bmcUtil_getCmd_str(
                                   node_ptr->bmc_thread_info.command).c_str());
-                        node_ptr->reset_cause_query_active = false ;
                         mtcTimer_start ( node_ptr->bm_timer, mtcTimer_handler, MTC_BMC_REQUEST_DELAY );
-                        node_ptr->bmc_thread_ctrl.done = true ;
                     }
                     else
                     {
-                        mtcTimer_reset ( node_ptr->bm_timer );
                         node_ptr->reset_cause_query_active = false ;
                         node_ptr->reset_cause_query_done   = true ;
                         node_ptr->bmc_thread_ctrl.done = true ;
+                        node_ptr->bmc_thread_info.command = 0  ;
                         ilog ("%s %s\n", node_ptr->hostname.c_str(),
                                          node_ptr->bmc_thread_info.data.c_str());
+
+                        /* IPMI queries are done and successful */
+                        mtcTimer_reset ( node_ptr->bmc_access_timer );
+                        node_ptr->bmc_accessible = true ;
+                        plog ("%s bmc is accessible using ipmi", node_ptr->hostname.c_str());
+                        kpi_log ( node_ptr->hostname, KPI_AREA__BMC,
+                                                      KPI_AREA__IPMI,
+                                                      KPI_STR__PROVISIONING,
+                                                      KPI_STR__ACCESSIBLE,
+                                                      node_ptr->start_bmc_prov_time );
                     }
+
+                    /* push the BMC access info out to the mtcClient when
+                        * a controller's BMC connection is established/verified */
+                    if ( node_ptr->nodetype & CONTROLLER_TYPE )
+                        this->want_mtcInfo_push = true ;
+
+                    send_hwmon_command ( node_ptr->hostname, MTC_CMD_ADD_HOST );
+                    send_hwmon_command ( node_ptr->hostname, MTC_CMD_START_HOST );
+
                 }
-                else if (( node_ptr->bmc_info_query_done     == true ) &&
-                         ( node_ptr->reset_cause_query_done  == true ) &&
-                         ( node_ptr->power_status_query_done == false ))
-                {
-                    if ( node_ptr->power_status_query_active == false )
-                    {
-                        if ( bmc_command_send ( node_ptr, BMC_THREAD_CMD__POWER_STATUS ) != PASS )
-                        {
-                            elog ("%s %s send failed\n",
-                                      node_ptr->hostname.c_str(),
-                                      bmcUtil_getCmd_str(
-                                      node_ptr->bmc_thread_info.command).c_str());
-                            mtcTimer_start ( node_ptr->bm_timer, mtcTimer_handler, MTC_POWER_ACTION_RETRY_DELAY );
-                        }
-                        else
-                        {
-                            dlog ("%s %s\n",
-                                      node_ptr->hostname.c_str(),
-                                      bmcUtil_getCmd_str(
-                                      node_ptr->bmc_thread_info.command).c_str());
-                            mtcTimer_start ( node_ptr->bm_timer, mtcTimer_handler, MTC_FIRST_WAIT );
-                            node_ptr->power_status_query_active = true ;
-                        }
-                    }
-                    else if ( node_ptr->power_status_query_done == false )
-                    {
-                        if ( ( rc = bmc_command_recv ( node_ptr ) ) == RETRY )
-                        {
-                            mtcTimer_start ( node_ptr->bm_timer, mtcTimer_handler, MTC_RETRY_WAIT );
-                        }
-                        else if ( rc )
-                        {
-                            node_ptr->power_status_query_active = false ;
-                            node_ptr->bmc_thread_ctrl.done = true ;
-                            mtcTimer_start ( node_ptr->bm_timer, mtcTimer_handler, MTC_BMC_REQUEST_DELAY );
-                        }
-                        else
-                        {
-                            mtcTimer_reset ( node_ptr->bm_timer );
-                            mtcTimer_reset ( node_ptr->bmc_access_timer );
-                            node_ptr->power_status_query_active = false ;
-                            node_ptr->power_status_query_done   = true  ;
-                            node_ptr->bmc_thread_ctrl.done = true  ;
-                            node_ptr->bmc_thread_info.command = 0  ;
-                            node_ptr->bmc_accessible = true ;
-                            node_ptr->bm_ping_info.ok = true;
-
-                            ilog ("%s %s\n", node_ptr->hostname.c_str(),
-                                             node_ptr->bmc_thread_info.data.c_str());
-                            plog ("%s bmc is accessible using ipmi\n", node_ptr->hostname.c_str());
-
-                            /* set host power state ; on or off */
-                            if ( node_ptr->bmc_thread_info.data.find (IPMITOOL_POWER_ON_STATUS) != std::string::npos )
-                                node_ptr->power_on = true ;
-                            else
-                                node_ptr->power_on = false ;
-                            if ( node_ptr->bmc_thread_info.data.find (IPMITOOL_POWER_OFF_STATUS) != std::string::npos )
-                            {
-                                if ( node_ptr->adminState == MTC_ADMIN_STATE__LOCKED )
-                                {
-                                    availStatusChange ( node_ptr, MTC_AVAIL_STATUS__POWERED_OFF );
-                                }
-                                else
-                                {
-                                    wlog ("%s is powered off while in the unlocked state\n", node_ptr->hostname.c_str());
-                                    availStatusChange ( node_ptr, MTC_AVAIL_STATUS__POWERED_OFF );
-                                }
-                            } /* end power off detection handling     */
-
-                            /* push the BMC access info out to the mtcClient when
-                             * a controller's BMC connection is established/verified */
-                            if ( node_ptr->nodetype & CONTROLLER_TYPE )
-                                this->want_mtcInfo_push = true ;
-
-                            send_hwmon_command ( node_ptr->hostname, MTC_CMD_ADD_HOST );
-                            send_hwmon_command ( node_ptr->hostname, MTC_CMD_START_HOST );
-
-                        } /* end query handling success path               */
-                    } /* end power status query handling                   */
-                } /* end query info stages handling                        */
             } /* end handling ipmi query, info, restart cause, power state */
         } /* end main condition handling                                   */
 
@@ -7295,11 +7619,16 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
                             power_on = false ;
                         else
                         {
-                            wlog ("%s bmc audit failed to get power state",
+                            wlog ("%s bmc audit failed to get power state ; assuming power is on",
                                       node_ptr->hostname.c_str());
                             pingUtil_restart ( node_ptr->bm_ping_info );
+
+                            /* Don't allow a failure to read from the BMC lead
+                             * to the assumption the power is off */
+                            node_ptr->power_on = true ;
                             rc = FAIL_JSON_PARSE ;
                         }
+                        node_ptr->power_status_query_done = true ;
                         if ( rc == PASS )
                         {
                             if ( power_on != node_ptr->power_on )
@@ -7309,6 +7638,13 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
                                           power_state.c_str());
                             }
                             node_ptr->power_on = power_on ;
+                            ilog ("%s power is %s", node_ptr->hostname.c_str(), node_ptr->power_on ? "on" : "off");
+
+                            /* save the power on state and if power is off update inventory */
+                            node_ptr->power_on = node_ptr->bmc_info.power_on ;
+                            if ( node_ptr->power_on == false )
+                                availStatusChange ( node_ptr, MTC_AVAIL_STATUS__POWERED_OFF );
+
                             mtcTimer_start ( node_ptr->bmc_audit_timer,
                                              mtcTimer_handler,
                                              daemon_get_cfg_ptr()->bmc_audit_period );
@@ -7325,6 +7661,25 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
                                   node_ptr->hostname.c_str());
                     }
                 }
+            }
+        }
+
+        /* Monitor for host power off state and update database if power
+         * is found to be off got a BMC provisioned unlocked enabled host */
+        if (( node_ptr->bmc_provisioned == true ) &&
+            ( node_ptr->bmc_accessible == true ) &&
+            ( node_ptr->adminState == MTC_ADMIN_STATE__UNLOCKED ) &&
+            ( node_ptr->power_on == false ) &&
+            ( node_ptr->adminAction != MTC_ADMIN_ACTION__POWERON ))
+        {
+            if ( node_ptr->power_on_needed == false )
+            {
+                node_ptr->power_on_needed = true;
+
+                /* update inventory */
+                allStateChange ( node_ptr, node_ptr->adminState,
+                                 MTC_OPER_STATE__DISABLED,
+                                 MTC_AVAIL_STATUS__POWERED_OFF );
             }
         }
 
@@ -7799,6 +8154,45 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
             {
                 /* Remind the heartbeat service that this is the active ctrl */
                 send_hbs_command ( this->my_hostname, MTC_CMD_ACTIVE_CTRL );
+            }
+            else if (( node_ptr->ar_disabled == false ) &&
+                     ( node_ptr->power_on_needed == true ) &&
+                     ( node_ptr->bmc_provisioned == true ) &&
+                     ( node_ptr->bmc_accessible == true ))
+            {
+                if ( node_ptr->adminAction != MTC_ADMIN_ACTION__POWERON )
+                {
+                    node_ptr->power_on_in_progress = false ;
+                    node_ptr->power_on_needed = false ;
+                }
+                /* First case - not in progress -> set in progress */
+                else if ( node_ptr->power_on_in_progress == false )
+                {
+                    gettime (node_ptr->start_poweron_time);
+                    node_ptr->power_action_retries = MTC_POWER_ACTION_RETRY_COUNT ;
+                    powerStageChange ( node_ptr , MTC_POWERON__REQ_SEND );
+                    node_ptr->power_on_in_progress = true ;
+                }
+                /* Poll for done */
+                else if ( node_ptr->powerStage == MTC_POWER__DONE )
+                {
+                    if ( node_ptr->power_on == false )
+                    {
+                        elog ("%s power is off ; failed to power on host.", node_ptr->hostname.c_str());
+                    }
+                    else
+                    {
+                        node_ptr->power_on_needed = false ;
+                    }
+                    node_ptr->power_on_in_progress = false ;
+                }
+                /* allow for processing */
+                else
+                {
+                    /* run the power handler till the host's power is on
+                     * or the power-on handler times out */
+                    power_handler ( node_ptr );
+                }
             }
 
             /* Monitor the health of the host - no pass file */
@@ -8361,14 +8755,13 @@ int nodeLinkClass::self_fail_handler ( struct nodeLinkClass::node * node_ptr )
                          "%s ... waiting on force swact", node_ptr->hostname.c_str());
         return (PASS);
     }
-    
+
     /* Wait for the database update */
     else if ( node_ptr->mtcTimer.ring )
     {
         // Last second check for an active standby controller in a DX system
         if (( NOT_SIMPLEX ) && ( is_inactive_controller_main_insv () == false ))
         {
-            // ERIK: TEST ME: Force this test case
             wlog ("%s refusing to self reboot with no enabled standby controller", node_ptr->hostname.c_str());
             wlog ("%s ... critical enable alarm raised", node_ptr->hostname.c_str());
             wlog ("%s ... recommend enabling a standby controller.", node_ptr->hostname.c_str());

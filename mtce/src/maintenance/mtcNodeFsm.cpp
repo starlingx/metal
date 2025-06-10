@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016, 2024 Wind River Systems, Inc.
+ * Copyright (c) 2013, 2016, 2024-2025 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -253,7 +253,7 @@ int nodeLinkClass::fsm ( struct nodeLinkClass::node * node_ptr )
              ( node_ptr->hwmon_powercycle.attempts == 0 ) &&
              ( node_ptr->hwmon_powercycle.state == RECOVERY_STATE__INIT ))
     {
-        ilog ("%s auto-poweron for unlocked host\n", node_ptr->hostname.c_str());
+        ilog ("%s auto power-on for unlocked host\n", node_ptr->hostname.c_str());
         adminActionChange ( node_ptr, MTC_ADMIN_ACTION__POWERON );
 
         /* FSM sanity check below will reject this operation, need exit now */

@@ -454,7 +454,8 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
             }
             else
             {
-                plog ("%s is ENABLED\n", name.c_str());
+                plog ("%s is ENABLED", name.c_str());
+                plog ("%s is ENABLED%s", node_ptr->hostname.c_str(), node_ptr->unlocking ? " ; from unlock" : "");
             }
 
             alarm_compute_clear ( node_ptr, force );
@@ -536,10 +537,34 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
             node_ptr->enabled_count++ ;
             node_ptr->health_threshold_counter = 0 ;
 
-
             ar_enable ( node_ptr );
-
             mtcInvApi_force_task ( node_ptr, "" );
+
+            if ( node_ptr->hostname == this->my_hostname )
+            {
+                if ( daemon_is_file_present ( NODE_UNLOCK_SECS_FILE ) )
+                {
+                    unsigned int self_unlock_secs = daemon_get_file_uint ( NODE_UNLOCK_SECS_FILE );
+                    if ( self_unlock_secs )
+                    {
+                        kpi_log ( node_ptr->hostname, KPI_AREA__ACTION,
+                                                      KPI_ACTION__UNLOCK,
+                                                      KPI_STR__START,
+                                                      KPI_STR__COMPLETE,
+                                                      self_unlock_secs);
+                    }
+                    daemon_remove_file(NODE_UNLOCK_SECS_FILE);
+                }
+            }
+            else if ( node_ptr->unlocking == true )
+            {
+                kpi_log ( node_ptr->hostname, KPI_AREA__ACTION,
+                                              KPI_ACTION__UNLOCK,
+                                              KPI_STR__START,
+                                              KPI_STR__COMPLETE,
+                                              node_ptr->start_unlock_time);
+                node_ptr->unlocking = false ;
+            }
             break ;
         }
         default:
