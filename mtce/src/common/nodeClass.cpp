@@ -3115,12 +3115,25 @@ int nodeLinkClass::add_host ( node_inv_type & inv )
         if ( delay > 0 )
         {
             mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, delay );
-            ilog ("%s Host add delay is %d seconds", node_ptr->hostname.c_str(), delay );
             node_ptr->addStage = MTC_ADD__START_DELAY ;
         }
         else
         {
             node_ptr->addStage = MTC_ADD__START ;
+        }
+        /* Provision the BMC as early as possible.
+         * Mainly for the purpose of querying the server power state
+         * This can be largely hidden within the add host start delay. */
+        if (( hostUtil_is_valid_bm_type  ( node_ptr->bm_type )) &&
+            ( hostUtil_is_valid_ip_addr  ( node_ptr->bm_ip )) &&
+            ( hostUtil_is_valid_username ( node_ptr->bm_un )))
+        {
+            set_bm_prov ( node_ptr, true ) ;
+        }
+        else
+        {
+            ilog ("%s bmc not provisioned ; assuming power is on", node_ptr->hostname.c_str());
+            node_ptr->power_on = true ;
         }
         adminActionChange ( node_ptr , MTC_ADMIN_ACTION__ADD );
     }
@@ -5005,6 +5018,7 @@ void nodeLinkClass::bmc_access_data_init ( struct nodeLinkClass::node * node_ptr
         node_ptr->bm_pw.clear();
         node_ptr->bmc_accessible              = false ;
         node_ptr->bm_ping_info.ok             = false ;
+        node_ptr->start_bmc_prov_time         = TIME_DEBUG_INIT ;
 
         /* default bmc handler query controlo variables */
         bmc_default_query_controls ( node_ptr );
@@ -5050,6 +5064,7 @@ int nodeLinkClass::set_bm_prov ( struct nodeLinkClass::node * node_ptr, bool sta
         {
             bmc_access_data_init ( node_ptr );
             bmc_load_protocol ( node_ptr );
+            gettime(node_ptr->start_bmc_prov_time);
 
             barbicanSecret_type * secret = secretUtil_find_secret( node_ptr->uuid );
             if ( secret )
@@ -5096,6 +5111,19 @@ int nodeLinkClass::set_bm_prov ( struct nodeLinkClass::node * node_ptr, bool sta
             send_hwmon_command(node_ptr->hostname, MTC_CMD_MOD_HOST);
         }
         node_ptr->bmc_provisioned = state ;
+    }
+    return (rc);
+}
+
+int nodeLinkClass::set_bm_prov ( string hostname , bool state )
+{
+    int rc = FAIL_HOSTNAME_LOOKUP ;
+
+    nodeLinkClass::node* node_ptr ;
+    node_ptr = nodeLinkClass::getNode ( hostname );
+    if ( node_ptr != NULL )
+    {
+        rc = set_bm_prov ( node_ptr, state ) ;
     }
     return (rc);
 }
@@ -5652,8 +5680,21 @@ void nodeLinkClass::manage_heartbeat_failure ( string hostname, iface_enum iface
                 {
                     elog ("%s %s network heartbeat failure\n", hostname.c_str(), get_iface_name_str(iface));
 
-                    nodeLinkClass::set_availStatus ( hostname, MTC_AVAIL_STATUS__FAILED );
-
+                    /* Handle setting up the power off status for the recovery handler.
+                     * - don't override the POWER_OFF state with FAILED if the power is off */
+                    if ( node_ptr->power_on == false )
+                    {
+                        ilog ("%s power is off", node_ptr->hostname.c_str());
+                        allStateChange ( node_ptr, node_ptr->adminState,
+                                         MTC_OPER_STATE__DISABLED,
+                                         MTC_AVAIL_STATUS__POWERED_OFF );
+                    }
+                    else
+                    {
+                        allStateChange ( node_ptr, node_ptr->adminState,
+                                         MTC_OPER_STATE__DISABLED,
+                                         MTC_AVAIL_STATUS__FAILED );
+                    }
                     if (( node_ptr->adminAction != MTC_ADMIN_ACTION__ENABLE ) &&
                         ( node_ptr->adminAction != MTC_ADMIN_ACTION__UNLOCK ))
                     {
@@ -7008,9 +7049,9 @@ int nodeLinkClass::subfStateChange ( struct nodeLinkClass::node * node_ptr,
 
 
 /**
- *  Set the required action and then let the FSP and handlers deal with it
+ *  Set the required action and then let the FSM and handlers deal with it
  *  If we are in an action already then just add the action to the
- *  action todo list. When we chnage the action to none then query the
+ *  action todo list. When we change the action to none then query the
  *  todo list and pop it off and apply it
  **/
 int nodeLinkClass::adminActionChange ( struct nodeLinkClass::node * node_ptr,
@@ -7038,7 +7079,7 @@ int nodeLinkClass::adminActionChange ( struct nodeLinkClass::node * node_ptr,
         if (( node_ptr->adminAction != MTC_ADMIN_ACTION__ADD ) &&
             ( node_ptr->adminAction != MTC_ADMIN_ACTION__FORCE_LOCK ))
         {
-            clog ("%s Administrative Action '%s' -> '%s'\n",
+            clog ("%s admin action '%s' -> '%s'\n",
                       node_ptr->hostname.c_str(),
                       mtc_nodeAdminAction_str [node_ptr->adminAction],
                       mtc_nodeAdminAction_str [newActionState]);
@@ -7051,7 +7092,7 @@ int nodeLinkClass::adminActionChange ( struct nodeLinkClass::node * node_ptr,
             newActionState = *(node_ptr->adminAction_todo_list.begin());
             node_ptr->adminAction_todo_list.pop_front();
 
-            clog ("%s Administrative Action '%s' -> '%s' from queue\n",
+            ilog ("%s admin action '%s' -> '%s' from queue\n",
                       node_ptr->hostname.c_str(),
                       mtc_nodeAdminAction_str [node_ptr->adminAction],
                       mtc_nodeAdminAction_str [newActionState]);
@@ -7072,7 +7113,7 @@ int nodeLinkClass::adminActionChange ( struct nodeLinkClass::node * node_ptr,
             }
             else if ( node_ptr->adminAction_todo_list.size() >= MTC_MAX_QUEUED_ACTIONS )
             {
-                wlog ("%s rejecting action '%s' request ; max queued actions reached (%ld of %d)\n",
+                wlog ("%s rejecting admin action '%s' request ; max queued actions reached (%ld of %d)\n",
                           node_ptr->hostname.c_str(),
                           mtc_nodeAdminAction_str [newActionState],
                           node_ptr->adminAction_todo_list.size(),
@@ -7090,7 +7131,7 @@ int nodeLinkClass::adminActionChange ( struct nodeLinkClass::node * node_ptr,
                 {
                     if ( *adminAction_todo_list_ptr == newActionState )
                     {
-                        wlog ("%s refusing to queue duplicate already queued action (%s)\n",
+                        wlog ("%s refusing to queue duplicate already queued admin action (%s)\n",
                                   node_ptr->hostname.c_str(),
                                   mtc_nodeAdminAction_str [*adminAction_todo_list_ptr]);
 
@@ -7101,7 +7142,7 @@ int nodeLinkClass::adminActionChange ( struct nodeLinkClass::node * node_ptr,
             /* Add the action to the action todo list */
             node_ptr->adminAction_todo_list.push_back( newActionState );
 
-            ilog ("%s Administrative Action '%s' queued ; already handling '%s' action\n",
+            ilog ("%s admin action '%s' queued ; already handling '%s' action\n",
                   node_ptr->hostname.c_str(),
                   mtc_nodeAdminAction_str [newActionState],
                   mtc_nodeAdminAction_str [node_ptr->adminAction]);
@@ -7110,7 +7151,7 @@ int nodeLinkClass::adminActionChange ( struct nodeLinkClass::node * node_ptr,
         /* otherwise just take the action change */
         else
         {
-            clog ("%s Administrative Action '%s' -> '%s'\n",
+            clog ("%s admin action '%s' -> '%s'\n",
                       node_ptr->hostname.c_str(),
                       mtc_nodeAdminAction_str [node_ptr->adminAction],
                       mtc_nodeAdminAction_str [newActionState]);
@@ -7155,6 +7196,20 @@ int nodeLinkClass::adminActionChange ( struct nodeLinkClass::node * node_ptr,
                     {
                         node_ptr->node_unlocked_counter++ ;
                     }
+                    gettime (node_ptr->start_unlock_time);
+                    if ( node_ptr->hostname == this->my_hostname )
+                    {
+                        /* Save when controller-0 was first unlocked */
+                        /* Note: that it would be 137 years before epoch time rollover of an unsigned int */
+                        daemon_log_value ( NODE_UNLOCK_SECS_FILE, (unsigned int)time(NULL));
+                    }
+                    else
+                        node_ptr->unlocking = true ; /* only applies to system nodes */
+
+                    dlog ("%s admin unlock action started at %s ; unlock count is %d since process startup)",
+                              node_ptr->hostname.c_str(),
+                              node_ptr->start_unlock_time.time_buff,
+                              node_ptr->node_unlocked_counter);
 
                     ar_enable (node_ptr);
 
@@ -7179,11 +7234,19 @@ int nodeLinkClass::adminActionChange ( struct nodeLinkClass::node * node_ptr,
                 case MTC_ADMIN_ACTION__REINSTALL:
                 {
                     node_ptr->reinstallStage = MTC_REINSTALL__START ;
+                    gettime (node_ptr->start_reinstall_time);
+                    dlog ("%s admin reinstall action started at %s",
+                              node_ptr->hostname.c_str(),
+                              node_ptr->start_reinstall_time.time_buff);
                     break ;
                 }
                 case MTC_ADMIN_ACTION__POWERON:
                 {
                     node_ptr->powerStage = MTC_POWERON__START ;
+                    gettime (node_ptr->start_poweron_time);
+                    dlog ("%s admin power-on action started started at %s",
+                              node_ptr->hostname.c_str(),
+                              node_ptr->start_poweron_time.time_buff);
                     break ;
                 }
                 case MTC_ADMIN_ACTION__RECOVER:
@@ -7203,6 +7266,10 @@ int nodeLinkClass::adminActionChange ( struct nodeLinkClass::node * node_ptr,
                 case MTC_ADMIN_ACTION__POWEROFF:
                 {
                     node_ptr->powerStage = MTC_POWEROFF__START ;
+                    gettime (node_ptr->start_poweroff_time);
+                    dlog ("%s admin power-off action started at %s",
+                              node_ptr->hostname.c_str(),
+                              node_ptr->start_poweroff_time.time_buff);
                     break ;
                 }
                 case MTC_ADMIN_ACTION__DELETE:
@@ -8464,6 +8531,43 @@ int nodeLinkClass::ar_handler ( struct nodeLinkClass::node    * node_ptr,
 
 /****************************************************************************
  *
+ * Name       : dor_host_checkin
+ *
+ * Description: Adds a hostname to a static dor checkin list.
+ *
+ *              If the hostname is new, it is added to a static list and the
+ *              function returns true. If the hostname already exists in the
+ *              list, it returns false. This allows the report_dor_recovery
+ *              function to report on only the first host state.
+ *
+ * Assumptions: The list of hostnames is stored in a static container local
+ *              to the function and persists across multiple calls.
+ *
+ * Parameters  :
+ *
+ * @param hostname     The name of the host to check and add if not present.
+ *
+ * Returns     : true  - if the hostname was newly added
+ *               false - if the hostname already existed
+ *
+ ***************************************************************************/
+bool dor_host_checkin ( string & hostname )
+{
+    static std::list<std::string> __dor_checkedin_hostnames;
+
+    auto it = std::find(__dor_checkedin_hostnames.begin(),
+                        __dor_checkedin_hostnames.end(),
+                        hostname);
+
+    if (it != __dor_checkedin_hostnames.end())
+        return false;  /* already exists */
+
+    __dor_checkedin_hostnames.push_back(hostname);
+    return true;  /* newly added */
+}
+
+/****************************************************************************
+ *
  * Name       : report_dor_recovery
  *
  * Description: Create a specifically formatted log for the specified
@@ -8493,6 +8597,23 @@ void nodeLinkClass::report_dor_recovery ( struct nodeLinkClass::node * node_ptr,
 
     if ( this->dor_mode_active )
     {
+        /* Record the initial host state determined by sysinv
+           and then the add_handler's testing */
+
+        /* avoid double counting in the same way. Adds a POST recovery string prefix */
+        if ( dor_host_checkin ( node_ptr->hostname ) == false )
+        {
+            ilog ("%-12s %-11s ;POST Recovery %2d:%02d mins (%4d secs) (uptime:%2d:%02d mins) %s",
+                         node_ptr->hostname.c_str(),
+                         node_state_log_prefix.c_str(),
+                         node_ptr->dor_recovery_time/60,
+                         node_ptr->dor_recovery_time%60,
+                         node_ptr->dor_recovery_time,
+                         node_ptr->uptime/60,
+                         node_ptr->uptime%60,
+                         extra.c_str());
+            return ;
+        }
         node_ptr->dor_recovery_time = ts.tv_sec ;
         plog ("%-12s %-11s ; DOR Recovery %2d:%02d mins (%4d secs) (uptime:%2d:%02d mins) %s",
                     node_ptr->hostname.c_str(),

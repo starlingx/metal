@@ -642,6 +642,8 @@ private:
         string bm_poweron_cmd  ;
         string bm_poweroff_cmd ;
 
+        bool   bm_cancel_reset_progression = false ;
+
         /**
          *   The BMC is 'accessible' once provisioning data is available
          *   and bmc is verified pingable.
@@ -733,6 +735,13 @@ private:
         bool   bmc_actions_query_done   ;
 
         bool   power_on = false ;
+        bool   unlocking = false ;
+
+        bool   power_on_needed = false ;
+        bool   power_on_in_progress = false ;
+
+        /* the number of secs since Epoch this host was last powered on */
+        time_t power_on_time_secs = 0 ;
 
         /* a timer used in the bmc_handler to query
          * the bmc_info and reset cause */
@@ -756,6 +765,12 @@ private:
         /* extra thread info for board management control thread */
         thread_extra_info_type thread_extra_info ;
 
+        /* Maintenance KPI Start timers */
+        time_debug_type start_bmc_prov_time  = TIME_DEBUG_INIT;
+        time_debug_type start_unlock_time    = TIME_DEBUG_INIT;
+        time_debug_type start_poweroff_time  = TIME_DEBUG_INIT;
+        time_debug_type start_poweron_time   = TIME_DEBUG_INIT;
+        time_debug_type start_reinstall_time = TIME_DEBUG_INIT;
     };
 
     struct node * head ; /**< Node Linked List Head pointer */
@@ -1443,6 +1458,8 @@ public:
     string my_pxeboot_ip ; /** Pxeboot network IP address      */
     string my_pxeboot_if ; /** Pxeboot interface name          */
 
+    time_debug_type start_process_time = TIME_DEBUG_INIT ;
+
     /*********  New Public Constructs for IPMI Comamnd Handling ***********/
 
     /* the main fsm entrypoint to service all hosts */
@@ -1887,6 +1904,7 @@ public:
     int    set_bm_type ( string hostname , string bm_type );
     int    set_bm_un   ( string hostname , string bm_un );
 
+    int    set_bm_prov     ( string hostname , bool state );
     bool   is_bm_ip_already_used  ( string bm_ip  );
 
     string get_bm_ip   ( string hostname );

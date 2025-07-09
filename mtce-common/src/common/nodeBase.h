@@ -18,6 +18,7 @@
 
 using namespace std;
 
+#include "timeUtil.h"
 #include "fitCodes.h"
 #include "logMacros.h"
 #include "returnCodes.h"
@@ -114,6 +115,7 @@ void daemon_exit ( void );
 #define CONFIG_FAIL_FILE        ((const char *)"/var/run/.config_fail")
 #define NODE_LOCKED_FILE        ((const char *)"/var/run/.node_locked")
 #define NODE_LOCKED_FILE_BACKUP ((const char *)"/var/persist/mtc/.node_locked")
+#define NODE_UNLOCK_SECS_FILE   ((const char *)"/var/persist/mtc/.node_unlocked")
 #define NODE_RESET_FILE         ((const char *)"/var/run/.node_reset")
 #define SMGMT_DEGRADED_FILE     ((const char *)"/var/run/.sm_degraded")
 #define SMGMT_UNHEALTHY_FILE    ((const char *)"/var/run/.sm_node_unhealthy")
@@ -934,7 +936,8 @@ typedef enum
     MTC_ENABLE__FAILURE              = 27,
     MTC_ENABLE__FAILURE_WAIT         = 28,
     MTC_ENABLE__FAILURE_SWACT_WAIT   = 29,
-    MTC_ENABLE__STAGES               = 30,
+    MTC_ENABLE__FAILURE_TIMER        = 30,
+    MTC_ENABLE__STAGES               = 31,
 } mtc_enableStages_enum ;
 
 /** Return the string representing the specified 'enable' stage */
@@ -998,6 +1001,11 @@ typedef enum
     MTC_RECOVERY__RETRY_WAIT,
     MTC_RECOVERY__REQ_MTCALIVE,
     MTC_RECOVERY__REQ_MTCALIVE_WAIT,
+    MTC_RECOVERY__SETUP,
+    MTC_RECOVERY__POWER_QUERY,
+    MTC_RECOVERY__POWER_QUERY_RECV,
+    MTC_RECOVERY__POWER_ON,
+    MTC_RECOVERY__POWER_ON_RECV,
     MTC_RECOVERY__RESET_SEND_WAIT,
     MTC_RECOVERY__RESET_RECV_WAIT,
     MTC_RECOVERY__MTCALIVE_TIMER,
@@ -1373,6 +1381,33 @@ void mem_log    ( char   log );
 void mem_log    ( string one, string two );
 void mem_log    ( string one, string two, string three );
 void mem_log    ( string label, int value, string data );
+
+/* KPI definitions and log functions */
+
+#define KPI_AREA__BMC                "bmc"
+#define KPI_AREA__IPMI               "ipmi"
+#define KPI_AREA__REDFISH            "redfish"
+
+#define KPI_AREA__ACTION             "action:"
+#define KPI_ACTION__UNLOCK           "unlock"
+#define KPI_ACTION__REINSTALL        "reinstall"
+#define KPI_ACTION__POWERON          "power-on"
+#define KPI_ACTION__POWEROFF         "power-off"
+
+/* KPI strings */
+#define KPI_STR__START               "start"
+#define KPI_STR__COMPLETE            "complete"
+#define KPI_STR__PROCESS_STARTUP     "startup"
+#define KPI_STR__REINSTALL           "reinstall"
+#define KPI_STR__POWER_STATE_LEARNED "power state learned"
+#define KPI_STR__ACCESSIBLE          "accessible"
+#define KPI_STR__INACCESSIBLE        "inaccessible"
+#define KPI_STR__PROVISIONING        "provisioning"
+
+void kpi_log ( string & hostname, string kpi, time_debug_type & start );
+void kpi_log ( string & hostname, string kpi_area, string kpi_start, string kpi_stop, time_debug_type & start_time );
+void kpi_log ( string & hostname, string kpi_area, string extra, string kpi_start, string kpi_stop, unsigned int start_secs );
+void kpi_log ( string & hostname, string kpi_area, string extra, string kpi_start, string kpi_stop, time_debug_type & start_time );
 
 string get_hostname ( void );
 

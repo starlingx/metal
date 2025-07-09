@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016, 2023-2024 Wind River Systems, Inc.
+ * Copyright (c) 2013, 2016, 2023-2025 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -1156,6 +1156,8 @@ int daemon_init ( string iface, string nodetype )
 {
     int rc = PASS ;
 
+    gettime (mtcInv.start_process_time);
+
     /* Not used presently */
     mtcInv.functions = nodetype ;
 
@@ -1353,6 +1355,15 @@ int _self_provision ( void )
             mtcWait_secs (15);
         }
     } while ( rc != PASS ) ;
+
+    /* Provision this first controller's BMC
+     * The add_host was already called (above) for this controller */
+    if (( hostUtil_is_valid_bm_type  ( record_info.bm_type )) &&
+        ( hostUtil_is_valid_ip_addr  ( record_info.bm_ip )) &&
+        ( hostUtil_is_valid_username ( record_info.bm_un )))
+    {
+        mtcInv.set_bm_prov ( my_identity.name, true ) ;
+    }
 
     mtcInv.set_active_controller_hostname ( my_identity.name );
     mtcInv.set_activity_state (true);
