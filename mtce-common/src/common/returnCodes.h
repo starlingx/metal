@@ -1,12 +1,12 @@
 #ifndef __INCLUDE_RETURNCODES_H__
 #define __INCLUDE_RETURNCODES_H__
 /*
- * Copyright (c) 2013, 2016, 2024 Wind River Systems, Inc.
-*
-* SPDX-License-Identifier: Apache-2.0
-*
+ * Copyright (c) 2013, 2016, 2024-2025 Wind River Systems, Inc.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  */
- 
+
  /**
   * @file
   * Wind River CGTS Platform Common Return Code Definition
@@ -141,6 +141,7 @@
 #define FAIL_NO_CMD_ACK       (123)
 #define FAIL_FORK_HANDLING    (124)
 
+#define FAIL_CANCELLED        (253)
 #define FAIL_FIT              (254)
 #define FAIL_NULL_POINTER     (256)
 

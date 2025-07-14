@@ -49,8 +49,8 @@ using namespace std;
 #endif
 #define __AREA__ "mon"
 
-#define MAX_HOST_SENSORS            (512) // (100)
-#define MAX_HOST_GROUPS              (20)
+#define MAX_HOST_SENSORS            (256)
+#define MAX_HOST_GROUPS              (10)
 #define MIN_SENSOR_GROUPS             (4)
 #define HWMON_DEFAULT_LARGE_INTERVAL (MTC_MINS_15)
 #define HWMON_DEFAULT_AUDIT_INTERVAL (MTC_MINS_2)
@@ -58,6 +58,7 @@ using namespace std;
 #define DEGRADE_AUDIT_TRIGGER        (2)
 #define MAX_SENSORS_NOT_FOUND        (5)
 #define START_DEBOUCE_COUNT          (1)
+#define HWMOND_STACK_SIZE            (0x80000) // 512 KByes
 
 // Power sensor data for Dell R740-emc-1 needs 45KiB
 // Thermal sensor readout on wolfpass requires 20KiB

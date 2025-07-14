@@ -1,12 +1,12 @@
 #ifndef __DAEMON_COMMON_H__
 #define __DAEMON_COMMON_H__
 /*
- * Copyright (c) 2013, 2016 Wind River Systems, Inc.
+ * Copyright (c) 2013, 2016, 2025 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
  */
- 
+
  /**
   * @file
   * Wind River CGTS Platform Common Maintenance Header
@@ -62,20 +62,21 @@ void daemon_remove_pidfile ( void );
 void daemon_remove_file    ( const char * filename );
 void daemon_rename_file    ( const char * path, const char * old_filename, const char * new_filename );
 void daemon_make_dir       ( const char * dir );
-
+int  daemon_copy_file      (string hostname, const char *source );
 string daemon_read_file    ( const char * filename );
 
 void daemon_logfile_close ( void );
 void daemon_logfile_open  ( void );
 
 int daemon_log ( const char * filename , const char * str );
-int daemon_log_value ( const char * filename , int val );
+int daemon_log_value ( const char * filename , unsigned int val );
 int daemon_log_value ( const char * filename , const char * str, int val );
 
 /* reads the first line of a file and if it contains a string
  * that represents an integer value then return it */
 int  daemon_get_file_int ( const char * filename );
 string daemon_get_file_str ( const char * filename );
+unsigned int  daemon_get_file_uint ( const char * filename );
 
 string daemon_nodetype       ( void );
 string daemon_clstr_iface    ( void );
@@ -236,9 +237,23 @@ int daemon_run_testhead ( void );
 
 typedef struct {
     struct timespec ts ;
-    struct tm t;
+    struct tm t;          /* see notes below */
     char   time_buff[50];
 } time_debug_type ;
+
+/* The tm_gmtoff and tm_zone were only added to the tm struct in glibc
+ *
+ * Field	    Available on	    Requires
+ * ----------   -----------------   -----------
+ * tm_gmtoff	GNU/Linux (glibc)	_GNU_SOURCE
+ * tm_zone	    GNU/Linux (glibc)	_GNU_SOURCE
+ */
+ #if defined(__GLIBC__) && defined(_GNU_SOURCE)
+    // Safe to use tm_gmtoff and tm_zone
+    #define TIME_DEBUG_INIT ((time_debug_type){ .ts = {0, 0}, .t = {0,0,0,0,0,0,0,0,0,0,{0}}, .time_buff = {0} })
+#else
+    #define TIME_DEBUG_INIT ((time_debug_type){ .ts = {0, 0}, .t = {0,0,0,0,0,0,0,0,0}, .time_buff = {0} })
+#endif
 
 typedef struct
 {

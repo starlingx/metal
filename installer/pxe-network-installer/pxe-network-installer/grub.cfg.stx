@@ -13,6 +13,8 @@ set kernel=vmlinuz
 set kernel_rollback=vmlinuz
 set kernel_params=""
 set kernel_params_ext=""
+set boot_failure="0"
+set system_mode="simplex"
 
 if [ "${legacy_bios}" != "1" ]; then
     set boot_env_path=${prefix}
@@ -20,8 +22,22 @@ fi
 
 if [ -e ${boot_env_path}/boot.env ]; then
   load_env -s -f ${boot_env_path}/boot.env
-  set default="0"
-  save_env -f ${boot_env_path}/boot.env default
+  if [ "$boot_failure" = "0" ]; then
+    set boot_failure="1"
+  elif [ "$boot_failure" = "1" ]; then
+    set boot_failure="2"
+  elif [ "$boot_failure" = "2" ]; then
+    set boot_failure="3"
+  elif [ "$boot_failure" = "3" ]; then
+    set boot_failure="0"
+    if [ $default = "0" ]; then
+      set default="1"
+    else
+      set default="0"
+    fi
+    save_env -f ${boot_env_path}/boot.env default
+  fi
+  save_env -f ${boot_env_path}/boot.env boot_failure
 fi
 
 set partition_based_root="0"
@@ -121,6 +137,10 @@ else
     load_env -s -f ($avol)/1/kernel.env kernel
   fi
 
+  if [ -e ($avol)/2/kernel.env ] ; then
+    load_env -s -f ($avol)/2/kernel.env kernel_rollback
+  fi
+
   get_efivar -f uint8 -s secured SecureBoot
   if [ "${secured}" = "1" ]; then
       # Enable user authentication to make grub unlockable
@@ -149,5 +169,19 @@ else
       linux /1/${kernel} rw rootwait ostree_boot=LABEL=${boot_part}${boot_mode} ostree_root=${ostree_root_lv} rd.lvm.lv=${kernel_root_lv} ostree_var=${ostree_var_lv} ostree=/ostree/1 $ostree_console $kernel_params $kernel_params_ext
       initrd /1/initramfs
   }
+
+  if [ "${system_mode}" = "simplex" ]; then
+      menuentry "StarlingX ostree${boot_mode} ${kernel_rollback} (Rollback)" --unrestricted {
+          if [ "${legacy_bios}" != "1" ]; then
+              efi-watchdog enable 0 180
+          fi
+          search --no-floppy --label --set=root ${boot_part}${boot_mode}
+          if [ -e /2/kernel.env ] ; then
+              load_env -s -f /2/kernel.env kernel_params_ext
+          fi
+          linux /2/${kernel_rollback} rw rootwait ostree_boot=LABEL=${boot_part}${boot_mode} ostree_root=${ostree_root_lv} rd.lvm.lv=${kernel_root_lv} ostree_var=${ostree_var_lv} ostree=/ostree/2 $ostree_console $kernel_params $kernel_params_ext
+          initrd /2/initramfs
+      }
+  fi
 
 fi

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016, 2023-2024 Wind River Systems, Inc.
+ * Copyright (c) 2013, 2016, 2023-2025 Wind River Systems, Inc.
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -348,8 +348,6 @@ void mtc_stages_init ( void )
    enableStages_str  [MTC_ENABLE__GOENABLED_TIMER      ] = "GoEnable-Start";
    enableStages_str  [MTC_ENABLE__GOENABLED_WAIT       ] = "GoEnable-Wait";
    enableStages_str  [MTC_ENABLE__PMOND_READY_WAIT     ] = "PmondReady-Wait";
-   enableStages_str  [MTC_ENABLE__HOST_SERVICES_START  ] = "HostServices-Start";
-   enableStages_str  [MTC_ENABLE__HOST_SERVICES_WAIT   ] = "HostServices-Wait";
    enableStages_str  [MTC_ENABLE__SERVICES_START_WAIT  ] = "Services-Start";
    enableStages_str  [MTC_ENABLE__HEARTBEAT_WAIT       ] = "Heartbeat-Wait";
    enableStages_str  [MTC_ENABLE__HEARTBEAT_SOAK       ] = "Heartbeat-Soak";
@@ -361,6 +359,7 @@ void mtc_stages_init ( void )
    enableStages_str  [MTC_ENABLE__SUBF_FAILED          ] = "Host-Degraded-Subf-Failed";
    enableStages_str  [MTC_ENABLE__DEGRADED             ] = "Host-Degraded";
    enableStages_str  [MTC_ENABLE__FAILURE              ] = "Failure";
+   enableStages_str  [MTC_ENABLE__FAILURE_TIMER        ] = "Failure-Timer";
    enableStages_str  [MTC_ENABLE__FAILURE_WAIT         ] = "Failure-Wait";
    enableStages_str  [MTC_ENABLE__FAILURE_SWACT_WAIT   ] = "Failure-Swact-Wait";
    enableStages_str  [MTC_ENABLE__STAGES               ] = "Enable-Unknown" ;
@@ -369,14 +368,17 @@ void mtc_stages_init ( void )
    recoveryStages_str[MTC_RECOVERY__RETRY_WAIT         ] = "Req-Retry-Wait";
    recoveryStages_str[MTC_RECOVERY__REQ_MTCALIVE       ] = "Req-MtcAlive";
    recoveryStages_str[MTC_RECOVERY__REQ_MTCALIVE_WAIT  ] = "Req-MtcAlive-Wait";
+   recoveryStages_str[MTC_RECOVERY__SETUP              ] = "Setup";
+   recoveryStages_str[MTC_RECOVERY__POWER_QUERY        ] = "Power Query";
+   recoveryStages_str[MTC_RECOVERY__POWER_QUERY_RECV   ] = "Power Query Recv";
+   recoveryStages_str[MTC_RECOVERY__POWER_ON           ] = "Power On";
+   recoveryStages_str[MTC_RECOVERY__POWER_ON_RECV      ] = "Power On Recv";
    recoveryStages_str[MTC_RECOVERY__RESET_SEND_WAIT    ] = "Reset-Send-Wait";
    recoveryStages_str[MTC_RECOVERY__RESET_RECV_WAIT    ] = "Reset-Recv-Wait";
    recoveryStages_str[MTC_RECOVERY__MTCALIVE_TIMER     ] = "MtcAlive-Timer";
    recoveryStages_str[MTC_RECOVERY__MTCALIVE_WAIT      ] = "MtcAlive-Wait";
    recoveryStages_str[MTC_RECOVERY__GOENABLED_TIMER    ] = "GoEnable-Timer";
    recoveryStages_str[MTC_RECOVERY__GOENABLED_WAIT     ] = "GoEnable-Wait";
-   recoveryStages_str[MTC_RECOVERY__HOST_SERVICES_START] = "HostServices-Start";
-   recoveryStages_str[MTC_RECOVERY__HOST_SERVICES_WAIT ] = "HostServices-Wait";
    recoveryStages_str[MTC_RECOVERY__CONFIG_COMPLETE_WAIT]= "Compute-Config-Wait";
    recoveryStages_str[MTC_RECOVERY__SUBF_GOENABLED_TIMER]= "Subf-GoEnable-Timer";
    recoveryStages_str[MTC_RECOVERY__SUBF_GOENABLED_WAIT] = "Subf-GoEnable-Wait";
@@ -670,8 +672,8 @@ string get_mtcAliveStages_str ( mtc_mtcAliveStages_enum stage )
     return (mtcAliveStages_str[stage]);
 }
 
-void log_adminAction ( string hostname, 
-                       mtc_nodeAdminAction_enum currAction, 
+void log_adminAction ( string hostname,
+                       mtc_nodeAdminAction_enum currAction,
                        mtc_nodeAdminAction_enum  newAction )
 {
     if (( currAction != MTC_ADMIN_ACTION__LOCK ) &&
@@ -702,7 +704,7 @@ void log_adminAction ( string hostname,
     else if (( currAction != MTC_ADMIN_ACTION__ADD ) &&
              (  newAction == MTC_ADMIN_ACTION__ADD ))
     {
-        ilog ("%s Add Action\n", hostname.c_str());
+        ilog ("%s Add Action ; in %d seconds", hostname.c_str(), daemon_get_cfg_ptr()->host_add_delay);
     }
     else if (( currAction != MTC_ADMIN_ACTION__RESET ) &&
              (  newAction == MTC_ADMIN_ACTION__RESET ))
@@ -729,6 +731,135 @@ void log_adminAction ( string hostname,
     {
         ilog ("%s Power-On Action\n", hostname.c_str());
     }
+}
+
+/*****************************************************************************
+ *
+ * Name           : kpi_log
+ * Description    : Add a kpi to the calling processes log file
+ *
+ * @brief Logs a specific KPI string and its action duration.
+ *
+ * Parameters     :
+  *
+ * @param hostname   The host's name
+ * @param kpi        The KPI start_stop string
+ * @param start_time KPI compare against ; the time the KPI operation started
+ *
+ * **************************************************************************/
+void kpi_log ( string & hostname, string kpi, time_debug_type & start_time )
+{
+    time_debug_type now_time   ;
+    time_delta_type delta_time ;
+
+    gettime ( now_time );
+    timedelta ( start_time, now_time, delta_time);
+
+    ilog ("%s %s took %ld.%ld secs", hostname.c_str(), kpi.c_str(), delta_time.secs, delta_time.msecs );
+}
+
+/*****************************************************************************
+ *
+ * Name           : kpi_log
+ * Description    : Add a kpi to the calling processes log file
+ *
+ * @brief Logs a specific KPI with start and stop strings and its action duration.
+ *
+ * Parameters     :
+  *
+ * @param hostname   The host's name
+ * @param kpi_area   The KPI domain
+ * @param kpi_extra  Extra context information (eg: ipmi vs redfish)
+ * @param kpi_start  KPI starting phase string
+ * @param kpi_stop   KPI ending phase string
+ * @param start_time KPI compare against ; the time the KPI operation started
+ *
+ * **************************************************************************/
+void kpi_log ( string & hostname,
+               string kpi_area,
+               string kpi_start,
+               string kpi_stop,
+               time_debug_type & start_time )
+{
+    time_debug_type now_time   ;
+    time_delta_type delta_time ;
+
+    gettime ( now_time );
+    timedelta ( start_time, now_time, delta_time);
+
+    ilog ("%s kpi:%s %s -> %s took %ld.%ld secs",
+              hostname.c_str(),  kpi_area.c_str(),
+              kpi_start.c_str(), kpi_stop.c_str(),
+              delta_time.secs, delta_time.msecs );
+}
+
+/*****************************************************************************
+ *
+ * Name           : kpi_log
+ * Description    : Add a kpi to the calling processes log file
+ *
+ * @brief Logs a specific KPI with start and stop strings, extra data and its action duration.
+ *
+ * Parameters     :
+ *
+ * @param hostname   The host's name
+ * @param kpi_area   The KPI domain
+ * @param kpi_extra  Extra context information (eg: ipmi vs redfish)
+ * @param kpi_start  KPI starting phase string
+ * @param kpi_stop   KPI ending phase string
+ * @param start_time KPI compare against ; the time the KPI operation started
+ *
+ * **************************************************************************/
+void kpi_log ( string & hostname,
+               string kpi_area,
+               string kpi_extra,
+               string kpi_start,
+               string kpi_stop,
+               time_debug_type & start_time )
+{
+    time_debug_type now_time   ;
+    time_delta_type delta_time ;
+
+    gettime ( now_time );
+    timedelta ( start_time, now_time, delta_time);
+
+    ilog ("%s kpi:%s %s %s -> %s took %ld.%ld secs",
+              hostname.c_str(),
+              kpi_area.c_str(), kpi_extra.c_str(),
+              kpi_start.c_str(), kpi_stop.c_str(),
+              delta_time.secs, delta_time.msecs );
+}
+
+/*****************************************************************************
+ *
+ * Name           : kpi_log
+ * Description    : Add a kpi to the calling processes log file
+ *
+ * @brief Logs a specific KPI with start and stop strings, extra data and its action duration.
+ *
+ * Parameters     :
+ *
+ * @param hostname   The host's name
+ * @param kpi_area   The KPI domain
+ * @param kpi_extra  Extra context information (eg: ipmi vs redfish)
+ * @param kpi_start  KPI starting phase string
+ * @param kpi_stop   KPI ending phase string
+ * @param start_secs seconds since Unix Epoch - Jan 1, 1970
+ *
+ * **************************************************************************/
+void kpi_log ( string & hostname,
+               string kpi_area,
+               string kpi_extra,
+               string kpi_start,
+               string kpi_stop,
+               unsigned int start_secs )
+{
+    time_t now_time = time(NULL);
+    ilog ("%s kpi:%s %s %s -> %s took %ld secs",
+              hostname.c_str(),
+              kpi_area.c_str(), kpi_extra.c_str(),
+              kpi_start.c_str(), kpi_stop.c_str(),
+              now_time-start_secs);
 }
 
 /* Init recovery control structure */

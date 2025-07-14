@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2018, 2024 Wind River Systems, Inc.
+ * Copyright (c) 2013-2018, 2024-2025 Wind River Systems, Inc.
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -458,7 +458,7 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
                 return (PASS);
             }
 
-            /* inform mtcAgent of enhanced ost services support */
+            /* inform mtcAgent of enhanced host services support */
             msg.parm[1] = MTC_ENHANCED_HOST_SERVICES ;
             msg.parm[0] = rc ;
             msg.num     =  2 ;
@@ -667,7 +667,7 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
             stop_pmon();
             ilog ("Reboot (%s)", iface_name_ptr);
             daemon_log ( NODE_RESET_FILE, "reboot command" );
-            fork_sysreq_reboot ( delay );
+            launch_failsafe_reboot ( delay );
             rc = system("/usr/bin/systemctl reboot");
         }
         if ( msg.cmd == MTC_CMD_LAZY_REBOOT )
@@ -696,7 +696,7 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
                 ilog ("Lazy Reboot (%s) ; now", iface_name_ptr);
             }
 
-            fork_sysreq_reboot ( delay );
+            launch_failsafe_reboot ( delay );
             rc = system("/usr/bin/systemctl reboot");
         }
         else if ( msg.cmd == MTC_CMD_RESET )
@@ -709,7 +709,7 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
             stop_pmon();
             ilog ("Reset 'reboot -f' (%s)", iface_name_ptr);
             daemon_log ( NODE_RESET_FILE, "reset command" );
-            fork_sysreq_reboot ( delay/2 );
+            launch_failsafe_reboot ( delay/2 );
             rc = system("/usr/bin/systemctl reboot --force");
         }
         else if ( msg.cmd == MTC_CMD_WIPEDISK )
@@ -725,7 +725,7 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
              * If something goes wrong we should reboot anyway
              */
             stop_pmon();
-            fork_sysreq_reboot ( delay/2 );
+            launch_failsafe_reboot ( delay/2 );
 
             /* We fork the wipedisk command as it may take upwards of 30s
              * If we hold this thread for that long pmon will kill mtcClient
@@ -810,14 +810,20 @@ int mtce_send_event ( mtc_socket_type * sock_ptr, unsigned int cmd , const char 
 
         if ( mtce_name_ptr )
         {
-            /* add the error message to the message buffer */
+            /* add the message to the message buffer */
             size_t len = strnlen ( mtce_name_ptr, MAX_MTCE_EVENT_NAME_LEN );
 
             /* We don't use the buffer for mtce events to remove it from the size */
             bytes = ((sizeof(mtc_message_type))-(BUF_SIZE-len));
 
             snprintf ( &event.buf[0], MAX_MTCE_EVENT_NAME_LEN , "%s", mtce_name_ptr );
-            rc = FAIL_OPERATION ;
+
+            // If the supplied mtce_name_str string contains 'failed'
+            // then set the rc to FAIL_OPERATION
+            if ( strcasestr (mtce_name_ptr, "failed" ) )
+                rc = FAIL_OPERATION ;
+            if ( strcasestr (mtce_name_ptr, "timeout" ) )
+                rc = FAIL_TIMEOUT ;
         }
         else
         {
@@ -981,6 +987,38 @@ int create_mtcAlive_msg ( ctrl_type * ctrl_ptr, mtc_message_type & msg, int cmd,
                 msg.parm[MTC_PARM_FLAGS_IDX] |= MTC_FLAG__SUBF_GOENABLED ;
             }
         }
+    }
+
+    /* Set Out-Of-Band goEnable failure flag for goEnable failure. */
+    if ( ctrl_ptr->goEnable_result )
+        msg.parm[MTC_PARM_FLAGS_IDX] |= MTC_FLAG__MAIN_GOENABLE_FAIL ;
+    if ( ctrl_ptr->goEnable_result_subf )
+        msg.parm[MTC_PARM_FLAGS_IDX] |= MTC_FLAG__SUBF_GOENABLE_FAIL ;
+
+    /* Set the Out-Of-Band Host Services failure
+     * flag for any start host services that failed */
+    if ( ctrl_ptr->storage_hostservices_result )
+    {
+        msg.parm[MTC_PARM_FLAGS_IDX] |= MTC_FLAG__MAIN_SERVICES_FAIL ;
+        dlog3 ("storage start host services failed ; rc:%d", ctrl_ptr->storage_hostservices_result );
+    }
+    else if ( ctrl_ptr->controller_hostservices_result )
+    {
+        msg.parm[MTC_PARM_FLAGS_IDX] |= MTC_FLAG__MAIN_SERVICES_FAIL ;
+        dlog3 ("controller start host services failed ; rc:%d", ctrl_ptr->controller_hostservices_result );
+    }
+    else if ( is_subfunction_worker () )
+    {
+        if ( ctrl_ptr->worker_hostservices_result )
+        {
+            msg.parm[MTC_PARM_FLAGS_IDX] |= MTC_FLAG__SUBF_SERVICES_FAIL ;
+            dlog3 ("worker subfunction start host services failed ; rc:%d", ctrl_ptr->worker_hostservices_result );
+        }
+    }
+    else if ( ctrl_ptr->worker_hostservices_result )
+    {
+        msg.parm[MTC_PARM_FLAGS_IDX] |= MTC_FLAG__MAIN_SERVICES_FAIL ;
+        dlog3 ("worker start host services failed ; rc:%d", ctrl_ptr->worker_hostservices_result );
     }
 
     if ( daemon_is_file_present ( SMGMT_DEGRADED_FILE ) )

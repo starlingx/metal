@@ -149,7 +149,7 @@ int  load_filenames_in_dir ( const char * directory, std::list<string> & filelis
 int  double_fork ( void );
 int  double_fork_host_cmd ( string hostname , char * cmd_string, const char * cmd_oper );
 int  setup_child ( bool close_file_descriptors );
-void fork_sysreq_reboot ( int delay_in_secs );
+void launch_failsafe_reboot ( int delay_in_secs );
 void fork_graceful_reboot ( int delay_in_secs );
 
 int  get_node_health         ( string hostname );

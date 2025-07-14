@@ -133,9 +133,22 @@ void hwmonHostClass::hwmon_fsm ( void )
 
                             if ( secret->stage == MTC_SECRET__GET_PWD_RECV )
                             {
-                                host_ptr->bm_pw = host_ptr->thread_extra_info.bm_pw = secret->payload ;
-                                ilog ("%s bmc credentials received",
-                                          hostname.c_str());
+                                /* Free the http connection and base resources */
+                                httpUtil_free_conn ( host_ptr->secretEvent );
+                                httpUtil_free_base ( host_ptr->secretEvent );
+
+                                if ( secret->payload.empty() )
+                                {
+                                    wlog ("%s failed to acquire bmc password", hostname.c_str());
+                                    secret->stage = MTC_SECRET__GET_PWD_FAIL ;
+                                }
+                                else
+                                {
+                                    host_ptr->bm_pw = host_ptr->thread_extra_info.bm_pw = secret->payload ;
+                                    ilog ("%s bmc credentials received", hostname.c_str());
+                                    /* put the FSM back to the start */
+                                    secret->stage = MTC_SECRET__START ;
+                                }
                             }
                             else
                             {

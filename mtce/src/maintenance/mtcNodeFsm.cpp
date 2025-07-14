@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016, 2024 Wind River Systems, Inc.
+ * Copyright (c) 2013, 2016, 2024-2025 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -68,6 +68,11 @@ int nodeLinkClass::fsm ( struct nodeLinkClass::node * node_ptr )
         /* do nothing while thread is being killed */
         return RETRY ;
     }
+
+    /* Check for a 'delayed self reboot required' condition */
+    if ( this->delayed_swact_required )
+        if ( node_ptr->hostname == this->my_hostname )
+            return ( this->self_fail_handler ( node_ptr ));
 
     /* manage the host connected state and board management alarms */
     nodeLinkClass::bmc_handler ( node_ptr );
@@ -213,11 +218,13 @@ int nodeLinkClass::fsm ( struct nodeLinkClass::node * node_ptr )
     }
 
     /****************************************************************************
-     * Recovering Host: Run Recovery handler for failed or recovering host
+     * Recovering Host: Run Recovery handler for enabled-offline or recovering host
      ****************************************************************************
      */
-    else if (( node_ptr->adminAction == MTC_ADMIN_ACTION__RECOVER ) &&
-             ( node_ptr->adminState  == MTC_ADMIN_STATE__UNLOCKED ))
+    else if (( node_ptr->adminState == MTC_ADMIN_STATE__UNLOCKED ) &&
+             (( node_ptr->adminAction == MTC_ADMIN_ACTION__RECOVER ) ||
+              (( node_ptr->operState  == MTC_OPER_STATE__ENABLED ) &&
+               ( node_ptr->availStatus == MTC_AVAIL_STATUS__OFFLINE ))))
     {
         flog ("%s -> Run Recovery\n", node_ptr->hostname.c_str());
         nodeLinkClass::recovery_handler ( node_ptr );
@@ -246,7 +253,7 @@ int nodeLinkClass::fsm ( struct nodeLinkClass::node * node_ptr )
              ( node_ptr->hwmon_powercycle.attempts == 0 ) &&
              ( node_ptr->hwmon_powercycle.state == RECOVERY_STATE__INIT ))
     {
-        ilog ("%s auto-poweron for unlocked host\n", node_ptr->hostname.c_str());
+        ilog ("%s auto power-on for unlocked host\n", node_ptr->hostname.c_str());
         adminActionChange ( node_ptr, MTC_ADMIN_ACTION__POWERON );
 
         /* FSM sanity check below will reject this operation, need exit now */

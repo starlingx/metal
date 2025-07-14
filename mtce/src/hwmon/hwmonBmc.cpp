@@ -82,9 +82,9 @@ void sensor_data_init ( sensor_data_type & data )
  *
  *****************************************************************************/
 
-void sensor_data_print ( const sensor_data_type & data )
+void sensor_data_print ( string & hostname, const sensor_data_type & data )
 {
-    blog3 ("%s is %s : %s (%s) %s %s %s %s %s %s %s\n",
+    blog3 ("%s %s is %s : %s (%s) %s %s %s %s %s %s %s\n", hostname.c_str(),
                data.name.c_str(),
                data.status.c_str(),
                data.value.c_str(),
@@ -107,7 +107,7 @@ void sensor_data_print ( const sensor_data_type & data )
  *
  *****************************************************************************/
 
-int bmc_load_json_sensor ( sensor_data_type & sensor_data , string json_sensor_data )
+int bmc_load_json_sensor ( string & hostname, sensor_data_type & sensor_data , string json_sensor_data )
 {
     int rc = FAIL_KEY_VALUE_PARSE ;
     // ilog ("sensor data:%s\n", json_sensor_data.c_str() );
@@ -126,7 +126,7 @@ int bmc_load_json_sensor ( sensor_data_type & sensor_data , string json_sensor_d
         sensor_data.ucr    = jsonUtil_get_key_value_string ( raw_obj, "ucr" ) ;
         sensor_data.unc    = jsonUtil_get_key_value_string ( raw_obj, "unc" ) ;
 
-        sensor_data_print ( sensor_data );
+        sensor_data_print ( hostname, sensor_data );
 
         json_object_put(raw_obj);
         rc = PASS ;
@@ -310,7 +310,7 @@ int hwmonHostClass::bmc_load_sensor_samples ( struct hwmonHostClass::hwmon_host 
             rc = jsonUtil_get_array_idx ( msg_ptr, BMC_JSON__SENSORS_LABEL, index, sensor_data ) ;
             if ( rc == PASS )
             {
-                if ( bmc_load_json_sensor ( host_ptr->sample[host_ptr->samples], sensor_data ) == PASS )
+                if ( bmc_load_json_sensor ( host_ptr->hostname , host_ptr->sample[host_ptr->samples], sensor_data ) == PASS )
                 {
                     bool found = false ;
 
@@ -635,7 +635,7 @@ int hwmonHostClass::bmc_update_sensors ( struct hwmonHostClass::hwmon_host * hos
                                           host_ptr->sensor[i].sensorname.c_str(),
                                           bmc_status);
 
-                                sensor_data_print (host_ptr->sample[j]);
+                                sensor_data_print ( host_ptr->hostname, host_ptr->sample[j]);
                                 blog3 ("%s ... %s\n", host_ptr->hostname.c_str(), host_ptr->bmc_thread_info.data.c_str());
 
                                 host_ptr->sensor[i].sample_severity = HWMON_SEVERITY_MINOR ;
@@ -698,7 +698,7 @@ int hwmonHostClass::bmc_update_sensors ( struct hwmonHostClass::hwmon_host * hos
                                           host_ptr->sensor[i].sensorname.c_str(),
                                           bmc_status);
 
-                                sensor_data_print (host_ptr->sample[j]);
+                                sensor_data_print ( host_ptr->hostname, host_ptr->sample[j]);
                                 blog3 ("%s ... %s\n", host_ptr->hostname.c_str(), host_ptr->bmc_thread_info.data.c_str());
 
                                 host_ptr->sensor[i].sample_severity = HWMON_SEVERITY_MINOR ;

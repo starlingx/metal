@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2016 Wind River Systems, Inc.
+ * Copyright (c) 2013-2016, 2025 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -192,7 +192,7 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
                 alarm_compute_clear ( node_ptr, true );
 
                 /* ok. great, got the go-enabled message, lets move on */
-                enableStageChange ( node_ptr, MTC_ENABLE__HOST_SERVICES_START );
+                enableStageChange ( node_ptr, MTC_ENABLE__HEARTBEAT_CHECK );
                 break ;
             }
             ilog ("%s running out-of-service tests\n", name.c_str());
@@ -214,19 +214,20 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
         }
         case MTC_ENABLE__GOENABLED_WAIT:
         {
-            bool goenable_failed = false ;
+            bool goenable_failed_subf = false ;
 
             /* search for the Go Enable message */
             if (( node_ptr->health == NODE_UNHEALTHY ) ||
                 ( node_ptr->mtce_flags & MTC_FLAG__I_AM_NOT_HEALTHY) ||
+                ( node_ptr->mtce_flags & MTC_FLAG__SUBF_GOENABLE_FAIL) ||
                 ( node_ptr->goEnabled_failed_subf == true ))
             {
                 mtcTimer_reset ( node_ptr->mtcTimer );
-                elog ("%s one or more out-of-service tests failed\n", name.c_str());
+                elog ("%s one or more out-of-service subfunction tests failed\n", name.c_str());
 
                 mtcInvApi_update_task ( node_ptr, MTC_TASK_SUBF_INTEST_FAIL );
                 enableStageChange ( node_ptr, MTC_ENABLE__SUBF_FAILED );
-                goenable_failed = true ;
+                goenable_failed_subf = true ;
             }
 
             /* search for the Go Enable message */
@@ -245,17 +246,7 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
 
                 /* ok. great, got the go-enabled message, lets move on */
 
-                if ( node_ptr->start_services_needed_subf == true )
-                {
-                    /* If the add_handler set start_services_needed_subf to
-                     * true then we bypass inline execution and allow it to
-                     * be serviced as a scheduled background operation. */
-                    enableStageChange ( node_ptr, MTC_ENABLE__HEARTBEAT_CHECK );
-                }
-                else
-                {
-                    enableStageChange ( node_ptr, MTC_ENABLE__HOST_SERVICES_START );
-                }
+                enableStageChange ( node_ptr, MTC_ENABLE__HEARTBEAT_CHECK );
                 break ;
             }
 
@@ -265,14 +256,14 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
 
                 mtcInvApi_update_task ( node_ptr, MTC_TASK_SUBF_INTEST_TO );
                 enableStageChange ( node_ptr, MTC_ENABLE__SUBF_FAILED );
-                goenable_failed = true ;
+                goenable_failed_subf = true ;
             }
             else
             {
                 ; /* wait some more */
             }
 
-            if ( goenable_failed == true )
+            if ( goenable_failed_subf == true )
             {
                 alarm_compute_failure ( node_ptr, FM_ALARM_SEVERITY_CRITICAL );
 
@@ -281,103 +272,6 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
                                  MTC_AR_DISABLE_CAUSE__GOENABLE,
                                  MTC_TASK_AR_DISABLED_GOENABLE ) != PASS )
                     break ;
-            }
-            break ;
-        }
-        case  MTC_ENABLE__HOST_SERVICES_START:
-        {
-            bool start = true ;
-            bool subf  = true ;
-
-            plog ("%s %s host services\n",
-                      name.c_str(),
-                      node_ptr->start_services_needed_subf ? "scheduling start compute" :
-                                                             "starting compute");
-
-            if ( node_ptr->start_services_needed_subf == true )
-            {
-                bool force = true ;
-
-                /* If the add_handler set start_services_needed_subf to
-                 * true then we bypass inline execution and allow it to
-                 * be serviced as a scheduled background operation. */
-                enableStageChange ( node_ptr, MTC_ENABLE__HEARTBEAT_CHECK );
-                alarm_compute_clear ( node_ptr, force );
-            }
-
-            else if ( launch_host_services_cmd ( node_ptr, start, subf ) != PASS )
-            {
-                wlog ("%s %s failed ; launch\n",
-                          name.c_str(),
-                          node_ptr->host_services_req.name.c_str());
-
-                node_ptr->hostservices_failed_subf = true ;
-                alarm_compute_failure ( node_ptr, FM_ALARM_SEVERITY_CRITICAL );
-                enableStageChange ( node_ptr, MTC_ENABLE__SUBF_FAILED );
-                mtcInvApi_update_task ( node_ptr, MTC_TASK_SUBF_SERVICE_FAIL );
-
-                /* handle auto recovery for this failure */
-                if ( ar_manage ( node_ptr,
-                                 MTC_AR_DISABLE_CAUSE__HOST_SERVICES,
-                                 MTC_TASK_AR_DISABLED_SERVICES ) != PASS )
-                    break ;
-            }
-            else
-            {
-                enableStageChange ( node_ptr, MTC_ENABLE__HOST_SERVICES_WAIT );
-            }
-            break ;
-        }
-
-        case MTC_ENABLE__HOST_SERVICES_WAIT:
-        {
-            /* Wait for host services to complete - pass or fail.
-             * The host_services_handler manages timeout. */
-            rc = host_services_handler ( node_ptr );
-            if ( rc == RETRY )
-            {
-                /* wait for the mtcClient's response ... */
-                break ;
-            }
-            else if ( rc != PASS )
-            {
-                node_ptr->hostservices_failed_subf = true ;
-                alarm_compute_failure ( node_ptr, FM_ALARM_SEVERITY_CRITICAL );
-
-                enableStageChange ( node_ptr, MTC_ENABLE__SUBF_FAILED );
-
-
-                if ( rc == FAIL_TIMEOUT )
-                {
-                    elog ("%s %s failed ; timeout\n",
-                              name.c_str(),
-                              node_ptr->host_services_req.name.c_str());
-
-                    /* Report "Enabling Compute Service Timeout" to sysinv/horizon */
-                    mtcInvApi_update_task ( node_ptr, MTC_TASK_SUBF_SERVICE_TO );
-                }
-                else
-                {
-                    elog ("%s %s failed ; rc:%d\n",
-                              name.c_str(),
-                              node_ptr->host_services_req.name.c_str(),
-                              rc);
-
-                    /* Report "Enabling Compute Service Failed" to sysinv/horizon */
-                    mtcInvApi_update_task ( node_ptr, MTC_TASK_SUBF_SERVICE_FAIL );
-                }
-
-                /* handle auto recovery for this failure */
-                if ( ar_manage ( node_ptr,
-                                 MTC_AR_DISABLE_CAUSE__HOST_SERVICES,
-                                 MTC_TASK_AR_DISABLED_SERVICES ) != PASS )
-                    break ;
-            }
-            else /* success path */
-            {
-                alarm_compute_clear ( node_ptr, true );
-                node_ptr->hostservices_failed_subf = false ;
-                enableStageChange ( node_ptr, MTC_ENABLE__HEARTBEAT_CHECK );
             }
             break ;
         }
@@ -517,12 +411,6 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
             }
             else
             {
-                if ( node_ptr->dor_recovery_mode || node_ptr->was_dor_recovery_mode )
-                {
-                    node_ptr->dor_recovery_mode = false ;
-                    node_ptr->was_dor_recovery_mode = true ;
-                }
-
                 if (( node_ptr->alarms[MTC_ALARM_ID__CH_COMP] != FM_ALARM_SEVERITY_CLEAR ) ||
                     ( node_ptr->alarms[MTC_ALARM_ID__ENABLE] != FM_ALARM_SEVERITY_CLEAR ) ||
                     ( node_ptr->alarms[MTC_ALARM_ID__CONFIG] != FM_ALARM_SEVERITY_CLEAR ))
@@ -560,20 +448,17 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
 
             node_ptr->subf_enabled = true ;
             node_ptr->inservice_failed_subf    = false ;
-            if ( node_ptr->was_dor_recovery_mode )
+            if ( this->dor_mode_active )
             {
-                report_dor_recovery (  node_ptr , "is ENABLED" );
+                report_dor_recovery (  node_ptr , "is ENABLED", "subf" );
             }
             else
             {
-                plog ("%s is ENABLED\n", name.c_str());
+                plog ("%s is ENABLED", name.c_str());
+                plog ("%s is ENABLED%s", node_ptr->hostname.c_str(), node_ptr->unlocking ? " ; from unlock" : "");
             }
 
-            /* already cleared if true so no need to do it again */
-            if ( node_ptr->start_services_needed_subf != true )
-            {
-                alarm_compute_clear ( node_ptr, force );
-            }
+            alarm_compute_clear ( node_ptr, force );
 
             enableStageChange ( node_ptr, MTC_ENABLE__DONE );
 
@@ -598,9 +483,9 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
                                        MTC_OPER_STATE__ENABLED,
                                        MTC_AVAIL_STATUS__DEGRADED );
 
-            if ( node_ptr->was_dor_recovery_mode )
+            if ( this->dor_mode_active )
             {
-                report_dor_recovery (  node_ptr , "is ENABLED-degraded" );
+                report_dor_recovery (  node_ptr , "is DEGRADED", "subf" );
             }
             else
             {
@@ -621,16 +506,6 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
                                        MTC_OPER_STATE__ENABLED,
                                        MTC_AVAIL_STATUS__DEGRADED );
 
-            if ( node_ptr->was_dor_recovery_mode )
-            {
-                report_dor_recovery (  node_ptr , "is DISABLED-failed" );
-            }
-            else
-            {
-                elog ("%s is DISABLED-failed (subfunction failed)\n",
-                          name.c_str() );
-            }
-            this->dor_mode_active = false ;
 
             alarm_compute_failure ( node_ptr , FM_ALARM_SEVERITY_CRITICAL ) ;
 
@@ -662,13 +537,34 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
             node_ptr->enabled_count++ ;
             node_ptr->health_threshold_counter = 0 ;
 
-            node_ptr->was_dor_recovery_mode = false ;
-            node_ptr->dor_recovery_mode = false ;
-            this->dor_mode_active = false ;
-
             ar_enable ( node_ptr );
-
             mtcInvApi_force_task ( node_ptr, "" );
+
+            if ( node_ptr->hostname == this->my_hostname )
+            {
+                if ( daemon_is_file_present ( NODE_UNLOCK_SECS_FILE ) )
+                {
+                    unsigned int self_unlock_secs = daemon_get_file_uint ( NODE_UNLOCK_SECS_FILE );
+                    if ( self_unlock_secs )
+                    {
+                        kpi_log ( node_ptr->hostname, KPI_AREA__ACTION,
+                                                      KPI_ACTION__UNLOCK,
+                                                      KPI_STR__START,
+                                                      KPI_STR__COMPLETE,
+                                                      self_unlock_secs);
+                    }
+                    daemon_remove_file(NODE_UNLOCK_SECS_FILE);
+                }
+            }
+            else if ( node_ptr->unlocking == true )
+            {
+                kpi_log ( node_ptr->hostname, KPI_AREA__ACTION,
+                                              KPI_ACTION__UNLOCK,
+                                              KPI_STR__START,
+                                              KPI_STR__COMPLETE,
+                                              node_ptr->start_unlock_time);
+                node_ptr->unlocking = false ;
+            }
             break ;
         }
         default:

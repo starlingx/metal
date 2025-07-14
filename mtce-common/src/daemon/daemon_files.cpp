@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2019 Wind River Systems, Inc.
+ * Copyright (c) 2013-2019, 2025 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -121,6 +121,69 @@ bool daemon_is_file_present ( const char * filename )
         return (false);
 }
 
+static void get_current_date_as_string ( char *date_str, size_t size )
+{
+    time_t now = time(NULL);
+    struct tm *t = localtime(&now);
+
+    // Suffix Format: _YYYY-MM-DD_HH-MM-SS
+    strftime(date_str, size, "%Y-%m-%d_%H-%M-%S", t);
+}
+
+// 16KB buffer for efficient copying
+#define MAX_FILE_CONTENT_BUFFER_SIZE 0x4000 // 16 KBytes
+int daemon_copy_file ( string hostname, const char *source )
+{
+    // Open source file in binary mode
+    FILE *src = fopen (source, "rb");
+    if (!src)
+    {
+        // Error path
+        wlog ("%s unable to open source file: %s ; (%d:%m)", hostname.c_str(), source, errno);
+        return FAIL ;
+    }
+
+    // Generate the destination filename with date suffix
+
+    // Format: _YYYY-MM-DD_HH-MM-SS needs 21 chars with null termination
+    char date_suffix[21];
+    get_current_date_as_string (date_suffix, sizeof(date_suffix));
+
+    // Max hostname size is 256 plus extra for path and the rest
+    // of the filename size with the dated suffix. 512 is ample.
+    // Example /var/run/bmc/redfishtool/hwmond_controller-0_thermal_sensor_data
+    char destination[512];
+
+    // Create the date suffixed destination filename
+    snprintf(destination, sizeof(destination), "%s_%s", source, date_suffix);
+
+    // Open destination file in binary mode
+    FILE *dest = fopen(destination, "wb");
+    if (!dest)
+    {
+        // Error path
+        wlog ("%s failed to open destination file '%s' for copy operation",
+                  hostname.c_str(), destination);
+
+        fclose (src);
+        return FAIL ;
+    }
+
+    char buffer [MAX_FILE_CONTENT_BUFFER_SIZE];
+    size_t bytes_read;
+
+    // Read from source and write to destination in chunks
+    while ((bytes_read = fread(buffer, 1, MAX_FILE_CONTENT_BUFFER_SIZE, src)) > 0)
+        fwrite(buffer, 1, bytes_read, dest);
+
+    // Close files
+    fclose (src);
+    fclose (dest);
+
+    ilog ("%s file '%s' copied to '%s'\n", hostname.c_str(), source, destination);
+    return PASS ;
+}
+
 void daemon_healthcheck ( const char * sig )
 {
     FILE * hc_file_stream ;
@@ -162,12 +225,12 @@ int daemon_log_value ( const char * filename , const char * str, int val )
     return (FAIL_FILE_OPEN);
 }
 
-int daemon_log_value ( const char * filename , int val )
+int daemon_log_value ( const char * filename , unsigned int val )
 {
     FILE * file_stream = fopen (filename, "w" ) ;
     if ( file_stream != NULL )
     {
-        fprintf ( file_stream,"%d\n", val );
+        fprintf ( file_stream,"%u\n", val );
         fflush (file_stream);
         fclose (file_stream);
         return (PASS);
@@ -186,6 +249,43 @@ int daemon_log ( const char * filename , const char * str )
         return (PASS);
     }
     return (FAIL_FILE_OPEN);
+}
+
+/* reads the first line of a file and if it contains a string
+ * that represents an integer value then return it */
+unsigned int daemon_get_file_uint ( const char * filename )
+{
+    unsigned int value = 0 ;
+    FILE * __stream = fopen ( filename, "r" );
+    if ( __stream != NULL )
+    {
+        int rc ;
+
+        char   buffer     [MAX_CHARS_IN_INT];
+        memset(buffer, 0 , MAX_CHARS_IN_INT);
+        if ( fgets (buffer,MAX_CHARS_IN_INT, __stream) != NULL )
+        {
+            rc = sscanf ( &buffer[0], "%u",  &value );
+            if ( rc >= 1 )
+            {
+                dlog ("%s contains number %u\n", filename, value );
+            }
+            else
+            {
+                wlog ("failed to sscanf integer from file:%s\n", filename );
+            }
+        }
+        else
+        {
+            wlog ("failed to read integer from file:%s\n", filename );
+        }
+        fclose(__stream);
+    }
+    else
+    {
+        wlog ("failed to open file:%s\n", filename );
+    }
+    return ( value );
 }
 
 /* reads the first line of a file and if it contains a string
@@ -1086,9 +1186,12 @@ int daemon_wait_for_file ( const char * filename, int timeout )
 
 int daemon_files_init ( void )
 {
+    struct timespec ts ;
+    clock_gettime (CLOCK_MONOTONIC, &ts );
+
     /* Create PID file */
     pid_t mypid = getpid();
-    ilog   ("--- Daemon Start-Up --- pid:%d\n", mypid);
+    ilog   ("--- Daemon Start-Up --- pid:%d uptime:%ld", mypid, ts.tv_sec);
     daemon_init_fit ();
     return ( PASS );
 }

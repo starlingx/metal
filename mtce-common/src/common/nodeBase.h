@@ -1,7 +1,7 @@
 #ifndef __INCLUDE_NODEBASE_HH__
 #define __INCLUDE_NODEBASE_HH__
 /*
- * Copyright (c) 2013-2020, 2023-2024 Wind River Systems, Inc.
+ * Copyright (c) 2013-2020, 2023-2025 Wind River Systems, Inc.
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -18,6 +18,7 @@
 
 using namespace std;
 
+#include "timeUtil.h"
 #include "fitCodes.h"
 #include "logMacros.h"
 #include "returnCodes.h"
@@ -77,18 +78,25 @@ void daemon_exit ( void );
   *
   * These flags are shipped in the parm[2] if the
   * mtcAlive message from each host. */
-#define MTC_FLAG__I_AM_CONFIGURED  (0x00000001)
-#define MTC_FLAG__I_AM_NOT_HEALTHY (0x00000002)
-#define MTC_FLAG__I_AM_HEALTHY     (0x00000004)
-#define MTC_FLAG__I_AM_LOCKED      (0x00000008)
-#define MTC_FLAG__SUBF_CONFIGURED  (0x00000010)
-#define MTC_FLAG__MAIN_GOENABLED   (0x00000020)
-#define MTC_FLAG__SUBF_GOENABLED   (0x00000040)
-#define MTC_FLAG__SM_DEGRADED      (0x00000080)
-#define MTC_FLAG__PATCHING         (0x00000100) /* Patching in progress */
-#define MTC_FLAG__PATCHED          (0x00000200) /* Patched but not reset */
-#define MTC_FLAG__LUKS_VOL_FAILED  (0x00000400)
-#define MTC_FLAG__SM_UNHEALTHY     (0x00001000)
+#define MTC_FLAG__I_AM_CONFIGURED    (0x00000001)
+#define MTC_FLAG__I_AM_NOT_HEALTHY   (0x00000002)
+#define MTC_FLAG__I_AM_HEALTHY       (0x00000004)
+#define MTC_FLAG__I_AM_LOCKED        (0x00000008)
+#define MTC_FLAG__SUBF_CONFIGURED    (0x00000010)
+#define MTC_FLAG__MAIN_GOENABLED     (0x00000020)
+#define MTC_FLAG__SUBF_GOENABLED     (0x00000040)
+#define MTC_FLAG__SM_DEGRADED        (0x00000080)
+#define MTC_FLAG__PATCHING           (0x00000100) /* Patching in progress */
+#define MTC_FLAG__PATCHED            (0x00000200) /* Patched but not reset */
+#define MTC_FLAG__LUKS_VOL_FAILED    (0x00000400)
+#define MTC_FLAG__SM_UNHEALTHY       (0x00001000)
+#define MTC_FLAG__RESERVED_2000      (0x00002000)
+#define MTC_FLAG__RESERVED_4000      (0x00004000)
+#define MTC_FLAG__RESERVED_8000      (0x00008000)
+#define MTC_FLAG__MAIN_GOENABLE_FAIL (0x00010000)
+#define MTC_FLAG__SUBF_GOENABLE_FAIL (0x00020000)
+#define MTC_FLAG__MAIN_SERVICES_FAIL (0x00040000)
+#define MTC_FLAG__SUBF_SERVICES_FAIL (0x00080000)
 
 #define MTC_UNHEALTHY_THRESHOLD    (3)
 
@@ -98,7 +106,7 @@ void daemon_exit ( void );
 #define NODE_UNHEALTHY          (2)
 
 #define AUTO_RECOVERY_FILE_SUFFIX  ((const char *)"_ar_count")
-#define TMP_DIR_PATH               ((const char *)"/etc/mtc/tmp/")
+#define MTC_PERSIST_PATH           ((const char *)"/var/persist/mtc/")
 
 #define HOST_IS_VIRTUAL        ((const char *)"/var/run/virtual.host")
 
@@ -107,6 +115,7 @@ void daemon_exit ( void );
 #define CONFIG_FAIL_FILE        ((const char *)"/var/run/.config_fail")
 #define NODE_LOCKED_FILE        ((const char *)"/var/run/.node_locked")
 #define NODE_LOCKED_FILE_BACKUP ((const char *)"/var/persist/mtc/.node_locked")
+#define NODE_UNLOCK_SECS_FILE   ((const char *)"/var/persist/mtc/.node_unlocked")
 #define NODE_RESET_FILE         ((const char *)"/var/run/.node_reset")
 #define SMGMT_DEGRADED_FILE     ((const char *)"/var/run/.sm_degraded")
 #define SMGMT_UNHEALTHY_FILE    ((const char *)"/var/run/.sm_node_unhealthy")
@@ -159,6 +168,16 @@ void daemon_exit ( void );
 #define OPT_PLATFORM_CONFIG_DIR ((const char *)"/opt/platform/config")
 #define DNSMASQ_HOSTS_FILE      ((const char *)"dnsmasq.hosts")
 
+/* maintenance log files */
+#define MTCAGENT_LOG_FILE  ((const char *)"/var/log/mtcAgent.log")
+#define MTCCLIENT_LOG_FILE ((const char *)"/var/log/mtcClient.log")
+
+/* common binaries */
+#define SYSTEMD_RUN                     "/usr/bin/systemd-run"
+
+/* maintenance scripts */
+#define MTC_DELAYED_SYSRQ_REBOOT_SCRIPT "/usr/local/sbin/delayed_sysrq_reboot"
+
 /* supported BMC communication protocols ; access method */
 typedef enum
 {
@@ -192,8 +211,9 @@ typedef enum
 
 #define DEFAULT_MTCALIVE_TIMEOUT    (1200)
 #define DEFAULT_GOENABLE_TIMEOUT     (300)
-#define DEFAULT_DOR_MODE_TIMEOUT      (20)
-#define DEFAULT_DOR_MODE_AIO_TIMEOUT (600)
+#define DEFAULT_DOR_MODE_TIMEOUT      (MTC_MINS_15)
+#define DEFAULT_DOR_MODE_AIO_TIMEOUT  (MTC_MINS_20)
+#define DEFAULT_DOR_MODE_DETECT       (MTC_MINS_20)
 #define DEFAULT_POWER_OFF_RETRY_WAIT  (30)
 
 /** TODO: Convert names to omit JSON part */
@@ -294,8 +314,7 @@ typedef enum
 #define MTC_TASK_SUBF_CONFIG_TO    "Worker Configuration Timeout, re-enabling"
 #define MTC_TASK_SUBF_INTEST_FAIL  "Worker In-Test Failed, re-enabling"
 #define MTC_TASK_SUBF_INTEST_TO    "Worker In-Test Timeout, re-enabling"
-#define MTC_TASK_SUBF_SERVICE_FAIL "Worker Start Services Failed, re-enabling"
-#define MTC_TASK_SUBF_SERVICE_TO   "Worker Start Services Timeout, re-enabling"
+#define MTC_TASK_SUBF_SERVICE_FAIL "Start Worker Services Failed, re-enabling"
 
 #define MTC_TASK_AR_DISABLED_CONFIG    "Configuration failure, threshold reached, Lock/Unlock to retry"
 #define MTC_TASK_AR_DISABLED_GOENABLE  "In-Test Failure, threshold reached, Lock/Unlock to retry"
@@ -904,8 +923,6 @@ typedef enum
     MTC_ENABLE__GOENABLED_TIMER      = 12,
     MTC_ENABLE__GOENABLED_WAIT       = 13,
     MTC_ENABLE__PMOND_READY_WAIT     = 14,
-    MTC_ENABLE__HOST_SERVICES_START  = 15,
-    MTC_ENABLE__HOST_SERVICES_WAIT   = 16,
     MTC_ENABLE__SERVICES_START_WAIT  = 17,
     MTC_ENABLE__HEARTBEAT_WAIT       = 18,
     MTC_ENABLE__HEARTBEAT_SOAK       = 19,
@@ -919,7 +936,8 @@ typedef enum
     MTC_ENABLE__FAILURE              = 27,
     MTC_ENABLE__FAILURE_WAIT         = 28,
     MTC_ENABLE__FAILURE_SWACT_WAIT   = 29,
-    MTC_ENABLE__STAGES               = 30,
+    MTC_ENABLE__FAILURE_TIMER        = 30,
+    MTC_ENABLE__STAGES               = 31,
 } mtc_enableStages_enum ;
 
 /** Return the string representing the specified 'enable' stage */
@@ -954,6 +972,8 @@ typedef enum
     MTC_ADD__MTC_SERVICES,
     MTC_ADD__CLEAR_TASK,
     MTC_ADD__WORKQUEUE_WAIT,
+    MTC_ADD__HEARTBEAT_WAIT,
+    MTC_ADD__HEARTBEAT_SOAK,
     MTC_ADD__DONE,
     MTC_ADD__STAGES
 } mtc_addStages_enum ;
@@ -981,14 +1001,17 @@ typedef enum
     MTC_RECOVERY__RETRY_WAIT,
     MTC_RECOVERY__REQ_MTCALIVE,
     MTC_RECOVERY__REQ_MTCALIVE_WAIT,
+    MTC_RECOVERY__SETUP,
+    MTC_RECOVERY__POWER_QUERY,
+    MTC_RECOVERY__POWER_QUERY_RECV,
+    MTC_RECOVERY__POWER_ON,
+    MTC_RECOVERY__POWER_ON_RECV,
     MTC_RECOVERY__RESET_SEND_WAIT,
     MTC_RECOVERY__RESET_RECV_WAIT,
     MTC_RECOVERY__MTCALIVE_TIMER,
     MTC_RECOVERY__MTCALIVE_WAIT,
     MTC_RECOVERY__GOENABLED_TIMER,
     MTC_RECOVERY__GOENABLED_WAIT,
-    MTC_RECOVERY__HOST_SERVICES_START,
-    MTC_RECOVERY__HOST_SERVICES_WAIT,
 
     /* Subfunction stages */
     MTC_RECOVERY__CONFIG_COMPLETE_WAIT,
@@ -1358,6 +1381,33 @@ void mem_log    ( char   log );
 void mem_log    ( string one, string two );
 void mem_log    ( string one, string two, string three );
 void mem_log    ( string label, int value, string data );
+
+/* KPI definitions and log functions */
+
+#define KPI_AREA__BMC                "bmc"
+#define KPI_AREA__IPMI               "ipmi"
+#define KPI_AREA__REDFISH            "redfish"
+
+#define KPI_AREA__ACTION             "action:"
+#define KPI_ACTION__UNLOCK           "unlock"
+#define KPI_ACTION__REINSTALL        "reinstall"
+#define KPI_ACTION__POWERON          "power-on"
+#define KPI_ACTION__POWEROFF         "power-off"
+
+/* KPI strings */
+#define KPI_STR__START               "start"
+#define KPI_STR__COMPLETE            "complete"
+#define KPI_STR__PROCESS_STARTUP     "startup"
+#define KPI_STR__REINSTALL           "reinstall"
+#define KPI_STR__POWER_STATE_LEARNED "power state learned"
+#define KPI_STR__ACCESSIBLE          "accessible"
+#define KPI_STR__INACCESSIBLE        "inaccessible"
+#define KPI_STR__PROVISIONING        "provisioning"
+
+void kpi_log ( string & hostname, string kpi, time_debug_type & start );
+void kpi_log ( string & hostname, string kpi_area, string kpi_start, string kpi_stop, time_debug_type & start_time );
+void kpi_log ( string & hostname, string kpi_area, string extra, string kpi_start, string kpi_stop, unsigned int start_secs );
+void kpi_log ( string & hostname, string kpi_area, string extra, string kpi_start, string kpi_stop, time_debug_type & start_time );
 
 string get_hostname ( void );
 

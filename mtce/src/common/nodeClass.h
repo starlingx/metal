@@ -1,7 +1,7 @@
 #ifndef __INCLUDE_NODECLASS_H__
 #define __INCLUDE_NODECLASS_H__
 /*
- * Copyright (c) 2013-2016, 2023-2024 Wind River Systems, Inc.
+ * Copyright (c) 2013-2016, 2023-2025 Wind River Systems, Inc.
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -66,6 +66,9 @@ using namespace std;
 #endif
 #define SIMPLEX \
     ( daemon_is_file_present ( PLATFORM_SIMPLEX_MODE ) == true )
+
+#define NOT_SIMPLEX \
+    ( daemon_is_file_present ( PLATFORM_SIMPLEX_MODE ) == false )
 
 #define THIS_HOST \
     ( node_ptr->hostname == this->my_hostname )
@@ -199,6 +202,9 @@ private:
         /** Set to true once the host's add FSM is done  */
         bool   add_completed ;
 
+        /** Set true if the add handler heartbeat soak fails */
+        bool   add_heartbeat_soak_failed ;
+
         int uptime_refresh_counter ;
 
         /** Counts the number of times this node was unlocked.
@@ -208,19 +214,6 @@ private:
         int    node_unlocked_counter ;
 
         int    mtcalive_timeout ;
-
-        /* start host service retry controls */
-        int  start_services_retries ;
-
-        bool start_services_running_main ;
-        bool start_services_running_subf ;
-
-        bool start_services_needed  ;
-        bool start_services_needed_subf ; /* for the add handler that defers
-                                             start to the inservice test handler.
-                                             this provides a means of telling
-                                             maintenance that the subfunction
-                                             start needs to also be run. */
 
         /** Pointer to the previous node in the list */
         struct node *prev;
@@ -378,10 +371,8 @@ private:
         /* the fault handling offline handler timer */
         struct mtc_timer offline_timer ;
 
-        /* Host level DOR recovery mode time and bools */
+        /* Host level DOR recovery time */
         int              dor_recovery_time  ;
-        bool             dor_recovery_mode  ;
-        bool         was_dor_recovery_mode  ;
 
         /** Integer code representing the host health */
         int  health ;
@@ -404,8 +395,8 @@ private:
 
         /* Boolean indicating the main or subfunction has start host services
          * failure. */
-        bool hostservices_failed      ;
-        bool hostservices_failed_subf ;
+        bool hostservices_failed      = false ;
+        bool hostservices_failed_subf = false ;
 
         /* Boolean indicating the main or subfunction has inservice failure */
         bool inservice_failed      ;
@@ -442,7 +433,11 @@ private:
         /* throttles the ar_disabled log to periodically indicate auto
          * recovery disabled state but avoid flooding that same message. */
         #define AR_LOG_THROTTLE_THRESHOLD (100000)
+        #define AR_HANDLER_LOG_THROTTLE_THRESHOLD (1000)
         unsigned int ar_log_throttle ;
+
+        /** Bool to prevent nested force_full_enable and auto recovery management handling */
+        bool forcing_full_enable = false ;
 
         /** Host's mtc timer struct. Use to time handler stages.
          *
@@ -647,6 +642,8 @@ private:
         string bm_poweron_cmd  ;
         string bm_poweroff_cmd ;
 
+        bool   bm_cancel_reset_progression = false ;
+
         /**
          *   The BMC is 'accessible' once provisioning data is available
          *   and bmc is verified pingable.
@@ -738,6 +735,13 @@ private:
         bool   bmc_actions_query_done   ;
 
         bool   power_on = false ;
+        bool   unlocking = false ;
+
+        bool   power_on_needed = false ;
+        bool   power_on_in_progress = false ;
+
+        /* the number of secs since Epoch this host was last powered on */
+        time_t power_on_time_secs = 0 ;
 
         /* a timer used in the bmc_handler to query
          * the bmc_info and reset cause */
@@ -761,6 +765,12 @@ private:
         /* extra thread info for board management control thread */
         thread_extra_info_type thread_extra_info ;
 
+        /* Maintenance KPI Start timers */
+        time_debug_type start_bmc_prov_time  = TIME_DEBUG_INIT;
+        time_debug_type start_unlock_time    = TIME_DEBUG_INIT;
+        time_debug_type start_poweroff_time  = TIME_DEBUG_INIT;
+        time_debug_type start_poweron_time   = TIME_DEBUG_INIT;
+        time_debug_type start_reinstall_time = TIME_DEBUG_INIT;
     };
 
     struct node * head ; /**< Node Linked List Head pointer */
@@ -876,6 +886,7 @@ private:
     int stress_handler     ( struct nodeLinkClass::node * node_ptr );
     int bmc_handler        ( struct nodeLinkClass::node * node_ptr );
     int degrade_handler    ( struct nodeLinkClass::node * node_ptr );
+    int self_fail_handler  ( struct nodeLinkClass::node * node_ptr );
 
     int uptime_handler     ( void );
 
@@ -984,6 +995,12 @@ private:
     int  ar_manage ( struct nodeLinkClass::node * node_ptr,
                      autorecovery_disable_cause_enum cause,
                      string ar_disable_banner );
+
+    /* handle auto recovery
+     * - adds common handling functionality on top of ar_manage */
+    int ar_handler ( struct nodeLinkClass::node * node_ptr,
+                     autorecovery_disable_cause_enum cause,
+                     string ar_disable_banner);
 
     /** ***********************************************************************
       *
@@ -1160,7 +1177,6 @@ private:
 
     void clear_subf_failed_bools ( struct nodeLinkClass::node * node_ptr );
     void clear_main_failed_bools ( struct nodeLinkClass::node * node_ptr );
-    void clear_hostservices_ctls ( struct nodeLinkClass::node * node_ptr );
 
     /* Enables/Clears dynamic auto recovery state. start fresh !
      * called in disabled_handler (lock) and in the DONE stages
@@ -1254,28 +1270,6 @@ private:
     */
     int memory_used   ;
 
-   /** Inservice memory management audit.
-    *
-    * Verifies that the node_ptr list and memory_allocs jive as well
-    * as all the node pointers point to a node in the linked list.
-    *
-    * @return
-    *  an integer representing a PASS or TODO: list other error codes.
-    */
-    int memory_audit   ( void );
-
-
-    /* Simplex mode auto recovery bools
-     *
-     * Set to true when the autorecovery threshold is reached
-     * and we want to avoid taking further autorecovery action
-     * even though it may be requested. */
-    bool autorecovery_disabled = false ;
-
-    /* Set to true by fault detection methods that are
-     * autorecoverable when in simplex mode. */
-    bool autorecovery_enabled = false ;
-
     /** Tracks the number of hosts that 'are currently' in service trouble
      *  wrt heartbeat (above minor threshold).
      *  This is used in multi-host failure avoidance.
@@ -1297,7 +1291,7 @@ private:
 
     /* Dead Office Recovery - system level controls */
     void manage_dor_recovery ( struct nodeLinkClass::node * node_ptr, EFmAlarmSeverityT severity );
-    void report_dor_recovery ( struct nodeLinkClass::node * node_ptr, string node_state_log_prefix );
+    void report_dor_recovery ( struct nodeLinkClass::node * node_ptr, string node_state_log_prefix, string extra );
 
     struct {
         struct node * head_ptr ; /**< Pulse Linked List Head pointer */
@@ -1420,6 +1414,7 @@ public:
     bool dor_mode_active ;
     unsigned int dor_start_time  ;
     int  dor_mode_active_log_throttle ;
+    int  dor_recovered_nodes = 0; /**< DOR node recovery count            */
 
     bool hbs_disabled          ; /**< Control heartbeat service state    */
     bool hbs_state_change      ; /**< Flag service state change          */
@@ -1462,6 +1457,8 @@ public:
     string my_clstr_ip   ; /** Cluster network IP address      */
     string my_pxeboot_ip ; /** Pxeboot network IP address      */
     string my_pxeboot_if ; /** Pxeboot interface name          */
+
+    time_debug_type start_process_time = TIME_DEBUG_INIT ;
 
     /*********  New Public Constructs for IPMI Comamnd Handling ***********/
 
@@ -1724,6 +1721,9 @@ public:
     /** Remove a host from Node list */
     int rem_host ( string & hostname );
 
+    /** Get the number of unlocked nodes */
+    int unlocked_nodes ( void );
+
     /** Get the number of worker hosts that are operationally 'enabled' */
     int enabled_compute_nodes ( void );
 
@@ -1904,6 +1904,7 @@ public:
     int    set_bm_type ( string hostname , string bm_type );
     int    set_bm_un   ( string hostname , string bm_un );
 
+    int    set_bm_prov     ( string hostname , bool state );
     bool   is_bm_ip_already_used  ( string bm_ip  );
 
     string get_bm_ip   ( string hostname );
@@ -2191,7 +2192,14 @@ public:
      */
     unsigned int ar_interval[MTC_AR_DISABLE_CAUSE__LAST]  ;
 
-    int  unknown_host_throttle ;
+    /* Used by the auto recovery algorithm for self-reboot.
+     * This is a flag indicating a delayed self-reboot is required.
+     * This ensures the FSM enters the self_reboot_handler, allowing sufficient time
+     * for operational and availability state changes to be committed to the database
+     * before initiating the reboot. */
+    bool delayed_swact_required = false ;
+    bool self_reboot_wait = false ;
+    bool force_swact_wait = false ;
 };
 
 /**
