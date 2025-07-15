@@ -2055,7 +2055,7 @@ int nodeLinkClass::del_host ( const string uuid )
             /* Cleanup if this is the inactive controller */
             if ( !node_ptr->hostname.compare(inactive_controller_hostname))
             {
-                inactive_controller_hostname = "" ;
+                set_inactive_controller ( "" );
             }
         }
         rc = rem_host ( hostname );
@@ -2250,7 +2250,7 @@ int nodeLinkClass::mod_host ( node_inv_type & inv )
                               inv.action.c_str());
                     rc = FAIL_NODETYPE ;
                 }
-                else if ( nodeLinkClass::is_inactive_controller_main_insv() != true )
+                else if ( nodeLinkClass::inactive_controller_insv() != true )
                 {
                     elog ("%s Rejecting '%s' - No In-Service Mate\n", 
                               node_ptr->hostname.c_str(),
@@ -2828,7 +2828,7 @@ int nodeLinkClass::add_host ( node_inv_type & inv )
         node_ptr = nodeLinkClass::getNode(inv.uuid);
     }
 
-    if ( node_ptr ) 
+    if ( node_ptr )
     {
         dlog ("%s Already provisioned\n", node_ptr->hostname.c_str());
 
@@ -2859,8 +2859,12 @@ int nodeLinkClass::add_host ( node_inv_type & inv )
            {
                wlog ("Cannot provision more than 2 controllers\n");
                wlog ("%s is already provisioned as inactive\n",
-                     inactive_controller_hostname.c_str());
+                         inactive_controller_hostname.c_str());
                return (FAIL);
+           }
+           else if ( inv.name != this->my_hostname )
+           {
+               set_inactive_controller ( inv.name ) ;
            }
         }
 
@@ -6585,7 +6589,7 @@ int nodeLinkClass::critical_process_failed( string & hostname,
         node_ptr->degrade_mask |= DEGRADE_MASK_PMON ;
 
         /* Special critical process failure handling for AIO system */
-        if ( THIS_HOST && ( is_inactive_controller_main_insv() == false ))
+        if ( THIS_HOST && ( inactive_controller_insv() == false ))
         {
             if ( node_ptr->ar_disabled == true )
             {
@@ -6614,6 +6618,20 @@ int nodeLinkClass::critical_process_failed( string & hostname,
     return (PASS);
 }
 
+/* returns node's main function state in form <admin>-<oper>-<avail> */
+std::string nodeLinkClass::get_nodeState_str ( struct nodeLinkClass::node * node_ptr )
+{
+    std::string node_state = "" ;
+    if ( node_ptr != NULL )
+    {
+        node_state =
+             adminState_enum_to_str(node_ptr->adminState) + '-' +
+              operState_enum_to_str(node_ptr->operState) + '-' +
+            availStatus_enum_to_str(node_ptr->availStatus);
+    }
+    return (node_state);
+}
+
 bool nodeLinkClass::is_active_controller ( string hostname )
 {
     if ( nodeLinkClass::my_hostname.compare(hostname) )
@@ -6623,14 +6641,21 @@ bool nodeLinkClass::is_active_controller ( string hostname )
     return (true);
 }
 
-string nodeLinkClass::get_inactive_controller_hostname ( void )
+string nodeLinkClass::get_inactive_controller ( void )
 {
+    ilog ("%s is inactive controller", inactive_controller_hostname.c_str());
     return (inactive_controller_hostname);
 }
 
-void nodeLinkClass::set_inactive_controller_hostname ( string hostname )
+void nodeLinkClass::set_inactive_controller ( string hostname )
 {
-    inactive_controller_hostname = hostname ;
+    if ( inactive_controller_hostname != hostname )
+    {
+        ilog ("%s is now inactive controller ; was '%s'",
+                  hostname.c_str(),
+                  inactive_controller_hostname.empty() ? "unset" : inactive_controller_hostname.c_str());
+        inactive_controller_hostname = hostname ;
+    }
 }
 
 string nodeLinkClass::get_active_controller_hostname ( void )
@@ -6663,30 +6688,28 @@ bool nodeLinkClass::inactive_controller_is_patching ( void )
     return (false) ;
 }
 
-bool nodeLinkClass::is_inactive_controller_main_insv ( void )
+bool nodeLinkClass::inactive_controller_insv ( void )
 {
-    nodeLinkClass::node * node_ptr = getNode ( inactive_controller_hostname ) ;
-    if ( node_ptr != NULL )
+    bool rc = false ;
+    if ( inactive_controller_hostname.empty() )
     {
-        if ( node_ptr->operState == MTC_OPER_STATE__ENABLED )
-        {
-            return (true) ;
-        }
+        wlog ("inactive controller hostname is not set");
+        return (rc);
     }
-    return (false) ;
-}
 
-bool nodeLinkClass::is_inactive_controller_subf_insv ( void )
-{
     nodeLinkClass::node * node_ptr = getNode ( inactive_controller_hostname ) ;
     if ( node_ptr != NULL )
     {
-        if ( node_ptr->operState_subf   == MTC_OPER_STATE__ENABLED )
-        {
-            return (true) ;
-        }
+        string node_state = get_nodeState_str ( node_ptr );
+        if ( node_ptr->operState == MTC_OPER_STATE__ENABLED )
+            rc = true ;
+        wlog ("%s inactive controller is %s", node_ptr->hostname.c_str(), node_state.c_str());
     }
-    return (false) ;
+    else
+    {
+        slog ("%s inactive controller node lookup failed", inactive_controller_hostname.c_str());
+    }
+    return (rc) ;
 }
 
 int nodeLinkClass::set_subf_info ( string hostname,
@@ -8380,7 +8403,7 @@ int nodeLinkClass::ar_manage ( struct nodeLinkClass::node * node_ptr,
     if (( THIS_HOST ) && ( NOT_SIMPLEX ))
     {
         /* Case 1a - This DX controller with no enabled standby controller - go degraded and no reboot */
-        if ( is_inactive_controller_main_insv() == false )
+        if ( inactive_controller_insv() == false )
         {
             alarm_enabled_failure ( node_ptr, true );
             allStateChange ( node_ptr,
