@@ -622,7 +622,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
 
                 /* If the inactive controller is enabled then tru to swact to it.
                  * SM will reject till its eady, until then just run degraded */
-                if ( is_inactive_controller_main_insv() == true )
+                if ( inactive_controller_insv() == true )
                 {
                     wlog ("%s has critical failure\n", node_ptr->hostname.c_str());
                     wlog ("%s ... requesting swact to peer controller",
@@ -696,7 +696,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
 
             /* if we get here in controller simplex mode then go degraded
              * if we are not already degraded. Otherwise, fail. */
-            if ( THIS_HOST && ( is_inactive_controller_main_insv() == false ))
+            if ( THIS_HOST && ( inactive_controller_insv() == false ))
             {
                 if (( node_ptr->adminState  != MTC_ADMIN_STATE__UNLOCKED ) ||
                     ( node_ptr->operState   != MTC_OPER_STATE__ENABLED   ) ||
@@ -868,7 +868,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                 case MTC_AVAIL_STATUS__AVAILABLE:
                 {
                     if ( ( NOT_SIMPLEX ) && ( is_active_controller ( node_ptr->hostname )) &&
-                        ( is_inactive_controller_main_insv() == false ))
+                        ( inactive_controller_insv() == false ))
                     {
                         wlog ("%s recovering active controller from %s-%s-%s\n",
                                   node_ptr->hostname.c_str(),
@@ -6400,7 +6400,7 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
                 }
                 else
                 {
-                    nodeLinkClass::set_inactive_controller_hostname(node_ptr->hostname);
+                    nodeLinkClass::set_inactive_controller(node_ptr->hostname);
 
                     if ( !node_ptr->task.compare(MTC_TASK_SWACT_INPROGRESS) )
                     {
@@ -6427,7 +6427,7 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
                  *       reboot while this controller is disabled.
                  */
                 if (( THIS_HOST ) &&
-                    ( is_inactive_controller_main_insv() == false ) &&
+                    ( inactive_controller_insv() == false ) &&
                     ( node_ptr->operState == MTC_OPER_STATE__DISABLED ))
                 {
                     ilog ("%s recovering from %s-disabled\n",
@@ -8760,7 +8760,7 @@ int nodeLinkClass::self_fail_handler ( struct nodeLinkClass::node * node_ptr )
     else if ( node_ptr->mtcTimer.ring )
     {
         // Last second check for an active standby controller in a DX system
-        if (( NOT_SIMPLEX ) && ( is_inactive_controller_main_insv () == false ))
+        if (( NOT_SIMPLEX ) && ( inactive_controller_insv () == false ))
         {
             wlog ("%s refusing to self reboot with no enabled standby controller", node_ptr->hostname.c_str());
             wlog ("%s ... critical enable alarm raised", node_ptr->hostname.c_str());

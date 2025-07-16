@@ -1096,6 +1096,9 @@ private:
                           mtc_nodeOperState_enum   operState_subf,
                           mtc_nodeAvailStatus_enum availStatus_subf );
 
+    /* returns node's main function state in form <admin>-<oper>-<avail> */
+    std::string get_nodeState_str ( struct nodeLinkClass::node * node_ptr );
+
     /** Host Enable Handler Stage Change member function */
     int enableStageChange   ( struct nodeLinkClass::node * node_ptr,
                               mtc_enableStages_enum newHdlrStage );
@@ -1796,19 +1799,18 @@ public:
     bool inactive_controller_is_patched ( void );
     bool inactive_controller_is_patching ( void );
 
-    string get_inactive_controller_hostname ( void );
-    void   set_inactive_controller_hostname ( string hostname );
+    string get_inactive_controller ( void );
+    void   set_inactive_controller ( string hostname );
 
     string get_active_controller_hostname ( void );
     void   set_active_controller_hostname ( string hostname );
 
-    /** Returns 'true' if inactive controller main/subfunction is in-service
+    /** Returns 'true' if inactive controller main function is in-service
      *
      *  In-Service if "unlocked-enabled-available or
      *  unlocked-enabled-degraded
      */
-    bool is_inactive_controller_main_insv ( void );
-    bool is_inactive_controller_subf_insv ( void );
+    bool inactive_controller_insv ( void );
 
     /** Returns true if the specified hostname is the active controller */
     bool is_active_controller ( string hostname );
