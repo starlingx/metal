@@ -207,8 +207,9 @@ void daemon_exit ( void )
 #define HBS_SOCKET_NSEC    (HBS_SOCKET_MSEC*1000)
 #define HBS_MIN_PERIOD     (100)
 #define HBS_MAX_PERIOD     (1000)
-#define HBS_VIRT_PERIOD    (500)
-#define HBS_BACKOFF_FACTOR (4) /* period*this during backoff */
+#define HBS_DEF_PERIOD     (HBS_MAX_PERIOD)
+#define HBS_VIRT_PERIOD    (HBS_DEF_PERIOD)
+#define HBS_BACKOFF_FACTOR (4) /* period during backoff */
 
 /** Control Config Mask */
 #define CONFIG_AGENT_MASK   (CONFIG_AGENT_HBS_PERIOD      |\
@@ -2324,6 +2325,12 @@ void daemon_service_run ( void )
                         some_progress = true ;
                     // }
                     hbsInv.pulse_requests[iface] = 0 ;
+                    if ( hbsInv.hbs_silent_fault_logged == true )
+                    {
+                        ilog ("Heartbeat service is now making forward process again");
+                        hbsInv.hbs_silent_fault_logged   = false ;
+                        hbsInv.hbs_silent_fault_detector = 0     ;
+                    }
                 }
             }
             if ( some_progress == false )
@@ -2332,10 +2339,14 @@ void daemon_service_run ( void )
                 {
                     hbsInv.hbs_silent_fault_logged = true;
 
+                    /* Generate a customer log that indicates the heartbeat service
+                     * is not making forward progress. This is an event, not an alarm.
+                     * The data of the log indicates the time the issue was detected.
+                     * There is no automatic recovery method. If the issue does not
+                     * resolve on its own then manually restarting the hbsAgent OR
+                     * or lock/unlock the named controller may resolve. */
                     alarm_warning_log ( hbsInv.my_hostname, SERVICESTATUS_LOG_ID,
-                            "maintenance heartbeat service is not making forward progress ; "
-                            "recommend process restart by controller switchover "
-                            "at earliest convenience" , "service=heartbeat");
+                            "maintenance heartbeat service is not making forward progress", "service=heartbeat");
                 }
                 hbsInv.hbs_silent_fault_detector = 0 ;
             }
