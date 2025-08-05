@@ -694,37 +694,59 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                                             MTC_AVAIL_STATUS__FAILED );
             }
 
-            /* if we get here in controller simplex mode then go degraded
-             * if we are not already degraded. Otherwise, fail. */
-            if ( THIS_HOST && ( inactive_controller_insv() == false ))
+            /* If we get here in controller non-simplex with no enabled
+             * standby then raise critical enable alarm and go degraded. */
+            if (( THIS_HOST) &&
+                ( NOT_SIMPLEX ) &&
+                ( degrade_only == false ) &&
+                ( is_controller(node_ptr) == true ) &&
+                ( inactive_controller_insv () == false ))
             {
-                if (( node_ptr->adminState  != MTC_ADMIN_STATE__UNLOCKED ) ||
-                    ( node_ptr->operState   != MTC_OPER_STATE__ENABLED   ) ||
-                    ( node_ptr->availStatus != MTC_AVAIL_STATUS__DEGRADED))
-                {
-                    allStateChange  ( node_ptr, MTC_ADMIN_STATE__UNLOCKED,
-                                                MTC_OPER_STATE__ENABLED,
-                                                MTC_AVAIL_STATUS__DEGRADED );
-                }
-                /* adminAction state is already changed to NONE. */
+                degrade_only = true ;
             }
 
-            else if ( degrade_only == true )
+            if ( degrade_only == true )
             {
-                allStateChange ( node_ptr, MTC_ADMIN_STATE__UNLOCKED,
-                                           MTC_OPER_STATE__ENABLED,
-                                           MTC_AVAIL_STATUS__DEGRADED );
+                if ( ( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
+                {
+                    wlog ("%s active controller is %s-%s-%s with worker:%s-%s and no enabled standby controller - degrade only",
+                              node_ptr->hostname.c_str(),
+                              get_adminState_str(node_ptr->adminState).c_str(),
+                              get_operState_str(node_ptr->operState).c_str(),
+                              get_availStatus_str(node_ptr->availStatus).c_str(),
+                              get_operState_str(node_ptr->operState_subf).c_str(),
+                              get_availStatus_str(node_ptr->availStatus_subf).c_str());
+                }
+                else
+                {
+                    wlog ("%s active controller is %s-%s-%s and no enabled standby controller - degrade only",
+                              node_ptr->hostname.c_str(),
+                              get_adminState_str(node_ptr->adminState).c_str(),
+                              get_operState_str(node_ptr->operState).c_str(),
+                              get_availStatus_str(node_ptr->availStatus).c_str());
+                }
+                wlog ("%s ... critical enable alarm raised", node_ptr->hostname.c_str());
+                wlog ("%s ... recommend enabling a standby controller.", node_ptr->hostname.c_str());
+
+                allStateChange ( node_ptr,
+                                 node_ptr->adminState,
+                                 MTC_OPER_STATE__ENABLED,
+                                 MTC_AVAIL_STATUS__DEGRADED );
+                alarm_enabled_failure ( node_ptr, true );
+                mtcInvApi_update_task ( node_ptr, MTC_TASK_FAILED_NO_BACKUP);
+                adminActionChange ( node_ptr, MTC_ADMIN_ACTION__NONE );
+                enableStageChange ( node_ptr, MTC_ENABLE__START );
             }
             else
             {
                 allStateChange ( node_ptr, MTC_ADMIN_STATE__UNLOCKED,
                                            MTC_OPER_STATE__DISABLED,
                                            MTC_AVAIL_STATUS__FAILED );
+                enableStageChange ( node_ptr, MTC_ENABLE__FAILURE_TIMER );
             }
 
             /* Inform the VIM of the failure */
             mtcVimApi_state_change ( node_ptr, VIM_HOST_FAILED, 3 );
-            enableStageChange ( node_ptr, MTC_ENABLE__FAILURE_TIMER );
             break ;
         }
         case MTC_ENABLE__FAILURE_TIMER:
@@ -8267,17 +8289,12 @@ int nodeLinkClass::insv_test_handler ( struct nodeLinkClass::node * node_ptr )
                             }
                         }
                     }
-                    /*
-                     * Send out-of-service test command and wait for the
-                     * next audit interval to see the result.
-                     *
-                     *  node_ptr->goEnabled_subf        == true is pass
-                     *  node_ptr->goEnabled_subf_failed == true is fail
-                     *
-                     **/
                     if (( node_ptr->operState_subf == MTC_OPER_STATE__DISABLED ) &&
+                        ( node_ptr->operState == MTC_OPER_STATE__ENABLED ) &&
+                        ( node_ptr->forcing_full_enable == false ) &&
                         ( node_ptr->ar_disabled == false ))
                     {
+                        /* Only force recovery if the node is not already in recovery */
                         if (( node_ptr->adminAction != MTC_ADMIN_ACTION__ENABLE_SUBF ) &&
                             ( node_ptr->adminAction != MTC_ADMIN_ACTION__ENABLE ))
                         {

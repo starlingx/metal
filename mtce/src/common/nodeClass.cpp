@@ -2837,10 +2837,17 @@ int nodeLinkClass::add_host ( node_inv_type & inv )
         node_ptr->operState   = operState_str_to_enum   (inv.oper.data ());
         node_ptr->availStatus = availStatus_str_to_enum (inv.avail.data());
 
-        if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
+        if ( is_controller(node_ptr) == true )
         {
-            node_ptr->operState_subf   = operState_str_to_enum (inv.oper_subf.data());
-            node_ptr->availStatus_subf = availStatus_str_to_enum (inv.avail_subf.data());
+            if ( node_ptr->hostname != this->my_hostname )
+            {
+               set_inactive_controller ( node_ptr->hostname ) ;
+            }
+            if ( AIO_SYSTEM )
+            {
+                node_ptr->operState_subf   = operState_str_to_enum (inv.oper_subf.data());
+                node_ptr->availStatus_subf = availStatus_str_to_enum (inv.avail_subf.data());
+            }
         }
 
         /* Send back a retry so that this add is converted to a modify */
