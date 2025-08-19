@@ -77,12 +77,7 @@ do
     case $opt in
         i)
             input_file=$OPTARG
-            input_file_dirname=$(dirname $input_file)
-            input_file_basename=$(basename $input_file)
-            # lowlatency files removed. Added for backwards compatibility
-            fixed_input_file_basename=$(echo $input_file_basename | sed 's/_lowlatency//')
-            input_file=${input_file_dirname}/${fixed_input_file_basename}
-            input_file_efi=${input_file_dirname}/efi-${fixed_input_file_basename}
+            input_file_efi=$(dirname $input_file)/efi-$(basename $input_file)
             ;;
         o)
             output_file=$OPTARG
