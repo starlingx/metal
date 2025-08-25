@@ -2469,17 +2469,25 @@ int nodeLinkClass::mod_host ( node_inv_type & inv )
         }
         if ( node_ptr->ip.compare ( inv.ip ) )
         {
-            plog ("%s Modify 'mgmt_ip' from %s -> %s\n",
-                      node_ptr->hostname.c_str(),
-                      node_ptr->ip.c_str(), inv.ip.c_str());
-            node_ptr->ip = inv.ip ;
-            mtcInfo_clr ( node_ptr, MTCE_INFO_KEY__BMC_PROTOCOL );
-            mtcInvApi_update_mtcInfo ( node_ptr );
+            if ( inv.ip == "none" )
+            {
+                ilog ("%s refusing to set management ip address to 'none'",
+                          node_ptr->hostname.c_str());
+            }
+            else
+            {
+                plog ("%s Modify 'mgmt_ip' from %s -> %s\n",
+                        node_ptr->hostname.c_str(),
+                        node_ptr->ip.c_str(), inv.ip.c_str());
+                node_ptr->ip = inv.ip ;
+                mtcInfo_clr ( node_ptr, MTCE_INFO_KEY__BMC_PROTOCOL );
+                mtcInvApi_update_mtcInfo ( node_ptr );
 
-            /* Tell the guestAgent the new IP */
-            rc = send_guest_command(node_ptr->hostname,MTC_CMD_MOD_HOST);
+                /* Tell the guestAgent the new IP */
+                rc = send_guest_command(node_ptr->hostname,MTC_CMD_MOD_HOST);
 
-            modify = true ; /* we have a delta */
+                modify = true ; /* we have a delta */
+            }
         }
         if ( node_ptr->mac.compare ( inv.mac ) )
         {
