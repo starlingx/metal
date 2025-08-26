@@ -733,7 +733,12 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                                  MTC_OPER_STATE__ENABLED,
                                  MTC_AVAIL_STATUS__DEGRADED );
                 alarm_enabled_failure ( node_ptr, true );
-                mtcInvApi_update_task ( node_ptr, MTC_TASK_FAILED_NO_BACKUP);
+
+                /* Don't advise provisioning a standby controller
+                 * on an AIO Simplex system */
+                if ( ! SIMPLEX_AIO_SYSTEM )
+                    mtcInvApi_update_task ( node_ptr, MTC_TASK_FAILED_NO_BACKUP);
+
                 adminActionChange ( node_ptr, MTC_ADMIN_ACTION__NONE );
                 enableStageChange ( node_ptr, MTC_ENABLE__START );
             }
