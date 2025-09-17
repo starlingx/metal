@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2020 Wind River Systems, Inc.
+ * Copyright (c) 2013-2020, 2025 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -774,6 +774,7 @@ int hbs_socket_init ( void )
     {
         /* load local variables */
         int port = hbs_config.mtc_to_hbs_cmd_port ;
+        int rmem_max = daemon_get_rmem_max();
 
         /* Handle re-init case */
         if ( hbs_sock.mtc_to_hbs_sock != NULL )
@@ -787,6 +788,17 @@ int hbs_socket_init ( void )
         new msgClassRx ( hbsInv.my_local_ip.data(),
                          port,
                          IPPROTO_UDP);
+
+        /* Set rx socket buffer size to rmem_max.
+         * Needed to handle inventory push from mtcAgent over
+         * process restart on at-scale system deployments. */
+        if (rmem_max > 0)
+        {
+            hbs_sock.mtc_to_hbs_sock->setSocketMemory(
+                hbs_config.mgmnt_iface,
+                "mtc command rx socket memory",
+                rmem_max );
+        }
 
         /* Check the socket */
         if (hbs_sock.mtc_to_hbs_sock != NULL )
