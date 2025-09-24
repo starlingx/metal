@@ -5022,6 +5022,12 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
             mtcTimer_reset ( node_ptr->mtcTimer ) ;
             mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_TASK_UPDATE_DELAY );
             powerStageChange ( node_ptr , MTC_POWEROFF__FAIL_WAIT );
+
+            kpi_log ( node_ptr->hostname, KPI_AREA__ACTION,
+                                          KPI_ACTION__POWEROFF,
+                                          KPI_STR__START,
+                                          KPI_STR__FAIL,
+                                          node_ptr->start_poweroff_time);
             break ;
         }
         case MTC_POWEROFF__FAIL_WAIT:
@@ -5055,17 +5061,25 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
                           rc );
             }
 
-            node_ptr->power_action_retries = MTC_POWER_ACTION_RETRY_COUNT ;
+            if ( node_ptr->availStatus == MTC_AVAIL_STATUS__POWERED_OFF )
+            {
+                wlog ("%s power should already be off", node_ptr->hostname.c_str());
+            }
+            /* These are count 'down' counters */
+            node_ptr->power_action_retries = MTC_POWER_ACTION_RETRY_COUNT ; /* power action retries before failure  */
+            node_ptr->power_status_retries = MTC_POWER_STATUS_RETRY_COUNT ; /* power status queries before next power action */
 
             /* don't allow a timeout of zero to be passed in */
-            if ( power_off_retry_wait == 0 )
-                power_off_retry_wait = DEFAULT_POWER_OFF_RETRY_WAIT ;
+            if ( this->power_off_retry_wait == 0 )
+                this->power_off_retry_wait = DEFAULT_POWER_OFF_RETRY_WAIT ;
 
             ilog ("%s power off retry wait is %d seconds",
-                node_ptr->hostname.c_str(), power_off_retry_wait);
+                      node_ptr->hostname.c_str(), this->power_off_retry_wait);
 
+            /* Query the state first and make that immediate */
+            node_ptr->power_action_first = true ;
             mtcTimer_reset ( node_ptr->mtcTimer ) ;
-            powerStageChange ( node_ptr , MTC_POWEROFF__REQ_SEND );
+            powerStageChange ( node_ptr , MTC_POWEROFF__POWER_STATUS );
             break ;
         }
         case MTC_POWEROFF__REQ_SEND:
@@ -5091,7 +5105,14 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
 
                 else
                 {
-                    rc = bmc_command_send ( node_ptr, BMC_THREAD_CMD__POWER_OFF );
+#ifdef WANT_FIT_TESTING
+                    if ( daemon_want_fit ( FIT_CODE__BMC_POWER_REQUEST_SEND, node_ptr->hostname ))
+                        rc = daemon_get_file_int ("/var/run/return_code") ;
+                    else
+#endif
+                    {
+                        rc = bmc_command_send ( node_ptr, BMC_THREAD_CMD__POWER_OFF );
+                    }
                     if ( rc )
                     {
                         wlog ("%s Power-Off request failed (%d)", node_ptr->hostname.c_str(), rc );
@@ -5121,7 +5142,7 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
                 else if ( rc )
                 {
                     elog ("%s Power-Off command failed\n", node_ptr->hostname.c_str());
-                    powerStageChange ( node_ptr , MTC_POWEROFF__POWERQRY );
+                    powerStageChange ( node_ptr , MTC_POWEROFF__POWER_STATUS );
                     mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_POWER_ACTION_QUERY_WAIT );
                 }
                 else
@@ -5144,7 +5165,7 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
                  mtcTimer_reset ( node_ptr->mtcTimer );
 
                  plog ("%s is now offline\n", node_ptr->hostname.c_str());
-                 powerStageChange ( node_ptr , MTC_POWEROFF__POWERQRY );
+                 powerStageChange ( node_ptr , MTC_POWEROFF__POWER_STATUS );
                  mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_POWER_ACTION_QUERY_WAIT );
              }
              else if ( mtcTimer_expired ( node_ptr->mtcTimer ) )
@@ -5154,7 +5175,7 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
              }
              break ;
         }
-        case MTC_POWEROFF__POWERQRY:
+        case MTC_POWEROFF__POWER_STATUS:
         {
             /* give the power off action some time to complete */
             if ( mtcTimer_expired ( node_ptr->mtcTimer ) )
@@ -5173,7 +5194,7 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
                     }
                     else
                     {
-                        powerStageChange ( node_ptr , MTC_POWEROFF__POWERQRY_WAIT );
+                        powerStageChange ( node_ptr , MTC_POWEROFF__POWER_STATUS_WAIT );
                     }
                     mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_RECV_WAIT );
                 }
@@ -5184,7 +5205,7 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
             }
             break ;
         }
-        case MTC_POWEROFF__POWERQRY_WAIT:
+        case MTC_POWEROFF__POWER_STATUS_WAIT:
         {
             if ( mtcTimer_expired ( node_ptr->mtcTimer ) )
             {
@@ -5222,9 +5243,55 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
                     {
                         if ( node_ptr->power_on == true )
                         {
-                            ilog ("%s Power not Off ; retry power-off ",
-                                      node_ptr->hostname.c_str());
-                            powerStageChange ( node_ptr , MTC_POWEROFF__QUEUE );
+                           /* If this is the first query just gets the current state.
+                            * Issue the power off request. */
+                            if ( node_ptr->power_action_first )
+                            {
+                                powerStageChange ( node_ptr , MTC_POWEROFF__REQ_SEND );
+
+                                /* issue the power off command immediately - timer is already expired */
+                                node_ptr->power_action_first = false ;
+                            }
+                            /* If we get here then this is not the first power status query.
+                             * Handle it as a regular power status query while retries remain. */
+                            else if ( --node_ptr->power_status_retries > 0 )
+                            {
+                                powerStageChange ( node_ptr , MTC_POWEROFF__POWER_STATUS );
+
+                                ilog ("%s power not off ; power status retry %d of %d in %d secs (power action retry %d of %d)",
+                                          node_ptr->hostname.c_str(),
+                                          MTC_POWER_STATUS_RETRY_COUNT - node_ptr->power_status_retries,
+                                          MTC_POWER_STATUS_RETRY_COUNT,
+                                          MTC_POWEROFF_STATUS_RETRY_DELAY,
+                                          MTC_POWER_ACTION_RETRY_COUNT - node_ptr->power_action_retries,
+                                          MTC_POWER_ACTION_RETRY_COUNT);
+
+                                mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_POWEROFF_STATUS_RETRY_DELAY );
+                            }
+                            /* If we get here then power status retries have mxed out.
+                             * Issue the power off action command again. */
+                            else if ( --node_ptr->power_action_retries > 0 )
+                            {
+                                ilog ("%s power off action retry %d of %d in %d secs",
+                                          node_ptr->hostname.c_str(),
+                                          MTC_POWER_ACTION_RETRY_COUNT - node_ptr->power_action_retries,
+                                          MTC_POWER_ACTION_RETRY_COUNT,
+                                          this->power_off_retry_wait);
+                                powerStageChange ( node_ptr , MTC_POWEROFF__REQ_SEND );
+                                mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, this->power_off_retry_wait );
+
+                                /* reload the power status query countdown counter */
+                                node_ptr->power_status_retries = MTC_POWER_STATUS_RETRY_COUNT ;
+                            }
+                            else /* Max retries reached */
+                            {
+                                powerStageChange ( node_ptr , MTC_POWEROFF__QUEUE );
+                                wlog ("%s power not 'off' ; max retries",
+                                          node_ptr->hostname.c_str());
+
+                                /* correct the counter when transitioning to QUEUE */
+                                node_ptr->power_action_retries++ ;
+                            }
                         }
                         else
                         {
@@ -5236,6 +5303,7 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
                                                           KPI_STR__START,
                                                           KPI_STR__COMPLETE,
                                                           node_ptr->start_poweroff_time);
+                            mtcAlarm_log ( node_ptr->hostname, MTC_LOG_ID__COMMAND_AUTO_POWER_OFF );
                             powerStageChange ( node_ptr , MTC_POWEROFF__DONE );
                             mtcTimer_reset ( node_ptr->mtcTimer );
                             break ;
@@ -5271,20 +5339,25 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
                                                node_ptr->bmc_thread_info.status );
                 }
                 powerStageChange ( node_ptr , MTC_POWEROFF__REQ_SEND );
-                ilog ("%s waiting %d seconds before next power off retry",
-                          node_ptr->hostname.c_str(), power_off_retry_wait);
-                mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, power_off_retry_wait );
+                /* No delay for the action retry ; delay is in the power query */
+                mtcTimer_reset ( node_ptr->mtcTimer );
             }
             else
             {
                 powerStageChange ( node_ptr , MTC_POWEROFF__FAIL );
             }
+
+            /* reload for next action retry */
+            node_ptr->power_status_retries = MTC_POWER_STATUS_RETRY_COUNT ;
+            node_ptr->power_action_first = false ;
             break ;
         }
         case MTC_POWEROFF__DONE:
         {
             if ( mtcTimer_expired ( node_ptr->mtcTimer ) )
             {
+                node_ptr->power_action_first = false ;
+
                 plog ("%s Power-Off Completed\n", node_ptr->hostname.c_str());
 
                 stop_offline_handler ( node_ptr );
@@ -5307,6 +5380,12 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
             mtcTimer_reset ( node_ptr->mtcTimer ) ;
             mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_TASK_UPDATE_DELAY );
             powerStageChange ( node_ptr , MTC_POWERON__FAIL_WAIT );
+
+            kpi_log ( node_ptr->hostname, KPI_AREA__ACTION,
+                                          KPI_ACTION__POWERON,
+                                          KPI_STR__START,
+                                          KPI_STR__FAIL,
+                                          node_ptr->start_poweron_time);
             break ;
         }
         case MTC_POWERON__FAIL_WAIT:
@@ -5345,7 +5424,13 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
                           rc );
             }
 
-            node_ptr->power_action_retries = MTC_POWER_ACTION_RETRY_COUNT ;
+            /* These are count 'down' counters */
+            node_ptr->power_action_retries = MTC_POWER_ACTION_RETRY_COUNT ; /* power action retries before failure  */
+            node_ptr->power_status_retries = MTC_POWER_STATUS_RETRY_COUNT ; /* power status queries before next power action */
+
+            /* Query the state first and make that immediate */
+            node_ptr->power_action_first = true ;
+
             powerStageChange ( node_ptr , MTC_POWERON__POWER_STATUS );
             //the fall through to MTC_POWERON__REQ_SEND is intentional
             MTCE_FALLTHROUGH;
@@ -5364,7 +5449,14 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
                 break ;
             }
 
-            rc = bmc_command_send ( node_ptr, BMC_THREAD_CMD__POWER_STATUS ) ;
+#ifdef WANT_FIT_TESTING
+            if ( daemon_want_fit ( FIT_CODE__BMC_POWER_STATUS_SEND, node_ptr->hostname ))
+                rc = daemon_get_file_int ("/var/run/return_code") ;
+            else
+#endif
+            {
+                rc = bmc_command_send ( node_ptr, BMC_THREAD_CMD__POWER_STATUS ) ;
+            }
             if ( rc )
             {
                 powerStageChange ( node_ptr , MTC_POWERON__QUEUE );
@@ -5374,17 +5466,24 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
                 powerStageChange ( node_ptr , MTC_POWERON__POWER_STATUS_WAIT );
             }
             mtcTimer_reset ( node_ptr->mtcTimer );
-            mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_BMC_REQUEST_DELAY );
+            mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_RECV_WAIT );
             break ;
         }
         case MTC_POWERON__POWER_STATUS_WAIT:
         {
             if ( mtcTimer_expired ( node_ptr->mtcTimer ) )
             {
-                rc = bmc_command_recv ( node_ptr );
+#ifdef WANT_FIT_TESTING
+                if ( daemon_want_fit ( FIT_CODE__BMC_POWER_STATUS_RECV, node_ptr->hostname ))
+                    rc = daemon_get_file_int ("/var/run/return_code") ;
+                else
+#endif
+                {
+                    rc = bmc_command_recv ( node_ptr );
+                }
                 if ( rc == RETRY )
                 {
-                    mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_RETRY_WAIT );
+                    mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_RECV_RETRY_WAIT );
                 }
                 else if ( rc == PASS )
                 {
@@ -5400,15 +5499,56 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
 
                     if ( node_ptr->power_on )
                     {
-                        ilog ("%s power is already on ; no action required\n", node_ptr->hostname.c_str());
-                        mtcInvApi_update_task ( node_ptr, "Power Already On" );
-                        mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_TASK_UPDATE_DELAY );
+                        ilog ("%s power is on", node_ptr->hostname.c_str());
+                        mtcInvApi_update_task ( node_ptr, "Power Is On" );
                         powerStageChange ( node_ptr , MTC_POWERON__DONE );
                     }
+                    /* If this is the first query then that was just to get the current state.
+                     * If we get here then its not powered 'on' so issue the power on request.
+                     * Remainig power 'on' action retries are handled in the 'Status Wait' case. */
+                    else if ( node_ptr->power_action_first == true )
+                    {
+                        powerStageChange ( node_ptr , MTC_POWERON__REQ_SEND );
+                        ilog ("%s power is not on", node_ptr->hostname.c_str() );
+                        node_ptr->power_action_first = false ;
+                    }
+                    /* Otherwise retry the status until the status retry countdown counter
+                     * reaches zero. */
+                    else if ( --node_ptr->power_status_retries > 0 )
+                    {
+                        powerStageChange ( node_ptr , MTC_POWERON__POWER_STATUS );
+                        ilog ("%s power not on ; power status retry %d of %d in %d secs (power action retry %d of %d)",
+                                  node_ptr->hostname.c_str(),
+                                  MTC_POWER_STATUS_RETRY_COUNT - node_ptr->power_status_retries,
+                                  MTC_POWER_STATUS_RETRY_COUNT,
+                                  MTC_POWERON_STATUS_RETRY_DELAY,
+                                  MTC_POWER_ACTION_RETRY_COUNT - node_ptr->power_action_retries,
+                                  MTC_POWER_ACTION_RETRY_COUNT);
+
+                        mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_POWERON_STATUS_RETRY_DELAY );
+                    }
+                    /* The status retry counted down and now we need the power action
+                     * to be re-issued. */
+                    else if ( --node_ptr->power_action_retries > 0 )
+                    {
+                        powerStageChange ( node_ptr , MTC_POWERON__REQ_SEND );
+                        ilog ("%s power on action retry %d of %d",
+                                  node_ptr->hostname.c_str(),
+                                  MTC_POWER_ACTION_RETRY_COUNT - node_ptr->power_action_retries,
+                                  MTC_POWER_ACTION_RETRY_COUNT);
+
+                        /* reload the power status query countdown counter */
+                        node_ptr->power_status_retries = MTC_POWER_STATUS_RETRY_COUNT ;
+                    }
+                    /* Max action retries reached. Let the QUEUE stage handle it */
                     else
                     {
-                        ilog ("%s power is off ; powering on ...\n", node_ptr->hostname.c_str() );
-                        powerStageChange ( node_ptr , MTC_POWERON__REQ_SEND );
+                        powerStageChange ( node_ptr , MTC_POWERON__QUEUE );
+                        wlog ("%s power not 'on' ; max retries",
+                                  node_ptr->hostname.c_str());
+
+                        /* correct the counter when transitioning to QUEUE */
+                        node_ptr->power_action_retries++ ;
                     }
                 }
                 else
@@ -5448,7 +5588,14 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
             }
             else
             {
-                rc = bmc_command_send ( node_ptr, BMC_THREAD_CMD__POWER_ON );
+#ifdef WANT_FIT_TESTING
+                if ( daemon_want_fit ( FIT_CODE__BMC_POWER_REQUEST_SEND, node_ptr->hostname ))
+                    rc = daemon_get_file_int ("/var/run/return_code") ;
+                else
+#endif
+                {
+                    rc = bmc_command_send ( node_ptr, BMC_THREAD_CMD__POWER_ON );
+                }
                 if ( rc )
                 {
                     wlog ("%s Power-On request failed (%d)\n",
@@ -5462,7 +5609,7 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
                 {
                     blog ("%s Power-On requested\n", node_ptr->hostname.c_str());
 
-                    mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_BMC_REQUEST_DELAY );
+                    mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_RECV_WAIT );
 
                     powerStageChange ( node_ptr , MTC_POWERON__RESP_WAIT );
                 }
@@ -5473,12 +5620,12 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
         {
             if ( mtcTimer_expired ( node_ptr->mtcTimer ) )
             {
-                    rc = bmc_command_recv ( node_ptr );
-                    if ( rc == RETRY )
-                    {
-                        mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_RETRY_WAIT );
-                        break ;
-                    }
+                rc = bmc_command_recv ( node_ptr );
+                if ( rc == RETRY )
+                {
+                    mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_RECV_RETRY_WAIT );
+                    break ;
+                }
 
                 if ( rc )
                 {
@@ -5489,19 +5636,12 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
                 else
                 {
                     ilog ("%s is Powering On\n", node_ptr->hostname.c_str() );
-                    node_ptr->power_on = true ;
-                    node_ptr->power_on_time_secs = time(NULL);
-                    kpi_log ( node_ptr->hostname, KPI_AREA__ACTION,
-                                                  KPI_ACTION__POWERON,
-                                                  KPI_STR__START,
-                                                  KPI_STR__COMPLETE,
-                                                  node_ptr->start_poweron_time);
+                    powerStageChange ( node_ptr , MTC_POWERON__POWER_STATUS );
+
                     if ( node_ptr->adminAction != MTC_ADMIN_ACTION__REINSTALL )
                     {
                         mtcInvApi_update_task ( node_ptr, "Powering On" );
                     }
-                    mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_TASK_UPDATE_DELAY );
-                    powerStageChange ( node_ptr , MTC_POWERON__DONE );
                 }
             }
             break ;
@@ -5526,7 +5666,7 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
                                                      node_ptr->bmc_thread_info.status );
                     }
 
-                    powerStageChange ( node_ptr , MTC_POWERON__POWER_STATUS );
+                    powerStageChange ( node_ptr , MTC_POWERON__REQ_SEND );
                 }
                 else
                 {
@@ -5539,11 +5679,27 @@ int nodeLinkClass::power_handler ( struct nodeLinkClass::node * node_ptr )
         {
             if ( mtcTimer_expired ( node_ptr->mtcTimer ) )
             {
-                plog ("%s Power-On Completed\n", node_ptr->hostname.c_str());
+                if ( node_ptr->power_on )
+                {
+                    plog ("%s Power-On Completed ; with %d retries",
+                           node_ptr->hostname.c_str(),
+                           MTC_POWER_ACTION_RETRY_COUNT-node_ptr->power_action_retries);
+                    node_ptr->power_on_time_secs = time(NULL);
+                    kpi_log ( node_ptr->hostname, KPI_AREA__ACTION,
+                                                  KPI_ACTION__POWERON,
+                                                  KPI_STR__START,
+                                                  KPI_STR__COMPLETE,
+                                                  node_ptr->start_poweron_time);
 
-                availStatusChange ( node_ptr, MTC_AVAIL_STATUS__OFFLINE );
-
-                powerStageChange ( node_ptr , MTC_POWER__DONE );
+                    availStatusChange ( node_ptr, MTC_AVAIL_STATUS__OFFLINE );
+                    mtcAlarm_log ( node_ptr->hostname, MTC_LOG_ID__COMMAND_AUTO_POWER_ON );
+                    powerStageChange ( node_ptr , MTC_POWER__DONE );
+                }
+                else
+                {
+                    plog ("%s Power-On Failed", node_ptr->hostname.c_str());
+                    powerStageChange ( node_ptr, MTC_POWERON__FAIL );
+                }
 
                 /* If we are powering on a node then there is no need for any further reset progression */
                 if ( node_ptr->mtcCmd_work_fifo.size() )

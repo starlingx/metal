@@ -130,6 +130,11 @@
 
 #define FIT_CODE__BMC_COMMAND_SEND                   (60)
 #define FIT_CODE__BMC_COMMAND_RECV                   (61)
+#define FIT_CODE__BMC_POWER_REQUEST_SEND             (62)
+#define FIT_CODE__BMC_POWER_REQUEST_RECV             (63)
+#define FIT_CODE__BMC_POWER_STATUS_SEND              (64)
+#define FIT_CODE__BMC_POWER_STATUS_RECV              (65)
+#define FIT_CODE__BMC_POWER_STATE                    (66)
 
 #define FIT_CODE__START_HOST_SERVICES                (70)
 #define FIT_CODE__STOP_HOST_SERVICES                 (71)

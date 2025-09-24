@@ -1521,33 +1521,6 @@ int nodeLinkClass::avail_status_change ( string hostname,
                 this->ctl_mtcAlive_gate ( node_ptr, false ) ;
             }
 
-            /* check for need to generate power on log */
-            if (( node_ptr->availStatus == MTC_AVAIL_STATUS__POWERED_OFF ) &&
-                (           avail       != MTC_AVAIL_STATUS__POWERED_OFF ))
-            {
-                if ( node_ptr->adminAction == MTC_ADMIN_ACTION__POWERON )
-                {
-                    mtcAlarm_log ( hostname, MTC_LOG_ID__COMMAND_MANUAL_POWER_ON );
-                }
-                else
-                {
-                    mtcAlarm_log ( hostname, MTC_LOG_ID__COMMAND_AUTO_POWER_ON );
-                }
-            }
-
-            /* check for need to generate power off log */
-            if (( node_ptr->availStatus != MTC_AVAIL_STATUS__POWERED_OFF ) &&
-                (           avail       == MTC_AVAIL_STATUS__POWERED_OFF ))
-            {
-                if ( node_ptr->adminAction == MTC_ADMIN_ACTION__POWEROFF )
-                {
-                    mtcAlarm_log ( hostname, MTC_LOG_ID__COMMAND_MANUAL_POWER_OFF );
-                }
-                else
-                {
-                    mtcAlarm_log ( hostname, MTC_LOG_ID__COMMAND_AUTO_POWER_OFF );
-                }
-            }
 
             /* check for need to generate online log */
             if (( node_ptr->availStatus != MTC_AVAIL_STATUS__ONLINE ) &&
@@ -7285,6 +7258,7 @@ int nodeLinkClass::adminActionChange ( struct nodeLinkClass::node * node_ptr,
                     dlog ("%s admin power-on action started started at %s",
                               node_ptr->hostname.c_str(),
                               node_ptr->start_poweron_time.time_buff);
+                    mtcAlarm_log ( node_ptr->hostname, MTC_LOG_ID__COMMAND_MANUAL_POWER_ON );
                     break ;
                 }
                 case MTC_ADMIN_ACTION__RECOVER:
@@ -7308,6 +7282,7 @@ int nodeLinkClass::adminActionChange ( struct nodeLinkClass::node * node_ptr,
                     dlog ("%s admin power-off action started at %s",
                               node_ptr->hostname.c_str(),
                               node_ptr->start_poweroff_time.time_buff);
+                    mtcAlarm_log ( node_ptr->hostname, MTC_LOG_ID__COMMAND_MANUAL_POWER_OFF );
                     break ;
                 }
                 case MTC_ADMIN_ACTION__DELETE:

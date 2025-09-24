@@ -324,6 +324,14 @@ void * mtcThread_bmc ( void * arg )
                                           datafile,
                                           DEFAULT_SYSTEM_REQUEST_LATENCY_SECS);
 
+                /* Debug Option - enable lane debug_bmgt3 = 8 and touch
+                 * /var/run/bmc/redfish/want_dated_mtce_data_files
+                 * ... to save the current datafile with a dated extension
+                 *     so that a read history is maintained for debug purposes. */
+                if(daemon_get_cfg_ptr()->debug_bmgmt&8)
+                    if ( daemon_is_file_present (WANT_DATED_REDFISH_MTCE_DATA_FILES))
+                        daemon_copy_file(info_ptr->hostname, datafile.data());
+
                 if ( rc != PASS )
                 {
                     /* Log the command that failed unless ...

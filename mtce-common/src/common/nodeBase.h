@@ -357,7 +357,10 @@ typedef enum
 /* Define Reset and Power Action retry controls ; delay, count and switch threshold */
 #define MTC_POWER_ACTION_QUERY_WAIT       (30)
 #define MTC_POWER_ACTION_RETRY_DELAY      (20)
-#define MTC_POWER_ACTION_RETRY_COUNT      (10)
+#define MTC_POWER_STATUS_RETRY_COUNT      (10)
+#define MTC_POWEROFF_STATUS_RETRY_DELAY   (10)
+#define MTC_POWERON_STATUS_RETRY_DELAY    (5)
+#define MTC_POWER_ACTION_RETRY_COUNT      (5)
 #define MTC_POWER_ACTION_SWITCH_THRESHOLD (MTC_POWER_ACTION_RETRY_COUNT/2)
 #define MTC_RESET_ACTION_RETRY_DELAY      (20)
 #define MTC_RESET_ACTION_RETRY_COUNT      (10)
@@ -1153,8 +1156,8 @@ typedef enum
     MTC_POWEROFF__FAIL_WAIT,
     MTC_POWEROFF__QUEUE,
     MTC_POWEROFF__OFFLINE_WAIT,
-    MTC_POWEROFF__POWERQRY,
-    MTC_POWEROFF__POWERQRY_WAIT,
+    MTC_POWEROFF__POWER_STATUS,
+    MTC_POWEROFF__POWER_STATUS_WAIT,
     MTC_POWER__DONE, /* clear power action */
     MTC_POWER__STAGES
 }   mtc_powerStages_enum ;
@@ -1397,6 +1400,7 @@ void mem_log    ( string label, int value, string data );
 /* KPI strings */
 #define KPI_STR__START               "start"
 #define KPI_STR__COMPLETE            "complete"
+#define KPI_STR__FAIL                "fail"
 #define KPI_STR__PROCESS_STARTUP     "startup"
 #define KPI_STR__REINSTALL           "reinstall"
 #define KPI_STR__POWER_STATE_LEARNED "power state learned"

@@ -30,6 +30,7 @@ using namespace std;
 #define BMC_PROTOCOL__REDFISHTOOL_STR ((const char *)("redfishtool"))
 #define WANT_DATED_IPMI_SENSOR_DATA_FILES    ((const char *)("/var/run/bmc/ipmitool/want_dated_sensor_data_files"))
 #define WANT_DATED_REDFISH_SENSOR_DATA_FILES ((const char *)("/var/run/bmc/redfishtool/want_dated_sensor_data_files"))
+#define WANT_DATED_REDFISH_MTCE_DATA_FILES ((const char *)("/var/run/bmc/redfishtool/want_dated_mtce_data_files"))
 
 /* learned graceful and immediate power control command strings */
 typedef struct

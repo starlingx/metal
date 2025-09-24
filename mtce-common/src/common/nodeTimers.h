@@ -86,7 +86,6 @@
 #define MTC_REINSTALL_TIMEOUT_MIN      (MTC_MINS_1)
 #define MTC_REINSTALL_TIMEOUT_MAX      (MTC_HRS_4)
 #define MTC_REINSTALL_WAIT_TIMER       (10)
-#define MTC_BMC_REQUEST_DELAY     (10) /* consider making this shorter */
 #define LAZY_REBOOT_RETRY_DELAY_SECS   (60)
 #define SM_NOTIFY_UNHEALTHY_DELAY_SECS  (5)
 #define MTC_MIN_ONLINE_PERIOD_SECS      (7)
@@ -95,8 +94,13 @@
 #define MTC_AGENT_TIMEOUT_EXTENSION     (5)
 #define MTC_LOCK_CEPH_DELAY             (90)
 
-#define MTC_RECV_RETRY_WAIT (MTC_RETRY_WAIT)
-#define MTC_RECV_WAIT       (MTC_RETRY_WAIT)
+/* Deprecated: MTC_BMC_REQUEST_DELAY
+ * This 10 second delay is too long for time critical operations. */
+#define MTC_BMC_REQUEST_DELAY (10)
+/* New developments in time critical operations should
+ * begin to use these shorter BMC request delays */
+#define MTC_RECV_WAIT          (5) /* secs to wait before rx after a request */
+#define MTC_RECV_RETRY_WAIT    (5) /* secs to wait performing a rx retry     */
 
 /** Host must stay enabled for this long for the
  *  failed_recovery_counter to get cleared */

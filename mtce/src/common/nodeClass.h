@@ -181,6 +181,14 @@ private:
         /* Retry counter for power actions (on/off)*/
         int  power_action_retries ;
 
+        /* Retry counter for power state change query retries */
+        int  power_status_retries ;
+
+        /* Set true at the start of a power action.
+         * Used to force the, power on or off, action
+         * following the first status query. */
+        bool power_action_first ;
+
         /** Generic toggle switch */
         bool toggle ;
 
