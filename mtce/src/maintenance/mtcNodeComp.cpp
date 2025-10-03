@@ -1216,7 +1216,7 @@ int learn_my_pxeboot_address ( void )
 
     if ( (rc = get_iface_info ( PXEBOOT_INTERFACE, ctrl.pxeboot_iface, ctrl.iface_info[PXEBOOT_INTERFACE] )) == PASS )
     {
-        string ifcfg_file_suffix = ":2" ; // Assume ifcfg file suffix ':2' for first boot after install case
+        string ifcfg_file_suffix = ":2" ; // pxeboot interfaces use label ':2'
         iface_info_type * iface_info_ptr = &ctrl.iface_info[PXEBOOT_INTERFACE] ;
         iface_info_ptr->iface_name = ctrl.pxeboot_iface ;
 
@@ -1232,30 +1232,17 @@ int learn_my_pxeboot_address ( void )
         }
         ilog ("Pxeboot IF Name: %s", iface_info_ptr->parent.c_str());
 
-        // To handle the first reboot after install where the kickstart adds a ':2'
-        // to the boot interface we always try the dhcp search with the ':2' first.
+        // search for the dynamic allocated address
+        // worker/storage nodes always use DHCP
+        // stand-by controller uses DHCP after first boot post-install, static after 1st unlock
         ctrl.pxeboot_addr = get_pxeboot_dhcp_addr (  iface_info_ptr->parent + ifcfg_file_suffix);
         if ( !ctrl.pxeboot_addr.empty() )
         {
             ilog ("pxeboot dhcp lease address: %s ; initial", ctrl.pxeboot_addr.c_str());
         }
-        // If the pxeboot address is not found above then do the full search.
+        // If the pxeboot address is not found above then search for static ones.
         else
         {
-            // If the pxeboot interface is not same as the management interface
-            // name then we need to remove the ":2" suffix.
-            // The ':2' is something the kickstart and the networking management
-            // adds to the interface name to distinguish between mgmt and pxeboot
-            // interfaces when they are the same.
-            if ( iface_info_ptr->parent != std::string(ctrl.mgmnt_iface))
-                ifcfg_file_suffix = "" ;
-
-            ctrl.pxeboot_addr = get_pxeboot_dhcp_addr ( iface_info_ptr->parent + ifcfg_file_suffix);
-            if ( !ctrl.pxeboot_addr.empty() )
-            {
-                ilog ("pxeboot dhcp lease address: %s", ctrl.pxeboot_addr.c_str());
-            }
-            // Now, override that local address if its found in the controller leases file.
             if ( ctrl.nodetype & CONTROLLER_TYPE )
             {
                 string temp_pxeboot_addr= get_pxeboot_static_addr ( iface_info_ptr->parent + ifcfg_file_suffix );
