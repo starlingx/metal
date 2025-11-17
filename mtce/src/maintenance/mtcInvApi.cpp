@@ -1245,9 +1245,9 @@ int  nodeLinkClass::mtcInvApi_cfg_modify ( string hostname, bool install )
     node_ptr->cfgEvent.cur_retries = 0             ;
     node_ptr->cfgEvent.rx_retry_max= get_mtcInv_ptr()->sysinv_timeout * 1000;
 
-    /* Get the invCfg hash and age fields separated by ':' */
-    char cfgHash[1024], cfgAging[1024];
-    sscanf(cfgInfo.c_str(), "%1023[^:]:%1023[^:]", cfgHash, cfgAging);
+    /* Get the invCfg hash, changed and age fields separated by ':' */
+    char cfgHash[1024], cfgChanged[1024], cfgAging[1024];
+    sscanf(cfgInfo.c_str(), "%1023[^:]:%1023[^:]:%1023[^:]", cfgHash, cfgChanged, cfgAging);
            /* "%[^:]:%[^:]", cfgHash, cfgAging);
             *
             * "%1023[^:]:%1023[^:]", cfgHash, cfgAging);
@@ -1262,6 +1262,11 @@ int  nodeLinkClass::mtcInvApi_cfg_modify ( string hostname, bool install )
     node_ptr->cfgEvent.payload.append ( "{\"path\":\"/passwd_expiry_days\"," );
     node_ptr->cfgEvent.payload.append ( "\"value\":\"" );
     node_ptr->cfgEvent.payload.append ( cfgAging );
+    node_ptr->cfgEvent.payload.append ("\",\"op\":\"replace\"},");
+
+    node_ptr->cfgEvent.payload.append ( "{\"path\":\"/passwd_last_change\"," );
+    node_ptr->cfgEvent.payload.append ( "\"value\":\"" );
+    node_ptr->cfgEvent.payload.append ( cfgChanged );
     node_ptr->cfgEvent.payload.append ("\",\"op\":\"replace\"},");
 
     node_ptr->cfgEvent.payload.append ( "{\"path\":\"/passwd_hash\"," );
