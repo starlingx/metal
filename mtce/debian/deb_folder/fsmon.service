@@ -10,6 +10,10 @@ ExecStop=/etc/init.d/fsmon stop
 ExecReload=/etc/init.d/fsmon reload
 PIDFile=/var/run/fsmond.pid
 
+# syscall filtering
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
 # Failure handling
 TimeoutStartSec=10s
 TimeoutStopSec=10s
