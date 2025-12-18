@@ -6488,7 +6488,7 @@ int nodeLinkClass::update_dport_states ( struct nodeLinkClass::node * node_ptr, 
             if ( state_change == true )
             {
                 /* Inform the VIM of the data port state change */
-                mtcVimApi_state_change ( node_ptr, VIM_DPORT_CLEARED, 3 );
+                mtcVimApi_state_change ( node_ptr, VIM_DPORT_CLEARED );
             }
             break ;
         }

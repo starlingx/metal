@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2016, 2024 Wind River Systems, Inc.
+ * Copyright (c) 2015-2016, 2024-2025 Wind River Systems, Inc.
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -135,6 +135,8 @@ int httpUtil_event_init ( libEvent * ptr ,
     ptr->type = EVHTTP_REQ_GET ; /* request type GET/PUT/PATCH etc */
 
     /* Result Info */
+    ptr->callback    = nullptr ;
+    ptr->done        = false ;
     ptr->status      = FAIL;
     ptr->http_status = 0   ;
     ptr->low_wm = ptr->med_wm = ptr->high_wm = false ;
@@ -263,7 +265,9 @@ int httpUtil_request ( libEvent & event,
 {
     int rc = PASS ;
 
-    /* make a new request and bind the event handler to it */
+    /* Make a new request and bind the event handler to it.
+     * The handler will be called with arg* pointing to the event.base
+     * that needs to be freed at the end of the handler execution */
     event.req = evhttp_request_new( hdlr , event.base );
     if ( ! event.req )
     {
@@ -287,7 +291,7 @@ int httpUtil_payload_add ( libEvent & event )
 {
     int rc = PASS ;
 
-    /* Returns the output buffer. */ 
+    /* Returns the output buffer. */
     event.buf = evhttp_request_get_output_buffer ( event.req );
 
     /* Check for no buffer */
@@ -762,7 +766,7 @@ int httpUtil_api_request ( libEvent & event )
     {
         event.payload  = ""   ;
 
-        /* create the json string that can request an authority 
+        /* Create the json string that can request an authority
          * token and write that string to 'payload' */
         event.status = jsonApi_auth_request ( event.hostname, event.payload );
         if ( event.status != PASS )

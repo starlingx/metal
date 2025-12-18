@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2017 Wind River Systems, Inc.
+ * Copyright (c) 2013-2017, 2025 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -42,6 +42,7 @@ static hwmon_ctrl_type * _hwmon_ctrl_ptr = NULL ;
 /* hwmonTimer_audit - get_events periodic audit timer */
 static struct mtc_timer hwmonTimer_audit ;
 static struct mtc_timer hwmonTimer_token ;
+static struct mtc_timer hwmonTimer_fit   ;
 
 /** List of server profile files */
 std::list<string> profile_files ;
@@ -84,8 +85,13 @@ void _stage_change ( string hostname, monitor_ctrl_stage_enum & nowStage, monito
 /* Not run on a sighup     */
 void hwmon_timer_init ( void )
 {
-    mtcTimer_init ( hwmonTimer_audit, "controller", "audit timer" ) ;
-    mtcTimer_init ( hwmonTimer_token, "controller", "token timer") ;
+    mtcTimer_init ( hwmonTimer_audit, CONTROLLER, "audit timer" ) ;
+    mtcTimer_init ( hwmonTimer_token, CONTROLLER, "token timer" ) ;
+
+#ifdef WANT_FIT_TESTING
+    slog ("initializing token fit timer" );
+    mtcTimer_init ( hwmonTimer_fit, CONTROLLER, "fit timer" ) ;
+#endif
 }
 
 /* Register realtime signal handler with the kernel */
@@ -194,6 +200,17 @@ void hwmonHostClass::timer_handler ( int sig, siginfo_t *si, void *uc)
         hwmonTimer_token.ring = true ;
         return ;
     }
+#ifdef WANT_FIT_TESTING
+    else if (( *tid_ptr == hwmonTimer_fit.tid ) )
+    {
+        slog ("%s FIT timer ring", hwmonTimer_fit.hostname.c_str());
+        mtcTimer_stop_int_safe ( hwmonTimer_fit );
+        hwmonTimer_fit.ring = true ;
+        if ( daemon_want_fit ( FIT_CODE__CORRUPT_TOKEN, hwmonTimer_fit.hostname, "random"))
+            tokenUtil_fail_token ();
+        return ;
+    }
+#endif
     else
     {
         hwmon_host_ptr = getHost_timer ( *tid_ptr ) ;
@@ -372,6 +389,10 @@ void hwmon_service ( hwmon_ctrl_type * ctrl_ptr )
                                  config_ptr->token_refresh_rate,
                                  hwmonTimer_token,
                                  hwmonTimer_handler );
+#ifdef WANT_FIT_TESTING
+        if ( daemon_get_cfg_ptr()->testmode )
+            tokenUtil_manage_fit ( ctrl_ptr->my_hostname, hwmonTimer_fit, hwmonTimer_handler ) ;
+#endif
 
         /* Run the FSM */
         hostInv.hwmon_fsm ( ) ;

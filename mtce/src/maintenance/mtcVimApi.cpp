@@ -1,8 +1,8 @@
 /*
- * Copyright (c) 2013, 2016, 2023 Wind River Systems, Inc.
-*
-* SPDX-License-Identifier: Apache-2.0
-*
+ * Copyright (c) 2013, 2016, 2023, 2025 Wind River Systems, Inc.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  */
 
  /**
@@ -32,9 +32,32 @@ using namespace std;
 /* The handles the inventory PATCH request's response message */
 int mtcVimApi_handler ( libEvent & event )
 {
-    jlog ("%s Response:%s\n", event.log_prefix.c_str(), event.response.c_str());
-
-    return (PASS);
+    if ( event.status )
+    {
+        wlog ("%s HTTP '%s' request failed (status:%d) response:%s",
+                  event.log_prefix.c_str(),
+                  event.operation.c_str(),
+                  event.status,
+                  event.response.c_str());
+    }
+    /* log when a command completed ok with work queue level retries */
+    if ( event.cur_retries )
+    {
+        ilog ("%s HTTP '%s' request completed ok ; with %d retries",
+                  event.log_prefix.c_str(),
+                  event.operation.c_str(),
+                  event.cur_retries);
+    }
+    else
+    {
+        /* Nothing extra to do here yet.
+         * Just report the successful completion */
+        ilog ("%s HTTP '%s' request completed ok",
+                  event.log_prefix.c_str(),
+                  event.operation.c_str());
+    }
+    event.active = false ;
+    return (event.status);
 }
 
 string nodeLinkClass::mtcVimApi_state_get ( string hostname, int & http_status_code )
@@ -204,7 +227,7 @@ int nodeLinkClass::mtcVimApi_state_change ( struct nodeLinkClass::node * node_pt
                                             int retries )
 {
     int http_status_code = HTTP_OK ;
-    string type ="host" ;
+    string type ="host " ;
     mtcHttpUtil_event_init ( &node_ptr->httpReq,
                               node_ptr->hostname,
                               "mtcVimApi_state_change",
@@ -216,7 +239,6 @@ int nodeLinkClass::mtcVimApi_state_change ( struct nodeLinkClass::node * node_pt
     node_ptr->httpReq.uuid        = node_ptr->uuid;
     node_ptr->httpReq.cur_retries = 0             ;
     node_ptr->httpReq.max_retries = retries       ;
-    node_ptr->httpReq.active      = true          ;
     node_ptr->httpReq.noncritical = false         ;
     switch ( request )
     {
@@ -237,22 +259,22 @@ int nodeLinkClass::mtcVimApi_state_change ( struct nodeLinkClass::node * node_pt
             node_ptr->httpReq.operation = VIM_HOST__FAILED ;
             break ;
         case VIM_DPORT_OFFLINE:
-            type = "data port";
+            type = "data port ";
             node_ptr->httpReq.request   = request   ;
             node_ptr->httpReq.operation = "offline" ;
             break ;
         case VIM_DPORT_CLEARED:
-            type = "data port";
+            type = "data port ";
             node_ptr->httpReq.request   = request   ;
             node_ptr->httpReq.operation = "clear" ;
             break ;
         case VIM_DPORT_DEGRADED:
-            type = "data port";
+            type = "data port ";
             node_ptr->httpReq.request   = request   ;
             node_ptr->httpReq.operation = "major" ;
             break ;
         case VIM_DPORT_FAILED:
-            type = "data port";
+            type = "data port ";
             node_ptr->httpReq.request   = request   ;
             node_ptr->httpReq.operation = "critical" ;
             break ;
@@ -285,10 +307,10 @@ int nodeLinkClass::mtcVimApi_state_change ( struct nodeLinkClass::node * node_pt
     }
     else
     {
-        ilog ("%s sending '%s' state change to vim (%s)",
+        type.append(node_ptr->httpReq.operation);
+        ilog ("%s enqueueing '%s' state change to VIM Service",
                   node_ptr->hostname.c_str(),
-                  type.c_str(),
-                  node_ptr->httpReq.operation.c_str());
+                  type.c_str());
         dlog ("%s %s\n", node_ptr->hostname.c_str(), node_ptr->httpReq.payload.c_str());
     }
 

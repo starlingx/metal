@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2018, 2024 Wind River Systems, Inc.
+ * Copyright (c) 2013-2018, 2024-2025 Wind River Systems, Inc.
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -22,7 +22,7 @@
   *       mtcHttpUtil_payload_len
   *       mtcHttpUtil_header_add
   *       mtcHttpUtil_status
-  * 
+  *
   *    Request Utility and Handler:
   *
   *       mtcHttpUtil_api_request
@@ -42,7 +42,7 @@
   *       mtcHttpUtil_stop_timer
   *       mtcHttpUtil_log_time
   *       mtcHttpUtil_payload_len
-  * 
+  *
   */
 
 #include <time.h>
@@ -55,6 +55,7 @@ using namespace std;
 #include "mtcHttpUtil.h"    /* this module header                      */
 #include "mtcInvApi.h"      /* Inventory REST API header               */
 #include "mtcVimApi.h"      /* VIM REST API header                     */
+#include "mtcSmgrApi.h"     /* Service Manager REST API header         */
 #include "jsonUtil.h"       /* Json Utilities                          */
 #include "nodeUtil.h"       /* Node Utilities                          */
 
@@ -66,8 +67,6 @@ extern void mtcInvApi_qry_Handler     ( struct evhttp_request *req, void *arg );
 extern void mtcInvApi_get_Handler     ( struct evhttp_request *req, void *arg );
 extern void mtcInvApi_cfg_Handler     ( struct evhttp_request *req, void *arg );
 
-extern void mtcSmgrApi_Handler        ( struct evhttp_request *req, void *arg );
-extern void mtcVimApi_Handler         ( struct evhttp_request *req, void *arg );
 
 void mtcHttpUtil_Handler              ( struct evhttp_request *req, void *arg );
 
@@ -103,7 +102,10 @@ int mtcHttpUtil_event_init ( libEvent * ptr ,
     ptr->count       = 0     ;
     ptr->timeout     = 0     ;
     ptr->cur_retries = 0     ;
-    ptr->max_retries = 0     ;
+
+    /* This should not be needed.
+     * This is just defensive to set retries to the intended default */
+    ptr->max_retries = HTTP_DEFAULT_RETRIES ;
     ptr->active      = false ;
     ptr->mutex       = false ;
     ptr->found       = false ;
@@ -118,9 +120,6 @@ int mtcHttpUtil_event_init ( libEvent * ptr ,
     ptr->hostname = hostname ;
     ptr->service  = service  ;
 
-    /* Copy the mtce token into the libEvent struct for this command */
-    ptr->token = get_mtcInv_ptr()->tokenEvent.token ;
-
     /* Instance Specific Request Data Data */
     ptr->entity_path.clear() ;
     ptr->entity_path_next.clear() ;
@@ -134,6 +133,8 @@ int mtcHttpUtil_event_init ( libEvent * ptr ,
 
 
     /* Result Info */
+    ptr->callback    = nullptr ;
+    ptr->done        = false ;
     ptr->status      = FAIL;
     ptr->exec_time_msec = 0 ;
     ptr->http_status = 0   ;
@@ -436,9 +437,32 @@ int mtcHttpUtil_status ( libEvent & event )
         /* Authentication error - need to renew the token */
         case 401:
         {
+            wlog ("%s HTTP '%s' ; Authentication Error ; forcing token renewal",
+                      event.log_prefix.c_str(), event.operation.c_str());
             keyToken_type * token_ptr = tokenUtil_get_ptr() ;
             token_ptr->renew = true ;
             rc = FAIL_AUTHENTICATION ;
+            break ;
+        }
+        case 500:
+        {
+            wlog ("%s HTTP '%s' ; %d:Internal Server Error",
+                      event.log_prefix.c_str(), event.operation.c_str(), event.status);
+            rc = event.status ;
+            break ;
+        }
+        case 501:
+        {
+            wlog ("%s HTTP '%s' ; %d:Not Implemented",
+                      event.log_prefix.c_str(), event.operation.c_str(), event.status);
+            rc = event.status ;
+            break ;
+        }
+        case 503:
+        {
+            wlog ("%s HTTP '%s' ; %d:Service Unavailable",
+                      event.log_prefix.c_str(), event.operation.c_str(), event.status);
+            rc = event.status ;
             break ;
         }
         case 0:
@@ -451,7 +475,7 @@ int mtcHttpUtil_status ( libEvent & event )
         }
         default:
         {
-            wlog ("%s Status: %d\n", event.hostname.c_str(), event.status );
+            wlog ("%s Status: %d", event.log_prefix.c_str(), event.status );
             rc = event.status ;
             break;
         }
@@ -670,7 +694,7 @@ int mtcHttpUtil_api_request ( libEvent & event )
              ( event.request == SMGR_HOST_ENABLED  ))
     {
         event.timeout = HTTP_SMGR_TIMEOUT ;
-        handler = &mtcSmgrApi_Handler ;
+        handler = &mtcHttpUtil_Handler ;
         if ( event.request == SMGR_QUERY_SWACT )
         {
             event.type = EVHTTP_REQ_GET ;
@@ -714,11 +738,8 @@ int mtcHttpUtil_api_request ( libEvent & event )
         }
     }
 
-    if ( event.request != KEYSTONE_TOKEN )
-    {
-        event.address = event.token.url ;
-        jlog ("%s Address : %s\n", event.hostname.c_str(), event.token.url.c_str());
-    }
+    event.address = event.token.url ;
+    jlog ("%s Address : %s", event.hostname.c_str(), event.token.url.c_str());
 
     if (( event.type != EVHTTP_REQ_GET ) &&
         ( event.type != EVHTTP_REQ_DELETE ))
@@ -775,8 +796,7 @@ int mtcHttpUtil_api_request ( libEvent & event )
     hdrs.entry[hdr_entry].value = "application/json" ;
     hdr_entry++;
 
-    if (( event.request != KEYSTONE_TOKEN     ) &&
-        ( event.request != VIM_HOST_DISABLED  ) &&
+    if (( event.request != VIM_HOST_DISABLED  ) &&
         ( event.request != VIM_HOST_ENABLED   ) &&
         ( event.request != VIM_HOST_OFFLINE   ) &&
         ( event.request != VIM_HOST_FAILED    ) &&
@@ -817,22 +837,20 @@ int mtcHttpUtil_api_request ( libEvent & event )
     gettime   ( event.send_time );
     gettime   ( event.done_time ); /* create a valid done value */
 
-    if ( event.request == KEYSTONE_TOKEN )
-    {
-        string path = MTC_POST_KEY_LABEL ;
-        event.address = path ;
-        event.prefix_path += path;
-        jlog ("%s Keystone Address : %s\n", event.hostname.c_str(), event.prefix_path.c_str());
-        event.status = evhttp_make_request ( event.conn, event.req, event.type, event.prefix_path.data());
-    }
-    else
-    {
-        jlog ("%s API Address : %s\n", event.hostname.c_str(), event.token.url.c_str());
-        event.status = evhttp_make_request ( event.conn, event.req, event.type, event.token.url.data());
-    }
+    jlog ("%s API Address : %s", event.hostname.c_str(), event.token.url.c_str());
+    event.status = evhttp_make_request ( event.conn, event.req, event.type, event.token.url.data());
+
     if ( event.status == PASS )
     {
         evhttp_connection_set_timeout(event.req->evcon, event.timeout);
+
+#ifdef WANT_FIT_TESTING
+        if ( daemon_is_file_present ( MTC_CMD_FIT__AUTH_FAIL_ALL ) )
+        {
+            // Fail every request that requires a valid token
+            tokenUtil_fail_token ( );
+        }
+#endif
 
         /* Default to retry for both blocking and non-blocking command */
         event.status = RETRY ;
@@ -861,9 +879,12 @@ int mtcHttpUtil_api_request ( libEvent & event )
                  ( event.request == VIM_DPORT_FAILED  ) ||
                  ( event.request == VIM_DPORT_CLEARED ) ||
                  ( event.request == VIM_DPORT_DEGRADED) ||
+                 ( event.request == SMGR_HOST_UNLOCKED) ||
+                 ( event.request == SMGR_HOST_ENABLED ) ||
+                 ( event.request == SMGR_HOST_LOCKED  ) ||
+                 ( event.request == SMGR_HOST_DISABLED) ||
                  ( event.request == SMGR_QUERY_SWACT) ||
-                 ( event.request == SMGR_START_SWACT) ||
-                 ( event.request == KEYSTONE_TOKEN ))
+                 ( event.request == SMGR_START_SWACT))
         {
             if ( event.operation.compare(SYSINV_OPER__UPDATE_UPTIME) )
             {
@@ -914,17 +935,14 @@ int mtcHttpUtil_api_request ( libEvent & event )
         }
         else
         {
-            /* Catch all but should not be */
-            event.log_prefix = event.hostname ;
-            event.log_prefix.append (" ");
-            event.log_prefix.append (event.service) ;
-            event.log_prefix.append (" ");
-            event.log_prefix.append (event.operation) ;
-            slog ("%s Requested (blocking) (to:%d) ----------------------------------------\n", event.log_prefix.c_str(), event.timeout );
-
-            event_base_dispatch(event.base);
-
-            goto mtcHttpUtil_api_request_done ;
+            /* Unsupported non-blocking request */
+            slog ("%s %s %s ; Unsupported non-blocking request",
+                      event.hostname.c_str(),
+                      event.service.c_str(),
+                      event.operation.c_str());
+            mtcHttpUtil_free_conn ( event );
+            mtcHttpUtil_free_base ( event );
+            return FAIL_BAD_CASE ;
         }
     }
     else
@@ -937,26 +955,19 @@ int mtcHttpUtil_api_request ( libEvent & event )
 
 mtcHttpUtil_api_request_done:
 
-
     if ( event.blocking == true )
     {
         mtcHttpUtil_free_conn ( event );
         mtcHttpUtil_free_base ( event );
+    }
 
-        /**
-         *  If there is an authentication error then free the event, force a refresh
-         *  and return the error to the caller so that the request can be retried.
-         **/
-        if (( event.status == FAIL_AUTHENTICATION ) ||
-            ( event.status == MTC_HTTP_UNAUTHORIZED ))
-        {
-            /* Find the host this handler instance is being run against */
-            nodeLinkClass * obj_ptr = get_mtcInv_ptr () ;
-            tokenUtil_token_renew ( );
-            mtcHttpUtil_free_conn ( obj_ptr->tokenEvent );
-            mtcHttpUtil_free_base ( obj_ptr->tokenEvent );
-            event.status = FAIL_AUTHENTICATION ;
-        }
+    /*  Force an immediate token renewal for authentication errors */
+    if (( event.status == FAIL_AUTHENTICATION ) ||
+        ( event.status == MTC_HTTP_UNAUTHORIZED ) ||
+        ( event.http_status == MTC_HTTP_UNAUTHORIZED ))
+    {
+        tokenUtil_token_renew ();
+        event.status = FAIL_AUTHENTICATION ;
     }
 
     return (event.status);
@@ -1003,8 +1014,7 @@ int mtcHttpUtil_receive ( libEvent & event )
                 /* the log_event is called in the mtcHttpUtil_handler */
                 if (( event.request == SYSINV_UPDATE ) ||
                     ( event.request == SYSINV_CONFIG_SHOW ) ||
-                    ( event.request == SYSINV_CONFIG_MODIFY ) ||
-                    ( event.request == KEYSTONE_TOKEN ))
+                    ( event.request == SYSINV_CONFIG_MODIFY ))
                 {
                    ;
                 }
@@ -1257,11 +1267,18 @@ void nodeLinkClass::mtcHttpUtil_handler ( struct evhttp_request *req, void *arg 
     /* Find the host this handler instance is being run against */
     nodeLinkClass * obj_ptr = get_mtcInv_ptr () ;
 
+    if ( arg == NULL )
+    {
+        slog ("HTTP Handler called with NULL arg");
+        return ;
+    }
     /* Make sure we get a valid event to work on */
     libEvent & event = obj_ptr->getEvent ( (struct event_base *)arg ) ;
     if (( event.request >= SERVICE_LAST ) || ( event.request == SERVICE_NONE ))
     {
         slog ("HTTP Event Lookup Failed for http base (%p) <------\n", arg);
+        event.active = false ;
+        event.done = true ;
         return ;
     }
 
@@ -1285,11 +1302,13 @@ void nodeLinkClass::mtcHttpUtil_handler ( struct evhttp_request *req, void *arg 
                    event.timeout);
 
         event.status = FAIL_TIMEOUT ;
+        event.active = false ;
         goto _handler_done ;
     }
 
     else if ( event.status != PASS )
     {
+        event.active = false ;
         goto _handler_done ;
     }
    
@@ -1311,17 +1330,21 @@ void nodeLinkClass::mtcHttpUtil_handler ( struct evhttp_request *req, void *arg 
     else if ( mtcHttpUtil_get_response ( event ) != PASS )
     {
         elog ("%s failed to get response\n", event.log_prefix.c_str());
+        event.active = false ;
         goto _handler_done ;
     }
 
-    if ( event.request == KEYSTONE_TOKEN )
+    if (( event.request == SMGR_HOST_ENABLED  ) ||
+        ( event.request == SMGR_HOST_UNLOCKED ) ||
+        ( event.request == SMGR_HOST_LOCKED   ) ||
+        ( event.request == SMGR_HOST_DISABLED ) ||
+        ( event.request == SMGR_START_SWACT   ) ||
+        ( event.request == SMGR_QUERY_SWACT   ))
     {
-        /* TODO: Deal with Failure */
-        ilog ("CALLING TOKENUTIL_HANDLER !!!!\n");
-        rc = tokenUtil_handler ( event );
+        rc = mtcSmgrApi_handler ( event );
         if ( rc )
         {
-            wlog ("%s tokenUtil_handler reported failure (%d)\n", event.hostname.c_str(), rc );
+            wlog ("%s mtcSmgrApi_handler reported failure (%d)", event.hostname.c_str(), rc );
         }
     }
     else if (( event.request == SYSINV_UPDATE )||
@@ -1359,29 +1382,43 @@ void nodeLinkClass::mtcHttpUtil_handler ( struct evhttp_request *req, void *arg 
 
 _handler_done:
 
-   event.active = false ;
+    event.active = false ;
+    event.done = true ;
+    if ( event.callback )
+        event.callback ( event ) ;
 
-   gettime   ( event.done_time );
-   timedelta ( event.send_time, event.done_time, event.diff_time );
-   mtcHttpUtil_log_event ( event );
+    gettime   ( event.done_time );
+    timedelta ( event.send_time, event.done_time, event.diff_time );
+    mtcHttpUtil_log_event ( event );
 
-   if ( event.blocking == false )
-   {
+    /* Only log if the handling time was more than 1 second */
+    if ( event.diff_time.secs )
+    {
+        wlog ("%s '%s' completed with status %d in %ld.%06ld secs",
+                  event.log_prefix.c_str(),
+                  event.operation.c_str(),
+                  event.status,
+                  event.diff_time.secs,
+                  event.diff_time.msecs );
+    }
+
+    if ( event.blocking == false )
+    {
         /**
          *  If there is an authentication error then free the event, force a refresh
          *  and return the error to the caller so that the request can be retried.
          **/
-       if (( event.status == FAIL_AUTHENTICATION ) ||
-           ( event.status == MTC_HTTP_UNAUTHORIZED ))
-       {
-           /* Find the host this handler instance is being run against */
-           nodeLinkClass * obj_ptr = get_mtcInv_ptr () ;
-           tokenUtil_token_renew ( );
-           mtcHttpUtil_free_conn ( obj_ptr->tokenEvent );
-           mtcHttpUtil_free_base ( obj_ptr->tokenEvent );
-           event.status = FAIL_AUTHENTICATION ;
-       }
-   }
+        if (( event.status == FAIL_AUTHENTICATION ) ||
+            ( event.status == MTC_HTTP_UNAUTHORIZED ))
+        {
+            /* Find the host this handler instance is being run against */
+            nodeLinkClass * obj_ptr = get_mtcInv_ptr () ;
+            tokenUtil_token_renew ( );
+            mtcHttpUtil_free_conn ( obj_ptr->tokenEvent );
+            mtcHttpUtil_free_base ( obj_ptr->tokenEvent );
+            event.status = FAIL_AUTHENTICATION ;
+        }
+    }
 }
 
 

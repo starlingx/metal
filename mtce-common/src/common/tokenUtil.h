@@ -1,10 +1,10 @@
 #ifndef __INCLUDE_TOKENUTIL_H__
 #define __INCLUDE_TOKENUTIL_H__
 /*
- * Copyright (c) 2013, 2017, 2024 Wind River Systems, Inc.
-*
-* SPDX-License-Identifier: Apache-2.0
-*
+ * Copyright (c) 2013, 2017, 2024-2025 Wind River Systems, Inc.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  */
 
 /*
@@ -59,5 +59,11 @@ void tokenUtil_manage_token ( libEvent         & event,
                               int              & refresh_rate,
                               struct mtc_timer & token_refresh_timer,
                               void (*handler)(int, siginfo_t*, void*));
+
+#ifdef WANT_FIT_TESTING
+void tokenUtil_manage_fit   ( string           & hostname,
+                              struct mtc_timer & fit_timer,
+                              void (*handler)(int, siginfo_t*, void*));
+#endif
 
 #endif /* __INCLUDE_TOKENUTIL_H__ */

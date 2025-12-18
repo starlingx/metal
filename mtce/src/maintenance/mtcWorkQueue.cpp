@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016, 2023-2024 Wind River Systems, Inc.
+ * Copyright (c) 2013, 2016, 2023-2025 Wind River Systems, Inc.
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -29,19 +29,26 @@ using namespace std;
 #include "mtcHttpUtil.h"    /*         this module header              */
 #include "mtcNodeHdlrs.h"   /* for ... mtcTimer_handl                  */
 #include "nodeUtil.h"       /* for ... common Node Utilities           */
+#include "tokenUtil.h"      /* for ... token utilities                 */
 
-#define QUEUE_OVERLOAD (40)
+#define QUEUE_OVERLOAD (100)
+#define VERBOSE_ENQUEUE_LOG_THRESHOLD (4)
+#define RENEW_BLOCKED_TIMEOUT_SECS (HTTP_TOKEN_TIMEOUT+10)
 
 string _get_work_state_str ( httpStages_enum state )
 {
-    if ( state == HTTP__TRANSMIT ) return ("Tx  ");
-    else if ( state == HTTP__RECEIVE  ) return ("  Rx");
-    else if ( state == HTTP__FAILURE  ) return (" Er ");
-    else if ( state == HTTP__RECEIVE_WAIT  ) return ("Wait");
-    else
+    switch (state)
     {
-        elog ("Invalid Http Work Queue State: %d\n", state );
-        return ("----");
+        case HTTP__TRANSMIT:    return ("Tx  ");
+        case HTTP__RECEIVE:     return ("  Rx");
+        case HTTP__FAILURE:     return (" Er ");
+        case HTTP__RECEIVE_WAIT:return ("Wait");
+        case HTTP__RETRY_WAIT:  return ("Rtry");
+        case HTTP__DONE_FAIL:   return ("Fail");
+        case HTTP__DONE_PASS:   return ("Pass");
+        default:
+            slog ("Invalid Http Work Queue State: %d\n", state);
+            return ("----");
     }
 }
 
@@ -152,21 +159,43 @@ int nodeLinkClass::workQueue_enqueue ( libEvent & event )
 
     GET_NODE_PTR(event.hostname) ;
 
+
+    /* Get current work queue fifo size */
+    int size = node_ptr->libEvent_work_fifo.size() ;
+    if ( size > QUEUE_OVERLOAD )
+    {
+        /* This should never happen without serious scheduling issues or
+         * too many back to back retries causing a build up of work load.
+         * There should only ever be a max of 3 or worst case 5 queued
+         * requests per host at any one time. */
+        wlog ("%s work queue overload ; already handling %d requests for this host", event.log_prefix.c_str(), size );
+
+        /* dump the done queue to log what is going on */
+        doneQueue_dump ( node_ptr );
+        return (RETRY);
+    }
+
+    if ( event.log_prefix.empty() )
+    {
+        event.log_prefix = event.hostname ;
+        event.log_prefix.append (" ");
+        event.log_prefix.append (event.service) ;
+    }
     event.sequence = node_ptr->oper_sequence++ ;
     sprintf ( &seq_str[0], "%d", event.sequence );
-
-    event.log_prefix = event.hostname ;
-    event.log_prefix.append (" ");
-    event.log_prefix.append (event.service) ;
-    //event.log_prefix.append (" '");
-    //event.log_prefix.append (event.operation) ;
-    //event.log_prefix.append ("' seq:");
     event.log_prefix.append (" seq:");
     event.log_prefix.append (seq_str) ;
 
+    /* add the event to this host's work fifo */
     node_ptr->libEvent_work_fifo.push_back(event);
 
-    qlog ("%s Enqueued\n", event.log_prefix.c_str());
+    /* Log the number of enqueued requests for this host
+     * if the number exceeds VERBOSE_ENQUEUE_LOG_THRESHOLD.
+     * Could be an early sign of overload or backup */
+    if ( ++size > VERBOSE_ENQUEUE_LOG_THRESHOLD )
+    {
+        ilog ("%s enqueued ; %d queued requests", event.log_prefix.c_str(), size);
+    }
 
     return (PASS) ;
 }
@@ -268,6 +297,9 @@ int nodeLinkClass::doneQueue_dequeue ( libEvent & event )
  *
  * ************************************************************************/
 
+ // both apply to all hosts
+static time_t token_renew_blocked_start_time = 0 ; // Applies to all hosts
+static int blocked_throttle_log = 0 ;
 int nodeLinkClass::workQueue_process ( struct nodeLinkClass::node * node_ptr )
 {
     int rc = PASS ;
@@ -306,6 +338,50 @@ int nodeLinkClass::workQueue_process ( struct nodeLinkClass::node * node_ptr )
         return (PASS);
     }
 
+    /* get the size of the work queue */
+    int size = node_ptr->libEvent_work_fifo.size() ;
+
+    /* Check if there is a token renewal in progress */
+    if ( tokenUtil_get_ptr()->renew_in_progress == true )
+    {
+        if ( size )
+        {
+            time_t now_time = time(NULL);
+
+            /* Initialize blocked start time on first occurrence */
+            if ( token_renew_blocked_start_time == 0 )
+                token_renew_blocked_start_time = now_time;
+
+            /* Check if renew_in_progress has been stuck for more than Blocked Timeout seconds */
+            if ( (now_time - token_renew_blocked_start_time) >= RENEW_BLOCKED_TIMEOUT_SECS )
+            {
+                /* Note: This should never happen because the tokenUtil is monitoring
+                 * as well and will self correct. */
+                wlog_throttled ( blocked_throttle_log, 1000,
+                                 "%s Token renewal stuck for %ld seconds ; processing work queue anyway",
+                                 node_ptr->hostname.c_str(),
+                                 now_time - token_renew_blocked_start_time);
+                /* Continue processing - don't return */
+            }
+            else
+            {
+                /* token renewal in progress - skip processing */
+                return (PASS);
+            }
+        }
+        else
+        {
+            /* No work to do */
+            return (PASS);
+        }
+    }
+    else
+    {
+        /* Reset the blocked start time and throttle log when renewal is not in progress */
+        token_renew_blocked_start_time = 0 ;
+        blocked_throttle_log = 0 ;
+    }
+
     if ( daemon_get_cfg_ptr()->debug_work & 8 )
     {
         // workQueue_print ( node_ptr ) ;
@@ -329,22 +405,6 @@ int nodeLinkClass::workQueue_process ( struct nodeLinkClass::node * node_ptr )
                 node_ptr->libEvent_work_fifo_ptr->payload.c_str());
         }
         syslog ( LOG_INFO, "+------+-------+--------------+---------+--------------+-----+----------------------+\n");
-    }
-
-    int size = node_ptr->libEvent_work_fifo.size() ;
-    if ( size > QUEUE_OVERLOAD )
-    {
-        elog ( "%s work queue overload ; clearing %d entries\n", node_ptr->hostname.c_str(), size );
-        workQueue_purge ( node_ptr );
-        return (FAIL);
-    }
-
-    if ( node_ptr->libEvent_work_fifo.empty() )
-    {
-        slog ("%s unexpected empty 'libEvent_work_fifo_ptr' (should have %d elements)\n",
-                  node_ptr->hostname.c_str(), size );
-        workQueue_purge ( node_ptr );
-        return (FAIL_NULL_POINTER);
     }
 
     node_ptr->libEvent_work_fifo_ptr = node_ptr->libEvent_work_fifo.begin();
@@ -507,7 +567,6 @@ int nodeLinkClass::workQueue_process ( struct nodeLinkClass::node * node_ptr )
                 {
                     /* Copy done event to the done queue */
                     node_ptr->libEvent_done_fifo.push_back(node_ptr->thisReq);
-
                 }
                 /* Pop that done event off the work queue */
                 node_ptr->libEvent_work_fifo.pop_front();
@@ -524,32 +583,14 @@ int nodeLinkClass::workQueue_process ( struct nodeLinkClass::node * node_ptr )
             node_ptr->http_retries_cur++ ;
             node_ptr->thisReq.cur_retries++ ;
 
-            if ( node_ptr->thisReq.noncritical == true )
-            {
-                if ( node_ptr->thisReq.cur_retries > node_ptr->thisReq.max_retries )
-                {
-                    node_ptr->oper_failures++ ;
-
-                    wlog ("%s retry conjestion abort of non-critical command (%d:%d)\n",
-                              node_ptr->thisReq.log_prefix.c_str(),
-                              node_ptr->thisReq.cur_retries,
-                              node_ptr->thisReq.max_retries );
-
-                    /* Pop this aborted event off the work queue */
-                    node_ptr->libEvent_work_fifo.pop_front();
-                }
-                else
-                {
-                    want_retry = true ;
-                }
-            }
-            /* other wise its critical and we are going for the retries */
-            else if ( node_ptr->thisReq.cur_retries >= node_ptr->thisReq.max_retries )
+            if ( node_ptr->thisReq.cur_retries >= node_ptr->thisReq.max_retries )
             {
                 node_ptr->oper_failures++ ;
-                elog ("%s Failed (rc:%d) - (%d of %d) (work->%s) (Critical:%s) (Total Fails:%d)\n",
+                elog ("%s %s Failed (rc:%d http:%d) - (%d of %d) (work->%s) (Critical:%s) (Total Fails:%d)\n",
                           node_ptr->thisReq.log_prefix.c_str(),
+                          node_ptr->thisReq.operation.c_str(),
                           node_ptr->thisReq.status,
+                          node_ptr->thisReq.http_status,
                           node_ptr->thisReq.cur_retries,
                           node_ptr->thisReq.max_retries,
                           node_ptr->thisReq.noncritical ? "drop" : "done",
@@ -571,9 +612,10 @@ int nodeLinkClass::workQueue_process ( struct nodeLinkClass::node * node_ptr )
 
             if ( want_retry )
             {
-                wlog ("%s Failed (rc:%d) - (%d of %d) (Timeout=%d) (Critical:%s)\n",
+                wlog ("%s Failed (rc:%d http:%d) - (%d of %d) (Timeout=%d) (Critical:%s)\n",
                           node_ptr->thisReq.log_prefix.c_str(),
                           node_ptr->thisReq.status,
+                          node_ptr->thisReq.http_status,
                           node_ptr->thisReq.cur_retries,
                           node_ptr->thisReq.max_retries,
                           node_ptr->thisReq.timeout,

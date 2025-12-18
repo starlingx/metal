@@ -61,6 +61,10 @@ int nodeLinkClass::fsm ( struct nodeLinkClass::node * node_ptr )
          }
     }
 
+#ifdef WANT_FIT_TESTING
+    stress_handler ( node_ptr );
+#endif
+
     /* Monitor and Manage active threads */
     thread_handler ( node_ptr->bmc_thread_ctrl, node_ptr->bmc_thread_info );
     if ( node_ptr->bmc_thread_ctrl.stage == THREAD_STAGE__KILL )

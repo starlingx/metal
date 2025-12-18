@@ -1,10 +1,10 @@
 #ifndef __INCLUDE_FITCODES_H__
 #define __INCLUDE_FITCODES_H__
 /*
- * Copyright (c) 2013, 2016, 2024 Wind River Systems, Inc.
-*
-* SPDX-License-Identifier: Apache-2.0
-*
+ * Copyright (c) 2013, 2016, 2024-2025 Wind River Systems, Inc.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  */
 
  /**
@@ -71,6 +71,8 @@
 #define MTC_CMD_FIT__MEM_LEAK_DEBUG ("/var/run/fit/mem_leak_debug") /* mtcAgent  */
 #define MTC_CMD_FIT__FM_ERROR_CODE  ("/var/run/fit/fm_error_code")  /* mtcAgent  */
 #define MTC_CMD_FIT__CORRUPT_TOKEN  ("/var/run/fit/corrupt_token")  /* mtcAgent & hwmond */
+#define MTC_CMD_FIT__AUTH_FAIL_ALL  ("/var/run/fit/corrupt_token_all") /* mtcAgent */
+#define MTC_CMD_FIT__API_STRESS     ("/var/run/fit/api_stress_test")/* mtcAgent */
 
 /*****************************************************
  *           Fault Insertion Codes
@@ -145,6 +147,8 @@
 #define FIT_CODE__HTTP_WORKQUEUE_OPERATION_FAILED    (75)
 #define FIT_CODE__HTTP_WORKQUEUE_REQUEST_TIMEOUT     (76)
 #define FIT_CODE__HTTP_WORKQUEUE_CONNECTION_LOSS     (77)
+
+#define FIT_CODE__HTTP_SWACT_OPERATION               (80)
 
 /*****************      Process Fit Codes     ********************************/
 

@@ -1,8 +1,8 @@
 /*
- * Copyright (c) 2015-2017, 2024 Wind River Systems, Inc.
-*
-* SPDX-License-Identifier: Apache-2.0
-*
+ * Copyright (c) 2015-2017, 2024-2025 Wind River Systems, Inc.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  */
 
  /**
@@ -29,7 +29,6 @@
 #include "jsonUtil.h"       /* for ... Json utilities                  */
 #include "tokenUtil.h"      /* for ... this module header              */
 
-#define GET_SERVICE_LIST_LABEL ((const char *)"OS-KSADM:services")
 #define TOKEN_REFRESH_RETRY_DELAY (5)
 
 /* The static token used for authentication by any
@@ -38,6 +37,9 @@ static keyToken_type      __token__ ;
 keyToken_type * tokenUtil_get_ptr   ( void ) { return &__token__ ; };
 keyToken_type   tokenUtil_get_token ( void ) { return __token__ ; };
 
+#ifdef WANT_FIT_TESTING
+struct mtc_timer token_fit_timer ;
+#endif
 
 /* Hold off for TOKEN_REFRESH_RETRY_DELAY seconds before trying again.
  * This applies to getting the first token only. */
@@ -88,7 +90,7 @@ void tokenUtil_get_first ( libEvent & event, string & hostname )
     do
     {
         log_throttle = 0 ;
-
+        __token__.renew_in_progress = false ;
         __token__.token.clear(); /* start with an empty token */
 
         /* Issue the token request in non-blocking form */
@@ -207,7 +209,10 @@ void tokenUtil_get_first ( libEvent & event, string & hostname )
 
     } while (( __token__.token.empty() ) || ( got_token == false )) ;
 
-    dlog ("%s took %d seconds to get token\n", hostname.c_str(), __retries );
+#ifdef WANT_FIT_TESTING
+    slog ("initializing token fit timer");
+    mtcTimer_init ( token_fit_timer, CONTROLLER, "fit timer" ) ;
+#endif
 
     /* wait 5 seconds for sysinv to be ready if the number of retries > 1 */
     if ( __retries > 1 )
@@ -234,37 +239,63 @@ void tokenUtil_get_first ( libEvent & event, string & hostname )
  * Returns    : Nothing
  *
  ***************************************************************************/
+#define RENEW_BLOCKED_TIMEOUT_SECS (HTTP_TOKEN_TIMEOUT+1)
+static time_t token_renew_blocked_start_time = 0 ; // Applies to all hosts
+
 void tokenUtil_manage_token ( libEvent         & event,
                               string           & hostname,
                               int              & refresh_rate,
                               struct mtc_timer & token_refresh_timer,
                               void (*handler)(int, siginfo_t*, void*))
 {
-
-#ifdef WANT_FIT_TESTING
-    if ( daemon_want_fit ( FIT_CODE__TOKEN, hostname , "corrupt" ))
-        tokenUtil_fail_token ();
-#endif
-
     if ( token_refresh_timer.ring == true )
     {
         bool blocking  = false ;        /* token request is non_blocking */
         int        _rr = refresh_rate ; /* local copy of refresh rate   */
 
         dlog ("%s renewing token\n", hostname.c_str());
-
-        /* this is a non-blocking call with the 'false' spec */
-        int rc = tokenUtil_new_token ( event, hostname, blocking );
-        if ( rc )
+        /* Check if there is a token renewal already in progress.
+         * Need to avoid starting a new one if one is already in progress */
+        if ( tokenUtil_get_ptr()->renew_in_progress == true )
         {
-            /* go for a retry by delayed renewal if the request fails */
-            __token__.renew = true ;
+            time_t now_time = time(NULL);
 
-            /* Override the default refresh timer duration to be at least
-             * the timeout value just in case the above request managed
-             * to launch something (even though it failed). */
-            _rr = event.timeout ;
+            /* Initialize blocked start time on first occurrence */
+            if ( token_renew_blocked_start_time == 0 )
+                token_renew_blocked_start_time = now_time;
+            {
+                /* Check if renew_in_progress has been stuck for more than Blocked Timeout seconds */
+                if ( (now_time - token_renew_blocked_start_time) >= RENEW_BLOCKED_TIMEOUT_SECS )
+                {
+                    slog ( "token in-progress renewal stuck for %ld seconds ; self correcting",
+                            now_time - token_renew_blocked_start_time);
+                    /* Self correcting this unexpected condition.
+                    * An invalid or missing token will get detected as a 401
+                    * on the next authenticated request which will start the
+                    * renew process again */
+                    __token__.renew_in_progress = false ;
+                    __token__.renew = false ;
+                }
+            }
+        }
+        else
+        {
+            /* Reset the blocked start time and throttle log when renewal is not in progress */
+            token_renew_blocked_start_time = 0 ;
 
+            /* this is a non-blocking call with the 'false' spec */
+            int rc = tokenUtil_new_token ( event, hostname, blocking );
+            if ( rc )
+            {
+                /* go for a retry by delayed renewal if the request fails */
+                __token__.renew = true ;
+                __token__.renew_in_progress = false ;
+
+                /* Override the default refresh timer duration to be at least
+                * the timeout value just in case the above request managed
+                * to launch something (even though it failed). */
+                _rr = event.timeout ;
+            }
         }
 
         /* Clear the renewal flag */
@@ -272,11 +303,7 @@ void tokenUtil_manage_token ( libEvent         & event,
         {
             ilog ("Token renew in %d seconds", _rr);
             __token__.renew = false ;
-
-        }
-        else
-        {
-            dlog ("Token refresh in %d seconds", _rr);
+            __token__.renew_in_progress = true ;
         }
         mtcTimer_start(token_refresh_timer,handler,_rr );
     }
@@ -287,18 +314,14 @@ void tokenUtil_manage_token ( libEvent         & event,
         mtcTimer_start(token_refresh_timer,handler,TOKEN_REFRESH_RETRY_DELAY);
     }
     /* Handle the forced token renewal case
-     * set by receiving a Authentication response 404 */
+     * set by receiving an HTTP 'Authentication Failed' response of 401 */
     else if ( __token__.renew == true )
     {
-        ilog ( "%s Token Renewal in %d seconds",
-                   hostname.c_str(),
-                   TOKEN_REFRESH_RETRY_DELAY);
-        if ( token_refresh_timer.ring == false )
-            mtcTimer_reset ( token_refresh_timer );
-        __token__.renew = false ;
+        ilog ( "%s Token Renewal request (immediate)", hostname.c_str());
 
-        /* force refresh of token in TOKEN_REFRESH_RETRY_DELAY seconds */
-        mtcTimer_start(token_refresh_timer,handler, TOKEN_REFRESH_RETRY_DELAY);
+        /* Resetting the token alarm forces alarm to ring
+         * and an immediate token renewal */
+        mtcTimer_reset ( token_refresh_timer );
     }
     /* launch the event */
     else if ( event.active == true )
@@ -315,6 +338,7 @@ void tokenUtil_manage_token ( libEvent         & event,
             /* should not get here. event active while base is null
              *    try and recover from this error case. */
             __token__.renew = true ;
+            __token__.renew_in_progress = false ;
             event.active = false ;
         }
     }
@@ -332,6 +356,7 @@ void tokenUtil_manage_token ( libEvent         & event,
             elog ("%s no token ; %d second hold-off before retry\n",
                       hostname.c_str(), event.timeout );
 
+            __token__.renew_in_progress = false ;
             /* force refresh of token in TOKEN_REFRESH_RETRY_DELAY seconds */
             mtcTimer_reset(token_refresh_timer);
             mtcTimer_start(token_refresh_timer,handler,TOKEN_REFRESH_RETRY_DELAY);
@@ -364,7 +389,8 @@ void tokenUtil_log_refresh ( void )
 /* Handle renewing the token ; due to authentication error */
 void tokenUtil_token_renew ( void )
 {
-    __token__.renew = true ;
+    if ( __token__.renew_in_progress == false )
+        __token__.renew = true ;
 }
 
 string _get_ip ( void )
@@ -463,6 +489,9 @@ int tokenUtil_handler ( libEvent & event )
             header_token_ptr = NULL ;
         }
 #endif
+
+        /* Accept new token renewal requests */
+        token_ptr->renew_in_progress = false ;
 
         if ( !header_token_ptr )
         {
@@ -703,8 +732,20 @@ int tokenUtil_handler ( libEvent & event )
     }
 
     /* retry the token request if it failed */
-    if ( rc ) __token__.renew = true ;
+    if ( rc )
+    {
+        __token__.renew = true ;
+    }
     event.active = false ;
+    __token__.renew_in_progress = false ;
+
+#ifdef WANT_FIT_TESTING
+    if ( daemon_is_file_present ( "/var/run/fit/stuck_token_renew_in_progress" ))
+    {
+        slog ("FIT stuck token renewal in-progress flag");
+        __token__.renew_in_progress = true ;
+    }
+#endif
     return (rc);
 }
 
@@ -882,3 +923,49 @@ int keystone_config_handler ( void * user,
     }
     return (PASS);
 }
+
+#ifdef WANT_FIT_TESTING
+/***************************************************************************
+ *
+ * Name       : tokenUtil_manage_fit
+ *
+ * Purpose:   : Manage Fault Injection Testing for token corruption
+ *
+ * Description: This function checks for the presence of the
+ *              fault injection file that indicates token corruption
+ *              is desired. That file can contain the upper bound of
+ *              the random delay.
+ *              The function should be called periodically from
+ *              the main loop of any daemon that includes this module.
+ *
+ * Parameters : hostname   - reference to the hostname
+ *              fit_timer  - reference to the calling process's FIT timer
+ *              handler    - pointer to the calling process's timer handler
+
+ * Returns    : Nothing
+ **************************************************************************/
+void tokenUtil_manage_fit ( string           & hostname,
+                            struct mtc_timer & fit_timer,
+                            void (*handler)(int, siginfo_t*, void*) )
+{
+
+    if ( daemon_is_file_present (MTC_CMD_FIT__CORRUPT_TOKEN) )
+    {
+        #define RANDOM_LOW_MIN  (20)
+        #define RANDOM_PEAK_MIN (30)
+        if ( fit_timer.tid == nullptr )
+        {
+            int random_peak = daemon_get_file_int ( MTC_CMD_FIT__CORRUPT_TOKEN ) ;
+            if ( random_peak <= RANDOM_PEAK_MIN )
+                random_peak = RANDOM_PEAK_MIN ;
+            random_peak -= RANDOM_LOW_MIN ;
+
+            int random_delay = rand()%random_peak + RANDOM_LOW_MIN ;
+
+            ilog ("%s FIT: corrupt token in %d seconds ; random range %d-%d secs",
+                      hostname.c_str(), random_delay, RANDOM_LOW_MIN, RANDOM_LOW_MIN + random_peak );
+            mtcTimer_start ( fit_timer, handler, random_delay);
+        }
+    }
+}
+#endif

@@ -1,10 +1,10 @@
 #ifndef __INCLUDE_MTCSMHAAPI_H__
 #define __INCLUDE_MTCSMHAAPI_H__
 /*
- * Copyright (c) 2013, 2015 Wind River Systems, Inc.
-*
-* SPDX-License-Identifier: Apache-2.0
-*
+ * Copyright (c) 2013, 2015, 2025 Wind River Systems, Inc.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  */
 
 #include <iostream>
@@ -16,7 +16,7 @@
  /**
   * @file
   * Wind River CGTS Platform Controller Maintenance
-  * 
+  *
   * Service Manager HA API Header
   *
   * This module offers init and cleanup utils along with
@@ -47,5 +47,8 @@ int mtcSmgrApi_init ( string ip, int port );
 void mtcSmgrApi_fini ( void );
 
 int mtcSmgrApi_service_state ( libEvent & event, bool & active_services );
+
+/** Handles Service Manager HTTP requests */
+int mtcSmgrApi_handler ( libEvent & event );
 
 #endif /* __INCLUDE_MTCSMHAAPI_H__ */

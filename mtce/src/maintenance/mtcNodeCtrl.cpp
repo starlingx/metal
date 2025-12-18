@@ -731,9 +731,13 @@ int daemon_configure ( void )
     if ( mtc_config.swact_timeout )
     {
         if ( mtc_config.swact_timeout < (MTC_SWACT_POLL_TIMER*2))
+        {
+            /* The minimum swact timeout is 2 * MTC_SWACT_POLL_TIMER = 20 secs */
             mtcInv.swact_timeout = (MTC_SWACT_POLL_TIMER*2);
+        }
         else
             mtcInv.swact_timeout = mtc_config.swact_timeout ;
+        ilog ("SwactTimeout: %d", mtcInv.swact_timeout);
     }
 
     /* Allow the token refresh rate to be specified in the config file */
@@ -1280,16 +1284,15 @@ int _self_provision ( void )
      * This call does not return until a token is received */
     tokenUtil_get_first ( mtcInv.tokenEvent, mtcInv.my_hostname );
 
-#ifdef WANT_FIT_TESTING
-    if ( daemon_want_fit ( FIT_CODE__CORRUPT_TOKEN, mtcInv.my_hostname ))
-        tokenUtil_fail_token ();
-#endif
-
     load_retries = 0 ;
     do
     {
         daemon_signal_hdlr ();
 
+#ifdef WANT_FIT_TESTING
+        if ( daemon_want_fit ( FIT_CODE__CORRUPT_TOKEN, mtcInv.my_hostname, "first" ))
+            tokenUtil_fail_token ();
+#endif
         rc = mtcInv.mtcInvApi_load_host ( my_identity.name, record_info ) ;
         if (( rc == PASS ) || ( rc == HTTP_OK ))
         {
@@ -1341,18 +1344,31 @@ int _self_provision ( void )
                 wlog ("%s inventory config dependency not met, retrying ...\n",
                           my_identity.name.c_str());
             }
+            else if ( rc == FAIL_AUTHENTICATION )
+            {
+                wlog ("%s inventory load Authentication Error ; renewing token and retrying ...\n",
+                          my_identity.name.c_str());
+                tokenUtil_get_first ( mtcInv.tokenEvent, mtcInv.my_hostname );
+            }
             else
             {
                 wlog ("%s inventory record load failed (rc:%d), retrying ...\n",
                           my_identity.name.c_str(), rc );
             }
             load_retries++ ;
-            if ( load_retries > (mtcInv.api_retries+10) )
+            if ( load_retries >= (mtcInv.api_retries+10) )
             {
                 elog ("... giving up after %d retries\n", load_retries );
                daemon_exit();
             }
-            mtcWait_secs (15);
+            /* Wait 15 seconds before retry.
+             * Don't use the mtcWait_secs utility because it conflicts
+               with other utilities that are called in the token refresh */
+            for ( int i = 0 ; i < 15 ; i++ )
+            {
+                daemon_signal_hdlr ();
+                sleep (1);
+            }
         }
     } while ( rc != PASS ) ;
 
@@ -1449,9 +1465,6 @@ void nodeLinkClass::fsm ( void )
         mtcInv.mtcInfo_handler();
     }
 }
-#ifdef WANT_FIT_TESTING
-static int token_corrupt_holdoff = 0 ;
-#endif
 void daemon_service_run ( void )
 {
     int rc ;
@@ -1528,6 +1541,10 @@ void daemon_service_run ( void )
         mtcTimer_init ( mtcInv.mtcTimer_uptime,mtcInv.my_hostname, "uptime timer" );
         mtcTimer_init ( mtcInv.mtcTimer_mnfa,  mtcInv.my_hostname, "mnfa timer" );
         mtcTimer_init ( mtcInv.mtcTimer_dor,   mtcInv.my_hostname, "DOR mode timer" );
+#ifdef WANT_FIT_TESTING
+        /* Timer used for FIT testing */
+        mtcTimer_init ( mtcInv.mtcTimer_fit, CONTROLLER, "fit timer" ) ;
+#endif
 
         if ( get_link_state ( mtc_sock.ioctl_sock, mtc_config.mgmnt_iface, &mtcInv.mgmnt_link_up_and_running ) )
         {
@@ -1776,24 +1793,12 @@ void daemon_service_run ( void )
             sleep (1);
             continue ;
         }
+
 #ifdef WANT_FIT_TESTING
-        if ( daemon_is_file_present (MTC_CMD_FIT__CORRUPT_TOKEN))
-        {
-            // The value in /var/run/fit/corrupt_token specifies the corruption cadence in seconds
-            if ( token_corrupt_holdoff == 0 )
-            {
-                token_corrupt_holdoff = daemon_get_file_int (MTC_CMD_FIT__CORRUPT_TOKEN) ;
-                slog ("FIT corrupting token and making sysinv request");
-                tokenUtil_fail_token();
-                mtcInv.mtcInvApi_force_states ( CONTROLLER_0, "unlocked", "enabled", "degraded" );
-            }
-            else
-            {
-                token_corrupt_holdoff-- ;
-                sleep (1);
-            }
-        }
+        if ( daemon_get_cfg_ptr()->testmode )
+            tokenUtil_manage_fit ( mtcInv.my_hostname, mtcInv.mtcTimer_fit, mtcTimer_handler ) ;
 #endif
+
         /* Handle recovery from MNFA */
         mtcInv.mnfa_recovery_handler ( mtcInv.my_hostname );
 

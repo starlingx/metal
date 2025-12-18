@@ -1,13 +1,13 @@
 /*
- * Copyright (c) 2013, 2015 Wind River Systems, Inc.
-*
-* SPDX-License-Identifier: Apache-2.0
-*
+ * Copyright (c) 2013, 2015, 2025 Wind River Systems, Inc.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  */
 
  /**
   * @file
-  * Wind River CGTS Platform Controller Maintenance
+  * Wind River Cloud Platform Controller Maintenance.
   * Access to Service Manager via REST API Interface.
   *
   */
@@ -21,52 +21,54 @@
 #include "mtcSmgrApi.h"     /* for ... this module header              */
 #include "jsonUtil.h"       /* for ... jsonUtil_get_key_val            */
 
-/*******************************************/
-/* Internal Private utilities and handlers */
-/*******************************************/
-
-/* The handles the inventory PATCH request's response message */
-void nodeLinkClass::mtcSmgrApi_handler ( struct evhttp_request *req, void *arg )
+/* Handles Service manager requests */
+int mtcSmgrApi_handler ( libEvent & event )
 {
-    if ( ! req )
+    if ( event.status )
     {
-        elog ("%s %s %s Request Timeout (%d)\n",
-                  smgrEvent.hostname.c_str(),
-                  smgrEvent.service.c_str(),
-                  smgrEvent.operation.c_str(),
-                  smgrEvent.timeout);
-
-        smgrEvent.status = FAIL_TIMEOUT ;
-        goto mtcSmgrApi_handler_out ;
+        wlog ("%s HTTP '%s' request failed (rc:%d http:%d ) response:%s",
+                  event.log_prefix.c_str(),
+                  event.operation.c_str(),
+                  event.status,
+                  event.http_status,
+                  event.response.c_str());
     }
-
-    mtcHttpUtil_status ( smgrEvent );
-    if ( smgrEvent.status != PASS )
+    /* log when a command completed ok with work queue level retries */
+    if ( event.cur_retries )
     {
-        wlog ("%s '%s' HTTP %s Request Failed (%d)\n",
-                  smgrEvent.hostname.c_str(),
-                  smgrEvent.service.c_str(),
-                  smgrEvent.operation.c_str(),
-                  smgrEvent.status);
+        ilog ("%s HTTP '%s' request completed ok ; with %d retries",
+                  event.log_prefix.c_str(),
+                  event.operation.c_str(),
+                  event.cur_retries);
     }
-
-    smgrEvent.response.clear();
-    if (( mtcHttpUtil_get_response ( smgrEvent )) && ( smgrEvent.response.empty() ))
+    else
     {
-        wlog ("%s failed to get a response\n", smgrEvent.hostname.c_str() );
+        /* Nothing extra to do here yet.
+         * Just report the successful completion */
+        ilog ("%s HTTP '%s' request completed ok",
+                  event.log_prefix.c_str(),
+                  event.operation.c_str());
+        hlog ("%s ... response:%s", event.log_prefix.c_str(), event.response.c_str());
     }
+    event.active = false ;
+    event.done = true ;
+    return (event.status);
+}
 
-mtcSmgrApi_handler_out:
+static void mtcSmgrApi_callback ( libEvent & event )
+{
+    hlog ("%s mtcSmgrApi_callback invoked", event.log_prefix.c_str() );
 
-    mtcHttpUtil_log_event ( smgrEvent );
-
-    if ( smgrEvent.blocking == true )
-    {
-        /* This is needed to get out of the loop in the blocking case
-         * Calling this here in non-blocking calls can lead to segfault */
-        event_base_loopbreak((struct event_base *)arg);
-    }
-    smgrEvent.active = false ;
+    /* Pass the workQueue event result data to the FSM */
+    nodeLinkClass * object_ptr        = get_mtcInv_ptr() ;
+    object_ptr->smgrEvent.done        = true ;
+    object_ptr->smgrEvent.active      = false ;
+    object_ptr->smgrEvent.status      = event.status   ;
+    object_ptr->smgrEvent.http_status = event.http_status ;
+    object_ptr->smgrEvent.result      = event.result   ;
+    object_ptr->smgrEvent.response    = event.response ;
+    object_ptr->smgrEvent.sequence    = event.sequence ;
+    object_ptr->smgrEvent.cur_retries = event.cur_retries ;
 }
 
 /*
@@ -80,64 +82,31 @@ mtcSmgrApi_handler_out:
  *   -------------------   ---------------------------------
  *   CONTROLLER_QUERY    - SMGR_QUERY_SWACT   (non-blocking)
  *   CONTROLLER_SWACT    - SMGR_START_SWACT   (non-blocking)
- *   CONTROLLER_DISABLED - SMGR_HOST_DISABLED (    blocking)
- *   CONTROLLER_ENABLED  - SMGR_HOST_ENABLED  (    blocking)
- *   CONTROLLER_LOCKED   - SMGR_HOST_LOCKED   (    blocking)
- *   CONTROLLER_UNLOCKED - SMGR_HOST_UNLOCKED (    blocking)
+ *   CONTROLLER_DISABLED - SMGR_HOST_DISABLED (non-blocking)
+ *   CONTROLLER_ENABLED  - SMGR_HOST_ENABLED  (non-blocking)
+ *   CONTROLLER_LOCKED   - SMGR_HOST_LOCKED   (non-blocking)
+ *   CONTROLLER_UNLOCKED - SMGR_HOST_UNLOCKED (non-blocking)
  *
- * Notes      : Retries are ignored for non-blocking operations
  */
 int nodeLinkClass::mtcSmgrApi_request ( struct nodeLinkClass::node * node_ptr, mtc_cmd_enum operation, int retries )
 {
-    int count = 0 ;
-    int rc = PASS ;
-    string operation_string = "unknown" ;
-
-    if ( system_type == SYSTEM_TYPE__AIO__SIMPLEX )
-    {
-        dlog ("%s simpex mode ; SM '%d' request not sent\n", node_ptr->hostname.c_str(), operation );
-        return ( PASS );
-    }
-
-    if ( smgrEvent.active == true )
-    {
-        wlog ("%s Service Manager %s Request - In-Progress (retry)\n",
-                  node_ptr->hostname.c_str(),
-                  smgrEvent.operation.c_str());
-
-        smgrEvent.status = FAIL_MUTEX_ERROR ;
-        return (RETRY);
-    }
-
-    rc = mtcHttpUtil_event_init ( &smgrEvent,
-                                   my_hostname,
-                                   "mtcSmgrApi_request",
-                                   hostUtil_getServiceIp  (SERVICE_SMGR),
-                                   hostUtil_getServicePort(SERVICE_SMGR));
-    if ( rc )
-    {
-        elog ("%s failed to allocate libEvent memory (%d)\n", node_ptr->hostname.c_str(), rc );
-        return (rc);
-    }
-
-#ifdef WANT_FIT_TESTING
-    string value = "" ;
-    if ( daemon_want_fit ( FIT_CODE__FAIL_SWACT, node_ptr->hostname, "port", value ))
-    {
-        smgrEvent.port = atoi(value.data());
-    }
-#endif
+    mtcHttpUtil_event_init ( &smgrEvent, my_hostname, "mtcSmgrApi_request",
+                             hostUtil_getServiceIp  (SERVICE_SMGR),
+                             hostUtil_getServicePort(SERVICE_SMGR));
 
     /* Set the common context of this new operation */
     smgrEvent.status   = RETRY ;
     smgrEvent.hostname = node_ptr->hostname ;
     smgrEvent.uuid     = get_uuid ( node_ptr->hostname );
+    smgrEvent.callback = &mtcSmgrApi_callback ;
+
+    smgrEvent.max_retries = retries ;
+    smgrEvent.blocking    = false   ;
 
     /* Clear payload and response */
     smgrEvent.address = MTC_SMGR_LABEL ;
     smgrEvent.address.append(node_ptr->hostname);
     smgrEvent.token.url = smgrEvent.address ;
-    smgrEvent.blocking = true ;
 
     smgrEvent.payload = "{\"origin\":\"mtce\"," ;
 
@@ -146,40 +115,28 @@ int nodeLinkClass::mtcSmgrApi_request ( struct nodeLinkClass::node * node_ptr, m
         smgrEvent.operation = "Query"   ;
         smgrEvent.request = SMGR_QUERY_SWACT ;
         string availStatus = availStatus_enum_to_str (get_availStatus (node_ptr->hostname));
-        smgrEvent.blocking = false ;
         smgrEvent.payload     = "" ;
-        ilog ("%s sending 'query services' request to HA Service Manager\n",
-                  smgrEvent.hostname.c_str());
-
-        rc = mtcHttpUtil_api_request ( smgrEvent ) ;
-        if ( rc )
-        {
-            elog ("%s mtcHttpUtil_api_request (rc:%d)\n",
-                     node_ptr->hostname.c_str(), rc );
-        }
-        return ( rc ) ;
     }
     else if ( operation == CONTROLLER_SWACT )
     {
         smgrEvent.operation = "Swact"   ;
         smgrEvent.request = SMGR_START_SWACT ;
         string availStatus = availStatus_enum_to_str (get_availStatus (node_ptr->hostname));
-        smgrEvent.blocking = false ;
         smgrEvent.payload.append ("\"action\":\"swact\",");
         smgrEvent.payload.append ("\"admin\":\"unlocked\",");
         smgrEvent.payload.append ("\"oper\":\"enabled\",");
         smgrEvent.payload.append ("\"avail\":\"");
         smgrEvent.payload.append (availStatus);
         smgrEvent.payload.append ("\"}");
-        ilog ("%s sending 'swact' request to HA Service Manager\n",
-                  smgrEvent.hostname.c_str());
-
-        return ( mtcHttpUtil_api_request ( smgrEvent )) ;
     }
     else if ( operation == CONTROLLER_DISABLED )
     {
-        operation_string = "disabled" ;
         smgrEvent.operation = "Disable"  ;
+
+        /* Cannot fail the Disable.
+         * Failure in this request should not fail the eventual Enable.
+         * The workQueue will log but discard noncritical failed requests. */
+        smgrEvent.noncritical = true     ;
         smgrEvent.request = SMGR_HOST_DISABLED ;
 
         string availStatus = availStatus_enum_to_str (get_availStatus (node_ptr->hostname));
@@ -201,15 +158,11 @@ int nodeLinkClass::mtcSmgrApi_request ( struct nodeLinkClass::node * node_ptr, m
         smgrEvent.payload.append ("\"avail\":\"");
         smgrEvent.payload.append (availStatus);
         smgrEvent.payload.append ("\"}");
-
-        ilog ("%s sending '%s-disabled' request to HA Service Manager\n",
-                  smgrEvent.hostname.c_str(), adminState.c_str() );
     }
     else if ( operation == CONTROLLER_ENABLED )
     {
         smgrEvent.request = SMGR_HOST_ENABLED ;
         smgrEvent.operation = "Enable" ;
-        operation_string = "enabled" ;
 
         string availStatus = availStatus_enum_to_str (get_availStatus (node_ptr->hostname));
         string adminState = adminState_enum_to_str (get_adminState (node_ptr->hostname));
@@ -230,73 +183,42 @@ int nodeLinkClass::mtcSmgrApi_request ( struct nodeLinkClass::node * node_ptr, m
         smgrEvent.payload.append ("\"avail\":\"");
         smgrEvent.payload.append (availStatus);
         smgrEvent.payload.append ("\"}");
-
-        ilog ("%s sending 'unlocked-enabled' request to HA Service Manager\n", 
-                  smgrEvent.hostname.c_str());
     }
     else if ( operation == CONTROLLER_LOCKED )
     {
-        operation_string = "locked" ;
         smgrEvent.request = SMGR_HOST_LOCKED ;
-        smgrEvent.operation = "Lock" ;
+        /* Cannot fail the Lock .
+         * Failure in this request should not fail the lock operarion.
+         * The workQueue will log but discard noncritical failed requests. */
+        smgrEvent.noncritical = true     ;
+        smgrEvent.operation   = "Locked" ;
         smgrEvent.payload.append ("\"action\":\"lock\",");
         smgrEvent.payload.append ("\"admin\":\"locked\",");
         smgrEvent.payload.append ("\"oper\":\"disabled\",");
         smgrEvent.payload.append ("\"avail\":\"online\"}");
-
-        ilog ("%s sending 'locked-disabled' request to HA Service Manager\n",
-                  smgrEvent.hostname.c_str());
-
     }
     else if ( operation == CONTROLLER_UNLOCKED )
     {
-        operation_string = "unlocked" ;
         smgrEvent.request = SMGR_HOST_UNLOCKED ;
-        smgrEvent.operation = "Unlock" ;
+
+        /* Should not fail the Unlock state change to SM.
+         * A failure of the final Enable will fail the host enable */
+        smgrEvent.noncritical = true       ;
+        smgrEvent.operation   = "Unlocked" ;
         smgrEvent.payload.append ("\"action\":\"unlock\",");
         smgrEvent.payload.append ("\"admin\":\"unlocked\",");
         smgrEvent.payload.append ("\"oper\":\"enabled\",");
         smgrEvent.payload.append ("\"avail\":\"available\"}");
-
-        ilog ("%s sending 'unlocked-enabled' request to Service Manager\n",
-                  smgrEvent.hostname.c_str());
     }
     else
     {
         return (FAIL_BAD_CASE);
     }
-    do
-    {
-        rc = mtcHttpUtil_api_request ( smgrEvent ) ;
+    ilog ("%s enqueueing '%s' request to Service Manager",
+              smgrEvent.hostname.c_str(),
+              smgrEvent.operation.c_str());
 
-        if ((( operation == CONTROLLER_DISABLED ) ||
-             ( operation == CONTROLLER_LOCKED )) &&
-             ( rc == HTTP_NOTFOUND ))
-        {
-            dlog ("%s Service Management (%d)\n", node_ptr->hostname.c_str(), rc );
-            rc = PASS ;
-        }
-        if ( rc != PASS )
-        {
-            count++ ;
-            wlog ("%s failed sending '%s' state to SM (rc:%d) ... retrying (cnt:%d)\n",
-                      node_ptr->hostname.c_str(), operation_string.c_str(),
-                      rc, count );
-        }
-    } while ( ( rc != PASS ) && ( count < retries ) ) ;
-
-    if ( rc )
-    {
-        elog ("%s failed sending '%s' state to Service Management failed (%d) ; giving up (cnt:%d)\n",
-                  node_ptr->hostname.c_str(),
-                  operation_string.c_str(),
-                  rc , count );
-    }
-    else
-    {
-        ilog ("%s is '%s' to Service Management\n", node_ptr->hostname.c_str(), operation_string.c_str());
-    }
-    return ( rc );
+    return(workQueue_enqueue(smgrEvent));
 }
 
 int mtcSmgrApi_service_state ( libEvent & event , bool & swactable_services )
@@ -372,10 +294,4 @@ int mtcSmgrApi_service_state ( libEvent & event , bool & swactable_services )
         }
     }
     return (rc);
-}
-
-/* The Neutron request handler wrapper abstracted from nodeLinkClass */
-void mtcSmgrApi_Handler ( struct evhttp_request *req, void *arg )
-{
-    get_mtcInv_ptr()->mtcSmgrApi_handler ( req , arg );
 }

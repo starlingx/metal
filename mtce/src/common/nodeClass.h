@@ -779,6 +779,8 @@ private:
         time_debug_type start_poweroff_time  = TIME_DEBUG_INIT;
         time_debug_type start_poweron_time   = TIME_DEBUG_INIT;
         time_debug_type start_reinstall_time = TIME_DEBUG_INIT;
+
+        time_t last_stress_test_time = 0 ;
     };
 
     struct node * head ; /**< Node Linked List Head pointer */
@@ -1243,10 +1245,10 @@ private:
     int mtcInvApi_update_mtcInfo    ( struct nodeLinkClass::node * node_ptr );
 
     /* Private SM API */
-    int mtcSmgrApi_request          ( struct nodeLinkClass::node * node_ptr, mtc_cmd_enum operation, int retries );
+    int mtcSmgrApi_request          ( struct nodeLinkClass::node * node_ptr, mtc_cmd_enum operation, int retries = HTTP_DEFAULT_RETRIES );
 
     /* Private VIM API */
-    int mtcVimApi_state_change      ( struct nodeLinkClass::node * node_ptr, libEvent_enum operation, int retries );
+    int mtcVimApi_state_change      ( struct nodeLinkClass::node * node_ptr, libEvent_enum operation, int retries = HTTP_DEFAULT_RETRIES );
 
     int  set_bm_prov                ( struct nodeLinkClass::node * node_ptr, bool state );
     void bmc_load_protocol          ( struct nodeLinkClass::node * node_ptr );
@@ -1846,6 +1848,9 @@ public:
     struct mtc_timer mtcTimer_token   ;
     struct mtc_timer mtcTimer_uptime  ;
     struct mtc_timer mtcTimer_loop    ; // main loop timer
+#ifdef WANT_FIT_TESTING
+    struct mtc_timer mtcTimer_fit     ;
+#endif
 
     /* System Level DOR recovery timer
      * Note: tid != NULL represents DOR Mode Active */
@@ -2075,7 +2080,6 @@ public:
 
     int    mtcVimApi_system_info ( string & response );
 
-    void mtcSmgrApi_handler    ( struct evhttp_request *req, void *arg );
 
     void mtcHttpUtil_handler   ( struct evhttp_request *req, void *arg );
 

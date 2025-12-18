@@ -43,7 +43,8 @@ using namespace std;
 
 #define HTTP_VIM_TIMEOUT    (20)
 
-#define HTTP_MAX_RETRIES    (3)
+/* Default number of request retries. */
+#define HTTP_DEFAULT_RETRIES       (3)
 
 #define HTTP_SYSINV_CRIT_TIMEOUT   (20)
 #define HTTP_SYSINV_NONC_TIMEOUT   (10)
@@ -53,8 +54,6 @@ using namespace std;
 #define HTTP_SMGR_TIMEOUT          (20)
 #define HTTP_VIM_TIMEOUT           (20)
 #define HTTP_SECRET_TIMEOUT        (20)
-
-#define SMGR_MAX_RETRIES    (3)
 
 #define CLIENT_HEADER      "User-Agent"
 #define CLIENT_SYSINV_1_0  "sysinv/1.0"
@@ -100,7 +99,7 @@ typedef enum {
 }  httpStages_enum ;
 
 #define HTTP_RECEIVE_WAIT_MSEC (10)
-#define HTTP_RETRY_WAIT_SECS   (10)
+#define HTTP_RETRY_WAIT_SECS   (5)
 
 typedef struct
 {
@@ -109,8 +108,8 @@ typedef struct
     string expiry   ; /**< Timestamp when token is expired    */
     string token    ; /**< The huge 3kb token                 */
     bool   refreshed; /**< set true when refreshed            */
-    bool   renew    ; /**< trigger renew with small delay
-                           error renewal - flood avoidance    */
+    bool   renew    ; /**< request immediate token renewal    */
+    bool   renew_in_progress ; /**< set true renewal in progress */
 } keyToken_type ;
 
 
@@ -252,6 +251,7 @@ struct libEvent
     string user_agent             ; /**< set the User-Agent header   */
 
     /** Result Info */
+    bool   done                   ; /**< true when request is done   */
     int    status                 ; /**< Execution Status            */
     int    http_status            ; /**< raw http returned status    */
     int    exec_time_msec         ; /**< execution time in msec      */
@@ -273,7 +273,8 @@ struct libEvent
     bool  med_wm ;
     bool high_wm ;
 
-    int (*handler) (struct libEvent &) ;
+    int  (*handler)  (struct libEvent &) ;
+    void (*callback) (struct libEvent &) ;
 
     char req_str[MAX_API_LOG_LEN] ;
 

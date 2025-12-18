@@ -1,8 +1,8 @@
 /*
  * Copyright (c) 2013-2016, 2025 Wind River Systems, Inc.
-*
-* SPDX-License-Identifier: Apache-2.0
-*
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  */
 
 /****************************************************************************
@@ -528,8 +528,8 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
                 cmd = CONTROLLER_UNLOCKED ;
             }
 
-            mtcSmgrApi_request     ( node_ptr, cmd, SMGR_MAX_RETRIES );
-            mtcVimApi_state_change ( node_ptr, VIM_HOST_ENABLED, 3 );
+            mtcSmgrApi_request     ( node_ptr, cmd );
+            mtcVimApi_state_change ( node_ptr, VIM_HOST_ENABLED );
 
             adminActionChange ( node_ptr, MTC_ADMIN_ACTION__NONE );
             enableStageChange ( node_ptr, MTC_ENABLE__START );

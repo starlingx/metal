@@ -1,8 +1,8 @@
 /*
- * Copyright (c) 2013-2016 Wind River Systems, Inc.
-*
-* SPDX-License-Identifier: Apache-2.0
-*
+ * Copyright (c) 2013-2016, 2025 Wind River Systems, Inc.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  */
 
  /**
@@ -298,8 +298,6 @@ int nodeLinkClass::mtcInvApi_update_task ( struct nodeLinkClass::node * node_ptr
     node_ptr->httpReq.uuid        = node_ptr->uuid;
     node_ptr->httpReq.request     = SYSINV_UPDATE ;
     node_ptr->httpReq.operation   = SYSINV_OPER__UPDATE_TASK ;
-    node_ptr->httpReq.max_retries = 0             ;
-    node_ptr->httpReq.cur_retries = 0             ;
     node_ptr->httpReq.noncritical = true          ;
     node_ptr->httpReq.information = task          ;
     node_ptr->httpReq.timeout     = get_mtcInv_ptr()->sysinv_noncrit_timeout ;
@@ -360,8 +358,6 @@ int nodeLinkClass::mtcInvApi_update_task_now ( struct nodeLinkClass::node * node
     this->sysinvEvent.uuid        = node_ptr->uuid;
     this->sysinvEvent.request     = SYSINV_UPDATE ;
     this->sysinvEvent.operation   = SYSINV_OPER__UPDATE_TASK ;
-    this->sysinvEvent.max_retries = 0             ;
-    this->sysinvEvent.cur_retries = 0             ;
     this->sysinvEvent.noncritical = true          ;
     this->sysinvEvent.information = task          ;
     this->sysinvEvent.timeout     = get_mtcInv_ptr()->sysinv_noncrit_timeout ;
@@ -424,8 +420,6 @@ int nodeLinkClass::mtcInvApi_force_task ( struct nodeLinkClass::node * node_ptr,
     node_ptr->httpReq.uuid        = node_ptr->uuid;
     node_ptr->httpReq.request     = SYSINV_UPDATE ;
     node_ptr->httpReq.operation   = SYSINV_OPER__FORCE_TASK ;
-    node_ptr->httpReq.max_retries = 3             ;
-    node_ptr->httpReq.cur_retries = 0             ;
     node_ptr->httpReq.information = task          ;
     node_ptr->httpReq.timeout     = get_mtcInv_ptr()->sysinv_timeout ;
 
@@ -517,8 +511,6 @@ int nodeLinkClass::mtcInvApi_update_value ( struct nodeLinkClass::node * node_pt
     node_ptr->httpReq.operation   = SYSINV_OPER__UPDATE_VALUE ;
     node_ptr->httpReq.key         = key           ;
     node_ptr->httpReq.value       = value         ;
-    node_ptr->httpReq.max_retries = 3             ;
-    node_ptr->httpReq.cur_retries = 0             ;
     node_ptr->httpReq.timeout     = get_mtcInv_ptr()->sysinv_timeout ;
 
     node_ptr->httpReq.information = key           ;
@@ -569,8 +561,6 @@ int nodeLinkClass::mtcInvApi_update_mtcInfo ( struct nodeLinkClass::node * node_
     node_ptr->httpReq.uuid        = node_ptr->uuid;
     node_ptr->httpReq.request     = SYSINV_UPDATE ;
     node_ptr->httpReq.operation   = SYSINV_OPER__UPDATE_VALUE ;
-    node_ptr->httpReq.max_retries = 3             ;
-    node_ptr->httpReq.cur_retries = 0             ;
     node_ptr->httpReq.timeout     = get_mtcInv_ptr()->sysinv_timeout ;
     node_ptr->httpReq.payload = "[" ;
     node_ptr->httpReq.payload.append ("{\"path\":\"/") ;
@@ -611,8 +601,6 @@ int nodeLinkClass::mtcInvApi_update_uptime ( struct nodeLinkClass::node * node_p
     node_ptr->httpReq.uuid        = node_ptr->uuid;
     node_ptr->httpReq.request     = SYSINV_UPDATE ;
     node_ptr->httpReq.operation   = SYSINV_OPER__UPDATE_UPTIME ;
-    node_ptr->httpReq.max_retries = 0             ;
-    node_ptr->httpReq.cur_retries = 0             ;
     node_ptr->httpReq.noncritical = true          ;
     node_ptr->httpReq.timeout     = get_mtcInv_ptr()->sysinv_noncrit_timeout ;
 
@@ -675,8 +663,6 @@ int nodeLinkClass::mtcInvApi_force_states ( struct nodeLinkClass::node * node_pt
     node_ptr->httpReq.uuid        = node_ptr->uuid;
     node_ptr->httpReq.request     = SYSINV_UPDATE ;
     node_ptr->httpReq.operation   = SYSINV_OPER__FORCE_STATES ;
-    node_ptr->httpReq.max_retries = 3             ;
-    node_ptr->httpReq.cur_retries = 0             ;
     node_ptr->httpReq.timeout     = get_mtcInv_ptr()->sysinv_timeout ;
 
     node_ptr->httpReq.information = admin         ;
@@ -749,8 +735,6 @@ int nodeLinkClass::mtcInvApi_subf_states ( struct nodeLinkClass::node * node_ptr
     node_ptr->httpReq.uuid        = node_ptr->uuid;
     node_ptr->httpReq.request     = SYSINV_UPDATE ;
     node_ptr->httpReq.operation   = SYSINV_OPER__FORCE_STATES ;
-    node_ptr->httpReq.max_retries = 3             ;
-    node_ptr->httpReq.cur_retries = 0             ;
     node_ptr->httpReq.timeout     = get_mtcInv_ptr()->sysinv_timeout ;
 
     node_ptr->httpReq.information = oper_subf     ;
@@ -813,8 +797,6 @@ int nodeLinkClass::mtcInvApi_update_states ( struct nodeLinkClass::node * node_p
     node_ptr->httpReq.uuid        = node_ptr->uuid;
     node_ptr->httpReq.request     = SYSINV_UPDATE ;
     node_ptr->httpReq.operation   = SYSINV_OPER__UPDATE_STATES ;
-    node_ptr->httpReq.max_retries = 3             ;
-    node_ptr->httpReq.cur_retries = 0             ;
     node_ptr->httpReq.timeout     = get_mtcInv_ptr()->sysinv_timeout ;
 
     node_ptr->httpReq.payload = "[" ;
@@ -930,8 +912,6 @@ int nodeLinkClass::mtcInvApi_update_states_now ( struct nodeLinkClass::node * no
     this->sysinvEvent.uuid        = node_ptr->uuid;
     this->sysinvEvent.request     = SYSINV_UPDATE ;
     this->sysinvEvent.operation   = SYSINV_OPER__UPDATE_STATES ;
-    this->sysinvEvent.max_retries = 3             ;
-    this->sysinvEvent.cur_retries = 0             ;
     this->sysinvEvent.timeout     = get_mtcInv_ptr()->sysinv_timeout ;
 
     this->sysinvEvent.payload = "[" ;
@@ -1101,8 +1081,6 @@ int nodeLinkClass::mtcInvApi_update_state ( struct nodeLinkClass::node * node_pt
     node_ptr->httpReq.operation   = SYSINV_OPER__UPDATE_STATE ;
     node_ptr->httpReq.key         = state         ;
     node_ptr->httpReq.value       = value         ;
-    node_ptr->httpReq.max_retries = 3             ;
-    node_ptr->httpReq.cur_retries = 0             ;
     node_ptr->httpReq.timeout     = get_mtcInv_ptr()->sysinv_timeout ;
 
     node_ptr->httpReq.information = state         ;
@@ -1178,8 +1156,6 @@ int nodeLinkClass::mtcInvApi_cfg_show ( string hostname )
     node_ptr->cfgEvent.status      = PASS          ;
     node_ptr->cfgEvent.request     = SYSINV_CONFIG_SHOW ;
     node_ptr->cfgEvent.operation   = SYSINV_OPER__CONFIG_SHOW ;
-    node_ptr->cfgEvent.max_retries = 3             ;
-    node_ptr->cfgEvent.cur_retries = 0             ;
 
     return(this->workQueue_enqueue ( node_ptr->cfgEvent));
 }
@@ -1241,8 +1217,6 @@ int  nodeLinkClass::mtcInvApi_cfg_modify ( string hostname, bool install )
     node_ptr->cfgEvent.hostname    = hostname      ;
     node_ptr->cfgEvent.request     = SYSINV_CONFIG_MODIFY ;
     node_ptr->cfgEvent.operation   = SYSINV_OPER__CONFIG_MODIFY ;
-    node_ptr->cfgEvent.max_retries = 3             ;
-    node_ptr->cfgEvent.cur_retries = 0             ;
     node_ptr->cfgEvent.rx_retry_max= get_mtcInv_ptr()->sysinv_timeout * 1000;
 
     /* Get the invCfg hash, changed and age fields separated by ':' */
@@ -1385,14 +1359,45 @@ int mtcInvApi_handler ( libEvent & event )
 
     if ( rc )
     {
-       wlog ("%s Handled with error (%d:%d)\n", event.log_prefix.c_str(), event.status, rc );
-       return (rc);
+        wlog ("%s HTTP %s request failed ; in handler (rc:%d) response:%s",
+                  event.log_prefix.c_str(),
+                  event.operation.c_str(),
+                  rc,
+                  event.response.c_str());
+        event.active = false ;
+        return (rc);
     }
 
-    else if ( event.status )
-        return (event.status);
 
-    return ( PASS );
+    if ( event.status )
+    {
+        wlog ("%s HTTP '%s' request failed (status:%d http:%d)",
+                  event.log_prefix.c_str(),
+                  event.operation.c_str(),
+                  event.status,
+                  event.http_status);
+    }
+
+    /* log when a command completed ok with work queue level retries */
+    if ( event.cur_retries )
+    {
+        ilog ("%s HTTP '%s' request completed ok ; with %d retries",
+                  event.log_prefix.c_str(),
+                  event.operation.c_str(),
+                  event.cur_retries);
+    }
+    /* Don't log update uptime requests - they are too frequent and non-critical */
+    else if ( event.service != "mtcInvApi_update_uptime")
+    {
+        /* Nothing extra to do here yet.
+         * Just report the successful completion */
+        ilog ("%s HTTP '%s' request completed ok",
+                  event.log_prefix.c_str(),
+                  event.operation.c_str());
+    }
+    jlog ("%s ... response:%s", event.log_prefix.c_str(), event.response.c_str());
+    event.active = false ;
+    return (event.status);
 }
 
 /* The handles the Inventory Add (POST) request's response */
@@ -1442,6 +1447,7 @@ void nodeLinkClass::mtcInvApi_add_handler ( struct evhttp_request *req, void *ar
 _add_handler_done:
 
     event_base_loopbreak((struct event_base *)arg);
+    obj_ptr->sysinvEvent.active = false ;
 }
 
 /* The handles the inventory Query (QUERY) request's response */
@@ -1563,6 +1569,7 @@ _get_handler_done:
 
     /* This is needed to get out of the loop */
     event_base_loopbreak((struct event_base *)arg);
+    obj_ptr->sysinvEvent.active = false ;
 }
 
 
@@ -1668,6 +1675,7 @@ _qry_handler_done:
 
     /* This is needed to get out of the loop */
     event_base_loopbreak((struct event_base *)arg);
+    obj_ptr->sysinvEvent.active = false ;
 }
 
 /* The Inventory 'Add' request handler wrapper abstracted from nodeLinkClass */

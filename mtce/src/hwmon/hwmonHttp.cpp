@@ -1186,7 +1186,15 @@ int hwmonHttp_handler ( libEvent & event )
     /* request shared  string iterator */
     std::list<string>::iterator iter_curr_ptr ;
 
-    if ( event.request == SYSINV_SENSOR_MOD )
+    if ( event.status != PASS )
+    {
+        elog ("%s handler request (%d) failed (rc:%d)", event.log_prefix.c_str(), event.request, event.status);
+        if ( ! event.response.empty() )
+        {
+            wlog ("%s ... response: %s", event.log_prefix.c_str(), event.response.c_str());
+        }
+    }
+    else if ( event.request == SYSINV_SENSOR_MOD )
     {
         jlog ("Sensor Modify Response: %s\n", event.response.c_str());
     }
@@ -1195,7 +1203,7 @@ int hwmonHttp_handler ( libEvent & event )
         jlog ("Group Modify Response: %s\n", event.response.c_str());
     }
     /* Handle the sysinv resposne to a sensor load request */
-    if ( event.request == SYSINV_SENSOR_LOAD )
+    else if ( event.request == SYSINV_SENSOR_LOAD )
     {
         if ( event.status == PASS )
         {
