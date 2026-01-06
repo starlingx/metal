@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2019 Wind River Systems, Inc.
+ * Copyright (c) 2013-2019, 2025 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -225,12 +225,12 @@ int daemon_log_value ( const char * filename , const char * str, int val )
     return (FAIL_FILE_OPEN);
 }
 
-int daemon_log_value ( const char * filename , int val )
+int daemon_log_value ( const char * filename , unsigned int val )
 {
     FILE * file_stream = fopen (filename, "w" ) ;
     if ( file_stream != NULL )
     {
-        fprintf ( file_stream,"%d\n", val );
+        fprintf ( file_stream,"%u\n", val );
         fflush (file_stream);
         fclose (file_stream);
         return (PASS);
@@ -249,6 +249,43 @@ int daemon_log ( const char * filename , const char * str )
         return (PASS);
     }
     return (FAIL_FILE_OPEN);
+}
+
+/* reads the first line of a file and if it contains a string
+ * that represents an integer value then return it */
+unsigned int daemon_get_file_uint ( const char * filename )
+{
+    unsigned int value = 0 ;
+    FILE * __stream = fopen ( filename, "r" );
+    if ( __stream != NULL )
+    {
+        int rc ;
+
+        char   buffer     [MAX_CHARS_IN_INT];
+        memset(buffer, 0 , MAX_CHARS_IN_INT);
+        if ( fgets (buffer,MAX_CHARS_IN_INT, __stream) != NULL )
+        {
+            rc = sscanf ( &buffer[0], "%u",  &value );
+            if ( rc >= 1 )
+            {
+                dlog ("%s contains number %u\n", filename, value );
+            }
+            else
+            {
+                wlog ("failed to sscanf integer from file:%s\n", filename );
+            }
+        }
+        else
+        {
+            wlog ("failed to read integer from file:%s\n", filename );
+        }
+        fclose(__stream);
+    }
+    else
+    {
+        wlog ("failed to open file:%s\n", filename );
+    }
+    return ( value );
 }
 
 /* reads the first line of a file and if it contains a string
@@ -836,42 +873,44 @@ string get_shadow_signature ( char * shadowfile , const char * username,
             if ( s != NULL )
             {
                 int result;
-                char user[BUFFER], password[BUFFER], aging[BUFFER];
+                char user[BUFFER], password[BUFFER], changed[BUFFER], aging[BUFFER];
                 unsigned char digest[MD5_DIGEST_LENGTH];
                 char md5str         [MD5_STRING_LENGTH];
 
                 /* Fields are separated by ':'.  The first field is the
-                 * user. We need to only isolate the password and aging
-                 * fields since these are the only ones that'd be
+                 * user. We need to only isolate the password, last changed
+                 * and aging fields since these are the only ones that'd be
                  * propagated across host nodes. By specifically tracking
                  * these we prevent config-out-of-date alarms for other fields
                  */
-                
+
                 /*
                  * The following line should be changed to add width limits:
                  * (However, not changing it yet because of risk.)
                  * result = sscanf(buffer, "%1023[^:]:%1023[^:]:%*[^:]:%*[^:]:%1023[^:]",
                  */
-                result = sscanf(buffer, "%[^:]:%[^:]:%*[^:]:%*[^:]:%[^:]",
-                user, password, aging);
-                if ( result != 3 || strcmp(user, username) != 0 )
+                result = sscanf(buffer, "%[^:]:%[^:]:%[^:]:%*[^:]:%[^:]",
+                user, password, changed, aging);
+                if ( result != 4 || strcmp(user, username) != 0 )
                 {
                     /* Sanity */
                     continue;
                 }
 
-                /* at max, both password[] and aging[] include BUFFER chars (BUFFER-1 
+                /* at max, password[], changed[] and aging[] include BUFFER chars (BUFFER-1 
                  * meaningful chars and one "\0" as tail). when they are combined with
-                 * ":" and put into shadowEntry by snprintf (..., "%s:%s", ...), 
-                 * shadowEntry has 2 chars (":" + "\0") at least and BUFFER*2 chars at most:
+                 * ":" and put into shadowEntry by snprintf (..., "%s:%s:%s", ...), 
+                 * shadowEntry has 3 chars ("::" + "\0") at least and BUFFER*3 chars at most:
                  *     BUFFER-1 chars copied from password
+                 *     ":"
+                 *     BUFFER-1 chars copied from changed 
                  *     ":"
                  *     BUFFER-1 chars copied from aging, and 
                  *     one tail "\0"
                  */
-                char shadowEntry[BUFFER*2] = {0};
+                char shadowEntry[BUFFER*3] = {0};
                 snprintf (shadowEntry, sizeof(shadowEntry), 
-                          "%s:%s", password, aging);
+                          "%s:%s:%s", password, changed, aging);
 
                 int ret = snprintf(shadowinfo, infolen, "%s", shadowEntry);
                 if (ret >= (int)infolen)
@@ -1149,9 +1188,12 @@ int daemon_wait_for_file ( const char * filename, int timeout )
 
 int daemon_files_init ( void )
 {
+    struct timespec ts ;
+    clock_gettime (CLOCK_MONOTONIC, &ts );
+
     /* Create PID file */
     pid_t mypid = getpid();
-    ilog   ("--- Daemon Start-Up --- pid:%d\n", mypid);
+    ilog   ("--- Daemon Start-Up --- pid:%d uptime:%ld", mypid, ts.tv_sec);
     daemon_init_fit ();
     return ( PASS );
 }

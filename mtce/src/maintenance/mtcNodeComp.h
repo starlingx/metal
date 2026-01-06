@@ -1,7 +1,7 @@
 #ifndef __INCLUDE_MTCNODECOMP_HH__
 #define __INCLUDE_MTCNODECOMP_HH__
 /*
- * Copyright (c) 2015-2016, 2024 Wind River Systems, Inc.
+ * Copyright (c) 2015-2016, 2024-2025 Wind River Systems, Inc.
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -138,6 +138,17 @@ typedef struct
     bool   start_controller_hostservices = false ;
     bool   start_worker_hostservices     = false ;
     bool   start_storage_hostservices    = false ;
+
+    /* Store the result of the last Start Host Services
+     * completion status for each personality. */
+    int    controller_hostservices_result = PASS ;
+    int    worker_hostservices_result     = PASS ;
+    int    storage_hostservices_result    = PASS ;
+
+    /* Store the result of the last goEnabled completion
+     * status */
+    int    goEnable_result      = PASS ;
+    int    goEnable_result_subf = PASS ;
 
     /* The script set that is executing */
     script_set_enum active_script_set ;

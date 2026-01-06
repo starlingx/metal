@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016 Wind River Systems, Inc.
+ * Copyright (c) 2013, 2016, 2025 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -70,6 +70,7 @@ void hwmon_msg_fini ( void )
 int cmd_rx_port_init ( int port )
 {
     int rc = PASS ;
+    int rmem_max = daemon_get_rmem_max();
     hwmon_sock.cmd_port = port ;
 
     mtcAgent_ip = getipbyname ( CONTROLLER );
@@ -82,6 +83,16 @@ int cmd_rx_port_init ( int port )
         return (rc);
     }
 
+    /* Set rx socket buffer size to rmem_max.
+     * Needed to handle inventory push from mtcAgent over
+     * process restart on at-scale system deployments. */
+    if (rmem_max > 0)
+    {
+        hwmon_sock.cmd_sock->setSocketMemory(
+            daemon_get_cfg_ptr()->mgmnt_iface,
+            "mtc command rx socket memory",
+            rmem_max );
+    }
     return (rc);
 }
 

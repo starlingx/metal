@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2018, 2023-2024 Wind River Systems, Inc.
+ * Copyright (c) 2013-2018, 2023-2025 Wind River Systems, Inc.
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -295,15 +295,7 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
         if ( msg.num > 0 )
         {
             /* log if not locked message */
-            if ( msg.cmd != MTC_MSG_LOCKED )
-            {
-                ilog ("%s %s request ACK (rc:%d) (%s)",
-                          hostname.c_str(),
-                          get_mtcNodeCommand_str(msg.cmd),
-                          msg.parm[0],
-                          iface_name_ptr);
-            }
-            else
+            if ( msg.cmd == MTC_MSG_LOCKED )
             {
                 mlog ("%s %s request ACK (rc:%d) (%s)",
                           hostname.c_str(),
@@ -311,6 +303,38 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
                           msg.parm[0],
                           iface_name_ptr);
             }
+            else if ( msg.cmd == MTC_CMD_HOST_SVCS_RESULT )
+            {
+                ilog ("%s %s (rc:%d) (%s)",
+                          hostname.c_str(),
+                          msg.buf,
+                          msg.parm[0],
+                          iface_name_ptr);
+            }
+            else
+            {
+                ilog ("%s %s request ACK (rc:%d) (%s)",
+                            hostname.c_str(),
+                            get_mtcNodeCommand_str(msg.cmd),
+                            msg.parm[0],
+                            iface_name_ptr);
+            }
+        }
+        else if ( msg.cmd == MTC_MSG_LOCKED )
+        {
+            mlog ("%s %s request ACK (%s)",
+                      hostname.c_str(),
+                      get_mtcNodeCommand_str(msg.cmd),
+                      iface_name_ptr);
+
+        }
+        else
+        {
+            /* log other command request ACKs that don't have any return parameters */
+            ilog ("%s %s request ACK (%s)",
+                      hostname.c_str(),
+                      get_mtcNodeCommand_str(msg.cmd),
+                      iface_name_ptr);
         }
     }
 
@@ -731,10 +755,8 @@ int send_mtc_cmd ( string & hostname, int cmd , int interface, string json_dict 
         case MTC_CMD_STOP_CONTROL_SVCS:
         case MTC_CMD_STOP_WORKER_SVCS:
         case MTC_CMD_STOP_STORAGE_SVCS:
-        case MTC_CMD_START_CONTROL_SVCS:
-        case MTC_CMD_START_WORKER_SVCS:
-        case MTC_CMD_START_STORAGE_SVCS:
         {
+            ilog ("%s %s command sent", hostname.c_str(), get_mtcNodeCommand_str(cmd));
             snprintf ( &mtc_cmd.hdr[0], MSG_HEADER_SIZE, "%s", get_cmd_req_msg_header() );
             mtc_cmd.cmd     = cmd ;
             rc = PASS ;

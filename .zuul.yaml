@@ -7,17 +7,41 @@
       - stx-bandit-jobs
     check:
       jobs:
-        - openstack-tox-linters
-        - openstack-tox-pep8
-        - openstack-tox-pylint
+        - metal-tox-linters
+        - metal-tox-pep8
+        - metal-tox-pylint
     gate:
       jobs:
-        - openstack-tox-linters
-        - openstack-tox-pep8
-        - openstack-tox-pylint
+        - metal-tox-linters
+        - metal-tox-pep8
+        - metal-tox-pylint
     post:
       jobs:
         - stx-metal-upload-git-mirror
+
+- job:
+    name: metal-tox-linters
+    parent: tox
+    description: Run linters for metal repo
+    nodeset: debian-bullseye
+    vars:
+      tox_envlist: linters
+
+- job:
+    name: metal-tox-pep8
+    parent: tox
+    description: Run pep8 for metal repo
+    nodeset: debian-bullseye
+    vars:
+      tox_envlist: pep8
+
+- job:
+    name: metal-tox-pylint
+    parent: tox
+    description: Run pylint for metal repo
+    nodeset: debian-bullseye
+    vars:
+      tox_envlist: pylint
 
 - job:
     name: flock-devstack-metal

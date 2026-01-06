@@ -329,6 +329,8 @@ int bmcUtil_is_power_on ( string   hostname,
                           string & response,
                           bool   & power_on)
 {
+    string reading = "unknown" ;
+    bool power_state_unknown = false ;
     if ( response.empty() )
     {
         wlog ("%s bmc power status query response empty",
@@ -343,10 +345,26 @@ int bmcUtil_is_power_on ( string   hostname,
             wlog ("%s failed to tokenize bmc info", hostname.c_str());
             return (FAIL_JSON_PARSE) ;
         }
-        else if (tolowercase(jsonUtil_get_key_value_string(json_obj,REDFISH_LABEL__POWER_STATE)) == "on" )
+
+        reading = tolowercase(jsonUtil_get_key_value_string(json_obj,REDFISH_LABEL__POWER_STATE));
+
+#ifdef WANT_FIT_TESTING
+        string test_reading = "" ;
+        if ( daemon_want_fit ( FIT_CODE__BMC_POWER_STATE, hostname, "power", test_reading ))
+            reading = test_reading ;
+#endif
+        if ( reading == "on" )
+        {
+            blog1("%s power is on", hostname.c_str());
             power_on = true ;
-        else
+        }
+        else if ( reading == "off" )
+        {
+            blog1("%s power is off", hostname.c_str());
             power_on = false ;
+        }
+        else
+            power_state_unknown = true ;
 
         /* free the json object */
         json_object_put(json_obj );
@@ -355,8 +373,17 @@ int bmcUtil_is_power_on ( string   hostname,
     {
         if ( response.find (IPMITOOL_POWER_ON_STATUS) != std::string::npos )
             power_on = true ;
-        else
+        else if ( response.find (IPMITOOL_POWER_OFF_STATUS) != std::string::npos )
             power_on = false ;
+        else
+            power_state_unknown = true ;
+    }
+    if ( power_state_unknown )
+    {
+        ilog ("%s power state is '%s' ; last known state was '%s'",
+                  hostname.c_str(),
+                  reading.c_str(),
+                  power_on ? "On":"Off");
     }
     return (PASS);
 }

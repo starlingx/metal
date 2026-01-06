@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2016, 2024 Wind River Systems, Inc.
+ * Copyright (c) 2013-2016, 2024-2025 Wind River Systems, Inc.
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -832,7 +832,7 @@ void _scripts_cleanup ( script_set_enum script_set )
  ***************************************************************************/
 void _manage_services_scripts ( void )
 {
-    bool failed = false ;
+    int status = PASS ;
     char str [BUF_SIZE] ;
 
     if ( ! ctrl.hostservices.scripts )
@@ -841,6 +841,8 @@ void _manage_services_scripts ( void )
         ctrl.active_script_set = NO_SCRIPTS ;
         return ;
     }
+
+    string current_cmd = get_mtcNodeCommand_str(ctrl.current_hostservices_command) ;
 
     memset (str,0,BUF_SIZE);
 
@@ -852,31 +854,32 @@ void _manage_services_scripts ( void )
         {
             if ( ctrl.hostservices.script[i].status )
             {
-                if ( failed == false )
+                if ( status == PASS )
                 {
                     /* only report of the first failure */
                     snprintf(str, BUF_SIZE, "%s failed ; rc:%d",
                                   ctrl.hostservices.script[i].name.data(),
                                   ctrl.hostservices.script[i].status );
-                    failed = true ;
+                    status = ctrl.hostservices.script[i].status ;
+                    break ;
                 }
             }
         }
         /* handle the aggrigate status */
-        if ( failed == true )
+        if ( status )
         {
-            elog ("Host Services: %s\n", str );
+            ilog ("%s result: %s", current_cmd.c_str(), str );
             mtce_send_event ( sock_ptr, MTC_CMD_HOST_SVCS_RESULT, str );
         }
         else
         {
-            ilog ("Host Services Complete ; all passed ; %s", get_mtcNodeCommand_str(ctrl.current_hostservices_command));
-            mtce_send_event ( sock_ptr, MTC_CMD_HOST_SVCS_RESULT, NULL );
+            ilog ("%s complete ; all passed", current_cmd.c_str());
+            mtce_send_event ( sock_ptr, MTC_CMD_HOST_SVCS_RESULT, current_cmd.data());
         }
         ctrl.active_script_set = NO_SCRIPTS ;
     }
 
-    /* do if have we timed out ? */
+    /* check for 5 minute timeout */
     else if ( ctrl.hostservices.timer.ring == true )
     {
         bool found = false ;
@@ -887,9 +890,13 @@ void _manage_services_scripts ( void )
             {
                 if ( ctrl.hostservices.script[i].done == false )
                 {
-                    snprintf(str, BUF_SIZE, "%s (timeout)", ctrl.hostservices.script[i].name.data() );
+                    status = FAIL_TIMEOUT ;
+                    snprintf(str, BUF_SIZE, "%s timeout", ctrl.hostservices.script[i].name.data() );
                     found = true ;
-                    wlog ("host services timeout on %s\n", ctrl.hostservices.script[i].name.c_str());
+                    elog ("%s timeout on %s\n",
+                              current_cmd.c_str(),
+                              ctrl.hostservices.script[i].name.c_str());
+
                     mtce_send_event ( sock_ptr, MTC_CMD_HOST_SVCS_RESULT, str );
                     break ;
                 }
@@ -906,6 +913,23 @@ void _manage_services_scripts ( void )
         return ;
     }
 
+    /* Specify which start host services command failed */
+    if ( status )
+    {
+        if ( ctrl.current_hostservices_command == MTC_CMD_START_CONTROL_SVCS )
+            ctrl.controller_hostservices_result = status ;
+        else if ( ctrl.current_hostservices_command == MTC_CMD_START_WORKER_SVCS )
+            ctrl.worker_hostservices_result = status ;
+        else if ( ctrl.current_hostservices_command == MTC_CMD_START_STORAGE_SVCS )
+            ctrl.storage_hostservices_result = status ;
+        else
+        {
+            slog ("unexpected current hostservices command=%d status=%d",
+                   ctrl.current_hostservices_command, status );
+        }
+    }
+
+    mtcTimer_reset (ctrl.hostservices.timer );
     _scripts_cleanup (ctrl.active_script_set) ;
 }
 
@@ -992,6 +1016,7 @@ void _manage_goenabled_tests ( void )
 
                     ilog ("GoEnabled Subfunction Testing Failed ; at least one test failed\n");
                     daemon_log ( GOENABLED_SUBF_FAIL , str );
+                    ctrl.goEnable_result_subf = FAIL ;
                     send_mtc_msg ( sock_ptr, MTC_MSG_SUBF_GOENABLED_FAILED, str );
                     break ;
                 }
@@ -1002,6 +1027,7 @@ void _manage_goenabled_tests ( void )
 
                     ilog ("GoEnabled Testing Failed ; at least one test failed\n");
                     daemon_log ( GOENABLED_MAIN_FAIL , str );
+                    ctrl.goEnable_result = FAIL ;
                     send_mtc_msg ( sock_ptr, MTC_MSG_MAIN_GOENABLED_FAILED, str );
                     break ;
                 }
@@ -1067,6 +1093,7 @@ void _manage_goenabled_tests ( void )
                 daemon_remove_file ( GOENABLED_SUBF_PASS );
                 send_mtc_msg ( sock_ptr, MTC_MSG_SUBF_GOENABLED_FAILED, str );
                 daemon_log ( GOENABLED_SUBF_FAIL , str );
+                ctrl.goEnable_result_subf = FAIL ;
                 break ;
             }
             case GOENABLED_MAIN_SCRIPTS:
@@ -1074,6 +1101,7 @@ void _manage_goenabled_tests ( void )
                 daemon_remove_file ( GOENABLED_SUBF_PASS );
                 send_mtc_msg ( sock_ptr, MTC_MSG_MAIN_GOENABLED_FAILED, str );
                 daemon_log ( GOENABLED_MAIN_FAIL , str );
+                ctrl.goEnable_result = FAIL ;
                 break ;
             }
             default:
@@ -1188,7 +1216,7 @@ int learn_my_pxeboot_address ( void )
 
     if ( (rc = get_iface_info ( PXEBOOT_INTERFACE, ctrl.pxeboot_iface, ctrl.iface_info[PXEBOOT_INTERFACE] )) == PASS )
     {
-        string ifcfg_file_suffix = ":2" ; // Assume ifcfg file suffix ':2' for first boot after install case
+        string ifcfg_file_suffix = ":2" ; // pxeboot interfaces use label ':2'
         iface_info_type * iface_info_ptr = &ctrl.iface_info[PXEBOOT_INTERFACE] ;
         iface_info_ptr->iface_name = ctrl.pxeboot_iface ;
 
@@ -1204,30 +1232,17 @@ int learn_my_pxeboot_address ( void )
         }
         ilog ("Pxeboot IF Name: %s", iface_info_ptr->parent.c_str());
 
-        // To handle the first reboot after install where the kickstart adds a ':2'
-        // to the boot interface we always try the dhcp search with the ':2' first.
+        // search for the dynamic allocated address
+        // worker/storage nodes always use DHCP
+        // stand-by controller uses DHCP after first boot post-install, static after 1st unlock
         ctrl.pxeboot_addr = get_pxeboot_dhcp_addr (  iface_info_ptr->parent + ifcfg_file_suffix);
         if ( !ctrl.pxeboot_addr.empty() )
         {
             ilog ("pxeboot dhcp lease address: %s ; initial", ctrl.pxeboot_addr.c_str());
         }
-        // If the pxeboot address is not found above then do the full search.
+        // If the pxeboot address is not found above then search for static ones.
         else
         {
-            // If the pxeboot interface is not same as the management interface
-            // name then we need to remove the ":2" suffix.
-            // The ':2' is something the kickstart and the networking management
-            // adds to the interface name to distinguish between mgmt and pxeboot
-            // interfaces when they are the same.
-            if ( iface_info_ptr->parent != std::string(ctrl.mgmnt_iface))
-                ifcfg_file_suffix = "" ;
-
-            ctrl.pxeboot_addr = get_pxeboot_dhcp_addr ( iface_info_ptr->parent + ifcfg_file_suffix);
-            if ( !ctrl.pxeboot_addr.empty() )
-            {
-                ilog ("pxeboot dhcp lease address: %s", ctrl.pxeboot_addr.c_str());
-            }
-            // Now, override that local address if its found in the controller leases file.
             if ( ctrl.nodetype & CONTROLLER_TYPE )
             {
                 string temp_pxeboot_addr= get_pxeboot_static_addr ( iface_info_ptr->parent + ifcfg_file_suffix );
@@ -1420,14 +1435,19 @@ void daemon_service_run ( void )
     int rc = PASS ;
     int file_not_present_count = 0 ;
 
-    /* Bool to track whether the start host services scripts run has
-     * been attempted at least once since last process startup. */
+    /* Bool to track whether the start host services scripts needs to be run. */
     bool start_host_services_needs_to_be_run = true ;
 
+    /* Don't start host services if the node is locked */
+    if ( daemon_is_file_present ( NODE_LOCKED_FILE ) == true )
+    {
+        ilog ("locked node");
+        start_host_services_needs_to_be_run = false ;
+    }
     if ( daemon_is_file_present ( NODE_RESET_FILE ) )
     {
         wlog ("mtce reboot required");
-        fork_sysreq_reboot ( daemon_get_cfg_ptr()->failsafe_shutdown_delay );
+        launch_failsafe_reboot ( daemon_get_cfg_ptr()->failsafe_shutdown_delay );
         for ( ; ; )
         {
             wlog ("issuing reboot");
@@ -1948,7 +1968,7 @@ void daemon_service_run ( void )
          * Need to ensure that the appropriate host
          * services are started for the system/node
          * type. */
-        if ( start_host_services_needs_to_be_run == true ) 
+        if ( start_host_services_needs_to_be_run == true )
         {
             if ( ctrl.system_type == SYSTEM_TYPE__NORMAL )
             {
@@ -1981,7 +2001,7 @@ void daemon_service_run ( void )
                         ctrl.start_controller_hostservices = true ;
                     if ( ctrl.nodetype & WORKER_TYPE )
                         ctrl.start_worker_hostservices = true ;
-                    start_host_services_needs_to_be_run = false ; 
+                    start_host_services_needs_to_be_run = false ;
                 }
                 else if (( daemon_is_file_present ( GOENABLED_MAIN_FAIL ) ||
                          ( daemon_is_file_present ( GOENABLED_SUBF_FAIL ))))
@@ -2001,7 +2021,7 @@ void daemon_service_run ( void )
                         ctrl.start_worker_hostservices = true ;
                     else if ( ctrl.nodetype & STORAGE_TYPE )
                         ctrl.start_storage_hostservices = true ;
-                    start_host_services_needs_to_be_run = false ; 
+                    start_host_services_needs_to_be_run = false ;
                 }
                 else if ( daemon_is_file_present ( GOENABLED_MAIN_FAIL ) )
                 {
@@ -2012,7 +2032,6 @@ void daemon_service_run ( void )
             }
 
         }
-        
         // Handle auto start of node personality services.
         // - prioritize controller first
         // - prevent more than one being posted at once

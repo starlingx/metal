@@ -135,6 +135,9 @@ override_dh_auto_install:
 	install -m 755 -d $(COLLECTDIR)
 	install -m 755 -p -D scripts/collect_bmc.sh $(COLLECTDIR)/collect_bmc
 
+	# general scripts
+	install -m 700 -p -D scripts/delayed_sysrq_reboot.sh $(LOCAL_SBINDIR)/delayed_sysrq_reboot
+
 	# syslog configuration
 	install -m 644 -p -D scripts/mtce.syslog $(SYSCONFDIR)/syslog-ng/conf.d/mtce.conf
 

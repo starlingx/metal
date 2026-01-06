@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Copyright (c) 2016-2023 Wind River Systems, Inc.
+# Copyright (c) 2016-2025 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -32,7 +32,6 @@ Arguments:
     -T <tboot value>      : Specify whether or not to use tboot (optional)
     -k <kernel args>      : Specify any extra kernel boot arguments (optional)
     -l <base url>         : Specify installer base URL
-    -v <intel driver ver> : Specify intel driver ver to load
     -d                    : Update Debian grub menus ; rather than centos menus
 
 EOF
@@ -72,17 +71,12 @@ parms=$@
 logger -t $0 " $parms"
 debian_menus=false
 
-while getopts "i:o:tgc:b:r:H:u:s:T:k:l:v:h:d" opt
+while getopts "i:o:tgc:b:r:H:u:s:T:k:l:h:d" opt
 do
     case $opt in
         i)
             input_file=$OPTARG
-            input_file_dirname=$(dirname $input_file)
-            input_file_basename=$(basename $input_file)
-            # lowlatency files removed. Added for backwards compatibility
-            fixed_input_file_basename=$(echo $input_file_basename | sed 's/_lowlatency//')
-            input_file=${input_file_dirname}/${fixed_input_file_basename}
-            input_file_efi=${input_file_dirname}/efi-${fixed_input_file_basename}
+            input_file_efi=$(dirname $input_file)/efi-$(basename $input_file)
             ;;
         o)
             output_file=$OPTARG
@@ -126,9 +120,6 @@ do
             ;;
         l)
             base_url=$OPTARG
-            ;;
-        v)
-            driver_ver=$OPTARG
             ;;
         h)
             usage
@@ -207,10 +198,6 @@ APPEND_OPTIONS="$APPEND_OPTIONS user_namespace.enable=1"
 
 if [ -n "$kernal_extra_args" ]; then
     APPEND_OPTIONS="$APPEND_OPTIONS $kernal_extra_args"
-fi
-
-if [ -n "$driver_ver" ]; then
-    APPEND_OPTIONS="$APPEND_OPTIONS multi-drivers-switch=$driver_ver"
 fi
 
 BASE_URL=$base_url

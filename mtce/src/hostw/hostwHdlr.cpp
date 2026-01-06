@@ -443,7 +443,7 @@ void hostw_log_and_reboot()
 
         /* start the process that will perform an ungraceful reboot, if
          * the graceful reboot fails */
-        fork_sysreq_reboot ( FORCE_REBOOT_DELAY );
+        launch_failsafe_reboot ( FORCE_REBOOT_DELAY );
 
         /* start the graceful reboot process */
         fork_graceful_reboot ( GRACEFUL_REBOOT_DELAY );

@@ -159,8 +159,8 @@ typedef struct
     int   work_queue_timeout           ; /**< end of action workq complete TO */
     int   loc_recovery_timeout         ; /**< loss of comms recovery timeout  */
     int   node_reinstall_timeout       ; /**< node reinstall timeout          */
+    int   dor_mode_detect              ; /**< dead office recovery detect thld*/
     int   dor_mode_timeout             ; /**< dead office recovery timeout    */
-    int   dor_recovery_timeout_ext     ; /**< dor recovery timeout extension  */
     int   uptime_period                ; /**< Uptime refresh timer period     */
     int   online_period                ; /**< locked availability refresh     */
     int   insv_test_period             ; /**< insv test period in secs        */

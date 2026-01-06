@@ -1,8 +1,8 @@
 /*
- * Copyright (c) 2013-2017, 2023-2024 Wind River Systems, Inc.
-*
-* SPDX-License-Identifier: Apache-2.0
-*
+ * Copyright (c) 2013-2017, 2023-2025 Wind River Systems, Inc.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  */
 
 /****************************************************************************
@@ -136,6 +136,14 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
         return (rc);
 
     node_ptr->mtcCmd_work_fifo_ptr = node_ptr->mtcCmd_work_fifo.begin ();
+
+    if ( node_ptr->bm_cancel_reset_progression == true )
+    {
+        node_ptr->mtcCmd_work_fifo_ptr->status = FAIL_CANCELLED ;
+        node_ptr->mtcCmd_work_fifo_ptr->stage  = MTC_CMD_STAGE__DONE ;
+        node_ptr->bm_cancel_reset_progression = false ;
+    }
+
     switch ( node_ptr->mtcCmd_work_fifo_ptr->stage )
     {
         case MTC_CMD_STAGE__START:
@@ -509,6 +517,7 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
                                       RESET_PROG_MAX_REBOOTS_B4_RESET-1,
                                       retry_delay);
                         mtcTimer_start ( node_ptr->mtcCmd_timer, mtcTimer_handler, retry_delay );
+                        node_ptr->mtcCmd_work_fifo_ptr->stage = MTC_CMD_STAGE__REBOOT ;
                     }
                 }
             }
@@ -623,21 +632,13 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
                      * or the failure of just one (mgmnt or clstr) networks to mistakenly
                      * cancel the reset. Prevent the cancel if
                      * - the node uptime is high and
-                     * - not receiving mtcAlive on any mtcAlive networks ;
-                     *       mgmnt, clstr and pxeboot networks.
-                     *
-                     * Note: online does not mean both networks are receiving mtcAlive,
-                     *       Currently just mgmnt needs to see mtcAlive for the node to
-                     *       go online.
-                     * TODO: Fix this in the future so both are required.
-                     *       It came from the days when the cluster-host was named the
-                     *       infrastructure network where at that time it was optional.
-                     *       Cluster-host is no longer optional. */
+                     * - not receiving mtcAlive on one or more provisioned mtcAlive networks ;
+                     *       mgmnt, clstr and pxeboot networks. */
                     if (( node_ptr->availStatus == MTC_AVAIL_STATUS__ONLINE ) &&
                         ( node_ptr->uptime < MTC_MINS_5 ) &&
                         ( node_ptr->mtcAlive_mgmnt_count ) &&
-                        ( node_ptr->mtcAlive_clstr_count ) &&
-                        ( node_ptr->mtcAlive_pxeboot_count ))
+                        (( node_ptr->mtcAlive_clstr_count )   || ( this->clstr_network_provisioned   == false )) &&
+                        (( node_ptr->mtcAlive_pxeboot_count ) || ( this->pxeboot_network_provisioned == false)))
                     {
                         mtcTimer_reset ( node_ptr->mtcCmd_timer );
                         ilog ("%s cancelling reset ; host is online ; delay:%d uptime:%d mtcAlive:%d:%d:%d ",
@@ -933,7 +934,11 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
 
             mtcTimer_reset ( node_ptr->mtcCmd_timer );
 
-            if ( node_ptr->mtcCmd_work_fifo_ptr->status != PASS )
+            if ( node_ptr->mtcCmd_work_fifo_ptr->status == FAIL_CANCELLED )
+            {
+                ilog ("%s command handling operation cancelled", node_ptr->hostname.c_str());
+            }
+            else if ( node_ptr->mtcCmd_work_fifo_ptr->status != PASS )
             {
                 qlog ("%s Command '%s' (%d) Failed (Status:%d)\n",
                           node_ptr->hostname.c_str(),
