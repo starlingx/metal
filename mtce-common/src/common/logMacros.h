@@ -121,6 +121,7 @@ typedef struct
     int   bmc_reset_delay       ; /**< secs delay before bmc reset            */
     int   http_retry_wait       ; /**< secs to wait between http reg retries  */
     int   host_add_delay        ; /**< secs to wait before adding hosts       */
+    int   lazy_reboot_delay     ; /**< secs to wait before reboot             */
     int   hostwd_failure_threshold ; /**< allowed # of missed pmon/hostwd messages */
     bool  hostwd_reboot_on_err  ; /**< should hostwd reboot on fault detected */
     bool  hostwd_kdump_on_stall ; /**< sysrq crash dump on quorum msg'ing stall */

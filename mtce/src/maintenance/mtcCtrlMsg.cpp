@@ -777,7 +777,7 @@ int send_mtc_cmd ( string & hostname, int cmd , int interface, string json_dict 
             if ( cmd == MTC_CMD_LAZY_REBOOT )
             {
                 mtc_cmd.num = 1 ;
-                mtc_cmd.parm[0] = MTC_SECS_30 ;
+                mtc_cmd.parm[0] = daemon_get_cfg_ptr()->lazy_reboot_delay ;
             }
             rc = PASS ;
             break ;

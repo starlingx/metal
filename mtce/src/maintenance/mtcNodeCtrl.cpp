@@ -468,6 +468,11 @@ static int mtc_config_handler ( void * user,
         config_ptr->host_add_delay = atoi(value);
         ilog ("Start Delay : %d secs", config_ptr->host_add_delay );
     }
+    else if (MATCH("agent", "lazy_reboot_delay"))
+    {
+        config_ptr->lazy_reboot_delay = atoi(value);
+        ilog ("Lazy Reboot : %d secs", config_ptr->lazy_reboot_delay );
+    }
     else if (MATCH("timeouts", "failsafe_shutdown_delay"))
     {
         config_ptr->failsafe_shutdown_delay = atoi(value);

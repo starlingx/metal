@@ -672,30 +672,27 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
         }
         if ( msg.cmd == MTC_CMD_LAZY_REBOOT )
         {
+            /* Start the delay timer */
+            time_t start_time = time(NULL);
             daemon_log ( NODE_RESET_FILE, "lazy reboot command" );
 
             /* stop pmon before issuing the lazy reboot so that it does not
              * try and recover any processes, most importantly this one */
             stop_pmon();
 
-            if ( msg.num >= 1 )
+            /* subtract the time it took to stop pmond from the lazy reboot delay */
+            time_t now = time(NULL) - start_time ;
+            if (( msg.num >= 1 ) && ( now < msg.parm[0] ))
             {
+                /* calculate the remaining delay */
+                int remaining_lazy_delay = msg.parm[0] - now ;
                 do
                 {
-                    ilog ("Lazy Reboot (%s) ; rebooting in %d seconds", iface_name_ptr, msg.num ? msg.parm[0] : 1 );
+                    ilog ("Lazy Reboot (%s) ; in %d seconds", iface_name_ptr, remaining_lazy_delay);
                     sleep (1);
-                    if ( msg.parm[0] % 5 )
-                    {
-                        /* service the active monitoring every 5 seconds */
-                        active_monitor_dispatch ();
-                    }
-                } while ( msg.parm[0]-- > 0 ) ;
+                } while ( remaining_lazy_delay-- > 0 ) ;
             }
-            else
-            {
-                ilog ("Lazy Reboot (%s) ; now", iface_name_ptr);
-            }
-
+            ilog ("Lazy Reboot (%s) ; now", iface_name_ptr);
             launch_failsafe_reboot ( delay );
             rc = system("/usr/bin/systemctl reboot");
         }

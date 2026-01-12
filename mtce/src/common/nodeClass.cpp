@@ -1615,8 +1615,11 @@ int nodeLinkClass::failed_state_change ( struct nodeLinkClass::node * node_ptr )
 
 int nodeLinkClass::lazy_graceful_fs_reboot ( struct nodeLinkClass::node * node_ptr )
 {
-    /* issue a lazy reboot to the mtcClient and as a backup launch a sysreq reset thresd */
+    /* Issue a lazy reboot to the mtcClient */
     send_mtc_cmd ( node_ptr->hostname, MTC_CMD_LAZY_REBOOT, MGMNT_INTERFACE ) ;
+    send_mtc_cmd ( node_ptr->hostname, MTC_CMD_LAZY_REBOOT, PXEBOOT_INTERFACE ) ;
+
+    /* As a backup launch a sysreq reset thread */
     launch_failsafe_reboot ( daemon_get_cfg_ptr()->failsafe_shutdown_delay );
 
     /* loop until reboot */
@@ -1624,14 +1627,9 @@ int nodeLinkClass::lazy_graceful_fs_reboot ( struct nodeLinkClass::node * node_p
     {
         for ( int i = 0 ; i < LAZY_REBOOT_RETRY_DELAY_SECS ; i++ )
         {
+            daemon_log ( SMGMT_UNHEALTHY_FILE, "AIO lazy reboot request" );
             daemon_signal_hdlr ();
             sleep (MTC_SECS_1);
-
-            /* give sysinv time to handle the response and get its state in order */
-            if ( i == SM_NOTIFY_UNHEALTHY_DELAY_SECS )
-            {
-                daemon_log ( SMGMT_UNHEALTHY_FILE, "AIO shutdown request" );
-            }
         }
         /* Should never get there but if we do resend the reboot request
          * but this time not Lazy */
