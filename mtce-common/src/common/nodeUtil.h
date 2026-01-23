@@ -2,7 +2,7 @@
 #define __INCLUDE_NODEUTIL_H__
 
 /*
-* Copyright (c) 2013-2014, 2016, 2019, 2024 Wind River Systems, Inc.
+* Copyright (c) 2013-2014, 2016, 2019, 2024, 2026 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -150,6 +150,7 @@ int  double_fork ( void );
 int  double_fork_host_cmd ( string hostname , char * cmd_string, const char * cmd_oper );
 int  setup_child ( bool close_file_descriptors );
 void launch_failsafe_reboot ( int delay_in_secs );
+void launch_force_pod_drain ( string hostname, int timeout_in_secs, char * done_filename_str );
 void fork_graceful_reboot ( int delay_in_secs );
 
 int  get_node_health         ( string hostname );

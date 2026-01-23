@@ -2,7 +2,7 @@
 #define __INCLUDE_NODETIMERS_HH__
 
 /*
- * Copyright (c) 2013-2023 Wind River Systems, Inc.
+ * Copyright (c) 2013-2023,2026 Wind River Systems, Inc.
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -86,7 +86,7 @@
 #define MTC_REINSTALL_TIMEOUT_MIN      (MTC_MINS_1)
 #define MTC_REINSTALL_TIMEOUT_MAX      (MTC_HRS_4)
 #define MTC_REINSTALL_WAIT_TIMER       (10)
-#define LAZY_REBOOT_RETRY_DELAY_SECS   (60)
+#define LAZY_REBOOT_RETRY_DELAY_SECS   (120)
 #define SM_NOTIFY_UNHEALTHY_DELAY_SECS  (5)
 #define MTC_MIN_ONLINE_PERIOD_SECS      (7)
 #define MTC_RETRY_WAIT                  (5)

@@ -1,0 +1,91 @@
+#!/bin/bash
+# Copyright (c) 2026 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# The script will run during kubelet.service ExecStop.
+# This script detects whether systemd state is 'stopping' due to
+# shutdown/reboot, then does a kubectl drain on this Kubernetes node
+# to force shutdown of pods.
+#
+
+NAME=$(basename "${0}")
+
+# Check for help options
+if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+    echo "Usage: $NAME <timeout_seconds> <completion_file>"
+    echo ""
+    echo "Arguments:"
+    echo "  timeout_seconds   Maximum time in seconds to wait for pod drain"
+    echo "  completion_file   File to touch when drain operation completes"
+    echo ""
+    echo "Example:"
+    echo "  $NAME 120 /tmp/drain_complete"
+    exit 1
+fi
+
+# Validate required arguments
+if [[ $# -ne 2 ]]; then
+    echo "Error: Exactly 2 arguments required"
+    echo "Usage: $NAME <timeout_seconds> <completion_file>"
+    echo "Use '$NAME --help' for more information"
+    exit 1
+fi
+
+TMOUT="${1}"
+TOUCH_FILE="${2}"
+
+# Validate timeout is a number
+if ! [[ "$TMOUT" =~ ^[0-9]+$ ]]; then
+    echo "Error: timeout_seconds must be a positive integer"
+    exit 1
+fi
+
+HOSTNAME=$(cat /proc/sys/kernel/hostname)
+KUBECONFIG="--kubeconfig=/etc/kubernetes/admin.conf"
+REBOOT_CORDONED=/etc/platform/.reboot_cordoned
+UNLOCK_READY=/etc/platform/.unlock_ready
+
+# Log info message to /var/log/daemon.log
+function LOG {
+    logger -p daemon.info -t "${NAME}($$): " "${@}"
+}
+
+LOG "Args: timeout=${TMOUT}s, completion_file=${TOUCH_FILE}"
+
+# Perform kubectl drain on this Kubernetes node.
+if [ -f "${REBOOT_CORDONED}" ]; then
+    LOG "Already cordoned. Do nothing."
+    exit 0
+fi
+if [ -f "${UNLOCK_READY}" ]; then
+    LOG "Unlock ready."
+fi
+
+# Skip waiting if pod is stuck terminating for specified duration
+SKIP_TIMEOUT="--skip-wait-for-delete-timeout=30"
+
+# Maximum time to wait before failing the drain command.
+TIMEOUT="--timeout=$((${TMOUT:-120} - 1))s"
+
+# Prepare the Kubernetes node for maintenance by marking the node
+# unschedulable and evicting pods. This improves pod recovery after
+# reboot since pods are able to shutdown gracefully.
+# Ignore failures since we can't do anything anyway (e.g., due to
+# timeout waiting for unsatisfied pod-disruption-budget).
+LOG "Draining all pods for graceful shutdown."
+timeout "${TMOUT:-120}s" stdbuf -oL -eL kubectl drain "${HOSTNAME}" ${KUBECONFIG} \
+    --ignore-daemonsets --delete-emptydir-data --force \
+    ${SKIP_TIMEOUT} "${TIMEOUT}" 2>&1 | LOG
+RC=$?
+LOG "Drain Done ; rc:$RC"
+
+touch "${REBOOT_CORDONED}"
+
+# Touch the specified file if provided
+if [ -n "${TOUCH_FILE}" ]; then
+    touch "${TOUCH_FILE}"
+    LOG "Touched completion file: ${TOUCH_FILE}"
+fi
+
+exit 0

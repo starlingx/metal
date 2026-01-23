@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2013-2017, 2024 Wind River Systems, Inc.
+* Copyright (c) 2013-2017, 2024, 2026 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -1111,6 +1111,47 @@ void fork_graceful_reboot ( int delay_in_secs )
             errno, strerror(errno));
         exit (-1);
     }
+}
+
+ void launch_force_pod_drain ( string hostname, int timeout_in_secs, char * done_filename_str )
+{
+    int parent = 0 ;
+
+    // Double fork in prep to run MTC_DELAYED_SYSRQ_REBOOT_SCRIPT as a
+    // detached grandchild using systemd-run command. The script does
+    // the SysRq reset.
+    if ( 0 > ( parent = double_fork()))
+    {
+        elog ("%s failed to fork force pod drain launcher", hostname.c_str());
+        return ;
+    }
+    else if( 0 == parent ) /* we're the grandchild */
+    {
+        char timeout_str [MAX_CHARS_IN_INT]; /* for the int to str conversion */
+        char unit_arg    [MAX_FILENAME_LEN]; /* for the dynamic unit name     */
+
+        // Convert the calling int parameter to a string so it can be passed to execv
+        snprintf(timeout_str, sizeof(timeout_str), "%d", timeout_in_secs);
+
+        // Create a dynamic unit name using the current program name.
+        // Do this so that if multiple maintenance processes use this
+        // API they don't have a unit name collision.
+        snprintf(unit_arg, sizeof(unit_arg),
+                 "--unit=%s-force_pod_drain",
+                 program_invocation_short_name);
+
+        const char *cmd[] = {
+            SYSTEMD_RUN,
+            unit_arg,
+            MTC_FORCE_POD_DRAIN_SCRIPT,
+            timeout_str, done_filename_str,
+            NULL
+        };
+        execv(cmd[0], (char * const *)cmd);
+        exit(EXIT_FAILURE);
+    }
+    ilog ("%s force pod drain script launched ; timeout:%d parent pid:%d",
+              hostname.c_str(), timeout_in_secs, parent);
 }
 
 bool is_string_in_string_list ( std::list<string> & l , string & str )

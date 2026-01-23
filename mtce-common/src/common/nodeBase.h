@@ -1,7 +1,7 @@
 #ifndef __INCLUDE_NODEBASE_HH__
 #define __INCLUDE_NODEBASE_HH__
 /*
- * Copyright (c) 2013-2020, 2023-2025 Wind River Systems, Inc.
+ * Copyright (c) 2013-2020, 2023-2026 Wind River Systems, Inc.
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -177,6 +177,7 @@ void daemon_exit ( void );
 
 /* maintenance scripts */
 #define MTC_DELAYED_SYSRQ_REBOOT_SCRIPT "/usr/local/sbin/delayed_sysrq_reboot"
+#define MTC_FORCE_POD_DRAIN_SCRIPT "/usr/local/sbin/force_pod_drain"
 
 /* supported BMC communication protocols ; access method */
 typedef enum

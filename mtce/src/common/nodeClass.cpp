@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2020, 2023-2025 Wind River Systems, Inc.
+ * Copyright (c) 2013-2020, 2023-2026 Wind River Systems, Inc.
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -1612,9 +1612,59 @@ int nodeLinkClass::failed_state_change ( struct nodeLinkClass::node * node_ptr )
  * Assumptions: No return
  *
  *****************************************************************************/
+#define DRAIN_GLOBAL_TIMEOUT_SECS (121)
+#define DRAIN_DONE_TOUCH_FILE "/var/run/pod_drain_done"
 
 int nodeLinkClass::lazy_graceful_fs_reboot ( struct nodeLinkClass::node * node_ptr )
 {
+    char drain_done_flag_file  [MAX_FILENAME_LEN]; /* for the dynamic unit name     */
+    bool drain_done = false ;
+
+    // Convert the calling int parameter to a string so it can be passed to execv
+    snprintf(drain_done_flag_file, sizeof(drain_done_flag_file), "%s", DRAIN_DONE_TOUCH_FILE);
+
+#ifdef WANT_FORCE_REMOVE_CORDONED_FILE_FOR_TESTING
+    #define ALREADY_CORDONED_FILE "/etc/platform/.reboot_cordoned"
+    if ( daemon_is_file_present ( ALREADY_CORDONED_FILE ) )
+    {
+        /* remove any stale done file */
+        daemon_remove_file ( ALREADY_CORDONED_FILE );
+        slog ("%s is already cordoned - removing file for testing",
+                  node_ptr->hostname.c_str());
+    }
+#endif
+
+    /* Force the pods to drain */
+    launch_force_pod_drain ( node_ptr->hostname, DRAIN_GLOBAL_TIMEOUT_SECS, drain_done_flag_file );
+
+    /* Wait for pods to drain */
+    for ( int drain_count_down = 0 ; drain_count_down < DRAIN_GLOBAL_TIMEOUT_SECS+1 ; drain_count_down++ )
+    {
+        /* hold off on forcing SM shutdown and Lazy reboot until the pods draining is done */
+        if ( daemon_is_file_present ( drain_done_flag_file ) == false )
+        {
+            ilog ("%s ... waiting for pods to drain before Lazy Reboot ; secs:%d",
+                      node_ptr->hostname.c_str(), drain_count_down);
+
+            daemon_signal_hdlr ();
+            sleep (MTC_SECS_1);
+        }
+        else
+        {
+            ilog ("%s pods drained - proceeding with graceful Lazy Reboot",
+                      node_ptr->hostname.c_str());
+
+            drain_done = true ;
+            break ;
+        }
+    }
+
+    if ( drain_done == false )
+    {
+        wlog ("%s pod drain timeout - proceeding with Lazy Reboot",
+                  node_ptr->hostname.c_str());
+    }
+
     /* Issue a lazy reboot to the mtcClient */
     send_mtc_cmd ( node_ptr->hostname, MTC_CMD_LAZY_REBOOT, MGMNT_INTERFACE ) ;
     send_mtc_cmd ( node_ptr->hostname, MTC_CMD_LAZY_REBOOT, PXEBOOT_INTERFACE ) ;
@@ -1632,7 +1682,7 @@ int nodeLinkClass::lazy_graceful_fs_reboot ( struct nodeLinkClass::node * node_p
             sleep (MTC_SECS_1);
         }
         /* Should never get there but if we do resend the reboot request
-         * but this time not Lazy */
+            * but this time not Lazy */
         send_mtc_cmd ( node_ptr->hostname, MTC_CMD_REBOOT, MGMNT_INTERFACE ) ;
         send_mtc_cmd ( node_ptr->hostname, MTC_CMD_REBOOT, PXEBOOT_INTERFACE ) ;
     }

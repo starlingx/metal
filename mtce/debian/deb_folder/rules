@@ -66,6 +66,7 @@ override_dh_auto_install:
 	install -m 700 -p -D scripts/wipedisk $(BINDIR)/wipedisk
 	install -m 755 -d $(SBINDIR)
 	install -m 700 -p -D fsync/fsync $(SBINDIR)/fsync
+	install -m 755 -p -D scripts/force_pod_drain $(LOCAL_SBINDIR)/force_pod_drain
 	install -m 755 -d $(SBINDIR)
 	install -m 755 -p -D scripts/crash-dump-manager $(SBINDIR)/crash-dump-manager
 	install -m 700 -p -D pmon/scripts/pmon-restart $(LOCAL_SBINDIR)/pmon-restart

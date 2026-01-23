@@ -37,6 +37,7 @@ usr/local/sbin/delayed_sysrq_reboot
 usr/sbin/crash-dump-manager
 usr/sbin/dmemchk.sh
 usr/sbin/fsync
+usr/local/sbin/force_pod_drain
 usr/share/mtce/hwclock.service
 usr/share/mtce/hwclock.sh
 usr/share/starlingx/pmon.d/acpid.conf
