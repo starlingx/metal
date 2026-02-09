@@ -1612,13 +1612,13 @@ int nodeLinkClass::failed_state_change ( struct nodeLinkClass::node * node_ptr )
  * Assumptions: No return
  *
  *****************************************************************************/
-#define DRAIN_GLOBAL_TIMEOUT_SECS (121)
 #define DRAIN_DONE_TOUCH_FILE "/var/run/pod_drain_done"
 
 int nodeLinkClass::lazy_graceful_fs_reboot ( struct nodeLinkClass::node * node_ptr )
 {
     char drain_done_flag_file  [MAX_FILENAME_LEN]; /* for the dynamic unit name     */
     bool drain_done = false ;
+    int  drain_timeout = daemon_get_cfg_ptr()->pod_drain_timeout ;
 
     // Convert the calling int parameter to a string so it can be passed to execv
     snprintf(drain_done_flag_file, sizeof(drain_done_flag_file), "%s", DRAIN_DONE_TOUCH_FILE);
@@ -1635,35 +1635,46 @@ int nodeLinkClass::lazy_graceful_fs_reboot ( struct nodeLinkClass::node * node_p
 #endif
 
     /* Force the pods to drain */
-    launch_force_pod_drain ( node_ptr->hostname, DRAIN_GLOBAL_TIMEOUT_SECS, drain_done_flag_file );
-
-    /* Wait for pods to drain */
-    for ( int drain_count_down = 0 ; drain_count_down < DRAIN_GLOBAL_TIMEOUT_SECS+1 ; drain_count_down++ )
+    int rc = launch_force_pod_drain ( node_ptr->hostname, drain_timeout, drain_done_flag_file );
+    if ( rc == PASS )
     {
-        /* hold off on forcing SM shutdown and Lazy reboot until the pods draining is done */
-        if ( daemon_is_file_present ( drain_done_flag_file ) == false )
+        /* Wait for pods to drain */
+        for ( int drain_second_counter = 0 ; drain_second_counter < drain_timeout+1 ; drain_second_counter++ )
         {
-            ilog ("%s ... waiting for pods to drain before Lazy Reboot ; secs:%d",
-                      node_ptr->hostname.c_str(), drain_count_down);
+            /* hold off on forcing SM shutdown and Lazy reboot until the pods draining is done */
+            if ( daemon_is_file_present ( drain_done_flag_file ) == false )
+            {
+                /* only start logging after 15 seconds */
+                if ( (( drain_second_counter > 30 ) || (drain_second_counter % 5 == 0)) && (drain_second_counter != 0 ))
+                {
+                    ilog ("%s ... waiting for pods to drain before Lazy Reboot ; secs:%d",
+                              node_ptr->hostname.c_str(), drain_second_counter);
+                }
+                daemon_signal_hdlr ();
+                sleep (MTC_SECS_1);
+            }
+            else
+            {
+                ilog ("%s pods drained in %d secs",
+                          node_ptr->hostname.c_str(), drain_second_counter);
 
-            daemon_signal_hdlr ();
-            sleep (MTC_SECS_1);
+                drain_done = true ;
+                break ;
+            }
         }
-        else
-        {
-            ilog ("%s pods drained - proceeding with graceful Lazy Reboot",
-                      node_ptr->hostname.c_str());
 
-            drain_done = true ;
-            break ;
+        if ( drain_done == false )
+        {
+            wlog ("%s pod drain timeout",
+                    node_ptr->hostname.c_str());
         }
     }
-
-    if ( drain_done == false )
+    else
     {
-        wlog ("%s pod drain timeout - proceeding with Lazy Reboot",
-                  node_ptr->hostname.c_str());
+        wlog ("%s Failed to launch force pod drain script (rc:%d)", node_ptr->hostname.c_str(), rc);
     }
+
+    wlog ("%s ... proceeding with Lazy Reboot", node_ptr->hostname.c_str());
 
     /* Issue a lazy reboot to the mtcClient */
     send_mtc_cmd ( node_ptr->hostname, MTC_CMD_LAZY_REBOOT, MGMNT_INTERFACE ) ;

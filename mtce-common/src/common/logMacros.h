@@ -122,6 +122,8 @@ typedef struct
     int   http_retry_wait       ; /**< secs to wait between http reg retries  */
     int   host_add_delay        ; /**< secs to wait before adding hosts       */
     int   lazy_reboot_delay     ; /**< secs to wait before reboot             */
+    int   pod_drain_timeout     ; /**< secs to wait before draining pods      */
+
     int   hostwd_failure_threshold ; /**< allowed # of missed pmon/hostwd messages */
     bool  hostwd_reboot_on_err  ; /**< should hostwd reboot on fault detected */
     bool  hostwd_kdump_on_stall ; /**< sysrq crash dump on quorum msg'ing stall */

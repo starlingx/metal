@@ -1113,8 +1113,15 @@ void fork_graceful_reboot ( int delay_in_secs )
     }
 }
 
- void launch_force_pod_drain ( string hostname, int timeout_in_secs, char * done_filename_str )
+int launch_force_pod_drain ( string hostname, int timeout_in_secs, char * done_filename_str )
 {
+    if ( daemon_is_file_present ( MTC_FORCE_POD_DRAIN_SCRIPT ) == false )
+    {
+        wlog ("%s pod drain script not found (%s)",
+                  hostname.c_str(), MTC_FORCE_POD_DRAIN_SCRIPT);
+        return FAIL_NOT_FOUND;
+    }
+
     int parent = 0 ;
 
     // Double fork in prep to run MTC_DELAYED_SYSRQ_REBOOT_SCRIPT as a
@@ -1123,7 +1130,7 @@ void fork_graceful_reboot ( int delay_in_secs )
     if ( 0 > ( parent = double_fork()))
     {
         elog ("%s failed to fork force pod drain launcher", hostname.c_str());
-        return ;
+        return FAIL_OPERATION ;
     }
     else if( 0 == parent ) /* we're the grandchild */
     {
@@ -1150,8 +1157,9 @@ void fork_graceful_reboot ( int delay_in_secs )
         execv(cmd[0], (char * const *)cmd);
         exit(EXIT_FAILURE);
     }
-    ilog ("%s force pod drain script launched ; timeout:%d parent pid:%d",
-              hostname.c_str(), timeout_in_secs, parent);
+    ilog ("%s force pod drain script launched ; timeout:%d",
+              hostname.c_str(), timeout_in_secs);
+    return PASS ;
 }
 
 bool is_string_in_string_list ( std::list<string> & l , string & str )

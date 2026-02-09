@@ -49,6 +49,8 @@ void daemon_config_default ( daemon_config_type* config_ptr )
     config_ptr->fit_host              = strdup("none");
     config_ptr->multicast             = strdup("none");
     config_ptr->barbican_api_host     = strdup("none");
+    config_ptr->lazy_reboot_delay     = 0 ;
+    config_ptr->pod_drain_timeout     = 0 ;
 
     config_ptr->hostwd_kdump_on_stall = 0 ;
     config_ptr->bmc_audit_period      = 0 ;

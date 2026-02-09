@@ -473,6 +473,11 @@ static int mtc_config_handler ( void * user,
         config_ptr->lazy_reboot_delay = atoi(value);
         ilog ("Lazy Reboot : %d secs", config_ptr->lazy_reboot_delay );
     }
+    else if (MATCH("agent", "pod_drain_timeout"))
+    {
+        config_ptr->pod_drain_timeout = atoi(value);
+        ilog ("Pod Drain   : %d secs", config_ptr->pod_drain_timeout );
+    }
     else if (MATCH("timeouts", "failsafe_shutdown_delay"))
     {
         config_ptr->failsafe_shutdown_delay = atoi(value);
