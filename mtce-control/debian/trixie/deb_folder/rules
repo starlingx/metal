@@ -1,0 +1,21 @@
+#!/usr/bin/make -f
+# export DH_VERBOSE = 1
+
+export ROOT = debian/tmp
+export PMONDIR = usr/share/starlingx/pmon.d
+
+%:
+	dh $@
+
+override_dh_auto_install:
+	$(MAKE) buildroot=$(ROOT) \
+		_sysconfdir=/etc \
+		_unitdir=/lib/systemd/system \
+		_datarootdir=/usr/share \
+		PMONDIR=$(PMONDIR) \
+		install
+
+	dh_install
+
+override_dh_installsystemd:
+	dh_installsystemd -pmtce-control --name hbsAgent hbsAgent.service
