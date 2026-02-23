@@ -178,7 +178,6 @@ kubernetes-1.23.1-client
 kubernetes-1.23.1-kubeadm
 kubernetes-1.23.1-node
 kubernetes-unversioned
-kvm-timer-advance
 libcap
 libcap-ng
 libcephfs2

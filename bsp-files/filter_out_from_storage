@@ -328,7 +328,6 @@ openstack-swift-container
 openstack-swift-proxy
 pci-irq-affinity-agent
 Redfishtool
-kvm-timer-advance
 dex-helm
 oidcauthtools
 stx-oidc-auth-helm
