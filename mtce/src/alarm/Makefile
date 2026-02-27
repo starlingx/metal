@@ -17,6 +17,7 @@ STATIC_ANALYSIS_TOOL = cppcheck
 STATIC_ANALYSIS_TOOL_EXISTS = $(shell [[ -e `which $(STATIC_ANALYSIS_TOOL)` ]] && echo 1 || echo 0)
 
 BINS = mtcalarmd
+DEB_CODENAME := $(shell lsb_release -cs)
 
 
 .cpp.o:
@@ -39,8 +40,9 @@ common:
 daemon:
 	( cd ../daemon ; make clean ; make lib VER=$(VER) VER_MJR=$(VER_MJR))
 
-library:
-	 ar rcs libalarm.a alarm.o $(EXTRAARFLAGS)
+ LIBRARY_DEPS := $(if $(filter trixie,$(DEB_CODENAME)),alarm.o)
+ library: $(LIBRARY_DEPS)
+	ar rcs libalarm.a alarm.o $(EXTRAARFLAGS)
 
 process: $(OBJS)
 	$(CXX) $(CCFLAGS) ${OBJS} -L../daemon -L../common $(LDLIBS) $(EXTRALDFLAGS) -o mtcalarmd
@@ -48,6 +50,6 @@ process: $(OBJS)
 clean_bins:
 	@rm -v -f $(BINS)
 
-clean:
-	@rm -v -f $(OBJ) $(BINS) *.o *.a
-
+OBJ_VAR := $(if $(filter bullseye,$(DEB_CODENAME)),$(OBJ),$(OBJS))
+ clean:
+	@rm -v -f $(OBJ_VAR) $(BINS) *.o *.a
