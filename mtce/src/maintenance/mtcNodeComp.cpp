@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2016, 2024-2025 Wind River Systems, Inc.
+ * Copyright (c) 2013-2016, 2024-2026 Wind River Systems, Inc.
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -405,14 +405,14 @@ void setup_pxeboot_rx_socket ( void )
     {
         wlog ("cannot %s without a valid ; port: %d",
                log_prefix.c_str(),
-               mtc_sock.mtc_rx_pxeboot_port)
+               mtc_sock.mtc_rx_pxeboot_port);
     }
     else if ( ctrl.pxeboot_addr.empty() )
     {
         wlog ("cannot %s socket on %s port %d with no pxeboot address",
                log_prefix.c_str(),
                ctrl.pxeboot_iface.c_str(),
-               mtc_sock.mtc_rx_pxeboot_port)
+               mtc_sock.mtc_rx_pxeboot_port);
         return ;
     }
 
