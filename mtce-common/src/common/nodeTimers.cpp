@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016 Wind River Systems, Inc.
+ * Copyright (c) 2013,2016,2026 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -22,6 +22,10 @@
 #include "daemon_common.h"
 #include "nodeBase.h"
 #include "nodeTimers.h"
+
+#ifndef UNUSED
+#define UNUSED(x) (void)(x)
+#endif
 
 static int timer_count = 0 ;
 
@@ -370,9 +374,7 @@ int _timer_stop_tid ( timer_t * tid_ptr , bool int_safe )
 {
     int rc = PASS ;
 
-#ifdef UNUSED
     UNUSED (int_safe);
-#endif
 
     /*********************************************************************
      *
