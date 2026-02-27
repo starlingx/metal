@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2013-2018 Wind River Systems, Inc.
+# Copyright (c) 2013-2018,2026 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -53,6 +53,15 @@ CCFLAGS = -g -O2 -Wall -Wextra -Werror -std=c++11
 
 STATIC_ANALYSIS_TOOL = cppcheck
 STATIC_ANALYSIS_TOOL_EXISTS = $(shell [[ -e `which $(STATIC_ANALYSIS_TOOL)` ]] && echo 1 || echo 0)
+DEB_CODENAME := $(shell lsb_release -cs)
+
+# Define DEBIAN_TRIXIE or DEBIAN_BULLSEYE based on detected codename
+ifneq ($(filter trixie,$(DEB_CODENAME)),)
+    CCFLAGS += -DDEBIAN_TRIXIE
+else
+    CCFLAGS += -DDEBIAN_BULLSEYE
+endif
+
 
 ifeq (,$(shell which ${CC}))
 CC=g++
@@ -76,13 +85,16 @@ threadUtil:
 	$(CXX) -c threadUtil.cpp $(CCFLAGS) $(INCLUDES) $(EXTRACCFLAGS) $(LDLIBS) -lpthread -o threadUtil.o
 	ar rcs libthreadUtil.a threadUtil.o $(EXTRAARFLAGS)
 
-library:
+LIBRARY_DEPS := $(if $(filter trixie,$(DEB_CODENAME)),$(COMMON_OBJS) bmcUtil.o ipmiUtil.o redfishUtil.o pingUtil.o nodeBase.o regexUtil.o hostUtil.o)
+
+ library: $(LIBRARY_DEPS)
 	ar rcs libcommon.a $(COMMON_OBJS) $(EXTRAARFLAGS)
 	ar rcs libbmcUtils.a bmcUtil.o ipmiUtil.o redfishUtil.o $(EXTRAARFLAGS)
 	ar rcs libpingUtil.a pingUtil.o $(EXTRAARFLAGS)
 	ar rcs libnodeBase.a nodeBase.o $(EXTRAARFLAGS)
 	ar rcs libregexUtil.a regexUtil.o $(EXTRAARFLAGS)
 	ar rcs libhostUtil.a hostUtil.o $(EXTRAARFLAGS)
+
 
 testhead:
 	$(CCFLAGS) $(INCLUDES) -L../daemon -L../common -L. $(LDLIBS) -lpingUtil -lnodeBase -lregexUtil -lhostUtil 
