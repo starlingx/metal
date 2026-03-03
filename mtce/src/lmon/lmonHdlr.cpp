@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Wind River Systems, Inc.
+ * Copyright (c) 2019, 2026 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -45,13 +45,13 @@ void daemon_exit ( void )
 void lmonTimer_handler ( int sig, siginfo_t *si, void *uc)
 {
     UNUSED(sig); UNUSED(uc);
-    timer_t * tid_ptr = (void**)si->si_value.sival_ptr ;
-    if ( !(*tid_ptr) )
+    struct mtc_timer * fired = (struct mtc_timer *)si->si_value.sival_ptr ;
+    if ( fired == NULL )
         return ;
-    else if (( *tid_ptr == lmon_ctrl.audit_timer.tid ) )
+    else if ( fired == &lmon_ctrl.audit_timer )
         lmon_ctrl.audit_timer.ring = true ;
     else
-        mtcTimer_stop_tid_int_safe ( tid_ptr );
+        mtcTimer_stop_tid_int_safe ( &fired->tid );
 }
 
 /*****************************************************************************

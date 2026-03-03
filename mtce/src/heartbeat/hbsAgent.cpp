@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2020, 2025 Wind River Systems, Inc.
+ * Copyright (c) 2013-2020, 2025-2026 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -495,7 +495,6 @@ int daemon_configure ( void )
     hbs_config.active = daemon_get_run_option ("active") ;
     ilog ("Controller  : %s\n",
         hbs_config.active ? "Active" : "In-Active" );
-
     /* pust the activity state into inventory (nodeLinkClass) */
     if ( hbs_config.active == true )
         hbsInv.set_activity_state ( true );
@@ -507,7 +506,6 @@ int daemon_configure ( void )
 
     /* pull in the degrade only config option */
     hbsInv.clstr_degrade_only = hbs_config.clstr_degrade_only ;
-
     if ( hbsInv.hbs_degrade_threshold >= hbsInv.hbs_failure_threshold )
     {
         wlog ("Degrade threshold should be smaller than Failure threshold\n");
@@ -523,34 +521,32 @@ static struct mtc_timer hbsTimer_audit ;
 
 void hbsTimer_handler ( int sig, siginfo_t *si, void *uc)
 {
-    timer_t * tid_ptr = (void**)si->si_value.sival_ptr ;
+    struct mtc_timer * fired = (struct mtc_timer *)si->si_value.sival_ptr ;
 
     /* Avoid compiler errors/warnings for parms we must
      * have but currently do nothing with */
     UNUSED(sig);
     UNUSED(uc);
 
-    if ( !(*tid_ptr) )
+    if ( fired == NULL )
     {
-        // tlog ("Called with a NULL Timer ID\n");
         return ;
     }
     /* is base mtc timer */
-    else if (( *tid_ptr == hbsTimer.tid ) )
+    else if ( fired == &hbsTimer )
     {
         mtcTimer_stop_int_safe ( hbsTimer );
         hbsTimer.ring = true ;
     }
-    /* is base mtc timer */
-    else if (( *tid_ptr == hbsTimer_audit.tid ) )
+    /* is audit timer */
+    else if ( fired == &hbsTimer_audit )
     {
         mtcTimer_stop_int_safe ( hbsTimer_audit );
         hbsTimer_audit.ring = true ;
     }
     else
     {
-        // wlog ("Unexpected timer - %p", *tid_ptr );
-        mtcTimer_stop_tid_int_safe ( tid_ptr );
+        mtcTimer_stop_tid_int_safe ( &fired->tid );
     }
 }
 
@@ -676,7 +672,7 @@ int _setup_pulse_messaging ( iface_enum i, int rmem_max )
     {
         elog("Failed to create %s pulse receive socket (%d:%d:%m)\n",
               get_iface_name_str(i),
-              hbs_sock.rx_sock[i]->return_status,
+              hbs_sock.rx_sock[i] ? hbs_sock.rx_sock[i]->return_status : -1,
               errno );
         rc = FAIL_SOCKET_CREATE ;
     }

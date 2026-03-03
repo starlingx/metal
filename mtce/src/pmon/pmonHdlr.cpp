@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2016 Wind River Systems, Inc.
+ * Copyright (c) 2013-2016, 2026 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -450,35 +450,36 @@ void load_processes ( void )
 /* Looks up the timer ID and asserts the corresponding ringer */
 void pmon_timer_handler ( int sig, siginfo_t *si, void *uc)
 {
-    timer_t * tid_ptr = (void**)si->si_value.sival_ptr ;
+    /* sival_ptr points directly to the mtc_timer struct that fired */
+    struct mtc_timer * fired = (struct mtc_timer *)si->si_value.sival_ptr ;
 
     /* Avoid compiler errors/warnings for parms we must
      * have but currently do nothing with */
     UNUSED(sig);
     UNUSED(uc);
 
-    if ( !(*tid_ptr) )
+    if ( fired == NULL )
     {
         return ;
     }
 
-    else if ( *tid_ptr == pmonTimer_pulse.tid )
+    else if ( fired == &pmonTimer_pulse )
     {
         pmonTimer_pulse.ring = true ;
     }
-    else if ( *tid_ptr == pmonTimer_degrade.tid )
+    else if ( fired == &pmonTimer_degrade )
     {
         mtcTimer_stop_int_safe ( pmonTimer_degrade );
         pmonTimer_degrade.ring = true ;
         _pmon_ctrl_ptr->patching_in_progress = false ;
     }
-    else if ( *tid_ptr == pmonTimer_audit.tid )
+    else if ( fired == &pmonTimer_audit )
     {
         mtcTimer_stop_int_safe ( pmonTimer_audit );
         pmonTimer_audit.ring = true ;
     }
     /* is host watchdog pmon timer */
-    else if ( *tid_ptr == pmonTimer_hostwd.tid )
+    else if ( fired == &pmonTimer_hostwd )
     {
         pmonTimer_hostwd.ring = true ;
 
@@ -489,7 +490,7 @@ void pmon_timer_handler ( int sig, siginfo_t *si, void *uc)
         bool found = false ;
         for ( int i = 0 ; i < _pmon_ctrl_ptr->processes ; i++ )
         {
-            if ( *tid_ptr == process_config[i].pt_ptr->tid )
+            if ( fired == process_config[i].pt_ptr )
             {
                 mtcTimer_stop_int_safe ( process_config[i].pt_ptr );
                 process_config[i].pt_ptr->ring = true ;
@@ -500,8 +501,7 @@ void pmon_timer_handler ( int sig, siginfo_t *si, void *uc)
         if ( !found )
         {
             //wlog ("Unknown timer\n");
-            /* try and cleanup by stopping this unknown timer via its tid */
-            mtcTimer_stop_tid_int_safe (tid_ptr);
+            mtcTimer_stop_tid_int_safe (&fired->tid);
         }
     }
 }
@@ -1406,11 +1406,16 @@ int execute_status_command (process_config_type * ptr)
 void daemon_sigchld_hdlr ( void )
 {
     pid_t tpid = 0 ;
-    bool found = 0 ;
     int status = 0 ;
-
+    #ifdef DEBIAN_BULLSEYE
+    bool found = 0 ;
     dlog("Received SIGCHLD ...\n");
+    #endif
 
+    /* CRITICAL: This is a signal handler - only async-signal-safe functions allowed.
+    * NO logging (dlog/ilog/wlog), NO malloc/free, NO mutex locks.
+    * Trixie's glibc/Python 3.13/OpenSSL 3.0 will deadlock otherwise.
+    * Just reap children and set flags - logging happens in main loop. */
     while ( 0 < ( tpid = waitpid ( -1, &status, WNOHANG | WUNTRACED )))
     {
         process_config_type * process_ptr = find_parent_process ( tpid ) ;
@@ -1422,7 +1427,11 @@ void daemon_sigchld_hdlr ( void )
             {
                 if ( process_ptr->status_monitoring == false )
                 {
-                  dlog ("%s spawn script exited properly (%d)\n", process_ptr->process, tpid );
+                  #ifdef DEBIAN_BULLSEYE
+                    dlog ("%s spawn script exited properly (%d)\n", process_ptr->process, tpid );
+                  #endif
+                  /* DEBIAN_TRIXIE */
+                  /* Defer logging to main loop */
                 }
                 else
                 {
@@ -1436,9 +1445,11 @@ void daemon_sigchld_hdlr ( void )
                             process_ptr->time_stop,
                             process_ptr->time_delta );
 
-                /* only print log if there is an error */
+                /* DEBIAN_BULLSEYE only print log if there is an error */
+                /* DEBIAN_TRIXIE only print log if there is an error */
                 process_ptr->status = WEXITSTATUS(status) ;
 
+#ifdef DEBIAN_BULLSEYE
                 if ( process_ptr->status )
                 {
                     if ( process_ptr->status_monitoring == false )
@@ -1465,28 +1476,46 @@ void daemon_sigchld_hdlr ( void )
                         }
                     }
                 }
+#endif
+
             }
             else if (WIFSIGNALED(status))
             {
                 process_ptr->status = FAIL ;
-                wlog ("%s test uncaught signal\n", process_ptr->process );
+                #ifdef DEBIAN_BULLSEYE
+                    wlog ("%s test uncaught signal\n", process_ptr->process);
+                #endif
+                /* DEBIAN_TRIXIE */
+                /* Defer logging to main loop */
+
             }
             else if (WIFSTOPPED(status))
             {
                 process_ptr->status = FAIL ;
-                wlog ("%s test stopped.\n", process_ptr->process );
+                #ifdef DEBIAN_BULLSEYE
+                    wlog ("%s test stopped.\n", process_ptr->process );
+                #endif
+                /* DEBIAN_TRIXIE */
+                /* Defer logging to main loop */
             }
         }
         else
         {
+        #ifdef DEBIAN_BULLSEYE
             dlog ("parent process for PID:%d lookup failed ; reaped likely after timeout\n", tpid );
+        #endif
+        /* DEBIAN_TRIXIE */
+        /* Defer logging to main loop */
             return ;
         }
     }
+#ifdef DEBIAN_BULLSEYE
     if ( ( tpid > 0 ) && ( found == false ) )
     {
         wlog ("PID:%d found no corresponding process\n", tpid );
     }
+#endif
+
 }
 
 int manage_alarm ( process_config_type * ptr, int action )

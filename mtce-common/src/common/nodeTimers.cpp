@@ -29,6 +29,13 @@
 
 static int timer_count = 0 ;
 
+/* SIGRTMIN and SIGRTMIN+1 are reserved by glibc NPTL (used by pthreads/Python).
+ * Use SIGRTMIN+2 as the single shared timer signal on Trixie. */
+#ifdef DEBIAN_TRIXIE
+#define MTC_TIMER_SIGNAL (SIGRTMIN + 2)
+#endif
+
+
 int _timer_start ( struct mtc_timer * mtcTimer_ptr,
                    void (*handler)(int, siginfo_t*, void*),
                    int secs, int msec )
@@ -45,9 +52,15 @@ int _timer_start ( struct mtc_timer * mtcTimer_ptr,
     mtcTimer_ptr->ring  = true ; /* default to rung for failure path cases */
 
     /* Avoid programming mistake that leads to over-writing
-     * a seemingly active timer; if .tid is not null then
-     * cancel that timr first */
+     * a seemingly active timer; if active flag is set then
+     * cancel that timer first */
+    /* TRIXIE FIX: Use active flag instead of tid check, since tid can be 0 in glibc 2.36+ */
+    #ifdef DEBIAN_BULLSEYE
     if (( mtcTimer_ptr->tid ) && ( timer_count > 0 ))
+    #else
+    if (( mtcTimer_ptr->active ) && ( timer_count > 0 ))
+    #endif
+
     {
         wlog ("%s (%s) called with active timer ; stopping first \n",
                   mtcTimer_ptr->hostname.c_str(),
@@ -77,20 +90,31 @@ int _timer_start ( struct mtc_timer * mtcTimer_ptr,
     mtcTimer_ptr->sa.sa_flags = SA_SIGINFO;
     mtcTimer_ptr->sa.sa_sigaction = handler;
     sigemptyset(&mtcTimer_ptr->sa.sa_mask);
+#ifdef DEBIAN_BULLSEYE
     if (sigaction(SIGRTMIN, &mtcTimer_ptr->sa, NULL) == -1)
+#else
+    if (sigaction(MTC_TIMER_SIGNAL, &mtcTimer_ptr->sa, NULL) == -1)
+#endif
     {
         elog ("%s (%s) Timer 'set action' (sigaction) failed\n",
                   mtcTimer_ptr->hostname.c_str(),
                   mtcTimer_ptr->service.c_str());
-
         rc = FAIL_TIMER_SET_ACTION ;
         goto _timer_start_out ;
-
     }
+
+
     /* set and enable alarm */
     mtcTimer_ptr->sev.sigev_notify = SIGEV_SIGNAL;
-    mtcTimer_ptr->sev.sigev_signo  = SIGRTMIN;
-    mtcTimer_ptr->sev.sigev_value.sival_ptr = &mtcTimer_ptr->tid;
+#ifdef DEBIAN_BULLSEYE
+     mtcTimer_ptr->sev.sigev_signo  = SIGRTMIN;
+#else
+     mtcTimer_ptr->sev.sigev_signo  = MTC_TIMER_SIGNAL;
+#endif
+    /* Point sival_ptr to the mtc_timer struct itself so signal handlers
+     * can identify which timer fired by address comparison. This avoids
+     * relying on tid values which can be 0 in glibc 2.36+. */
+    mtcTimer_ptr->sev.sigev_value.sival_ptr = mtcTimer_ptr;
 
     /* TODO: move up or set block till time is set ? */
     mtcTimer_ptr->value.it_value.tv_sec     = secs;
@@ -202,7 +226,12 @@ int _timer_stop ( struct mtc_timer * mtcTimer_ptr , bool int_safe)
         }
         goto _timer_stop_out ;
     }
+    /* TRIXIE FIX: Use active flag instead of tid check, since tid can be 0 in glibc 2.36+ */
+    #ifdef DEBIAN_BULLSEYE
     else if ( mtcTimer_ptr->tid )
+    #else
+    else if ( mtcTimer_ptr->active )
+    #endif
     {
         mtcTimer_ptr->value.it_value.tv_sec = 0;
         mtcTimer_ptr->value.it_value.tv_nsec = 0;
@@ -231,11 +260,11 @@ int _timer_stop ( struct mtc_timer * mtcTimer_ptr , bool int_safe)
                       mtcTimer_ptr->msec,
                       timer_count );
         }
-            timer_delete (mtcTimer_ptr->tid);
-            mtcTimer_ptr->tid    = NULL  ;
-            if ( timer_count )
-                timer_count-- ;
-        }
+        timer_delete (mtcTimer_ptr->tid);
+        mtcTimer_ptr->tid    = NULL  ;
+        if ( timer_count )
+            timer_count-- ;
+    }
     else if ( int_safe == false )
     {
         wlog ("%s (%s) called with null TID (count:%d)\n",
@@ -256,6 +285,7 @@ int _timer_stop ( struct mtc_timer * mtcTimer_ptr , bool int_safe)
 
 _timer_stop_out:
     mtcTimer_ptr->active = false ;
+
     return rc ;
 }
 
@@ -288,13 +318,19 @@ int mtcTimer_stop ( struct mtc_timer & mtcTimer )
 
 bool mtcTimer_expired ( struct mtc_timer & mtcTimer )
 {
+    bool expired = false;
     if (( mtcTimer.ring   == true  ) ||
-        ( mtcTimer.active == false ) ||
-        ( mtcTimer.tid    == NULL  ))
+        ( mtcTimer.active == false ))
     {
-        return (true);
+        expired = true;
     }
-    return (false);
+    #ifdef DEBIAN_BULLSEYE
+    if ( !expired && mtcTimer.tid == NULL )
+    {
+        expired = true;
+    }
+    #endif
+    return (expired);
 }
 
 
@@ -302,12 +338,19 @@ bool mtcTimer_expired ( struct mtc_timer * mtcTimer_ptr )
 {
     if ( mtcTimer_ptr )
     {
+        bool expired = false;
         if (( mtcTimer_ptr->ring   == true  ) ||
-            ( mtcTimer_ptr->active == false ) ||
-            ( mtcTimer_ptr->tid    == NULL  ))
+            ( mtcTimer_ptr->active == false ))
         {
-            return (true);
+            expired = true;
         }
+        #ifdef DEBIAN_BULLSEYE
+        if ( !expired && mtcTimer_ptr->tid == NULL )
+        {
+            expired = true;
+        }
+        #endif
+        return (expired);
     }
     return (false);
 }
@@ -315,7 +358,12 @@ bool mtcTimer_expired ( struct mtc_timer * mtcTimer_ptr )
 
 void mtcTimer_reset ( struct mtc_timer & mtcTimer )
 {
+    /* TRIXIE FIX: Use active flag instead of tid check, since tid can be 0 in glibc 2.36+ */
+    #ifdef DEBIAN_BULLSEYE
     if ( mtcTimer.tid )
+    #else
+    if ( mtcTimer.active )
+    #endif
         _timer_stop ( &mtcTimer , false );
 
     if ( mtcTimer.active )
@@ -328,7 +376,12 @@ void mtcTimer_reset ( struct mtc_timer * mtcTimer_ptr )
 {
     if ( mtcTimer_ptr )
     {
+        /* TRIXIE FIX: Use active flag instead of tid check, since tid can be 0 in glibc 2.36+ */
+        #ifdef DEBIAN_BULLSEYE
         if ( mtcTimer_ptr->tid )
+        #else
+        if ( mtcTimer_ptr->active )
+        #endif
             _timer_stop ( mtcTimer_ptr , false );
 
         if ( mtcTimer_ptr->active )
@@ -464,7 +517,13 @@ void _timer_init ( struct mtc_timer * mtcTimer_ptr , string hostname, string ser
     else
         mtcTimer_ptr->service = service ;
 
+#ifdef DEBIAN_BULLSEYE
     if (( mtcTimer_ptr->init == TIMER_INIT_SIGNATURE ) && ( mtcTimer_ptr->tid != NULL ))
+#else
+    /* TRIXIE FIX: Use active flag instead of tid != NULL check, since tid can be 0 in glibc 2.36+ */
+    if (( mtcTimer_ptr->init == TIMER_INIT_SIGNATURE ) && ( mtcTimer_ptr->active == true ))
+#endif
+
     {
         slog ("%s '%s' service is unexpectedly re-initializated ; stopping active timer\n",
                   hostname.c_str(),
@@ -544,26 +603,23 @@ static struct mtc_timer waitTimer ;
 
 static void waitTimer_handler ( int sig, siginfo_t *si, void *uc)
 {
-    timer_t * tid_ptr = (void**)si->si_value.sival_ptr ;
-
-    /* Avoid compiler errors/warnings for parms we must
-     * have but currently do nothing with */
     UNUSED(sig);
     UNUSED(uc);
-    if ( !(*tid_ptr) )
+
+    struct mtc_timer * fired = (struct mtc_timer *)si->si_value.sival_ptr ;
+    if ( fired == NULL )
     {
         return ;
     }
-    /* is base mtc timer */
-    else if (( *tid_ptr == waitTimer.tid ) )
+    else if ( fired == &waitTimer )
     {
         waitTimer.ring = true ;
         mtcTimer_stop ( waitTimer );
     }
     else
     {
-        wlog ("Unexpected timer (%p)\n", *tid_ptr );
-        mtcTimer_stop_tid ( tid_ptr );
+        wlog ("Unexpected timer (%p)\n", fired );
+        mtcTimer_stop_tid ( &fired->tid );
     }
 }
 
@@ -603,4 +659,5 @@ void mtcTimer_mem_log ( void )
     char str [64] ;
     sprintf ( str, "Working Timers: %d\n", timer_count );
     mem_log ( str );
+
 }

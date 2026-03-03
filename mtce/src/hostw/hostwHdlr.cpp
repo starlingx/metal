@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2016,2023 Wind River Systems, Inc.
+ * Copyright (c) 2015-2016,2023,2026 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -88,19 +88,19 @@ static struct mtc_timer pmonTimer ;
 
 void hostwTimer_handler ( int sig, siginfo_t *si, void *uc)
 {
-    timer_t * tid_ptr = (void**)si->si_value.sival_ptr ;
+    struct mtc_timer * fired = (struct mtc_timer *)si->si_value.sival_ptr ;
 
     /* Avoid compiler errors/warnings for parms we must
      * have but currently do nothing with */
     UNUSED(sig);
     UNUSED(uc);
 
-    if ( !(*tid_ptr) )
+    if ( fired == NULL )
         return ;
-    else if (( *tid_ptr == pmonTimer.tid ) )
+    else if ( fired == &pmonTimer )
         pmonTimer.ring = true ;
     else
-        mtcTimer_stop_tid_int_safe ( tid_ptr );
+        mtcTimer_stop_tid_int_safe ( &fired->tid );
 }
 
 /***************************************************************************

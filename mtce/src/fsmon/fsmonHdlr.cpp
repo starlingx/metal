@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016, 2023 Wind River Systems, Inc.
+ * Copyright (c) 2013, 2016, 2023, 2026 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -52,27 +52,26 @@ void daemon_sigchld_hdlr ( void )
 /* Looks up the timer ID and asserts the corresponding ringer */
 void fsmon_timer_handler ( int sig, siginfo_t *si, void *uc)
 {
-    timer_t * tid_ptr = (void**)si->si_value.sival_ptr ;
+    struct mtc_timer * fired = (struct mtc_timer *)si->si_value.sival_ptr ;
    
     /* Avoid compiler errors/warnings for parms we must
      * have but currently do nothing with */
     UNUSED(sig);
     UNUSED(uc);    
  
-    if ( !(*tid_ptr) )
+    if ( fired == NULL )
     {
-        // tlog ("Called with a NULL Timer ID\n");
         return ;
     }
 
     /* is event ids fsmon timer */
-    if ( *tid_ptr == mtcTimer_audit.tid )
+    if ( fired == &mtcTimer_audit )
     {
         mtcTimer_stop_int_safe ( mtcTimer_audit );
         mtcTimer_audit.ring = true ;
         return ;
     }
-    mtcTimer_stop_tid_int_safe (tid_ptr);
+    mtcTimer_stop_tid_int_safe ( &fired->tid );
 }
 
 

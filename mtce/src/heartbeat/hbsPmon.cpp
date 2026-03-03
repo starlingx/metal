@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015 Wind River Systems, Inc.
+ * Copyright (c) 2013, 2015, 2026 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -98,18 +98,18 @@ struct mtc_timer _timer ;
 
 void hbs_recovery_timer_handler ( int sig, siginfo_t *si, void *uc)
 {
-    timer_t * tid_ptr = (void**)si->si_value.sival_ptr ;
+    struct mtc_timer * fired = (struct mtc_timer *)si->si_value.sival_ptr ;
    
     /* Avoid compiler errors/warnings for parms we must
      * have but currently do nothing with */
     UNUSED(sig);
     UNUSED(uc); 
-    if ( !(*tid_ptr) )
+    if ( fired == NULL )
     {
-        tlog ("Called with a NULL Timer ID\n");
+        tlog ("Called with a NULL Timer pointer\n");
         return ;
     }
-    else if (( *tid_ptr == _timer.tid ) )
+    else if ( fired == &_timer )
     {
         _timer.ring = true ;
     }

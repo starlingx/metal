@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2017, 2025 Wind River Systems, Inc.
+ * Copyright (c) 2013-2017, 2025-2026 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -170,7 +170,7 @@ void daemon_sigchld_hdlr ( void )
 /* Looks up the timer ID and asserts the corresponding ringer */
 void hwmonHostClass::timer_handler ( int sig, siginfo_t *si, void *uc)
 {
-    timer_t * tid_ptr = (void**)si->si_value.sival_ptr ;
+    struct mtc_timer * fired = (struct mtc_timer *)si->si_value.sival_ptr ;
     struct hwmonHostClass::hwmon_host * hwmon_host_ptr ;
 
     /* Avoid compiler errors/warnings for parms we must
@@ -178,30 +178,26 @@ void hwmonHostClass::timer_handler ( int sig, siginfo_t *si, void *uc)
     UNUSED(sig);
     UNUSED(uc);
 
-    if ( tid_ptr == NULL )
-    {
-        return ;
-    }
-    else if ( *tid_ptr == NULL )
+    if ( fired == NULL )
     {
         return ;
     }
 
     /* Audit Timer */
-    else if ( *tid_ptr == hwmonTimer_audit.tid )
+    else if ( fired == &hwmonTimer_audit )
     {
         hwmonTimer_audit.ring = true ;
         return ;
     }
     /* Token refresh Timer */
-    else if ( *tid_ptr == hwmonTimer_token.tid )
+    else if ( fired == &hwmonTimer_token )
     {
         mtcTimer_stop_int_safe ( hwmonTimer_token );
         hwmonTimer_token.ring = true ;
         return ;
     }
 #ifdef WANT_FIT_TESTING
-    else if (( *tid_ptr == hwmonTimer_fit.tid ) )
+    else if ( fired == &hwmonTimer_fit )
     {
         slog ("%s FIT timer ring", hwmonTimer_fit.hostname.c_str());
         mtcTimer_stop_int_safe ( hwmonTimer_fit );
@@ -213,55 +209,57 @@ void hwmonHostClass::timer_handler ( int sig, siginfo_t *si, void *uc)
 #endif
     else
     {
-        hwmon_host_ptr = getHost_timer ( *tid_ptr ) ;
-        if ( hwmon_host_ptr )
+        for ( hwmon_host_ptr = hwmon_head ; hwmon_host_ptr != NULL ; hwmon_host_ptr = hwmon_host_ptr->next )
         {
-            if (( *tid_ptr == hwmon_host_ptr->monitor_ctrl.timer.tid ) )
+            if ( fired == &hwmon_host_ptr->monitor_ctrl.timer )
             {
                 mtcTimer_stop_int_safe ( hwmon_host_ptr->monitor_ctrl.timer );
                 hwmon_host_ptr->monitor_ctrl.timer.ring = true ;
                 return ;
             }
-            else if (( *tid_ptr == hwmon_host_ptr->bmc_thread_ctrl.timer.tid ) )
+            else if ( fired == &hwmon_host_ptr->bmc_thread_ctrl.timer )
             {
                 mtcTimer_stop_int_safe ( hwmon_host_ptr->bmc_thread_ctrl.timer );
                 hwmon_host_ptr->bmc_thread_ctrl.timer.ring = true ;
                 return ;
             }
-            else if (( *tid_ptr == hwmon_host_ptr->ping_info.timer.tid ) )
+            else if ( fired == &hwmon_host_ptr->ping_info.timer )
             {
                 mtcTimer_stop_int_safe ( hwmon_host_ptr->ping_info.timer );
                 hwmon_host_ptr->ping_info.timer.ring = true ;
                 return ;
             }
-            else if (( *tid_ptr == hwmon_host_ptr->hostTimer.tid ) )
+            else if ( fired == &hwmon_host_ptr->hostTimer )
             {
                 mtcTimer_stop_int_safe ( hwmon_host_ptr->hostTimer );
                 hwmon_host_ptr->hostTimer.ring = true ;
                 return ;
             }
-            else if (( *tid_ptr == hwmon_host_ptr->addTimer.tid ) )
+            else if ( fired == &hwmon_host_ptr->addTimer )
             {
                 mtcTimer_stop_int_safe ( hwmon_host_ptr->addTimer );
                 hwmon_host_ptr->addTimer.ring = true ;
                 return ;
             }
-            else if (( *tid_ptr == hwmon_host_ptr->relearnTimer.tid ) )
+            else if ( fired == &hwmon_host_ptr->relearnTimer )
             {
                 mtcTimer_stop_int_safe ( hwmon_host_ptr->relearnTimer );
                 hwmon_host_ptr->relearnTimer.ring = true ;
                 hwmon_host_ptr->relearn = false ;
                 return ;
             }
-            else if (( *tid_ptr == hwmon_host_ptr->secretTimer.tid ) )
+            else if ( fired == &hwmon_host_ptr->secretTimer )
             {
                 mtcTimer_stop_int_safe ( hwmon_host_ptr->secretTimer );
                 hwmon_host_ptr->secretTimer.ring = true ;
                 return ;
             }
+
+            if ( hwmon_host_ptr->next == NULL )
+                break ;
         }
     }
-    mtcTimer_stop_tid_int_safe (tid_ptr);
+    mtcTimer_stop_tid_int_safe (&fired->tid);
 }
 
 #ifdef WANT_SENSOR_TOGGLE

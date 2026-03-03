@@ -123,40 +123,40 @@ void timer_handler ( int sig, siginfo_t *si, void *uc)
     UNUSED(si);
     UNUSED(uc);
 
-    timer_t * tid_ptr = (void**)si->si_value.sival_ptr ;
+    struct mtc_timer * fired = (struct mtc_timer *)si->si_value.sival_ptr ;
 
-    if ( !(*tid_ptr) )
+    if ( fired == NULL )
     {
         return ;
     }
-    else if ( *tid_ptr == ctrl.timer.tid )
+    else if ( fired == &ctrl.timer )
     {
         mtcTimer_stop_int_safe ( ctrl.timer );
         ctrl.timer.ring = true ;
     }
-    else if ( *tid_ptr == ctrl.goenabled.timer.tid )
+    else if ( fired == &ctrl.goenabled.timer )
     {
         mtcTimer_stop_int_safe ( ctrl.goenabled.timer );
         ctrl.goenabled.timer.ring = true ;
     }
-    else if ( *tid_ptr == ctrl.hostservices.timer.tid )
+    else if ( fired == &ctrl.hostservices.timer )
     {
         mtcTimer_stop_int_safe ( ctrl.hostservices.timer );
         ctrl.hostservices.timer.ring = true ;
     }
-    else if ( *tid_ptr == ctrl.peer_ctrlr_reset.sync_timer.tid )
+    else if ( fired == &ctrl.peer_ctrlr_reset.sync_timer )
     {
         ctrl.peer_ctrlr_reset.sync_timer.ring = true ;
         mtcTimer_stop_int_safe ( ctrl.peer_ctrlr_reset.sync_timer );
     }
-    else if ( *tid_ptr == ctrl.peer_ctrlr_reset.audit_timer.tid )
+    else if ( fired == &ctrl.peer_ctrlr_reset.audit_timer )
     {
         /* use auto restart */
         ctrl.peer_ctrlr_reset.audit_timer.ring = true ;
     }
     else
     {
-        mtcTimer_stop_tid_int_safe ( tid_ptr );
+        mtcTimer_stop_tid_int_safe ( &fired->tid );
     }
 }
 

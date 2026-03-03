@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2020, 2023-2025 Wind River Systems, Inc.
+ * Copyright (c) 2013-2020, 2023-2026 Wind River Systems, Inc.
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -108,89 +108,174 @@ void mtcTimer_handler ( int sig, siginfo_t *si, void *uc);
 void nodeLinkClass::timer_handler ( int sig, siginfo_t *si, void *uc)
 {
     struct nodeLinkClass::node * node_ptr ;
-    timer_t * tid_ptr = (void**)si->si_value.sival_ptr ;
+
+    /* sival_ptr points directly to the mtc_timer struct that fired.
+     * This avoids relying on tid values for identification
+     * (tid can be 0 in glibc 2.36+) and avoids needing unique
+     * RT signals per timer. */
+    struct mtc_timer * fired = (struct mtc_timer *)si->si_value.sival_ptr ;
 
     /* Avoid compiler errors/warnings for parms we must
      * have but currently do nothing with */
     sig=sig ; uc = uc ;
 
-    if ( !(*tid_ptr) )
+    if ( fired == NULL )
     {
-        // tlog ("Called with a NULL Timer ID\n");
+        // tlog ("Called with a NULL Timer pointer\n");
         return ;
     }
 
-    /* Is this an offline timer */
-    node_ptr = get_offline_timer ( *tid_ptr );
-    if ( node_ptr )
+    /* Search per-host timers */
+    for ( node_ptr = head ; node_ptr != NULL ; node_ptr = node_ptr->next )
     {
-        // tlog ("%s offline timer ring\n", node_ptr->hostname.c_str());
-        mtcTimer_stop_int_safe ( node_ptr->offline_timer );
-        node_ptr->offline_timer.ring = true ;
-        return ;
+        if ( fired == &node_ptr->offline_timer )
+        {
+            mtcTimer_stop_int_safe ( node_ptr->offline_timer );
+            node_ptr->offline_timer.ring = true ;
+            return ;
+        }
+        if ( fired == &node_ptr->online_timer )
+        {
+            mtcTimer_stop_int_safe ( node_ptr->online_timer );
+            node_ptr->online_timer.ring = true ;
+            return ;
+        }
+        if ( fired == &node_ptr->mtcAlive_timer )
+        {
+            mtcTimer_stop_int_safe ( node_ptr->mtcAlive_timer );
+            node_ptr->mtcAlive_timer.ring = true ;
+            return ;
+        }
+        if ( fired == &node_ptr->mtcCmd_timer )
+        {
+            mtcTimer_stop_int_safe ( node_ptr->mtcCmd_timer );
+            node_ptr->mtcCmd_timer.ring = true ;
+            return ;
+        }
+        if ( fired == &node_ptr->insvTestTimer )
+        {
+            mtcTimer_stop_int_safe ( node_ptr->insvTestTimer );
+            node_ptr->insvTestTimer.ring = true ;
+            return ;
+        }
+        if ( fired == &node_ptr->oosTestTimer )
+        {
+            mtcTimer_stop_int_safe ( node_ptr->oosTestTimer );
+            node_ptr->oosTestTimer.ring = true ;
+            return ;
+        }
+        if ( fired == &node_ptr->mtcSwact_timer )
+        {
+            mtcTimer_stop_int_safe ( node_ptr->mtcSwact_timer );
+            node_ptr->mtcSwact_timer.ring = true ;
+            return ;
+        }
+        if ( fired == &node_ptr->http_timer )
+        {
+            mtcTimer_stop_int_safe ( node_ptr->http_timer );
+            node_ptr->http_timer.ring = true ;
+            if ( node_ptr->http_timer.mutex == true )
+                node_ptr->http_timer.error = true ;
+            return ;
+        }
+        if ( fired == &node_ptr->mtcTimer )
+        {
+            mtcTimer_stop_int_safe ( node_ptr->mtcTimer );
+            node_ptr->mtcTimer.ring = true ;
+            return ;
+        }
+        if ( fired == &node_ptr->mtcConfig_timer )
+        {
+            mtcTimer_stop_int_safe ( node_ptr->mtcConfig_timer );
+            node_ptr->mtcConfig_timer.ring = true ;
+            return ;
+        }
+        if ( fired == &node_ptr->bmc_thread_ctrl.timer )
+        {
+            mtcTimer_stop_int_safe ( node_ptr->bmc_thread_ctrl.timer );
+            node_ptr->bmc_thread_ctrl.timer.ring = true ;
+            return ;
+        }
+        if ( fired == &node_ptr->bm_ping_info.timer )
+        {
+            mtcTimer_stop_int_safe ( node_ptr->bm_ping_info.timer );
+            node_ptr->bm_ping_info.timer.ring = true ;
+            return ;
+        }
+        if ( fired == &node_ptr->bm_timer )
+        {
+            mtcTimer_stop_int_safe ( node_ptr->bm_timer );
+            node_ptr->bm_timer.ring = true ;
+            return ;
+        }
+        if ( fired == &node_ptr->bmc_access_timer )
+        {
+            mtcTimer_stop_int_safe ( node_ptr->bmc_access_timer );
+            node_ptr->bmc_access_timer.ring = true ;
+            return ;
+        }
+        if ( fired == &node_ptr->bmc_audit_timer )
+        {
+            mtcTimer_stop_int_safe ( node_ptr->bmc_audit_timer );
+            node_ptr->bmc_audit_timer.ring = true ;
+            return ;
+        }
+        if ( fired == &node_ptr->host_services_timer )
+        {
+            mtcTimer_stop_int_safe ( node_ptr->host_services_timer );
+            node_ptr->host_services_timer.ring = true ;
+            return ;
+        }
+        if ( fired == &node_ptr->hwmon_powercycle.recovery_timer )
+        {
+            if ( node_ptr->hwmon_powercycle.attempts )
+            {
+                tlog ("%s powercycle monitor completed successfully after attempt %d\n",
+                          node_ptr->hostname.c_str(),
+                          node_ptr->hwmon_powercycle.attempts);
+            }
+            recovery_ctrl_init ( node_ptr->hwmon_powercycle );
+            if (( node_ptr->adminAction == MTC_ADMIN_ACTION__NONE ) &&
+                ( node_ptr->availStatus != MTC_AVAIL_STATUS__POWERED_OFF ))
+            {
+               node_ptr->clear_task = true ;
+            }
+            mtcTimer_stop_int_safe ( node_ptr->hwmon_powercycle.recovery_timer );
+            node_ptr->hwmon_powercycle.recovery_timer.ring = true ;
+            return ;
+        }
+        if ( fired == &node_ptr->hwmon_powercycle.control_timer )
+        {
+            mtcTimer_stop_int_safe ( node_ptr->hwmon_powercycle.control_timer );
+            node_ptr->hwmon_powercycle.control_timer.ring = true ;
+            return ;
+        }
+        if ( fired == &node_ptr->hwmon_reset.recovery_timer )
+        {
+            tlog ("%s clearing hwmon reset holdoff timer\n",
+                      node_ptr->hostname.c_str());
+            recovery_ctrl_init ( node_ptr->hwmon_reset );
+            mtcTimer_stop_int_safe ( node_ptr->hwmon_reset.recovery_timer );
+            node_ptr->hwmon_reset.recovery_timer.ring = true ;
+            return ;
+        }
+        if ( fired == &node_ptr->hwmon_reset.control_timer )
+        {
+            tlog ("%s ringing hwmon reset control timer\n",
+                      node_ptr->hostname.c_str());
+            mtcTimer_stop_int_safe ( node_ptr->hwmon_reset.control_timer );
+            node_ptr->hwmon_reset.control_timer.ring = true ;
+            return ;
+        }
+
+        if ( node_ptr->next == NULL )
+            break ;
     }
 
-   /* Is this TID a online timer TID ? */
-    node_ptr = get_online_timer ( *tid_ptr );
-    if ( node_ptr )
-    {
-        mtcTimer_stop_int_safe ( node_ptr->online_timer );
-        node_ptr->online_timer.ring = true ;
-        return ;
-    }
-
-    /* Is this TID a mtcAlive timer TID ? */
-    node_ptr = get_mtcAlive_timer ( *tid_ptr );
-    if ( node_ptr )
-    {
-        // tlog ("%s MtcAlive 'offline' timer ring\n", node_ptr->hostname.c_str());
-        mtcTimer_stop_int_safe ( node_ptr->mtcAlive_timer );
-        node_ptr->mtcAlive_timer.ring = true ;
-        return ;
-    }
-
-    /* Is this TID a for the command FSM */
-    node_ptr = get_mtcCmd_timer ( *tid_ptr );
-    if ( node_ptr )
-    {
-        // tlog ("%s Mtc Command FSM timer ring\n", node_ptr->hostname.c_str());
-        mtcTimer_stop_int_safe ( node_ptr->mtcCmd_timer );
-        node_ptr->mtcCmd_timer.ring = true ;
-        return ;
-    }
-
-    /* Is this TID a inservice test timer TID ? */
-    node_ptr = get_insvTestTimer ( *tid_ptr );
-    if ( node_ptr )
-    {
-        // tlog ("%s Insv Test timer ring\n", node_ptr->hostname.c_str());
-        mtcTimer_stop_int_safe ( node_ptr->insvTestTimer );
-        node_ptr->insvTestTimer.ring = true ;
-        return ;
-    }
-
-    /* Is this TID a out-of-service test timer TID ? */
-    node_ptr = get_oosTestTimer ( *tid_ptr );
-    if ( node_ptr )
-    {
-        // tlog ("%s Oos Test timer ring\n", node_ptr->hostname.c_str());
-        mtcTimer_stop_int_safe ( node_ptr->oosTestTimer );
-        node_ptr->oosTestTimer.ring = true ;
-        return ;
-    }
-
-    /* Is this TID a swact timer TID ? */
-    node_ptr = get_mtcSwact_timer ( *tid_ptr );
-    if ( node_ptr )
-    {
-        // tlog ("%s Swact Timer ring\n", node_ptr->hostname.c_str());
-        mtcTimer_stop_int_safe ( node_ptr->mtcSwact_timer );
-        node_ptr->mtcSwact_timer.ring = true ;
-        return ;
-    }
+    /* Check global (non-per-host) timers */
 
     /* Dead Office Recovery Mode Timer */
-    if ( *tid_ptr == mtcTimer_dor.tid )
+    if ( fired == &mtcTimer_dor )
     {
         mtcTimer_stop_int_safe ( mtcTimer_dor );
         mtcTimer_dor.ring = true ;
@@ -198,67 +283,54 @@ void nodeLinkClass::timer_handler ( int sig, siginfo_t *si, void *uc)
         return ;
     }
 
-    /* Multi-Node Failure Avoidance Timer ? */
-    if ( *tid_ptr == mtcTimer_mnfa.tid )
+    /* Multi-Node Failure Avoidance Timer */
+    if ( fired == &mtcTimer_mnfa )
     {
-        // tlog ("%s Mnfa timer ring\n", mtcTimer_mnfa.hostname.c_str());
         mtcTimer_stop_int_safe ( mtcTimer_mnfa );
         mtcTimer_mnfa.ring = true ;
         return ;
     }
 
-    /* is base mtc timer */
-    if ( *tid_ptr == mtcTimer.tid )
+    /* base mtc timer */
+    if ( fired == &mtcTimer )
     {
-        // tlog ("%s Mtc timer ring\n", mtcTimer.hostname.c_str());
         mtcTimer_stop_int_safe ( mtcTimer );
         mtcTimer.ring = true ;
         return ;
     }
 
-    /* is uptime refresh timer ? */
-    if ( *tid_ptr == mtcTimer_uptime.tid )
+    /* uptime refresh timer */
+    if ( fired == &mtcTimer_uptime )
     {
-        // tlog ("%s Uptime 'refresh' timer ring\n", mtcTimer_uptime.hostname.c_str());
         mtcTimer_stop_int_safe ( mtcTimer_uptime );
         mtcTimer_uptime.ring = true ;
 
-        /* This timer provides self corrective action handler as a secondary service
-         * Currently it looks for the following ...
-         *
-         * 1. Stuck libevent smgrEvent.mutex gate and frees it after 5 uptime intervals
-         *
-         **/
         if ( smgrEvent.mutex )
         {
             daemon_config_type * cfg_ptr = daemon_get_cfg_ptr();
-
-            /* Clear this mutex flag if stuck for more than 5 minutes */
             if ( ++smgrEvent.stuck > ((cfg_ptr->swact_timeout/60)+1))
             {
-                // wlog ("Swact Mutex found stuck and has been auto cleared\n");
                 smgrEvent.stuck = 0     ;
                 smgrEvent.mutex = false ;
             }
         }
         else
         {
-            /* Clear the stuck count */
             smgrEvent.stuck = 0 ;
         }
         return ;
     }
-    /* is keystone token refresh timer ? */
-    if (( *tid_ptr == mtcTimer_token.tid ) )
+
+    /* keystone token refresh timer */
+    if ( fired == &mtcTimer_token )
     {
-        // tlog ("%s Token 'refresh' timer ring\n", mtcTimer_token.hostname.c_str());
         mtcTimer_stop_int_safe ( mtcTimer_token );
         mtcTimer_token.ring = true ;
         return ;
     }
 
 #ifdef WANT_FIT_TESTING
-    if (( *tid_ptr == mtcTimer_fit.tid ) )
+    if ( fired == &mtcTimer_fit )
     {
         slog ("%s FIT timer ring", mtcTimer_fit.hostname.c_str());
         mtcTimer_stop_int_safe ( mtcTimer_fit );
@@ -270,202 +342,15 @@ void nodeLinkClass::timer_handler ( int sig, siginfo_t *si, void *uc)
 #endif
 
     /* daemon main loop timer */
-    if ( *tid_ptr == mtcTimer_loop.tid )
+    if ( fired == &mtcTimer_loop )
     {
         mtcTimer_stop_int_safe ( mtcTimer_loop );
         mtcTimer_loop.ring = true ;
         return ;
     }
 
-    /* is the http request timer ? */
-    node_ptr = get_http_timer ( *tid_ptr );
-    if ( node_ptr )
-    {
-        // tlog ("%s Http timer ring\n", node_ptr->http_timer.hostname.c_str());
-        mtcTimer_stop_int_safe ( node_ptr->http_timer );
-        node_ptr->http_timer.ring = true ;
-
-        if ( node_ptr->http_timer.mutex == true )
-            node_ptr->http_timer.error = true ;
-
-        return ;
-    }
-
-    /* get the node */
-    node_ptr = get_mtcTimer_timer ( *tid_ptr );
-    if ( node_ptr )
-    {
-        // tlog ("%s Timer ring\n", node_ptr->hostname.c_str());
-        mtcTimer_stop_int_safe ( node_ptr->mtcTimer );
-        node_ptr->mtcTimer.ring = true ;
-        return ;
-    }
-
-    /* Is this TID a config timer TID ? */
-    node_ptr = get_mtcConfig_timer ( *tid_ptr );
-    if ( node_ptr )
-    {
-        // tlog ("%s Config Timer ring\n", node_ptr->hostname.c_str());
-        mtcTimer_stop_int_safe ( node_ptr->mtcConfig_timer );
-        node_ptr->mtcConfig_timer.ring = true ;
-        return ;
-    }
-
-    /* is the thread timer ? */
-    node_ptr = get_thread_timer ( *tid_ptr );
-    if ( node_ptr )
-    {
-        mtcTimer_stop_int_safe ( node_ptr->bmc_thread_ctrl.timer );
-        node_ptr->bmc_thread_ctrl.timer.ring = true ;
-        return ;
-    }
-
-    /* is the ping timer ? */
-    node_ptr = get_ping_timer ( *tid_ptr );
-    if ( node_ptr )
-    {
-        /* is this the bm ping timer */
-        if ( *tid_ptr == node_ptr->bm_ping_info.timer.tid )
-        {
-            mtcTimer_stop_int_safe ( node_ptr->bm_ping_info.timer );
-            node_ptr->bm_ping_info.timer.ring = true ;
-            return ;
-        }
-        /* there may be other ping timers introduced later */
-    }
-
-    /* is the bmc handler timer ? */
-    node_ptr = get_bm_timer ( *tid_ptr );
-    if ( node_ptr )
-    {
-        /* is this the bm ping timer */
-        if ( *tid_ptr == node_ptr->bm_timer.tid )
-        {
-            mtcTimer_stop_int_safe ( node_ptr->bm_timer );
-            node_ptr->bm_timer.ring = true ;
-            return ;
-        }
-    }
-
-    /* is the bmc handler timer ? */
-    node_ptr = get_bmc_access_timer ( *tid_ptr );
-    if ( node_ptr )
-    {
-        /* is this the bm ping timer */
-        if ( *tid_ptr == node_ptr->bmc_access_timer.tid )
-        {
-            mtcTimer_stop_int_safe ( node_ptr->bmc_access_timer );
-            node_ptr->bmc_access_timer.ring = true ;
-            return ;
-        }
-    }
-
-    /* is the bmc audit timer ? */
-    node_ptr = get_bmc_audit_timer ( *tid_ptr );
-    if ( node_ptr )
-    {
-        /* is this the bm ping timer */
-        if ( *tid_ptr == node_ptr->bmc_audit_timer.tid )
-        {
-            mtcTimer_stop_int_safe ( node_ptr->bmc_audit_timer );
-            node_ptr->bmc_audit_timer.ring = true ;
-            return ;
-        }
-    }
-
-    /* is the host services handler timer ? */
-    node_ptr = get_host_services_timer ( *tid_ptr );
-    if ( node_ptr )
-    {
-        /* is this the bm ping timer */
-        if ( *tid_ptr == node_ptr->host_services_timer.tid )
-        {
-            mtcTimer_stop_int_safe ( node_ptr->host_services_timer );
-            node_ptr->host_services_timer.ring = true ;
-            return ;
-        }
-    }
-
-    node_ptr = get_powercycle_recovery_timer ( *tid_ptr );
-    if ( node_ptr )
-    {
-        if (( *tid_ptr == node_ptr->hwmon_powercycle.recovery_timer.tid ) )
-        {
-            if ( node_ptr->hwmon_powercycle.attempts )
-            {
-                tlog ("%s powercycle monitor completed successfully after attempt %d\n",
-                          node_ptr->hostname.c_str(),
-                          node_ptr->hwmon_powercycle.attempts);
-            }
-
-            recovery_ctrl_init ( node_ptr->hwmon_powercycle );
-
-            if (( node_ptr->adminAction == MTC_ADMIN_ACTION__NONE ) &&
-                ( node_ptr->availStatus != MTC_AVAIL_STATUS__POWERED_OFF ))
-            {
-               node_ptr->clear_task = true ;
-            }
-
-            /* cancel the timer */
-            mtcTimer_stop_int_safe ( node_ptr->hwmon_powercycle.recovery_timer );
-
-            node_ptr->hwmon_powercycle.recovery_timer.ring = true ;
-
-            return ;
-        }
-    }
-
-    node_ptr = get_powercycle_control_timer ( *tid_ptr );
-    if ( node_ptr )
-    {
-        if (( *tid_ptr == node_ptr->hwmon_powercycle.control_timer.tid ) )
-        {
-            /* cancel the timer */
-            mtcTimer_stop_int_safe ( node_ptr->hwmon_powercycle.control_timer );
-
-            node_ptr->hwmon_powercycle.control_timer.ring = true ;
-
-            return ;
-        }
-    }
-
-    /* Is this TID a reset recovery timer TID ? */
-    node_ptr = get_reset_recovery_timer ( *tid_ptr );
-    if ( node_ptr )
-    {
-        if (( *tid_ptr == node_ptr->hwmon_reset.recovery_timer.tid ) )
-        {
-            tlog ("%s clearing hwmon reset holdoff timer\n",
-                      node_ptr->hostname.c_str());
-
-            recovery_ctrl_init ( node_ptr->hwmon_reset );
-
-            mtcTimer_stop_int_safe ( node_ptr->hwmon_reset.recovery_timer );
-
-            node_ptr->hwmon_reset.recovery_timer.ring = true ;
-            return ;
-        }
-    }
-
-    /* Is this TID a reset control timer TID ? */
-    node_ptr = get_reset_control_timer ( *tid_ptr );
-    if ( node_ptr )
-    {
-        if (( *tid_ptr == node_ptr->hwmon_reset.control_timer.tid ) )
-        {
-            tlog ("%s ringing hwmon reset control timer\n",
-                      node_ptr->hostname.c_str());
-
-            mtcTimer_stop_int_safe ( node_ptr->hwmon_reset.control_timer );
-
-            node_ptr->hwmon_reset.control_timer.ring = true ;
-
-            return ;
-        }
-    }
-
-    /* cancel the timer by tid */
-    mtcTimer_stop_tid_int_safe ( tid_ptr );
+    /* Unknown timer - log and ignore */
+    mtcTimer_stop_tid_int_safe ( &fired->tid );
 }
 
 /* Inventory Object wrapper - does a node lookup and calls the timer handler */

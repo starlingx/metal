@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2017 Wind River Systems, Inc.
+ * Copyright (c) 2016-2017,2026 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -53,16 +53,16 @@ FMTimeT _fm_timestamp ( void )
 /** Daemon timer handler */
 void _timer_handler ( int sig, siginfo_t *si, void *uc)
 {
-    timer_t * tid_ptr = (void**)si->si_value.sival_ptr ;
+    struct mtc_timer * fired = (struct mtc_timer *)si->si_value.sival_ptr ;
     UNUSED(sig);
     UNUSED(uc);
-    if ( !(*tid_ptr) )
+    if ( fired == NULL )
     {
         return ;
     }
     else
     {
-        mtcTimer_stop_tid_int_safe (tid_ptr);
+        mtcTimer_stop_tid_int_safe ( &fired->tid );
     }
 }
 

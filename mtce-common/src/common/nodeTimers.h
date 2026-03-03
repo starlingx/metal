@@ -27,6 +27,20 @@
 #include <stdio.h>
 #include <time.h>
 #include <signal.h>
+#include <openssl/opensslv.h>
+
+/* DEBIAN_TRIXIE and DEBIAN_BULLSEYE are defined by Makefile based on lsb_release.
++ * Fallback to OpenSSL version check if not defined (for standalone compilation). */
+#ifndef DEBIAN_TRIXIE
+#ifndef DEBIAN_BULLSEYE
+ #if OPENSSL_VERSION_NUMBER >= 0x30000000L
+     #define DEBIAN_TRIXIE
+ #else
+     #define DEBIAN_BULLSEYE
+ #endif
+#endif
+#endif
+
 
 #define MAX_TIMER_DURATION (30000)
 
