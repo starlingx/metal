@@ -34,6 +34,11 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <regex>
+#include <openssl/opensslv.h>
+
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+    #include <openssl/evp.h>
+#endif
 
 using namespace std;
 
@@ -1279,8 +1284,25 @@ string md5sum_string ( string str )
     memset ( &digest, 0, MD5_DIGEST_LENGTH );
     memset ( &md5str, 0, MD5_STRING_LENGTH );
     
-    MD5 ((unsigned char*)str.data(), str.length(), (unsigned char*)&digest);    
- 
+    #if OPENSSL_VERSION_NUMBER < 0x30000000L
+        // Bullseye (OpenSSL 1.1)
+        MD5((unsigned char*)str.data(), str.length(), (unsigned char*)&digest);
+    #else
+        // Trixie (OpenSSL 3.x)
+        EVP_MD_CTX *ctx = EVP_MD_CTX_new();
+        if (ctx == NULL)
+        {
+            elog("md5sum_string: EVP_MD_CTX_new failed\n");
+            return ("");
+        }
+        unsigned int digest_len = 0;
+
+        EVP_DigestInit_ex(ctx, EVP_md5(), NULL);
+        EVP_DigestUpdate(ctx, str.data(), str.length());
+        EVP_DigestFinal_ex(ctx, (unsigned char *)&digest, &digest_len);
+        EVP_MD_CTX_free(ctx);
+    #endif
+
     for(int i = 0; i < MD5_DIGEST_LENGTH; i++)
         sprintf(&md5str[i*2], "%02x", (unsigned int)digest[i]);
  
