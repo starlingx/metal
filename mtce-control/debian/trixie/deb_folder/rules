@@ -10,7 +10,7 @@ export PMONDIR = usr/share/starlingx/pmon.d
 override_dh_auto_install:
 	$(MAKE) buildroot=$(ROOT) \
 		_sysconfdir=/etc \
-		_unitdir=/lib/systemd/system \
+		_unitdir=/usr/lib/systemd/system \
 		_datarootdir=/usr/share \
 		PMONDIR=$(PMONDIR) \
 		install
