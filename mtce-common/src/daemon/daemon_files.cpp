@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2019, 2025 Wind River Systems, Inc.
+ * Copyright (c) 2013-2019, 2025-2026 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -33,6 +33,7 @@ using namespace std;
 #include "daemon_option.h"
 #include "nodeBase.h"
 #include "nodeUtil.h"
+#include <openssl/evp.h>
 
 /* GNU Extension
  * program_invocation_name contains the name that was used to invoke the
@@ -789,67 +790,77 @@ char * daemon_get_iface_master ( char * iface_slave_ptr )
     return ( iface_slave_ptr );
 }
 
-string daemon_md5sum_file ( const char * file )
+string daemon_md5sum_file(const char *file)
 {
-    struct stat p ;
-    string md5sum = "" ;
+    string md5sum;
+    struct stat p {};
 
-    memset ( &p, 0 , sizeof(struct stat));
-    stat ( file, &p ) ;
-    if ((p.st_ino != 0 ) && (p.st_dev != 0))
+    if (stat(file, &p) != 0)
     {
-        /* add 256 bytes to the buffer just in case there are
-         * additions to the file by the time we start reading it */
-        int len = p.st_size+0x100 ;
-
-        char * buf_ptr = (char*)malloc(len) ;
-        char * buf_ptr_save = buf_ptr ;
-        if ( buf_ptr )
-        {
-            dlog ("%s is %ld bytes\n", file, p.st_size );
-
-            /* Open and read the file data */
-            FILE * file_ptr = fopen ( file, "r" ) ;
-            if ( file_ptr != NULL )
-            {
-                size_t l ;
-                unsigned char digest[MD5_DIGEST_LENGTH];
-                char md5str         [MD5_STRING_LENGTH];
-                memset ( &digest, 0, MD5_DIGEST_LENGTH);
-                memset ( &md5str, 0, MD5_STRING_LENGTH);
-
-                while ( fgets ( (char*)buf_ptr, BUFFER, file_ptr ) != NULL )
-                {
-                    l = strnlen ( buf_ptr_save, len );
-                    buf_ptr = buf_ptr_save+l ;
-                }
-                MD5 ( (unsigned char*)buf_ptr_save, strlen(buf_ptr_save), (unsigned char*)&digest);
-
-                for(int i = 0; i < MD5_DIGEST_LENGTH; i++)
-                    sprintf(&md5str[i*2], "%02x", (unsigned int)digest[i]);
-
-                dlog ("md5 digest: %s\n", md5str );
-                dlog3 ("file: %s\n", buf_ptr_save );
-
-                fclose(file_ptr);
-                md5sum = md5str ;
-            }
-            else
-            {
-                elog ("%s file open failed\n", file );
-            }
-            free (buf_ptr_save);
-        }
-        else
-        {
-            elog ("failed to allocate buffer memory for %s file md5sum calc\n", file );
-        }
+        wlog("%s file not present\n", file);
+        return md5sum;
     }
-    else
+
+    FILE *file_ptr = fopen(file, "rb");
+    if (!file_ptr)
     {
-        wlog ("%s file not present\n", file );
+        elog("%s file open failed\n", file);
+        return md5sum;
     }
-    return ( md5sum );
+
+    unsigned char digest[MD5_DIGEST_LENGTH];
+    unsigned char buf[BUFFER];
+    size_t bytes;
+
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
+    /* =========================
+     * Bullseye - OpenSSL 1.1
+     * ========================= */
+    MD5_CTX ctx;
+    MD5_Init(&ctx);
+
+    while ((bytes = fread(buf, 1, BUFFER, file_ptr)) > 0)
+        MD5_Update(&ctx, buf, bytes);
+
+    MD5_Final(digest, &ctx);
+
+#else
+    /* =========================
+     * Trixie - OpenSSL 3.x
+     * ========================= */
+    EVP_MD_CTX *ctx = EVP_MD_CTX_new();
+    if (!ctx)
+    {
+        fclose(file_ptr);
+        return md5sum;
+    }
+
+    if (EVP_DigestInit_ex(ctx, EVP_md5(), NULL) != 1)
+        goto cleanup;
+
+    while ((bytes = fread(buf, 1, BUFFER, file_ptr)) > 0)
+    {
+        if (EVP_DigestUpdate(ctx, buf, bytes) != 1)
+            goto cleanup;
+    }
+
+    if (EVP_DigestFinal_ex(ctx, digest, NULL) != 1)
+        goto cleanup;
+
+cleanup:
+    EVP_MD_CTX_free(ctx);
+#endif
+
+    fclose(file_ptr);
+
+    char md5str[MD5_STRING_LENGTH] = {};
+    for (int i = 0; i < MD5_DIGEST_LENGTH; i++)
+        sprintf(&md5str[i * 2], "%02x", digest[i]);
+
+    dlog("md5 digest: %s\n", md5str);
+    md5sum = md5str;
+
+    return md5sum;
 }
 
 // generate a md5sum signature for the Shadow entry
@@ -923,7 +934,21 @@ string get_shadow_signature ( char * shadowfile , const char * username,
     
                 memset ( &digest, 0, MD5_DIGEST_LENGTH );
                 memset ( &md5str, 0, MD5_STRING_LENGTH );
-                MD5 ((unsigned char*) shadowEntry, strlen(shadowEntry), (unsigned char*)&digest);
+                #if OPENSSL_VERSION_NUMBER < 0x30000000L 
+                    MD5((unsigned char*)shadowEntry, strlen(shadowEntry), (unsigned char*)&digest);
+                #else
+                    EVP_MD_CTX *ctx = EVP_MD_CTX_new();
+                    if (!ctx)
+                    {
+                        fclose(file_ptr);
+                        elog("EVP_MD_CTX_new failed\n");
+                        return ("");
+                    }
+                    EVP_DigestInit_ex(ctx, EVP_md5(), NULL);
+                    EVP_DigestUpdate(ctx, shadowEntry, strlen(shadowEntry));
+                    EVP_DigestFinal_ex(ctx, (unsigned char *)&digest, NULL);
+                    EVP_MD_CTX_free(ctx);
+                #endif
 
                 for(int i = 0; i < MD5_DIGEST_LENGTH; i++)
                     sprintf(&md5str[i*2], "%02x", (unsigned int)digest[i]);
