@@ -321,6 +321,8 @@ bool hbs_cluster_inject ( unsigned short controller, unsigned short hosts_enable
 void hbs_cluster_log  ( string & hostname,                                  string prefix, bool force=false );
 void hbs_cluster_log  ( string & hostname, mtce_hbs_cluster_type & cluster, string prefix, bool force=false );
 
+/* Update the heartbeat period stored in the Cluster Vault Info */
+void hbs_cluster_set_period ( int period );
 
 /* Service SM cluster info request */
 void hbs_sm_handler ( void );

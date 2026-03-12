@@ -260,7 +260,7 @@ static int hbs_config_handler ( void * user,
         if ( curr_period != hbsInv.hbs_pulse_period )
         {
             /* initialize cluster info */
-            hbs_cluster_init ( hbsInv.hbs_pulse_period, hbs_sock.sm_client_sock );
+            hbs_cluster_set_period ( hbsInv.hbs_pulse_period ) ;
         }
     }
 

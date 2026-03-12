@@ -143,6 +143,12 @@ void hbs_cluster_ctrl_init ( void )
     memset(&ctrl.storage_0_not_responding_count[0], 0, sizeof(ctrl.storage_0_not_responding_count));
 }
 
+void hbs_cluster_set_period ( int period )
+{
+    ilog ("Updating cluster info heartbeat period to %d msecs", period )
+    ctrl.cluster.period_msec = period ;
+}
+
 /****************************************************************************
  *
  * Name        : hbs_cluster_nums
