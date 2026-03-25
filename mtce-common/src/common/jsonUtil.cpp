@@ -199,10 +199,16 @@ string _json_get_key_value_string ( struct json_object * obj, const char * key )
     json_bool status = json_object_object_get_ex(obj, key, &key_obj );
     if ( ( status == true ) && ( key_obj ))
     {
+        string swactable_services_key = "swactable_services" ;
+        if ( !swactable_services_key.compare(key) )
+        {
+            ilog("%s: key:%s : obj_str:%s", swactable_services_key.c_str(), key, json_object_get_string(key_obj));
+        }
         value.append(json_object_get_string(key_obj));
     }
     else
     {
+        jlog3("none found for key: %s ; obj_str:%s (status:%d)", key, json_object_get_string(key_obj), status);
         value.append("none");
     }
     return ( value );

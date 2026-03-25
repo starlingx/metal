@@ -254,6 +254,8 @@ int mtcSmgrApi_service_state ( libEvent & event , bool & swactable_services )
          *   }
          */
 
+        ilog ("%s Swactable Services Query Response: %s", event.hostname.c_str(), event.response.c_str());
+
         int rc1 = jsonUtil_get_key_val((char*)event.response.c_str(),
                                   hostname_key, hn );
         int rc2 = jsonUtil_get_key_val((char*)event.response.c_str(),
@@ -286,11 +288,12 @@ int mtcSmgrApi_service_state ( libEvent & event , bool & swactable_services )
         }
         else
         {
-            elog ("%s Query Services Failed - %s service state (%s:%s)\n",
+            elog ("%s Query Services Failed - %s service state (%s:%s) - response:%s",
                       event.hostname.c_str(),
-                      yesno.c_str(),
+                      origin.c_str(),
                       hn.c_str(),
-                      yesno.c_str());
+                      yesno.c_str(),
+                      event.response.c_str());
         }
     }
     return (rc);
