@@ -10,11 +10,25 @@
         - metal-tox-linters
         - metal-tox-pep8
         - metal-tox-pylint
+        - metal-tox-coverage
+        - metal-tox-coverage-c:
+            voting: false
+        - metal-tox-pylint-trixie
+        - metal-tox-coverage-trixie
+        - metal-tox-coverage-c-trixie:
+            voting: false
+        - metal-tox-bandit-trixie
     gate:
       jobs:
         - metal-tox-linters
         - metal-tox-pep8
         - metal-tox-pylint
+        - metal-tox-coverage
+        - metal-tox-coverage-c
+        - metal-tox-pylint-trixie
+        - metal-tox-coverage-trixie
+        - metal-tox-coverage-c-trixie
+        - metal-tox-bandit-trixie
     post:
       jobs:
         - stx-metal-upload-git-mirror
@@ -24,6 +38,7 @@
     parent: tox
     description: Run linters for metal repo
     nodeset: debian-bullseye
+    post-run: tests/playbooks/upload-linter-reports.yaml
     vars:
       tox_envlist: linters
 
@@ -42,6 +57,57 @@
     nodeset: debian-bullseye
     vars:
       tox_envlist: pylint
+
+- job:
+    name: metal-tox-coverage
+    parent: tox
+    description: Run all tests with coverage analysis
+    nodeset: debian-bullseye
+    post-run: tests/playbooks/upload-coverage-reports.yaml
+    vars:
+      tox_envlist: coverage
+
+- job:
+    name: metal-tox-coverage-c
+    parent: tox
+    description: Run C/C++ coverage analysis via gcov/lcov
+    nodeset: debian-bullseye
+    vars:
+      tox_envlist: coverage-c
+
+- job:
+    name: metal-tox-coverage-c-trixie
+    parent: openstack-tox-py313
+    description: Run C/C++ coverage analysis via gcov/lcov (Trixie)
+    nodeset: debian-trixie-8GB
+    vars:
+      tox_envlist: coverage-c-trixie
+
+- job:
+    name: metal-tox-pylint-trixie
+    parent: openstack-tox-py313
+    description: Run pylint for metal repo (Trixie)
+    nodeset: debian-trixie-8GB
+    vars:
+      tox_envlist: pylint-trixie
+
+- job:
+    name: metal-tox-coverage-trixie
+    parent: openstack-tox-py313
+    description: Run all tests with coverage analysis (Trixie)
+    nodeset: debian-trixie-8GB
+    post-run: tests/playbooks/upload-coverage-reports.yaml
+    vars:
+      tox_envlist: coverage-trixie
+
+- job:
+    name: metal-tox-bandit-trixie
+    parent: openstack-tox-py313
+    description: Run security analysis with bandit (Trixie)
+    nodeset: debian-trixie-8GB
+    post-run: tests/playbooks/upload-security-reports.yaml
+    vars:
+      tox_envlist: bandit-trixie
 
 - job:
     name: flock-devstack-metal

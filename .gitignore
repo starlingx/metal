@@ -22,6 +22,7 @@ develop-eggs
 dist
 eggs
 sdist
+UTCoverage/
 
 # Docs Contrib Guide
 doc/build/

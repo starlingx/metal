@@ -1,0 +1,9 @@
+---
+- hosts: all
+  tasks:
+    - name: Upload linter report
+      synchronize:
+        src: "{{ zuul.project.src_dir }}/UTCoverage/lint_report.txt"
+        dest: "{{ zuul.executor.log_root }}/lint_report.txt"
+        mode: pull
+      failed_when: false
