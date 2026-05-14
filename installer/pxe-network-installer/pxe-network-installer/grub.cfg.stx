@@ -15,6 +15,8 @@ set kernel_params=""
 set kernel_params_ext=""
 set boot_failure="0"
 set system_mode="simplex"
+set install_bootnum=""
+set install_kargs=""
 
 if [ "${legacy_bios}" != "1" ]; then
     set boot_env_path=${prefix}
@@ -38,6 +40,13 @@ if [ -e ${boot_env_path}/boot.env ]; then
     save_env -f ${boot_env_path}/boot.env default
   fi
   save_env -f ${boot_env_path}/boot.env boot_failure
+fi
+
+if [ -n "${install_bootnum}" ]; then
+  get_efivar -f uint8 -s current_bootnum BootCurrent
+  if [ "${current_bootnum}" = "${install_bootnum}" ]; then
+    set default="local-factory-restore"
+  fi
 fi
 
 set partition_based_root="0"
@@ -184,4 +193,14 @@ else
       }
   fi
 
+fi
+
+if [ "${legacy_bios}" != "1" ] && [ -n "${install_kargs}" ]; then
+  menuentry "Local Factory Restore" --id=local-factory-restore --unrestricted {
+    set fallback=0
+    efi-watchdog enable 0 180
+    search --no-floppy --label --set=root ${boot_part}${boot_mode}
+    linux /install/vmlinuz ${install_kargs}
+    initrd /install/initramfs
+  }
 fi
