@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2013-2014, 2016, 2024 Wind River Systems, Inc.
+* Copyright (c) 2013-2014, 2016, 2024, 2026 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -136,8 +136,16 @@ int timeout_config_handler (       void * user,
     }
     else if (MATCH("timeouts", "swact_timeout"))
     {
+        string swact_timeout_override_str = "" ;
         config_ptr->swact_timeout = atoi(value);
-        ilog ("HA Swact TO : %3d secs\n" , config_ptr->swact_timeout);
+        if ( config_ptr->swact_timeout < MIN_SWACT_TIMEOUT )
+        {
+            config_ptr->swact_timeout = MIN_SWACT_TIMEOUT ;
+            swact_timeout_override_str = "(override)" ;
+        }
+        ilog ("HA Swact TO : %3d secs %s",
+                config_ptr->swact_timeout,
+                swact_timeout_override_str.c_str());
     }
     else if (MATCH("timeouts", "sysinv_noncrit_timeout"))
     {
@@ -151,8 +159,16 @@ int timeout_config_handler (       void * user,
     }
     else if (MATCH("timeouts", "uptime_period"))
     {
+        string uptime_period_override_str = "" ;
         config_ptr->uptime_period = atoi(value);
-        ilog ("Uptime Timer: %3d secs\n" , config_ptr->uptime_period);
+        if ( config_ptr->uptime_period < MIN_UPTIME_PERIOD )
+        {
+            config_ptr->uptime_period = MIN_UPTIME_PERIOD ;
+            uptime_period_override_str = "(override)" ;
+        }
+        ilog ("Uptime Timer: %3d secs %s" ,
+               config_ptr->uptime_period,
+               uptime_period_override_str.c_str());
     }
     else if (MATCH("timeouts", "online_period"))
     {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2018, 2024-2025 Wind River Systems, Inc.
+ * Copyright (c) 2013-2018, 2024-2026 Wind River Systems, Inc.
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -1196,15 +1196,6 @@ libEvent & nodeLinkClass::getEvent ( struct event_base * base_ptr)
                   base_ptr, &tokenEvent,
                   tokenEvent.active ? "Yes" : "No" );
         return (tokenEvent);
-    }
-
-    if ( base_ptr == (struct event_base *)&smgrEvent )
-    {
-        hlog1 ("%s Found libEvent Pointer (%p) smgrEvent (%p) Active : %s\n", 
-                  smgrEvent.log_prefix.c_str(), 
-                  base_ptr, &smgrEvent,
-                  smgrEvent.active ? "Yes" : "No" );
-        return (smgrEvent);
     }
 
     if ( base_ptr == (struct event_base *)&sysinvEvent )

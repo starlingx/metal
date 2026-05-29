@@ -337,20 +337,17 @@ nodeLinkClass::nodeLinkClass()
 
     /* Ensure that HA Swact gate is open on init.
      * This true gates maintenance commands */
-    smgrEvent.mutex = false ;
+    swact_mutex = false ;
+    swact_mutex_stuck = 0 ;
 
     /* Init the event bases to null as they have not been allocated yet */
     sysinvEvent.base = NULL ;
-    smgrEvent.base   = NULL ;
     tokenEvent.base  = NULL ;
     sysinvEvent.conn = NULL ;
-    smgrEvent.conn   = NULL ;
     tokenEvent.conn  = NULL ;
     sysinvEvent.req  = NULL ;
-    smgrEvent.req    = NULL ;
     tokenEvent.req   = NULL ;
     sysinvEvent.buf  = NULL ;
-    smgrEvent.buf    = NULL ;
     tokenEvent.buf   = NULL ;
 
     testmode = 0 ;
@@ -361,6 +358,56 @@ nodeLinkClass::nodeLinkClass()
 nodeLinkClass::~nodeLinkClass()
 {
     ;
+}
+
+/*****************************************************************************
+ *
+ * Name       : set_swact_mutex
+ *
+ * Description: Controls the state of the system-wide swact mutex gate.
+ *              All swact_mutex state changes go through this function
+ *              for tracking and FIT support.
+ *
+ *****************************************************************************/
+void nodeLinkClass::set_swact_mutex ( bool state )
+{
+#ifdef WANT_FIT_TESTING
+    if ( swact_mutex && !state &&
+         daemon_want_fit ( FIT_CODE__SET_SWACT_MUTEX, "controller" ) )
+    {
+        ilog ("FIT: blocking swact_mutex clear");
+        return ;
+    }
+#endif
+    if ( swact_mutex != state )
+    {
+        dlog ("swact_mutex: %d -> %d", swact_mutex, state);
+        swact_mutex = state ;
+    }
+    /* any explicit state set means it's not stuck */
+    swact_mutex_stuck = 0 ;
+}
+
+/* Update the per-host smgrEvent with callback result data */
+void nodeLinkClass::smgrEvent_callback_handler ( libEvent & event )
+{
+    struct node * node_ptr = getNode (event.hostname);
+    if ( node_ptr )
+    {
+        node_ptr->smgrEvent.done        = true ;
+        node_ptr->smgrEvent.active      = false ;
+        node_ptr->smgrEvent.status      = event.status   ;
+        node_ptr->smgrEvent.http_status = event.http_status ;
+        node_ptr->smgrEvent.result      = event.result   ;
+        node_ptr->smgrEvent.response    = event.response ;
+        node_ptr->smgrEvent.sequence    = event.sequence ;
+        node_ptr->smgrEvent.cur_retries = event.cur_retries ;
+    }
+    else
+    {
+        wlog ("%s smgrEvent_callback_handler failed to find node",
+                  event.hostname.c_str());
+    }
 }
 
 /* Clear all the main function enable failure bools */
@@ -690,6 +737,7 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
     ptr->cfgEvent.base   = NULL ;
     ptr->sysinvEvent.base= NULL ;
     ptr->vimEvent.base   = NULL ;
+    ptr->smgrEvent.base  = NULL ;
     ptr->secretEvent.base= NULL ;
 
     ptr->httpReq.base    = NULL ;
@@ -705,18 +753,21 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
     ptr->cfgEvent.conn   = NULL ;
     ptr->sysinvEvent.conn= NULL ;
     ptr->vimEvent.conn   = NULL ;
+    ptr->smgrEvent.conn  = NULL ;
     ptr->httpReq.conn    = NULL ;
     ptr->secretEvent.conn= NULL ;
 
     ptr->cfgEvent.req    = NULL ;
     ptr->sysinvEvent.req = NULL ;
     ptr->vimEvent.req    = NULL ;
+    ptr->smgrEvent.req   = NULL ;
     ptr->httpReq.req     = NULL ;
     ptr->secretEvent.req = NULL ;
 
     ptr->cfgEvent.buf    = NULL ;
     ptr->sysinvEvent.buf = NULL ;
     ptr->vimEvent.buf    = NULL ;
+    ptr->smgrEvent.buf   = NULL ;
     ptr->httpReq.buf     = NULL ;
     ptr->secretEvent.buf = NULL ;
 
@@ -931,6 +982,13 @@ int nodeLinkClass::remNode( string hostname )
 
     mtcTimer_fini ( ptr->mtcTimer );
     mtcTimer_fini ( ptr->mtcSwact_timer );
+
+    /* If this host had a swact in progress, clear the system-wide swact gate */
+    if (( ptr->adminAction == MTC_ADMIN_ACTION__SWACT ) ||
+        ( ptr->adminAction == MTC_ADMIN_ACTION__FORCE_SWACT ))
+    {
+        set_swact_mutex ( false );
+    }
     mtcTimer_fini ( ptr->mtcAlive_timer );
     mtcTimer_fini ( ptr->online_timer );
     mtcTimer_fini ( ptr->offline_timer );
@@ -2199,13 +2257,13 @@ int nodeLinkClass::mod_host ( node_inv_type & inv )
             /* Do not permit administrative actions while Swact is in progress */
             /* Note: There is a self corrective clause in the mtcTimer_handler
              * that will auto clear this flag if it gets stuck for 5 minutes */
-            if ( smgrEvent.mutex )
+            if ( swact_mutex )
             {
-                elog ("%s Rejecting '%s' - Swact Operation in-progress\n", 
+                elog ("%s Rejecting '%s' - Swact Operation in-progress\n",
                           node_ptr->hostname.c_str(), inv.action.c_str());
                 rc = FAIL_SWACT_INPROGRESS ;
             }
- 
+
             else if (!inv.action.compare ( "force-lock" ))
             {
                 /* TODO: Create customer log of this action */
@@ -2277,29 +2335,30 @@ int nodeLinkClass::mod_host ( node_inv_type & inv )
             {
                 if ( !((get_host_function_mask ( inv.type ) & CONTROLLER_TYPE) == CONTROLLER_TYPE) )
                 {
-                    elog ("%s Rejecting '%s' - Swact only supported for Controllers\n", 
+                    elog ("%s Rejecting '%s' - Swact only supported for Controllers\n",
                               node_ptr->hostname.c_str(),
                               inv.action.c_str());
                     rc = FAIL_NODETYPE ;
                 }
                 else if ( nodeLinkClass::inactive_controller_insv() != true )
                 {
-                    elog ("%s Rejecting '%s' - No In-Service Mate\n", 
+                    elog ("%s Rejecting '%s' - No In-Service Mate\n",
                               node_ptr->hostname.c_str(),
                               inv.action.c_str());
                     rc = FAIL_SWACT_NOINSVMATE ;
                 }
-                else if ( node_ptr->adminAction != MTC_ADMIN_ACTION__NONE )
+                else if (( node_ptr->adminAction != MTC_ADMIN_ACTION__NONE ) &&
+                         ( node_ptr->adminAction != MTC_ADMIN_ACTION__ADD ))
                 {
-                    elog ("%s Rejecting '%s' - '%s' In-Progress\n", 
+                    elog ("%s Rejecting '%s' - '%s' In-Progress\n",
                               node_ptr->hostname.c_str(),
                               inv.action.c_str(),
                               get_adminAction_str( node_ptr->adminAction ));
                     rc = FAIL_OPER_INPROGRESS ;
                 }
-                else if ( smgrEvent.mutex )
+                else if ( swact_mutex )
                 {
-                    elog ("%s Rejecting '%s' - Operation in-progress\n", 
+                    elog ("%s Rejecting '%s' - Operation in-progress\n",
                               node_ptr->hostname.c_str(),
                               inv.action.c_str());
                     rc = FAIL_SWACT_INPROGRESS ;
@@ -2316,10 +2375,10 @@ int nodeLinkClass::mod_host ( node_inv_type & inv )
                     rc = FAIL_PATCH_INPROGRESS ;
                 }
                 // if this is a force-swact action then allow swact to a
-                // patched node that has not been rebooted yet, since 
+                // patched node that has not been rebooted yet, since
                 // this is a recoverable operation. The other two patching tests
                 // (above) need to be done on all swact actions since it may
-                // render the system non-recoverable. 
+                // render the system non-recoverable.
                 else if ( !inv.action.compare ( "swact" ) &&
                           inactive_controller_is_patched() == true )
                 {
@@ -2328,7 +2387,7 @@ int nodeLinkClass::mod_host ( node_inv_type & inv )
                 }
                 else
                 {
-                    plog ("%s Action=%s\n", node_ptr->hostname.c_str(), 
+                    plog ("%s Action=%s\n", node_ptr->hostname.c_str(),
                            inv.action.c_str());
                     if ( !inv.action.compare ( "force-swact" ) )
                         adminActionChange ( node_ptr, MTC_ADMIN_ACTION__FORCE_SWACT );
@@ -2338,7 +2397,7 @@ int nodeLinkClass::mod_host ( node_inv_type & inv )
                     /* generate command=swact log */
                     mtcAlarm_log ( node_ptr->hostname, MTC_LOG_ID__COMMAND_SWACT );
 
-                    smgrEvent.mutex = true ;
+                    set_swact_mutex ( true );
                 }
             }
             else if ( !inv.action.compare ( "reboot" ) )
