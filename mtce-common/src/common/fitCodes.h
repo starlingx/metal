@@ -1,7 +1,7 @@
 #ifndef __INCLUDE_FITCODES_H__
 #define __INCLUDE_FITCODES_H__
 /*
- * Copyright (c) 2013, 2016, 2024-2025 Wind River Systems, Inc.
+ * Copyright (c) 2013, 2016, 2024-2026 Wind River Systems, Inc.
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -124,6 +124,7 @@
 #define FIT_CODE__UNLOCK_HOST                        (33)
 #define FIT_CODE__FAIL_SWACT                         (34)
 #define FIT_CODE__FAIL_PXEBOOT_MTCALIVE              (35)
+#define FIT_CODE__SET_SWACT_MUTEX                    (36)
 
 #define FIT_CODE__FM_SET_ALARM                       (40)
 #define FIT_CODE__FM_GET_ALARM                       (41)

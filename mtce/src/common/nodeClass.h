@@ -1,7 +1,7 @@
 #ifndef __INCLUDE_NODECLASS_H__
 #define __INCLUDE_NODECLASS_H__
 /*
- * Copyright (c) 2013-2016, 2023-2025 Wind River Systems, Inc.
+ * Copyright (c) 2013-2016, 2023-2026 Wind River Systems, Inc.
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -510,6 +510,7 @@ private:
         libEvent sysinvEvent; /**< Sysinv REST API Handling for host */
         libEvent cfgEvent   ; /**< Sysinv REST API Handling for config changes */
         libEvent vimEvent   ; /**< VIM Event REST API Handling       */
+        libEvent smgrEvent  ; /**< SM REST API Handling for host     */
         libEvent secretEvent;
 
         libEvent httpReq    ; /**< Http libEvent Request Handling    */
@@ -785,6 +786,11 @@ private:
 
     struct node * head ; /**< Node Linked List Head pointer */
     struct node * tail ; /**< Node Linked List Tail pointer */
+
+    /* System-wide Swact mutex gate - prevents admin actions during swact */
+    bool swact_mutex ;
+    int  swact_mutex_stuck ;
+    void set_swact_mutex ( bool state );
 
    /** Allocate memory for a new node.
     *
@@ -2163,11 +2169,11 @@ public:
 
     /** Common REST API Structs */
 
-    /* System Management REST API Control Struct */
-    libEvent sysinvEvent ;
+    /* Update the per-host smgrEvent with callback result data */
+    void smgrEvent_callback_handler ( libEvent & event );
 
     /* System Management REST API Control Struct */
-    libEvent smgrEvent ;
+    libEvent sysinvEvent ;
 
     /* Keystone Authentication Token Control Struct */
     libEvent tokenEvent ;

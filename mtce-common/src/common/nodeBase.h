@@ -47,9 +47,11 @@ void daemon_exit ( void );
 #define MAX_POWERCYCLE_QUERY_RETRIES  (10)
 #define MAX_BMC_POWER_CTRL_RETRIES     (5)
 
-/* Added for failure handling offline feature */
+/* List of Minimum config values */
 #define MIN_OFFLINE_PERIOD_MSECS      (10)
 #define MIN_OFFLINE_THRESHOLD          (1)
+#define MIN_UPTIME_PERIOD              (5)
+#define MIN_SWACT_TIMEOUT             (60)
 
 /* Board management Expect Script return Codes: 1xx range
  * These codes are also defined in /usr/local/sbin/bmvars.exp */

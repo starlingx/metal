@@ -305,18 +305,43 @@ void nodeLinkClass::timer_handler ( int sig, siginfo_t *si, void *uc)
         mtcTimer_stop_int_safe ( mtcTimer_uptime );
         mtcTimer_uptime.ring = true ;
 
-        if ( smgrEvent.mutex )
+        if ( swact_mutex )
         {
+            ilog ("Swact Mutex: %d - stuck:%d", swact_mutex, swact_mutex_stuck );
+
+            /* Self-healing swact mutex handler.
+             * Clears a stuck swact mutex after swact_timeout rounded
+             * up to the next uptime_period tick plus one extra tick
+             * of margin: (swact_timeout / uptime_period) + 1
+             *
+             *  swact_timeout=120 uptime_period=60: threshold=3 clears at 180s
+             *  swact_timeout=20  uptime_period=60: threshold=1 clears at  60s
+             *  swact_timeout=20  uptime_period=5:  threshold=5 clears at  25s */
             daemon_config_type * cfg_ptr = daemon_get_cfg_ptr();
-            if ( ++smgrEvent.stuck > ((cfg_ptr->swact_timeout/60)+1))
+
+            /* This should absolutely never occur but
+             * handle it anyway to avoid the divide by zero */
+            if ( uptime_period <= 0 )
             {
-                smgrEvent.stuck = 0     ;
-                smgrEvent.mutex = false ;
+                slog ("uptime_period is invalid "
+                      "; freeing swact mutex to avoid divide-by-zero "
+                      "; (swact_timeout:%d:uptime_period:%d)",
+                      cfg_ptr->swact_timeout,
+                      uptime_period);
+                set_swact_mutex ( false );
             }
-        }
-        else
-        {
-            smgrEvent.stuck = 0 ;
+            else
+            {
+                int stuck_threshold = (cfg_ptr->swact_timeout/uptime_period) + 1 ;
+                if ( ++swact_mutex_stuck >= stuck_threshold )
+                {
+                    wlog ("swact mutex stuck for %d seconds ; auto clearing (swact_timeout:%d:uptime_period:%d)",
+                           swact_mutex_stuck * uptime_period,
+                           cfg_ptr->swact_timeout,
+                           uptime_period);
+                    set_swact_mutex ( false );
+                }
+            }
         }
         return ;
     }
@@ -3602,12 +3627,12 @@ int nodeLinkClass::swact_handler  ( struct nodeLinkClass::node * node_ptr )
             mtcTimer_init ( node_ptr->mtcSwact_timer );
 
             /* reset error / control Counters to zero */
-            smgrEvent.count   = 0 ;
-            smgrEvent.retries = 0 ;
+            node_ptr->smgrEvent.count   = 0 ;
+            node_ptr->smgrEvent.retries = 0 ;
 
             /* Empty the event message strings */
-            smgrEvent.payload = "" ;
-            smgrEvent.response = "" ;
+            node_ptr->smgrEvent.payload = "" ;
+            node_ptr->smgrEvent.response = "" ;
 
             /* Post a user message 'Swact: Request' */
             mtcInvApi_force_task ( node_ptr, MTC_TASK_SWACT_REQUEST );
@@ -3629,7 +3654,7 @@ int nodeLinkClass::swact_handler  ( struct nodeLinkClass::node * node_ptr )
                 if ( daemon_want_fit ( FIT_CODE__HTTP_SWACT_OPERATION, "controller", "swact-query-enqueue-fail", rc_str ) == true )
                     rc = atoi ( rc_str.c_str() ) ;
                 else if ( daemon_want_fit ( FIT_CODE__HTTP_SWACT_OPERATION, "controller", "swact-query-drop") == true )
-                    smgrEvent.done = true ;
+                    node_ptr->smgrEvent.done = true ;
                 else
 #endif
                 {
@@ -3637,22 +3662,22 @@ int nodeLinkClass::swact_handler  ( struct nodeLinkClass::node * node_ptr )
                 }
                 if ( rc )
                 {
-                    smgrEvent.retries++ ;
+                    node_ptr->smgrEvent.retries++ ;
                     wlog ("%s Swact Query enqueue failed (rc:%d) ; try %d of %d",
                               node_ptr->hostname.c_str(), rc,
-                              smgrEvent.retries,
+                              node_ptr->smgrEvent.retries,
                               SWACT_TRY_THRESHOLD);
                     mtcTimer_start ( node_ptr->mtcSwact_timer, mtcTimer_handler, SWACT_ENQUEUE_RETRY_DELAY );
                 }
                 else
                 {
                     /* Successful enqueue, delay a bit then check for the response */
-                    smgrEvent.count = 0 ;
+                    node_ptr->smgrEvent.count = 0 ;
 #ifdef WANT_FIT_TESTING
                     /* redundant since this is set in mtcHttpUtil_event_init.
                      * only needed for FIT testing (above) where the API
                      * is not called as a means to emulate a lost message. */
-                    smgrEvent.done    = false ;
+                    node_ptr->smgrEvent.done    = false ;
 #endif
                     mtcTimer_start ( node_ptr->mtcSwact_timer, mtcTimer_handler, SWACT_POLL_DONE_DELAY );
                     node_ptr->swactStage = MTC_SWACT__QUERY_DONE ;
@@ -3660,7 +3685,7 @@ int nodeLinkClass::swact_handler  ( struct nodeLinkClass::node * node_ptr )
             }
 
             /* check for max retries */
-            if ( smgrEvent.retries >= SWACT_TRY_THRESHOLD )
+            if ( node_ptr->smgrEvent.retries >= SWACT_TRY_THRESHOLD )
             {
                 elog ("%s Swact Query failed ; max retries", node_ptr->hostname.c_str());
                 mtcInvApi_update_task (node_ptr, MTC_TASK_SWACT_FAIL_QUERY);
@@ -3675,11 +3700,11 @@ int nodeLinkClass::swact_handler  ( struct nodeLinkClass::node * node_ptr )
             {
 #ifdef WANT_FIT_TESTING
                 /* Verify swact query request failure handling */
-                if ( smgrEvent.done == true )
+                if ( node_ptr->smgrEvent.done == true )
                 {
                     string status_str ;
                     if ( daemon_want_fit ( FIT_CODE__HTTP_SWACT_OPERATION, "controller", "swact-query-fail", status_str ) == true )
-                        smgrEvent.status = atoi ( status_str.c_str() ) ;
+                        node_ptr->smgrEvent.status = atoi ( status_str.c_str() ) ;
                 }
 #endif
                 /* Swact Query is re-issued every 10 seconds.
@@ -3688,21 +3713,21 @@ int nodeLinkClass::swact_handler  ( struct nodeLinkClass::node * node_ptr )
                  * If the Swact Query request continues to not reach the Done state after
                  * after SWACT_TRY_THRESHOLD (10 retries) the Swact Query and over all
                  * Swact operation is failed after approximately 100 seconds. */
-                if ( smgrEvent.done == false )
+                if ( node_ptr->smgrEvent.done == false )
                 {
-                    if ( ++smgrEvent.count >= SWACT_QUERY_POLL_DONE_THRESHOLD )
+                    if ( ++node_ptr->smgrEvent.count >= SWACT_QUERY_POLL_DONE_THRESHOLD )
                     {
                         /* Force completion and issue the query again.
                          * Try to recover from a lost Query Request */
-                        smgrEvent.retries++ ;
-                        smgrEvent.count = 0 ;
+                        node_ptr->smgrEvent.retries++ ;
+                        node_ptr->smgrEvent.count = 0 ;
 
                         /* don't log the first try , only retries */
-                        if ( smgrEvent.retries > 1 )
+                        if ( node_ptr->smgrEvent.retries > 1 )
                         {
                             ilog ("%s Swact Query ; try %d of %d",
                                       node_ptr->hostname.c_str(),
-                                      smgrEvent.retries,
+                                      node_ptr->smgrEvent.retries,
                                       SWACT_TRY_THRESHOLD);
                         }
                         /* Purge the queue as a recovery action and proceed to retry */
@@ -3712,29 +3737,29 @@ int nodeLinkClass::swact_handler  ( struct nodeLinkClass::node * node_ptr )
                     else
                     {
                         /* Throttle the retry logs to only retry cases at 50% and 75% of retry count */
-                        if ((  smgrEvent.retries ) &&
-                            (( smgrEvent.count == SWACT_QUERY_POLL_DONE_HALF_THRESHOLD ) ||
-                             ( smgrEvent.count == SWACT_QUERY_POLL_DONE_THREE_QUARTERS )))
+                        if ((  node_ptr->smgrEvent.retries ) &&
+                            (( node_ptr->smgrEvent.count == SWACT_QUERY_POLL_DONE_HALF_THRESHOLD ) ||
+                             ( node_ptr->smgrEvent.count == SWACT_QUERY_POLL_DONE_THREE_QUARTERS )))
                         {
                             /* Not done yet - keep waiting */
                             ilog ("%s Swact Query ; in progress (count %d of %d  try %d of %d)",
                                       node_ptr->hostname.c_str(),
-                                      smgrEvent.count,
+                                      node_ptr->smgrEvent.count,
                                       SWACT_QUERY_POLL_DONE_THRESHOLD,
-                                      smgrEvent.retries,
+                                      node_ptr->smgrEvent.retries,
                                       SWACT_TRY_THRESHOLD);
                         }
                         mtcTimer_start ( node_ptr->mtcSwact_timer, mtcTimer_handler, SWACT_POLL_DONE_DELAY );
                     }
                 }
-                else if (( smgrEvent.status != PASS ))
+                else if (( node_ptr->smgrEvent.status != PASS ))
                 {
                     /* don't log the first try , only retries */
-                    if ( ++smgrEvent.retries > 1 )
+                    if ( ++node_ptr->smgrEvent.retries > 1 )
                     {
                         ilog ("%s Swact Query Failed ; try %d of %d",
                                     node_ptr->hostname.c_str(),
-                                    smgrEvent.retries,
+                                    node_ptr->smgrEvent.retries,
                                     SWACT_TRY_THRESHOLD);
                     }
                     node_ptr->swactStage = MTC_SWACT__QUERY ;
@@ -3743,19 +3768,19 @@ int nodeLinkClass::swact_handler  ( struct nodeLinkClass::node * node_ptr )
                 else
                 {
                     ilog ("%s Swact Query complete ; parsing query data ", node_ptr->hostname.c_str());
-                    hlog ("%s ... Sequence: %d State : %d:%d:%d", node_ptr->hostname.c_str(), smgrEvent.sequence, smgrEvent.active, smgrEvent.status, smgrEvent.http_status );
-                    if ( ! smgrEvent.response.empty() )
+                    hlog ("%s ... Sequence: %d State : %d:%d:%d", node_ptr->hostname.c_str(), node_ptr->smgrEvent.sequence, node_ptr->smgrEvent.active, node_ptr->smgrEvent.status, node_ptr->smgrEvent.http_status );
+                    if ( ! node_ptr->smgrEvent.response.empty() )
                     {
-                        hlog ("%s ... Response: %s", node_ptr->hostname.c_str(), smgrEvent.response.c_str());
+                        hlog ("%s ... Response: %s", node_ptr->hostname.c_str(), node_ptr->smgrEvent.response.c_str());
                     }
-                    if ( ! smgrEvent.result.empty() )
+                    if ( ! node_ptr->smgrEvent.result.empty() )
                     {
-                        hlog ("%s ... Result  : %s", node_ptr->hostname.c_str(), smgrEvent.result.c_str());
+                        hlog ("%s ... Result  : %s", node_ptr->hostname.c_str(), node_ptr->smgrEvent.result.c_str());
                     }
 
                     /* Parse through the response - no retries on response string errors */
                     bool active = false ;
-                    rc = mtcSmgrApi_service_state ( smgrEvent, active );
+                    rc = mtcSmgrApi_service_state ( node_ptr->smgrEvent, active );
                     if ( rc )
                     {
                         /* Setup common error message for the user*/
@@ -3766,8 +3791,8 @@ int nodeLinkClass::swact_handler  ( struct nodeLinkClass::node * node_ptr )
                     else if ( active == true )
                     {
                         /* O.K. We need to Swact */
-                        smgrEvent.count   = 0 ;
-                        smgrEvent.retries = 0 ;
+                        node_ptr->smgrEvent.count   = 0 ;
+                        node_ptr->smgrEvent.retries = 0 ;
                         node_ptr->swactStage = MTC_SWACT__ACTION ;
 
                         /* Stop heartbeat of all unlocked-enabled system nodes during swact.
@@ -3801,7 +3826,7 @@ int nodeLinkClass::swact_handler  ( struct nodeLinkClass::node * node_ptr )
             }
 
             /* check for max retries */
-            if ( smgrEvent.retries >= SWACT_TRY_THRESHOLD )
+            if ( node_ptr->smgrEvent.retries >= SWACT_TRY_THRESHOLD )
             {
                 elog ("%s Swact Query failed ; max retries", node_ptr->hostname.c_str());
                 mtcInvApi_update_task (node_ptr, MTC_TASK_SWACT_FAIL_QUERY);
@@ -3829,13 +3854,13 @@ int nodeLinkClass::swact_handler  ( struct nodeLinkClass::node * node_ptr )
                 {
                     /* Use the fit data as status code and pretend the event is done.
                      * Don't send the action request because the swact will happen */
-                    smgrEvent.status = atoi ( status_str.c_str() ) ;
-                    smgrEvent.done = true ;
+                    node_ptr->smgrEvent.status = atoi ( status_str.c_str() ) ;
+                    node_ptr->smgrEvent.done = true ;
                 }
                 else if ( daemon_want_fit ( FIT_CODE__HTTP_SWACT_OPERATION, "controller", "swact-action-enqueue-fail", status_str ) == true )
                     rc = atoi ( status_str.c_str() ) ;
                 else if ( daemon_want_fit ( FIT_CODE__HTTP_SWACT_OPERATION, "controller", "swact-action-drop") == true )
-                    smgrEvent.done = false ;
+                    node_ptr->smgrEvent.done = false ;
                 else if ( daemon_want_fit ( FIT_CODE__HTTP_SWACT_OPERATION, "controller", "swact-action-timeout") == true )
                 {
                     /* force a success path swact action timeout by sending a different request */
@@ -3848,24 +3873,24 @@ int nodeLinkClass::swact_handler  ( struct nodeLinkClass::node * node_ptr )
                 }
                 if ( rc )
                 {
-                    smgrEvent.retries++ ;
+                    node_ptr->smgrEvent.retries++ ;
                     wlog ("%s Swact Action enqueue failed ; rc=%d ; try %d of %d",
                             node_ptr->hostname.c_str(), rc,
-                            smgrEvent.retries,
+                            node_ptr->smgrEvent.retries,
                             SWACT_TRY_THRESHOLD);
                     mtcTimer_start ( node_ptr->mtcSwact_timer, mtcTimer_handler, SWACT_ENQUEUE_RETRY_DELAY );
                 }
                 else
                 {
                     plog ("%s Swact Action ; in progress", node_ptr->hostname.c_str());
-                    smgrEvent.count = 0 ;
+                    node_ptr->smgrEvent.count = 0 ;
                     mtcTimer_start ( node_ptr->mtcSwact_timer, mtcTimer_handler, SWACT_POLL_DONE_DELAY );
                     node_ptr->swactStage = MTC_SWACT__ACTION_DONE ;
                 }
             }
 
             /* check for max retries */
-            if ( smgrEvent.retries >= SWACT_TRY_THRESHOLD )
+            if ( node_ptr->smgrEvent.retries >= SWACT_TRY_THRESHOLD )
             {
                 elog ("%s Swact Action failed ; max retries", node_ptr->hostname.c_str());
                 doneQueue_purge ( node_ptr );
@@ -3880,17 +3905,17 @@ int nodeLinkClass::swact_handler  ( struct nodeLinkClass::node * node_ptr )
             if ( node_ptr->mtcSwact_timer.ring == true )
             {
                 /* Check to see if the 'swact action' is done */
-                if ( smgrEvent.done == false )
+                if ( node_ptr->smgrEvent.done == false )
                 {
-                    if ( ++smgrEvent.count >= SWACT_ACTION_POLL_DONE_THRESHOLD )
+                    if ( ++node_ptr->smgrEvent.count >= SWACT_ACTION_POLL_DONE_THRESHOLD )
                     {
                         /* Force completion and issue the swact action again.
                          * Try to recover from a lost swact action request */
-                        smgrEvent.retries++ ;
+                        node_ptr->smgrEvent.retries++ ;
 
                         ilog ("%s Swact done wait ; try %d of %d",
                                   node_ptr->hostname.c_str(),
-                                  smgrEvent.retries,
+                                  node_ptr->smgrEvent.retries,
                                   SWACT_TRY_THRESHOLD);
 
                         /* Purge the queue as a recovery action and proceed to retry */
@@ -3900,59 +3925,77 @@ int nodeLinkClass::swact_handler  ( struct nodeLinkClass::node * node_ptr )
                     else
                     {
                         /* Throttle the retry logs to only retry cases at 50% and 75% of retry count */
-                        if ((  smgrEvent.retries ) &&
-                            (( smgrEvent.count == SWACT_ACTION_POLL_DONE_HALF_THRESHOLD ) ||
-                             ( smgrEvent.count == SWACT_ACTION_POLL_DONE_THREE_QUARTERS )))
+                        if ((  node_ptr->smgrEvent.retries ) &&
+                            (( node_ptr->smgrEvent.count == SWACT_ACTION_POLL_DONE_HALF_THRESHOLD ) ||
+                             ( node_ptr->smgrEvent.count == SWACT_ACTION_POLL_DONE_THREE_QUARTERS )))
                         {
                             /* Not done yet - keep waiting */
                             ilog ("%s Swact Action ; in progress (count %d of %d  try %d of %d)",
                                       node_ptr->hostname.c_str(),
-                                      smgrEvent.count,
+                                      node_ptr->smgrEvent.count,
                                       SWACT_ACTION_POLL_DONE_THRESHOLD,
-                                      smgrEvent.retries,
+                                      node_ptr->smgrEvent.retries,
                                       SWACT_TRY_THRESHOLD);
                         }
                         mtcTimer_start ( node_ptr->mtcSwact_timer, mtcTimer_handler, SWACT_POLL_DONE_DELAY );
                     }
                 }
-                else if ( smgrEvent.status != PASS )
+                else if ( node_ptr->smgrEvent.status != PASS )
                 {
                     elog ("%s Swact request failed ; (rc:%d)\n",
-                              node_ptr->hostname.c_str(), smgrEvent.status);
-                    ilog ("%s ... Sequence: %d State : %d:%d:%d", node_ptr->hostname.c_str(), smgrEvent.sequence, smgrEvent.active, smgrEvent.status, smgrEvent.http_status );
-                    if ( ! smgrEvent.response.empty() )
+                              node_ptr->hostname.c_str(), node_ptr->smgrEvent.status);
+                    ilog ("%s ... Sequence: %d State : %d:%d:%d",
+                              node_ptr->hostname.c_str(),
+                              node_ptr->smgrEvent.sequence,
+                              node_ptr->smgrEvent.active,
+                              node_ptr->smgrEvent.status,
+                              node_ptr->smgrEvent.http_status );
+                    if ( ! node_ptr->smgrEvent.response.empty() )
                     {
-                        ilog ("%s ... Response: %s", node_ptr->hostname.c_str(), smgrEvent.response.c_str());
+                        ilog ("%s ... Response: %s",
+                                  node_ptr->hostname.c_str(),
+                                  node_ptr->smgrEvent.response.c_str());
                     }
-                    if ( ! smgrEvent.result.empty() )
+                    if ( ! node_ptr->smgrEvent.result.empty() )
                     {
-                        ilog ("%s ... Result  : %s", node_ptr->hostname.c_str(), smgrEvent.result.c_str());
+                        ilog ("%s ... Result  : %s",
+                                  node_ptr->hostname.c_str(),
+                                  node_ptr->smgrEvent.result.c_str());
                     }
                     /* Swact request failures are auto retried by the workQueue FSM
                      * with a built-in delay between retries.
                      * Fail the swact only after the current number of Swact Action
                      * request retries are reached. */
-                    smgrEvent.retries++ ;
+                    node_ptr->smgrEvent.retries++ ;
                     ilog ("%s Swact Action request failed (status:%d) ; try %d of %d",
                                     node_ptr->hostname.c_str(),
-                                    smgrEvent.status,
-                                    smgrEvent.retries,
+                                    node_ptr->smgrEvent.status,
+                                    node_ptr->smgrEvent.retries,
                                     SWACT_TRY_THRESHOLD);
-                    smgrEvent.count = 0 ;
+                    node_ptr->smgrEvent.count = 0 ;
                     node_ptr->swactStage = MTC_SWACT__ACTION ;
                     mtcTimer_start ( node_ptr->mtcSwact_timer, mtcTimer_handler, SWACT_ENQUEUE_RETRY_DELAY );
                 }
                 else
                 {
                     plog ("%s Swact Request complete ; Swact in progress", node_ptr->hostname.c_str());
-                    hlog ("%s ... Sequence: %d State : %d:%d:%d", node_ptr->hostname.c_str(), smgrEvent.sequence, smgrEvent.active, smgrEvent.status, smgrEvent.http_status );
-                    if ( ! smgrEvent.response.empty() )
+                    hlog ("%s ... Sequence: %d State : %d:%d:%d",
+                              node_ptr->hostname.c_str(),
+                              node_ptr->smgrEvent.sequence,
+                              node_ptr->smgrEvent.active,
+                              node_ptr->smgrEvent.status,
+                              node_ptr->smgrEvent.http_status );
+                    if ( ! node_ptr->smgrEvent.response.empty() )
                     {
-                        hlog ("%s ... Response: %s", node_ptr->hostname.c_str(), smgrEvent.response.c_str());
+                        hlog ("%s ... Response: %s",
+                                  node_ptr->hostname.c_str(),
+                                  node_ptr->smgrEvent.response.c_str());
                     }
-                    if ( ! smgrEvent.result.empty() )
+                    if ( ! node_ptr->smgrEvent.result.empty() )
                     {
-                        hlog ("%s ... Result  : %s", node_ptr->hostname.c_str(), smgrEvent.result.c_str());
+                        hlog ("%s ... Result  : %s",
+                                  node_ptr->hostname.c_str(),
+                                  node_ptr->smgrEvent.result.c_str());
                     }
                     node_ptr->swactStage = MTC_SWACT__ACTION_WAIT ;
                     mtcTimer_start ( node_ptr->mtcSwact_timer, mtcTimer_handler, swact_timeout/2 );
@@ -3960,7 +4003,7 @@ int nodeLinkClass::swact_handler  ( struct nodeLinkClass::node * node_ptr )
             }
 
             /* check for max retries */
-            if ( smgrEvent.retries >= SWACT_TRY_THRESHOLD )
+            if ( node_ptr->smgrEvent.retries >= SWACT_TRY_THRESHOLD )
             {
                 elog ("%s Swact Action failed ; max retries", node_ptr->hostname.c_str());
                 doneQueue_purge ( node_ptr );
@@ -3986,7 +4029,7 @@ int nodeLinkClass::swact_handler  ( struct nodeLinkClass::node * node_ptr )
 
                 /* Start retries at half the max retries due to
                    first timer being half of swact timout */
-                smgrEvent.retries = (SWACT_TRY_THRESHOLD)/2 ;
+                node_ptr->smgrEvent.retries = (SWACT_TRY_THRESHOLD)/2 ;
 
                 mtcSmgrApi_request ( node_ptr, CONTROLLER_QUERY, 0);
                 node_ptr->swactStage = MTC_SWACT__ACTION_POLL ;
@@ -4001,10 +4044,10 @@ int nodeLinkClass::swact_handler  ( struct nodeLinkClass::node * node_ptr )
         {
             if ( node_ptr->mtcSwact_timer.ring == true )
             {
-                if (++smgrEvent.retries >= SWACT_TRY_THRESHOLD)
+                if (++node_ptr->smgrEvent.retries >= SWACT_TRY_THRESHOLD)
                 {
                     elog ("%s Swact failed ; timeout", node_ptr->hostname.c_str());
-                    smgrEvent.status = FAIL_TIMEOUT ;
+                    node_ptr->smgrEvent.status = FAIL_TIMEOUT ;
                     mtcInvApi_update_task ( node_ptr, MTC_TASK_SWACT_TIMEOUT);
                     doneQueue_purge ( node_ptr );
                     SWACT_DONE ;
@@ -4014,23 +4057,32 @@ int nodeLinkClass::swact_handler  ( struct nodeLinkClass::node * node_ptr )
                 {
                     ilog ("%s Swact polling try %d of %d",
                               node_ptr->hostname.c_str(),
-                              smgrEvent.retries,
+                              node_ptr->smgrEvent.retries,
                               SWACT_TRY_THRESHOLD);
                 }
                 /* Check to see if the query is done */
-                if ( smgrEvent.done == true )
+                if ( node_ptr->smgrEvent.done == true )
                 {
                     bool active = true ;
-                    ilog ("%s ... Sequence: %d State : %d:%d:%d", node_ptr->hostname.c_str(), smgrEvent.sequence, smgrEvent.active, smgrEvent.status, smgrEvent.http_status );
-                    if ( ! smgrEvent.response.empty() )
+                    ilog ("%s ... Sequence: %d State : %d:%d:%d",
+                              node_ptr->hostname.c_str(),
+                              node_ptr->smgrEvent.sequence,
+                              node_ptr->smgrEvent.active,
+                              node_ptr->smgrEvent.status,
+                              node_ptr->smgrEvent.http_status );
+                    if ( ! node_ptr->smgrEvent.response.empty() )
                     {
-                        ilog ("%s ... Response: %s", node_ptr->hostname.c_str(), smgrEvent.response.c_str());
+                        ilog ("%s ... Response: %s",
+                                  node_ptr->hostname.c_str(),
+                                  node_ptr->smgrEvent.response.c_str());
                     }
-                    if ( ! smgrEvent.result.empty() )
+                    if ( ! node_ptr->smgrEvent.result.empty() )
                     {
-                        ilog ("%s ... Result  : %s", node_ptr->hostname.c_str(), smgrEvent.result.c_str());
+                        ilog ("%s ... Result  : %s",
+                                  node_ptr->hostname.c_str(),
+                                  node_ptr->smgrEvent.result.c_str());
                     }
-                    mtcSmgrApi_service_state ( smgrEvent, active );
+                    mtcSmgrApi_service_state ( node_ptr->smgrEvent, active );
                     if ( active == false )
                     {
                         dlog ("%s %s\n",node_ptr->hostname.c_str(), MTC_TASK_SWACT_COMPLETE );
@@ -4059,12 +4111,12 @@ int nodeLinkClass::swact_handler  ( struct nodeLinkClass::node * node_ptr )
             if ( node_ptr->mtcSwact_timer.ring == true )
             {
                 mtcInvApi_force_task ( node_ptr, "");
-                nodeLinkClass::smgrEvent.active = false ;
-                nodeLinkClass::smgrEvent.mutex  = false ;
+                node_ptr->smgrEvent.active = false ;
+                set_swact_mutex ( false );
                 node_ptr->mtcSwact_timer.ring   = false ;
                 node_ptr->swactStage = MTC_SWACT__START ;
                 adminActionChange ( node_ptr, MTC_ADMIN_ACTION__NONE );
-                if ( smgrEvent.status )
+                if ( node_ptr->smgrEvent.status )
                 {
                     wlog ("%s Swact: Failed\n", node_ptr->hostname.c_str());
 
@@ -4078,6 +4130,7 @@ int nodeLinkClass::swact_handler  ( struct nodeLinkClass::node * node_ptr )
         }
 
         default:
+            set_swact_mutex ( false );
             node_ptr->swactStage = MTC_SWACT__START ;
     }
     return (rc);

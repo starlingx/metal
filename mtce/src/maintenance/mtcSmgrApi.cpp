@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, 2025 Wind River Systems, Inc.
+ * Copyright (c) 2013, 2015, 2026 Wind River Systems, Inc.
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -59,16 +59,9 @@ static void mtcSmgrApi_callback ( libEvent & event )
 {
     hlog ("%s mtcSmgrApi_callback invoked", event.log_prefix.c_str() );
 
-    /* Pass the workQueue event result data to the FSM */
-    nodeLinkClass * object_ptr        = get_mtcInv_ptr() ;
-    object_ptr->smgrEvent.done        = true ;
-    object_ptr->smgrEvent.active      = false ;
-    object_ptr->smgrEvent.status      = event.status   ;
-    object_ptr->smgrEvent.http_status = event.http_status ;
-    object_ptr->smgrEvent.result      = event.result   ;
-    object_ptr->smgrEvent.response    = event.response ;
-    object_ptr->smgrEvent.sequence    = event.sequence ;
-    object_ptr->smgrEvent.cur_retries = event.cur_retries ;
+    /* Pass the workQueue event result data to the per-host smgrEvent */
+    nodeLinkClass * object_ptr = get_mtcInv_ptr() ;
+    object_ptr->smgrEvent_callback_handler ( event );
 }
 
 /*
@@ -90,135 +83,135 @@ static void mtcSmgrApi_callback ( libEvent & event )
  */
 int nodeLinkClass::mtcSmgrApi_request ( struct nodeLinkClass::node * node_ptr, mtc_cmd_enum operation, int retries )
 {
-    mtcHttpUtil_event_init ( &smgrEvent, my_hostname, "mtcSmgrApi_request",
+    mtcHttpUtil_event_init ( &node_ptr->smgrEvent, my_hostname, "mtcSmgrApi_request",
                              hostUtil_getServiceIp  (SERVICE_SMGR),
                              hostUtil_getServicePort(SERVICE_SMGR));
 
     /* Set the common context of this new operation */
-    smgrEvent.status   = RETRY ;
-    smgrEvent.hostname = node_ptr->hostname ;
-    smgrEvent.uuid     = get_uuid ( node_ptr->hostname );
-    smgrEvent.callback = &mtcSmgrApi_callback ;
+    node_ptr->smgrEvent.status   = RETRY ;
+    node_ptr->smgrEvent.hostname = node_ptr->hostname ;
+    node_ptr->smgrEvent.uuid     = get_uuid ( node_ptr->hostname );
+    node_ptr->smgrEvent.callback = &mtcSmgrApi_callback ;
 
-    smgrEvent.max_retries = retries ;
-    smgrEvent.blocking    = false   ;
+    node_ptr->smgrEvent.max_retries = retries ;
+    node_ptr->smgrEvent.blocking    = false   ;
 
     /* Clear payload and response */
-    smgrEvent.address = MTC_SMGR_LABEL ;
-    smgrEvent.address.append(node_ptr->hostname);
-    smgrEvent.token.url = smgrEvent.address ;
+    node_ptr->smgrEvent.address = MTC_SMGR_LABEL ;
+    node_ptr->smgrEvent.address.append(node_ptr->hostname);
+    node_ptr->smgrEvent.token.url = node_ptr->smgrEvent.address ;
 
-    smgrEvent.payload = "{\"origin\":\"mtce\"," ;
+    node_ptr->smgrEvent.payload = "{\"origin\":\"mtce\"," ;
 
     if ( operation == CONTROLLER_QUERY )
     {
-        smgrEvent.operation = "Query"   ;
-        smgrEvent.request = SMGR_QUERY_SWACT ;
+        node_ptr->smgrEvent.operation = "Query"   ;
+        node_ptr->smgrEvent.request = SMGR_QUERY_SWACT ;
         string availStatus = availStatus_enum_to_str (get_availStatus (node_ptr->hostname));
-        smgrEvent.payload     = "" ;
+        node_ptr->smgrEvent.payload     = "" ;
     }
     else if ( operation == CONTROLLER_SWACT )
     {
-        smgrEvent.operation = "Swact"   ;
-        smgrEvent.request = SMGR_START_SWACT ;
+        node_ptr->smgrEvent.operation = "Swact"   ;
+        node_ptr->smgrEvent.request = SMGR_START_SWACT ;
         string availStatus = availStatus_enum_to_str (get_availStatus (node_ptr->hostname));
-        smgrEvent.payload.append ("\"action\":\"swact\",");
-        smgrEvent.payload.append ("\"admin\":\"unlocked\",");
-        smgrEvent.payload.append ("\"oper\":\"enabled\",");
-        smgrEvent.payload.append ("\"avail\":\"");
-        smgrEvent.payload.append (availStatus);
-        smgrEvent.payload.append ("\"}");
+        node_ptr->smgrEvent.payload.append ("\"action\":\"swact\",");
+        node_ptr->smgrEvent.payload.append ("\"admin\":\"unlocked\",");
+        node_ptr->smgrEvent.payload.append ("\"oper\":\"enabled\",");
+        node_ptr->smgrEvent.payload.append ("\"avail\":\"");
+        node_ptr->smgrEvent.payload.append (availStatus);
+        node_ptr->smgrEvent.payload.append ("\"}");
     }
     else if ( operation == CONTROLLER_DISABLED )
     {
-        smgrEvent.operation = "Disable"  ;
+        node_ptr->smgrEvent.operation = "Disable"  ;
 
         /* Cannot fail the Disable.
          * Failure in this request should not fail the eventual Enable.
          * The workQueue will log but discard noncritical failed requests. */
-        smgrEvent.noncritical = true     ;
-        smgrEvent.request = SMGR_HOST_DISABLED ;
+        node_ptr->smgrEvent.noncritical = true     ;
+        node_ptr->smgrEvent.request = SMGR_HOST_DISABLED ;
 
         string availStatus = availStatus_enum_to_str (get_availStatus (node_ptr->hostname));
         string adminState  = adminState_enum_to_str  (get_adminState  (node_ptr->hostname));
         string adminAction = adminAction_enum_to_str (get_adminAction (node_ptr->hostname));
 
-        smgrEvent.payload.append ("\"action\":\"");
+        node_ptr->smgrEvent.payload.append ("\"action\":\"");
         if (adminAction.compare("lock"))
             adminAction = "event" ;
-        smgrEvent.payload.append (adminAction);
-        smgrEvent.payload.append ("\",");
+        node_ptr->smgrEvent.payload.append (adminAction);
+        node_ptr->smgrEvent.payload.append ("\",");
 
-        smgrEvent.payload.append ("\"admin\":\"");
-        smgrEvent.payload.append (adminState);
-        smgrEvent.payload.append ("\",");
+        node_ptr->smgrEvent.payload.append ("\"admin\":\"");
+        node_ptr->smgrEvent.payload.append (adminState);
+        node_ptr->smgrEvent.payload.append ("\",");
 
-        smgrEvent.payload.append ("\"oper\":\"disabled\",");
+        node_ptr->smgrEvent.payload.append ("\"oper\":\"disabled\",");
 
-        smgrEvent.payload.append ("\"avail\":\"");
-        smgrEvent.payload.append (availStatus);
-        smgrEvent.payload.append ("\"}");
+        node_ptr->smgrEvent.payload.append ("\"avail\":\"");
+        node_ptr->smgrEvent.payload.append (availStatus);
+        node_ptr->smgrEvent.payload.append ("\"}");
     }
     else if ( operation == CONTROLLER_ENABLED )
     {
-        smgrEvent.request = SMGR_HOST_ENABLED ;
-        smgrEvent.operation = "Enable" ;
+        node_ptr->smgrEvent.request = SMGR_HOST_ENABLED ;
+        node_ptr->smgrEvent.operation = "Enable" ;
 
         string availStatus = availStatus_enum_to_str (get_availStatus (node_ptr->hostname));
         string adminState = adminState_enum_to_str (get_adminState (node_ptr->hostname));
         string adminAction = adminAction_enum_to_str (get_adminAction (node_ptr->hostname));
 
-        smgrEvent.payload.append ("\"action\":\"");
+        node_ptr->smgrEvent.payload.append ("\"action\":\"");
         if (adminAction.compare("unlock"))
             adminAction = "event" ;
-        smgrEvent.payload.append (adminAction);
-        smgrEvent.payload.append ("\",");
+        node_ptr->smgrEvent.payload.append (adminAction);
+        node_ptr->smgrEvent.payload.append ("\",");
 
-        smgrEvent.payload.append ("\"admin\":\"");
-        smgrEvent.payload.append (adminState);
-        smgrEvent.payload.append ("\",");
+        node_ptr->smgrEvent.payload.append ("\"admin\":\"");
+        node_ptr->smgrEvent.payload.append (adminState);
+        node_ptr->smgrEvent.payload.append ("\",");
 
-        smgrEvent.payload.append ("\"oper\":\"enabled\",");
+        node_ptr->smgrEvent.payload.append ("\"oper\":\"enabled\",");
 
-        smgrEvent.payload.append ("\"avail\":\"");
-        smgrEvent.payload.append (availStatus);
-        smgrEvent.payload.append ("\"}");
+        node_ptr->smgrEvent.payload.append ("\"avail\":\"");
+        node_ptr->smgrEvent.payload.append (availStatus);
+        node_ptr->smgrEvent.payload.append ("\"}");
     }
     else if ( operation == CONTROLLER_LOCKED )
     {
-        smgrEvent.request = SMGR_HOST_LOCKED ;
+        node_ptr->smgrEvent.request = SMGR_HOST_LOCKED ;
         /* Cannot fail the Lock .
          * Failure in this request should not fail the lock operarion.
          * The workQueue will log but discard noncritical failed requests. */
-        smgrEvent.noncritical = true     ;
-        smgrEvent.operation   = "Locked" ;
-        smgrEvent.payload.append ("\"action\":\"lock\",");
-        smgrEvent.payload.append ("\"admin\":\"locked\",");
-        smgrEvent.payload.append ("\"oper\":\"disabled\",");
-        smgrEvent.payload.append ("\"avail\":\"online\"}");
+        node_ptr->smgrEvent.noncritical = true     ;
+        node_ptr->smgrEvent.operation   = "Locked" ;
+        node_ptr->smgrEvent.payload.append ("\"action\":\"lock\",");
+        node_ptr->smgrEvent.payload.append ("\"admin\":\"locked\",");
+        node_ptr->smgrEvent.payload.append ("\"oper\":\"disabled\",");
+        node_ptr->smgrEvent.payload.append ("\"avail\":\"online\"}");
     }
     else if ( operation == CONTROLLER_UNLOCKED )
     {
-        smgrEvent.request = SMGR_HOST_UNLOCKED ;
+        node_ptr->smgrEvent.request = SMGR_HOST_UNLOCKED ;
 
         /* Should not fail the Unlock state change to SM.
          * A failure of the final Enable will fail the host enable */
-        smgrEvent.noncritical = true       ;
-        smgrEvent.operation   = "Unlocked" ;
-        smgrEvent.payload.append ("\"action\":\"unlock\",");
-        smgrEvent.payload.append ("\"admin\":\"unlocked\",");
-        smgrEvent.payload.append ("\"oper\":\"enabled\",");
-        smgrEvent.payload.append ("\"avail\":\"available\"}");
+        node_ptr->smgrEvent.noncritical = true       ;
+        node_ptr->smgrEvent.operation   = "Unlocked" ;
+        node_ptr->smgrEvent.payload.append ("\"action\":\"unlock\",");
+        node_ptr->smgrEvent.payload.append ("\"admin\":\"unlocked\",");
+        node_ptr->smgrEvent.payload.append ("\"oper\":\"enabled\",");
+        node_ptr->smgrEvent.payload.append ("\"avail\":\"available\"}");
     }
     else
     {
         return (FAIL_BAD_CASE);
     }
     ilog ("%s enqueueing '%s' request to Service Manager",
-              smgrEvent.hostname.c_str(),
-              smgrEvent.operation.c_str());
+              node_ptr->smgrEvent.hostname.c_str(),
+              node_ptr->smgrEvent.operation.c_str());
 
-    return(workQueue_enqueue(smgrEvent));
+    return(workQueue_enqueue(node_ptr->smgrEvent));
 }
 
 int mtcSmgrApi_service_state ( libEvent & event , bool & swactable_services )
