@@ -187,7 +187,7 @@ private:
         /* Set true at the start of a power action.
          * Used to force the, power on or off, action
          * following the first status query. */
-        bool power_action_first ;
+        bool want_power_action ;
 
         /** Generic toggle switch */
         bool toggle ;

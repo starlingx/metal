@@ -77,6 +77,22 @@ int nodeLinkClass::mtcInvApi_update_task ( struct nodeLinkClass::node * node_ptr
     return(PASS);
 }
 
+int  nodeLinkClass::mtcInvApi_force_task ( string hostname,
+                                           string task )
+{
+    UNUSED(hostname);
+    UNUSED(task);
+    return(PASS);
+}
+
+int nodeLinkClass::mtcInvApi_force_task ( struct nodeLinkClass::node * node_ptr,
+                                          string task )
+{
+    UNUSED(node_ptr);
+    UNUSED(task);
+    return(PASS);
+}
+
 int nodeLinkClass::mtcInvApi_update_states ( string hostname,
                                              string admin,
                                              string oper,

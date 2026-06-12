@@ -741,6 +741,8 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
     ptr->http_retries_cur = 0 ;
     ptr->cmd_retries = 0 ;
     ptr->power_action_retries = 0 ;
+    ptr->power_status_retries = 0 ;
+    ptr->want_power_action = false ;
 
     ptr->subf_enabled = false ;
 
@@ -2391,8 +2393,30 @@ int nodeLinkClass::mod_host ( node_inv_type & inv )
                 }
                 else if ( node_ptr->availStatus == MTC_AVAIL_STATUS__POWERED_OFF )
                 {
+                    char buffer[BUFFER_SIZE] = {0} ;
+                    snprintf ( buffer, BUFFER_SIZE,
+                               MTC_TASK_RESET_POWERED_OFF,
+                               node_ptr->hostname.c_str() );
                     wlog ("%s reset rejected for powered off host\n",
                               node_ptr->hostname.c_str());
+                    /* Surface the rejection in inventory and drive
+                     * the Reset FSM directly into MTC_RESET__DONE_WAIT.
+                     * The DONE_WAIT block holds the failure task line
+                     * for MTC_TASK_UPDATE_DELAY before clearing it
+                     * and running the post-reset cleanup. We bypass
+                     * MTC_RESET__FAIL / FAIL_WAIT / DONE entirely so
+                     * the failure task is not overwritten by
+                     * "Reset Completed" on the success-path DONE
+                     * stage. */
+                    mtcInvApi_force_task ( node_ptr, buffer );
+                    mtcTimer_reset ( node_ptr->mtcTimer );
+                    mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, MTC_TASK_UPDATE_DELAY );
+                    /* adminActionChange sets resetStage to
+                     * MTC_RESET__START as a side-effect, so set the
+                     * action first and override the stage after to
+                     * land directly in DONE_WAIT. */
+                    adminActionChange ( node_ptr, MTC_ADMIN_ACTION__RESET );
+                    node_ptr->resetStage = MTC_RESET__DONE_WAIT ;
                     rc = FAIL_RESET_POWEROFF;
                 }
                 else if ( node_ptr->bm_un.empty() )
