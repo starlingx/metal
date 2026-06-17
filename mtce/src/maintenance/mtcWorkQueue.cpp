@@ -583,6 +583,28 @@ int nodeLinkClass::workQueue_process ( struct nodeLinkClass::node * node_ptr )
             node_ptr->http_retries_cur++ ;
             node_ptr->thisReq.cur_retries++ ;
 
+            /* If a sysinv update got 404, the host UUID may have changed.
+             * Re-query sysinv and refresh the cached UUID before retrying. */
+            if (( node_ptr->thisReq.http_status == HTTP_NOTFOUND ) &&
+                ( node_ptr->thisReq.request == SYSINV_UPDATE ))
+            {
+                node_inv_type record_info ;
+                string hostname = node_ptr->hostname ;
+                int _rc = this->mtcInvApi_load_host( hostname, record_info );
+                if (( _rc == PASS ) && ( !record_info.uuid.empty() ) &&
+                    ( record_info.uuid != node_ptr->uuid ))
+                {
+                    wlog ("%s host UUID changed ; refreshing %s -> %s\n",
+                              hostname.c_str(),
+                              node_ptr->uuid.c_str(),
+                              record_info.uuid.c_str());
+                    this->set_uuid( hostname, record_info.uuid );
+                    node_ptr->thisReq.uuid = record_info.uuid ;
+                    node_ptr->libEvent_work_fifo_ptr->uuid = record_info.uuid ;
+                    send_hwmon_command( hostname, MTC_CMD_MOD_HOST );
+                }
+            }
+
             if ( node_ptr->thisReq.cur_retries >= node_ptr->thisReq.max_retries )
             {
                 node_ptr->oper_failures++ ;
