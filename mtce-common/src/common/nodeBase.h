@@ -219,6 +219,9 @@ typedef enum
 #define DEFAULT_DOR_MODE_DETECT       (MTC_MINS_20)
 #define DEFAULT_POWER_OFF_RETRY_WAIT  (30)
 
+/* Stack buffer size used to format short status / task-update strings. */
+#define BUFFER_SIZE                   (128)
+
 /** TODO: Convert names to omit JSON part */
 #define MTC_JSON_INV_LABEL     "ihosts"
 #define MTC_JSON_INV_NEXT      "next"
@@ -328,13 +331,25 @@ typedef enum
 
 #define MTC_TASK_RESET_FAIL        "Reset Failed"
 #define MTC_TASK_RESET_QUEUE       "Reset Failed, retrying (%d of %d)"
+#define MTC_TASK_RESET_POWERED_OFF "Reset Failed - %s is powered off"
+#define MTC_TASK_RESET_NOT_PROV    "Reset Failed - BMC is not provisioned"
+#define MTC_TASK_RESET_NOT_ACC     "Reset Failed - BMC is not accessible"
+#define MTC_TASK_RESET_NOT_ACC_RETRY "Reset Failed - BMC not accessible, retry %d of %d"
+#define MTC_TASK_RESET_COMPLETED   "Reset Completed"
 #define MTC_TASK_POWERON_FAIL      "Power-On Failed"
 #define MTC_TASK_POWERON_QUEUE     "Power-On Failed, retrying (%d of %d)"
+#define MTC_TASK_POWERON_NOT_PROV  "Power-On Failed - BMC is not provisioned"
+#define MTC_TASK_POWERON_NOT_ACC   "Power-On Failed - BMC is not accessible"
+#define MTC_TASK_POWERON_NOT_ACC_RETRY "Power-On Failed - BMC not accessible, retry %d of %d"
+#define MTC_TASK_POWERON_COMPLETED "Power-On Completed"
 #define MTC_TASK_POWEROFF_FAIL     "Power-Off Failed"
 #define MTC_TASK_POWEROFF_QUEUE    "Power-Off Failed, retrying (%d of %d)"
+#define MTC_TASK_POWEROFF_NOT_PROV "Power-Off Failed - BMC is not provisioned"
+#define MTC_TASK_POWEROFF_NOT_ACC  "Power-Off Failed - BMC is not accessible"
+#define MTC_TASK_POWEROFF_NOT_ACC_RETRY "Power-Off Failed - BMC not accessible, retry %d of %d"
+#define MTC_TASK_POWEROFF_COMPLETED "Power-Off Completed"
 
 #define MTC_TASK_BMC_NOT_PROV      "Request Failed, Management Controller Not Provisioned"
-#define MTC_TASK_BMC_NOT_CONNECTED "Request Failed, Management Controlle  Not Accessible"
 
 #define MTC_TASK_DISABLE_REQ       "Requesting Disable"
 #define MTC_TASK_MIGRATE_INSTANCES "Migrating Instances"
@@ -365,9 +380,11 @@ typedef enum
 #define MTC_POWERON_STATUS_RETRY_DELAY    (5)
 #define MTC_POWER_ACTION_RETRY_COUNT      (5)
 #define MTC_POWER_ACTION_SWITCH_THRESHOLD (MTC_POWER_ACTION_RETRY_COUNT/2)
-#define MTC_RESET_ACTION_RETRY_DELAY      (20)
+#define MTC_RESET_ACTION_RETRY_DELAY      (10)
 #define MTC_RESET_ACTION_RETRY_COUNT      (10)
 #define MTC_RESET_ACTION_SWITCH_THRESHOLD (MTC_RESET_ACTION_RETRY_COUNT/2)
+
+#define MTC_BMC_NOT_ACC_RETRY_DELAY       (30)
 
 /* number of calls to the bmc_handler while bm_access is not confirmed */
 #define MTC_MAX_B2B_BM_ACCESS_FAIL_COUNT_B4_ALARM (5)
@@ -1086,11 +1103,14 @@ string get_configStages_str ( mtc_configStages_enum stage );
 typedef enum
 {
     MTC_RESET__START = 0,
+    MTC_RESET__POWER_STATUS,
+    MTC_RESET__POWER_STATUS_WAIT,
     MTC_RESET__REQ_SEND,
     MTC_RESET__RESP_WAIT,
     MTC_RESET__QUEUE,
     MTC_RESET__OFFLINE_WAIT,
     MTC_RESET__DONE,
+    MTC_RESET__DONE_WAIT,
     MTC_RESET__FAIL,
     MTC_RESET__FAIL_WAIT,
     MTC_RESET__STAGES
@@ -1142,27 +1162,28 @@ string get_reinstallStages_str ( mtc_reinstallStages_enum stage );
 typedef enum
 {
     MTC_POWERON__START = 0,
-    MTC_POWERON__POWER_STATUS,
-    MTC_POWERON__POWER_STATUS_WAIT,
-    MTC_POWERON__REQ_SEND,
-    MTC_POWERON__RETRY_WAIT,
-    MTC_POWERON__RESP_WAIT,
+    MTC_POWERON__POWER_STATUS,       // State requires BMC Access
+    MTC_POWERON__POWER_STATUS_WAIT,  // State requires BMC Access
+    MTC_POWERON__REQ_SEND,           // State requires BMC Access
+    MTC_POWERON__RESP_WAIT,          // State requires BMC Access
     MTC_POWERON__DONE,
     MTC_POWERON__FAIL,
     MTC_POWERON__FAIL_WAIT,
     MTC_POWERON__QUEUE,
 
     MTC_POWEROFF__START,
-    MTC_POWEROFF__REQ_SEND,
-    MTC_POWEROFF__RESP_WAIT,
+    MTC_POWEROFF__POWER_STATUS,      // State requires BMC Access
+    MTC_POWEROFF__POWER_STATUS_WAIT, // State requires BMC Access
+    MTC_POWEROFF__REQ_SEND,          // State requires BMC Access
+    MTC_POWEROFF__RESP_WAIT,         // State requires BMC Access
     MTC_POWEROFF__DONE,
     MTC_POWEROFF__FAIL,
     MTC_POWEROFF__FAIL_WAIT,
     MTC_POWEROFF__QUEUE,
     MTC_POWEROFF__OFFLINE_WAIT,
-    MTC_POWEROFF__POWER_STATUS,
-    MTC_POWEROFF__POWER_STATUS_WAIT,
-    MTC_POWER__DONE, /* clear power action */
+
+    MTC_POWER__DONE, /* show completion task and start delay timer */
+    MTC_POWER__DONE_WAIT, /* delay-then-clear completion task */
     MTC_POWER__STAGES
 }   mtc_powerStages_enum ;
 

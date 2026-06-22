@@ -425,6 +425,7 @@ void mtc_stages_init ( void )
    powerStages_str   [MTC_POWEROFF__FAIL               ] = "Power-Off-Fail";
    powerStages_str   [MTC_POWEROFF__FAIL_WAIT          ] = "Power-Off-Fail-Wait";
    powerStages_str   [MTC_POWER__DONE                  ] = "Power-Done";
+   powerStages_str   [MTC_POWER__DONE_WAIT             ] = "Power-Done-Wait";
    powerStages_str   [MTC_POWER__STAGES                ] = "Power-Unknown";
 
 
@@ -445,11 +446,14 @@ void mtc_stages_init ( void )
    powercycleStages_str [MTC_POWERCYCLE__STAGES         ] = "Power-Cycle-Unknown";
 
    resetStages_str   [MTC_RESET__START                 ] = "Reset-Start";
+   resetStages_str   [MTC_RESET__POWER_STATUS          ] = "Reset-Power-Status";
+   resetStages_str   [MTC_RESET__POWER_STATUS_WAIT     ] = "Reset-Power-Status-Wait";
    resetStages_str   [MTC_RESET__REQ_SEND              ] = "Reset-Req-Send";
    resetStages_str   [MTC_RESET__RESP_WAIT             ] = "Reset-Resp-Wait";
    resetStages_str   [MTC_RESET__QUEUE                 ] = "Reset-Queue";
    resetStages_str   [MTC_RESET__OFFLINE_WAIT          ] = "Reset-Offline-Wait";
    resetStages_str   [MTC_RESET__DONE                  ] = "Reset-Done";
+   resetStages_str   [MTC_RESET__DONE_WAIT             ] = "Reset-Done-Wait";
    resetStages_str   [MTC_RESET__FAIL                  ] = "Reset-Fail";
    resetStages_str   [MTC_RESET__FAIL_WAIT             ] = "Reset-Fail-Wait";
    resetStages_str   [MTC_RESET__STAGES                ] = "Reset-Unknown";

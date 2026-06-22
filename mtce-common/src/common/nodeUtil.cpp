@@ -2350,8 +2350,6 @@ void daemon_dump_membuf ( void )
     mem_log_list.clear();
 }
 
-#define BUFFER_SIZE 128
-
 /*****************************************************************************
  *
  * Name    : execute_pipe_cmd
