@@ -358,14 +358,14 @@ int daemon_configure ( void )
     /* Manage the daemon pulse period setting - ensure in bound values */
     if ( pmon_config.start_delay < PMON_MIN_START_DELAY )
     {
-        wlog ("Start Delay : %d msecs (rounded up)\n",
-               PMON_MIN_AUDIT_PERIOD );
+        wlog ("Start Delay : %d secs (rounded up from %d)",
+               PMON_MIN_START_DELAY, pmon_config.start_delay);
         pmon_config.start_delay = PMON_MIN_START_DELAY ;
     }
     else if ( pmon_config.start_delay > PMON_MAX_START_DELAY )
     {
-        wlog ("Start Delay : %d msecs (rounded down)\n",
-               PMON_MAX_AUDIT_PERIOD );
+        wlog ("Start Delay : %d secs (rounded down from %d) ",
+               PMON_MAX_START_DELAY, pmon_config.start_delay);
         pmon_config.start_delay = PMON_MAX_START_DELAY ;
     }
     else
@@ -540,12 +540,25 @@ void daemon_service_run ( void )
 
     /* Wait a few seconds after go enabled to
      * allow the rest of init to finish before
-     * starting to process monitor */
+     * starting to process monitor.  During this delay also pet
+     * the host watchdog so the quorum-health counter does not run
+     * down while pmond is paused here.  Log a single warning if
+     * the hostwd socket is not healthy for any iteration. */
     ilog ("Delaying %d seconds to allow other processes to start\n", pmon_config.start_delay);
+    bool hostwd_warned = false ;
     for ( int i = 0 ; i < pmon_config.start_delay ; i++ )
     {
-        mtcWait_secs ( 1 );
+        mtcWait_secs ( 1 ); // signal handling is serviced
         pmon_send_pulse ( );
+        if ( pmon_getSock_ptr()->hostwd_sock )
+        {
+            pmon_send_hostwd ( );
+        }
+        else if ( !hostwd_warned )
+        {
+            wlog ("hostwd socket not ready ; cannot pet host watchdog during start delay\n");
+            hostwd_warned = true ;
+        }
     }
 
     pmon_service ( &pmon_ctrl );
