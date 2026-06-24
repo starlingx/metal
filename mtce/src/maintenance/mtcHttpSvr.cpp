@@ -149,11 +149,6 @@ void _create_error_response ( int rc , string & resp_buffer , node_inv_type & in
         resp_buffer.append (",\"reason\" : \"Controller redundancy check\"");
         resp_buffer.append (",\"action\" : \"Enable second controller\"");
     }
-    else if ( rc == FAIL_DEL_UNLOCKED )
-    {
-        resp_buffer.append (",\"reason\" : \"Host is Unlocked\"");
-        resp_buffer.append (",\"action\" : \"Lock Host and then Delete\"");
-    }
     else if ( rc == FAIL_ADMIN_ACTION )
     {
         resp_buffer.append (",\"reason\" : \"Unknown admin action\"");
@@ -168,6 +163,11 @@ void _create_error_response ( int rc , string & resp_buffer , node_inv_type & in
     {
         resp_buffer.append (",\"reason\" : \"No unlocked-enabled controller available to switch activity to\"");
         resp_buffer.append (",\"action\" : \"Enable second controller and then retry\"");
+    }
+    else if ( rc == FAIL_SWACT_NOT_READY )
+    {
+        resp_buffer.append (",\"reason\" : \"Maintenance not ready to switch activity\"");
+        resp_buffer.append (",\"action\" : \"Wait a moment and then retry\"");
     }
     else if ( rc == FAIL_OPER_INPROGRESS )
     {

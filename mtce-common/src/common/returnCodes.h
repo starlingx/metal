@@ -78,7 +78,7 @@
 #define FAIL_UNKNOWN_HOSTNAME (58)
 #define FAIL_TOKEN_GET        (59)
 
-#define FAIL_DEL_UNLOCKED     (60)
+#define FAIL_NODETYPE         (60)
 #define FAIL_DEL_UNKNOWN      (61)
 #define FAIL_UNIT_ACTIVE      (62)
 #define FAIL_ADMIN_ACTION     (63)
@@ -87,7 +87,7 @@
 #define FAIL_OPER_INPROGRESS  (66)
 #define FAIL_SWACT_INPROGRESS (67)
 #define FAIL_SWACT_NOINSVMATE (68)
-#define FAIL_NODETYPE         (69)
+#define FAIL_SWACT_NOT_READY  (69)
 
 #define FAIL_RESET_POWEROFF   (70)
 #define FAIL_INVALID_DATA     (71)

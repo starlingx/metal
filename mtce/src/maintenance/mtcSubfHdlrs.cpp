@@ -515,6 +515,12 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
             mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, work_queue_timeout );
             enableStageChange ( node_ptr, MTC_ENABLE__FAILURE_WAIT );
 
+            if ( node_ptr->add_completed == false )
+            {
+                plog ("%s Host Add Completed (uptime:%d)\n", node_ptr->hostname.c_str(), node_ptr->uptime );
+                node_ptr->add_completed = true ;
+            }
+
             break ;
         }
         case MTC_ENABLE__DONE:
@@ -564,6 +570,11 @@ int nodeLinkClass::enable_subf_handler ( struct nodeLinkClass::node * node_ptr )
                                               KPI_STR__COMPLETE,
                                               node_ptr->start_unlock_time);
                 node_ptr->unlocking = false ;
+            }
+            if ( node_ptr->add_completed == false )
+            {
+                plog ("%s Host Add Completed (uptime:%d)\n", node_ptr->hostname.c_str(), node_ptr->uptime );
+                node_ptr->add_completed = true ;
             }
             break ;
         }

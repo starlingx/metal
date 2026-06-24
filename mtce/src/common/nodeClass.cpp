@@ -2335,7 +2335,18 @@ int nodeLinkClass::mod_host ( node_inv_type & inv )
             else if ( !inv.action.compare ( "swact" ) ||
                       !inv.action.compare ( "force-swact" ) )
             {
-                if ( !((get_host_function_mask ( inv.type ) & CONTROLLER_TYPE) == CONTROLLER_TYPE) )
+                if (( NOT_SIMPLEX ) &&
+                    (( getNode(CONTROLLER_0)->add_completed == false ) ||
+                     ( getNode(CONTROLLER_1)->add_completed == false )))
+                {
+                    wlog ("%s Rejecting '%s' - at least one controller 'add' operation not complete (c0:%s c1:%s)",
+                              node_ptr->hostname.c_str(),
+                              inv.action.c_str(),
+                              getNode(CONTROLLER_0)->add_completed ? "yes" : "no",
+                              getNode(CONTROLLER_1)->add_completed ? "yes" : "no");
+                    rc = FAIL_SWACT_NOT_READY ;
+                }
+                else if ( !((get_host_function_mask ( inv.type ) & CONTROLLER_TYPE) == CONTROLLER_TYPE) )
                 {
                     elog ("%s Rejecting '%s' - Swact only supported for Controllers\n",
                               node_ptr->hostname.c_str(),
@@ -10152,12 +10163,13 @@ void nodeLinkClass::mem_log_state1 ( struct nodeLinkClass::node * node_ptr )
     string op = operState_enum_to_str(node_ptr->operState) ;
     string av = availStatus_enum_to_str(node_ptr->availStatus);
 
-    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\t%s-%s-%s    degrade_mask:%08x\n",
+    snprintf (&str[0], MAX_MEM_LOG_DATA, "%s\t%s-%s-%s    degrade_mask:%08x add_complete:%s\n",
                 node_ptr->hostname.c_str(),
                 ad.c_str(),
                 op.c_str(),
                 av.c_str(),
-                node_ptr->degrade_mask);
+                node_ptr->degrade_mask,
+                node_ptr->add_completed ? "yes" : "no");
     mem_log (str);
     if ( ! node_ptr->subfunction_str.empty() )
     {
