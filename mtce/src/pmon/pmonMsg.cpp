@@ -161,7 +161,7 @@ int pmon_send_hostwd ( void )
         }
         else
         {
-            elog("Error sending  message to host watchdog -- error %d (%s)\n",
+            elog("Error sending message to host watchdog ; error %d (%s)",
                 errno, strerror(errno));
             if ( pmon_sock.hostwd_sock )
             {
@@ -171,6 +171,10 @@ int pmon_send_hostwd ( void )
             return (FAIL);
 
         }
+    }
+    else
+    {
+        elog("Error sending message to host watchdog ; socket not healthy");
     }
     return (FAIL);
 }
