@@ -1281,6 +1281,14 @@ void nodeLinkClass::mtcHttpUtil_handler ( struct evhttp_request *req, void *arg 
         elog ("%s returned (Not-Found) (%d)\n", 
                   event.log_prefix.c_str(), 
                   event.status);
+        /* For sysinv update requests, a 404 may indicate the host UUID
+         * changed (e.g. after factory restore). Don't mask the error;
+         * let the workQueue handle retry with UUID refresh. */
+        if ( event.request == SYSINV_UPDATE )
+        {
+            event.active = false ;
+            goto _handler_done ;
+        }
         event.status = PASS ;
     }
 
