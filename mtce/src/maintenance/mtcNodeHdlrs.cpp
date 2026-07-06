@@ -518,6 +518,13 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
              ***************************************************************/
             bool degrade_only = false ;
 
+            /* Complete the add operation even if the node failed ; for any reason */
+            if ( node_ptr->add_completed == false )
+            {
+                plog ("%s Host Add Completed (uptime:%d)\n", node_ptr->hostname.c_str(), node_ptr->uptime );
+                node_ptr->add_completed = true ;
+            }
+
             elog ("%s Main Enable FSM (from failed)\n", node_ptr->hostname.c_str());
 
             mtcTimer_reset ( node_ptr->mtcTimer );
@@ -1623,6 +1630,14 @@ int nodeLinkClass::recovery_handler ( struct nodeLinkClass::node * node_ptr )
             this->ctl_mtcAlive_gate  ( node_ptr, false );
             node_ptr->http_retries_cur = 0 ;
             node_ptr->unknown_health_reported = false ;
+
+            /* Complete the add operation even if the node failed
+               the add operation heartbeat soak */
+            if ( node_ptr->add_completed == false )
+            {
+                plog ("%s Host Add Completed (uptime:%d)\n", node_ptr->hostname.c_str(), node_ptr->uptime );
+                node_ptr->add_completed = true ;
+            }
 
             plog ("%s %sGraceful Recovery (%d) (uptime was %d)\n",
                       node_ptr->hostname.c_str(),
@@ -7604,9 +7619,11 @@ int nodeLinkClass::add_handler ( struct nodeLinkClass::node * node_ptr )
                 }
             }
             node_ptr->addStage = MTC_ADD__START;
-
-            plog ("%s Host Add Completed (uptime:%d)\n", node_ptr->hostname.c_str(), node_ptr->uptime );
-            node_ptr->add_completed = true ;
+            if ( node_ptr->adminAction != MTC_ADMIN_ACTION__ENABLE_SUBF )
+            {
+                plog ("%s Host Add Completed (uptime:%d)\n", node_ptr->hostname.c_str(), node_ptr->uptime );
+                node_ptr->add_completed = true ;
+            }
             break ;
         }
     }
