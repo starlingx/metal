@@ -75,10 +75,10 @@ TIMEOUT="--timeout=$((${TMOUT:-120} - 1))s"
 # timeout waiting for unsatisfied pod-disruption-budget).
 LOG "Draining all pods for graceful shutdown."
 timeout "${TMOUT:-120}s" stdbuf -oL -eL kubectl drain "${HOSTNAME}" ${KUBECONFIG} \
-    --ignore-daemonsets --delete-emptydir-data --force \
+    --ignore-daemonsets --delete-emptydir-data --force --disable-eviction=true \
     ${SKIP_TIMEOUT} "${TIMEOUT}" 2>&1 | LOG
 RC=$?
-LOG "Drain Done ; rc:$RC"
+LOG "Drain Done with eviction disabled ; rc:$RC"
 
 touch "${REBOOT_CORDONED}"
 
