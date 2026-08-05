@@ -1,0 +1,5 @@
+[bandit]
+# --skip B602,B605: subprocess shell=True and os.system() are intentional
+# in rvmc.py/rsbc.py for BMC hardware management (system commands required)
+skips = B602,B605
+exclude = .tox,.eggs,tests
