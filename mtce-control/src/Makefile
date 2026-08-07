@@ -4,6 +4,7 @@ SOURCE3 = hbsAgent
 SOURCE4 = hbsAgent.conf
 SOURCE5 = hbsAgent.service
 SOURCE6 = ipsec-server.conf
+SOURCE7 = goenabledControl.service
 
 PMONDIR ?= $(_sysconfdir)/pmon.d
 local_etc_goenabledd = $(_sysconfdir)/goenabled.d
@@ -28,6 +29,9 @@ install:
 
 	# Controller-Only Heartbeat Service file
 	install -m 644 -p -D scripts/$(SOURCE5) $(buildroot)/$(_unitdir)/hbsAgent.service
+
+	# Controller-Only Go Enabled Service file
+	install -m 644 -p -D scripts/$(SOURCE7) $(buildroot)/$(_unitdir)/goenabledControl.service
 
 	# Controller-Only Go Enabled Test
 	install -m 755 -d $(buildroot)/$(local_etc_goenabledd)

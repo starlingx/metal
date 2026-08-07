@@ -15,4 +15,4 @@ override_dh_auto_install:
 	dh_install
 
 override_dh_installsystemd:
-	dh_installsystemd -pmtce-compute goenabled-worker.service
+	dh_installsystemd -pmtce-compute goenabledWorker.service
