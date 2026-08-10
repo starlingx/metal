@@ -580,9 +580,32 @@ int pmon_passive_handler ( process_config_type * ptr )
          * before trying to monitor it */
         case PMON_STAGE__MONITOR_WAIT:
         {
+            /* The startuptime is a ceiling, not a fixed wait. Proceed as
+             * soon as the recovery child has completed successfully and the
+             * process pidfile exists, rather than waiting out the full
+             * startuptime. sigchld_rxed/child_pid/status confirm the restart
+             * command finished OK; get_process_pid confirms the process is
+             * actually up. Requiring the child reap here avoids racing a
+             * pidfile that appears before the restart child exits (which
+             * would otherwise be mis-handled as a spawn failure below). */
+            bool ready = ( ptr->sigchld_rxed &&
+                           ptr->child_pid    &&
+                         ( ptr->status == PASS ) &&
+                         ( get_process_pid ( ptr ) != 0 ) );
+
             /* Give the process time to start */
-            if ( ptr->pt_ptr->ring == true )
+            if (( ptr->pt_ptr->ring == true ) || ( ready ))
             {
+                /* took the early exit ; cancel the remaining startuptime
+                 * timer and assert the ring so the downstream stage (MONITOR
+                 * debounce cadence / MANAGE) proceeds exactly as it would on
+                 * a normal startuptime expiry. */
+                if ( ready && ( ptr->pt_ptr->ring == false ))
+                {
+                    mtcTimer_reset ( ptr->pt_ptr );
+                    ptr->pt_ptr->ring = true ;
+                }
+
                 if (( !ptr->sigchld_rxed ) || ( !ptr->child_pid ) || ( ptr->status ))
                 {
                     if ( ptr->child_pid == 0 )

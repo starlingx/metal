@@ -590,7 +590,7 @@ void pmon_msg_fini ( void );
 int  pulse_port_init ( void ) ;
 int  event_port_init ( const char * iface , int port );
 int  amon_port_init ( int port );
-int  hostwd_port_init ( void );
+int  hostwd_port_init ( bool quiet = false );
 
 int  pmon_send_event ( unsigned int event_cmd , process_config_type * ptr );
 
@@ -649,6 +649,10 @@ void quorum_process_failure ( process_config_type * ptr );
 
 #define PMON_MIN_START_DELAY (1)
 #define PMON_MAX_START_DELAY (120)
+
+#define PMON_DEFAULT_STARTUPTIME (10)
+#define PMON_MIN_STARTUPTIME (1)
+#define PMON_MAX_STARTUPTIME (60)
 
 #define PMON_MIN_AUDIT_PERIOD (50)
 #define PMON_MAX_AUDIT_PERIOD (999)

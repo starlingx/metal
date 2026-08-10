@@ -585,9 +585,11 @@ int process_config_load (process_config_type * pc_ptr, const char * config_file_
     {
         pc_ptr->mode = strdup("Passive") ;
     }
-    if ( !pc_ptr->startuptime )
+
+    if (( pc_ptr->startuptime > PMON_MAX_STARTUPTIME ) ||
+        ( pc_ptr->startuptime < PMON_MIN_STARTUPTIME ))
     {
-        pc_ptr->startuptime = PMON_MIN_START_DELAY ;
+        pc_ptr->startuptime = PMON_DEFAULT_STARTUPTIME ;
     }
 
     /* Many process conf files came from a sysvinit origin and might not
@@ -687,9 +689,11 @@ int process_config_load (process_config_type * pc_ptr, const char * config_file_
             pc_ptr->was_failed   = false ;
             pc_ptr->sigchld_rxed = false ;
 
-            ilog ("%7s Mon : %-27s %-8s\n", pc_ptr->mode,
-                                            pc_ptr->process,
-                                            pc_ptr->ignore ? "ignored" : pc_ptr->severity);
+            ilog ("%7s Mon : %-30s %-8s - [s:%3d d:%2d r:%2d i:%2d] - %s",
+                    pc_ptr->mode, pc_ptr->process,
+                    pc_ptr->ignore ? "ignored" : pc_ptr->severity,
+                    pc_ptr->startuptime, pc_ptr->debounce, pc_ptr->restarts, pc_ptr->interval,
+                    recovery_method_buf);
             pc_ptr->status_stage = STATUS_STAGE__BEGIN ;
         }
         else
@@ -751,10 +755,11 @@ int process_config_load (process_config_type * pc_ptr, const char * config_file_
         {
             /* subfunction process monitoring is deferred until
              * that subfunction init is complete */
-            ilog ("%7s Def : %-30s %-8s - %s (%s)\n", pc_ptr->mode,
-                                                 pc_ptr->process,
-                                                 pc_ptr->ignore ? "ignored" : pc_ptr->severity, recovery_method_buf,
-                                                 pc_ptr->subfunction);
+            ilog ("%7s Def : %-30s %-8s - [s:%3d d:%2d r:%2d i:%2d] - %s (%s)\n",
+                    pc_ptr->mode, pc_ptr->process,
+                    pc_ptr->ignore ? "ignored" : pc_ptr->severity,
+                    pc_ptr->startuptime, pc_ptr->debounce, pc_ptr->restarts, pc_ptr->interval,
+                    recovery_method_buf, pc_ptr->subfunction);
             /* defer subfunction processes to the FSM to get enabled */
             pc_ptr->stage = PMON_STAGE__POLLING ;
             pc_ptr->pt_ptr->ring = true ;
@@ -765,9 +770,11 @@ int process_config_load (process_config_type * pc_ptr, const char * config_file_
              * to true immediately */
             pc_ptr->passive_monitoring = true ;
 
-            ilog ("%7s Mon : %-30s %-8s - %s\n", pc_ptr->mode,
-                                                 pc_ptr->process,
-                                                 pc_ptr->ignore ? "ignored" : pc_ptr->severity, recovery_method_buf);
+            ilog ("%7s Mon : %-30s %-8s - [s:%3d d:%2d r:%2d i:%2d] - %s",
+                    pc_ptr->mode, pc_ptr->process,
+                    pc_ptr->ignore ? "ignored" : pc_ptr->severity,
+                    pc_ptr->startuptime, pc_ptr->debounce, pc_ptr->restarts, pc_ptr->interval,
+                    recovery_method_buf);
             pc_ptr->stage = PMON_STAGE__MANAGE ;
         }
         // mem_log_process ( pc_ptr );
@@ -2163,8 +2170,8 @@ void pmon_service ( pmon_ctrl_type * ctrl_ptr )
             }
         }
 
-        /* Debugging */
-        if (daemon_get_cfg_ptr()->debug_level & 1 )
+        /* Debugging - lane 4 - 1xxx */
+        if (daemon_get_cfg_ptr()->debug_level & 8 )
         {
             char proc_mask [MAX_PROCESSES*2] ;
             bool somefailed = false ;
