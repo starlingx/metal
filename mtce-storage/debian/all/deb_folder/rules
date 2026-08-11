@@ -15,4 +15,4 @@ override_dh_auto_install:
 	dh_install
 
 override_dh_installsystemd:
-	dh_installsystemd -pmtce-storage --name goenabledStorage goenabledStorage.service --no-enable
+	dh_installsystemd -pmtce-storage --no-enable

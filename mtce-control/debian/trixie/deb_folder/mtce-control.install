@@ -1,5 +1,4 @@
 usr/lib/systemd/system/hbsAgent.service
-usr/lib/systemd/system/goenabledControl.service
 etc/init.d/goenabledControl
 etc/init.d/hbsAgent
 usr/share/starlingx/pmon.d/hbsAgent.conf
