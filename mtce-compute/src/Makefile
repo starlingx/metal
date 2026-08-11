@@ -3,7 +3,7 @@ SOURCE5 = LICENSE
 
 SOURCE22 = virt-support-goenabled.sh
 
-SOURCE31 = goenabledWorker.service
+SOURCE31 = goenabled-worker.service
 
 
 local_etc_pmond = $(_sysconfdir)/pmon.d
@@ -21,7 +21,7 @@ install:
 	install -m 755 -d $(buildroot)/$(local_etc_goenabledd)
 	install -m 755 -p -D scripts/$(SOURCE22) $(buildroot)/$(local_etc_goenabledd)/virt-support-goenabled.sh
 	# Install to systemd (source group 3x)
-	install -m 644 -p -D scripts/$(SOURCE31) $(buildroot)/$(_unitdir)/goenabledWorker.service
+	install -m 644 -p -D scripts/$(SOURCE31) $(buildroot)/$(_unitdir)/goenabled-worker.service
 	# for license
 	install -m 755 -d $(buildroot)/$(_datarootdir)/licenses/mtce-compute-1.0
 	install -p -D -m 600 $(SOURCE5) $(buildroot)/$(_datarootdir)/licenses/mtce-compute-1.0/LICENSE

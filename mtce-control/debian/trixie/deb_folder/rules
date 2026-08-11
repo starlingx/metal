@@ -19,4 +19,3 @@ override_dh_auto_install:
 
 override_dh_installsystemd:
 	dh_installsystemd -pmtce-control --name hbsAgent hbsAgent.service
-	dh_installsystemd -pmtce-control --name goenabledControl goenabledControl.service
