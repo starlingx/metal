@@ -77,15 +77,22 @@ int pulse_port_init ( void )
     return (rc);
 }
 
-/* Setup the Unix Host Watchdog Socket */
-int hostwd_port_init ( void )
+/* Setup the Unix Host Watchdog Socket
+ *
+ * quiet : when true, suppress the "will retry" connect warnings. Used while
+ *         retrying during the start delay where hostwd is expected to still
+ *         be coming up (pmond is ordered before hostwd). */
+int hostwd_port_init ( bool quiet )
 {
     memset(&pmon_sock.hostwd_addr, 0, sizeof(pmon_sock.hostwd_addr));
     pmon_sock.hostwd_sock = socket(AF_UNIX, SOCK_DGRAM, 0);
 
     if (pmon_sock.hostwd_sock <= 0)
     {
-        wlog("Could not connect to create hostwd socket - will retry\n");
+        if ( !quiet )
+        {
+            wlog("Could not connect to create hostwd socket - will retry\n");
+        }
         pmon_sock.hostwd_sock = 0 ;
         return (FAIL_SOCKET_CREATE);
     }
@@ -106,7 +113,10 @@ int hostwd_port_init ( void )
         len);
     if (connected == -1)
     {
-        wlog("Could not connect to hostwd port - will retry\n");
+        if ( !quiet )
+        {
+            wlog("Could not connect to hostwd port - will retry\n");
+        }
         if ( pmon_sock.hostwd_sock )
             close(pmon_sock.hostwd_sock);
         pmon_sock.hostwd_sock = 0;

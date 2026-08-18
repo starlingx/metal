@@ -355,7 +355,7 @@ int daemon_configure ( void )
         ilog("Pulse Period: %d\n", pmon_ctrl.pulse_period );
     }
 
-    /* Manage the daemon pulse period setting - ensure in bound values */
+    /* Manage the daemon startup delay setting - ensure in bound values */
     if ( pmon_config.start_delay < PMON_MIN_START_DELAY )
     {
         wlog ("Start Delay : %d secs (rounded up from %d)",
@@ -419,13 +419,12 @@ int socket_init ( void )
         rc = amon_port_init ( pmon_config.pmon_amon_port );
     }
 
-    /* Setup the pmon hostwd connection.
-     * This lets pmon commuicate essential process info to the
-     * host watchdog process */
-    if ( rc == PASS )
-    {
-        hostwd_port_init ( );
-    }
+    /* Note: The pmon hostwd connection is intentionally NOT established here.
+     * pmond is ordered to start before hostwd (see pmon.service
+     * 'Before=hostw.service'), so connecting during early init races hostwd
+     * creating its listening socket and results in a failed connect.
+     * The connection is deferred to daemon_service_run(), just before
+     * process monitoring begins, once hostwd has had time to come up. */
 
     pmon_inbox_init ( );
 
@@ -540,25 +539,32 @@ void daemon_service_run ( void )
 
     /* Wait a few seconds after go enabled to
      * allow the rest of init to finish before
-     * starting to process monitor.  During this delay also pet
-     * the host watchdog so the quorum-health counter does not run
-     * down while pmond is paused here.  Log a single warning if
-     * the hostwd socket is not healthy for any iteration. */
+     * starting to process monitor. */
     ilog ("Delaying %d seconds to allow other processes to start\n", pmon_config.start_delay);
-    bool hostwd_warned = false ;
     for ( int i = 0 ; i < pmon_config.start_delay ; i++ )
     {
         mtcWait_secs ( 1 ); // signal handling is serviced
         pmon_send_pulse ( );
-        if ( pmon_getSock_ptr()->hostwd_sock )
+
+        /* Connect to the host watchdog during the start delay.
+         *
+         * pmond is ordered to start before hostwd (pmon.service has
+         * 'Before=hostw.service'), so hostwd's listening socket may not
+         * exist yet in the early part of this delay. Retry the connect
+         * quietly every 5 seconds to avoid log spam while hostwd comes
+         * up. */
+        if (( pmon_getSock_ptr()->hostwd_sock == 0 ) && (( i % 5 ) == 0 ))
         {
-            pmon_send_hostwd ( );
+            hostwd_port_init ( true );
         }
-        else if ( !hostwd_warned )
-        {
-            wlog ("hostwd socket not ready ; cannot pet host watchdog during start delay\n");
-            hostwd_warned = true ;
-        }
+    }
+
+    /* Final (non-quiet) attempt if still not connected, so a genuine
+     * failure is logged. pmon_service()'s main loop also re-attempts the
+     * connect on the hostwd timer as an in-service recovery. */
+    if ( pmon_getSock_ptr()->hostwd_sock == 0 )
+    {
+        hostwd_port_init ( );
     }
 
     pmon_service ( &pmon_ctrl );
