@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2018, 2024-2025 Wind River Systems, Inc.
+ * Copyright (c) 2013-2018, 2024-2026 Wind River Systems, Inc.
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -955,7 +955,8 @@ int create_mtcAlive_msg ( ctrl_type * ctrl_ptr, mtc_message_type & msg, int cmd,
     int exitstatus = system("cryptsetup status luks_encrypted_vault");
     if ( 0 != exitstatus )
         msg.parm[MTC_PARM_FLAGS_IDX] |= MTC_FLAG__LUKS_VOL_FAILED ;
-    if ( daemon_is_file_present ( CONFIG_COMPLETE_FILE ) )
+    if ( daemon_is_file_present ( CONFIG_COMPLETE_FILE ) ||
+         daemon_is_file_present ( USM_UPGRADE_IN_PROGRESS ) )
         msg.parm[MTC_PARM_FLAGS_IDX] |= MTC_FLAG__I_AM_CONFIGURED ;
     if ( daemon_is_file_present ( CONFIG_FAIL_FILE ) )
         msg.parm[MTC_PARM_FLAGS_IDX] |= MTC_FLAG__I_AM_NOT_HEALTHY ;
