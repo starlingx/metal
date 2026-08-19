@@ -1,5 +1,5 @@
 SOURCE1 = goenabled
-SOURCE2 = goenabled-storage.service
+SOURCE2 = goenabledStorage.service
 SOURCE3 = LICENSE
 
 local_etc_pmond = $(_sysconfdir)/pmond.d
@@ -18,7 +18,7 @@ install:
 	# Storage-Only Services
 	install -m 755 -d $(buildroot)/$(local_etc_servicesd)/storage
 	# Install systemd dir
-	install -m 644 -p -D scripts/$(SOURCE2) $(buildroot)/$(_unitdir)/goenabled-storage.service
+	install -m 644 -p -D scripts/$(SOURCE2) $(buildroot)/$(_unitdir)/goenabledStorage.service
 	# for license
 	install -m 755 -d $(buildroot)/$(_datarootdir)/licenses/mtce-storage-1.0
 	install -p -D -m 600 $(SOURCE3) $(buildroot)/$(_datarootdir)/licenses/mtce-storage-1.0/LICENSE
