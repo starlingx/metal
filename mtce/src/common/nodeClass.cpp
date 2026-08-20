@@ -2785,6 +2785,170 @@ int nodeLinkClass::offline_timeout_secs ( void )
     return (((offline_period*offline_threshold)/1000)*3);
 }
 
+/***************************************************************************
+ *
+ * Function: has_node_rebooted
+ *
+ * Description: Validates whether a node has actually rebooted based on
+ *              uptime and local time deltas. This prevents false positives
+ *              when stale residual mtcAlive messages arrive during node
+ *              booting from a slowly-shutting-down node.
+ *
+ * The algorithm works as follows:
+ * 1. When a node goes offline, we snapshot its current uptime and the mtcAgent
+ *    local time (using monotonic clock).
+ * 2. We wait for a minimum threshold (configurable, default 2 minutes). Any
+ *    mtcAlive message arriving before this threshold is automatically rejected
+ *    as stale - since a node cannot reboot and recover sending mtcAlive
+ *    messages that quickly.
+ * 3. ONLY after the threshold passes, when an mtcAlive message arrives, we examine
+ *    the uptime to distinguish between reboot vs stale leak:
+ *    - If uptime_delta ≈ elapsed_time: no reboot - old instance still running
+ *    - If uptime_delta differs significantly: did reboot - new instance after reboot
+ * 4. Allow configurable tolerance (±time_drift_tolerance, default ±30 secs) for
+ *    normal clock skew between remote node and local mtcAgent.
+ *
+ * Drift semantics:
+ *    - Drift WITHIN ±time_drift_tolerance: no reboot (old instance, uptime aged normally)
+ *    - Drift OUTSIDE ±time_drift_tolerance: reboot confirmed (uptime reset by shutdown)
+ *
+ * Configuration:
+ *    - reboot_validation_threshold: minimum wait time after offline (default 120 secs)
+ *    - time_drift_tolerance: clock skew allowance (default ±30 secs, configurable)
+ *
+ * Inputs: node_ptr - pointer to node struct (must have offline_detection_time
+ *                    and uptime_at_offline already captured)
+ *
+ * Returns: PASS if the node has rebooted
+ *          RETRY if validation inconclusive or threshold not yet reached
+ *          FAIL_OPERATION if unable to determine reboot status
+ *
+ ***************************************************************************/
+int nodeLinkClass::has_node_rebooted ( struct nodeLinkClass::node * node_ptr )
+{
+    /* If node uptime is exactly 0, node has not rebooted yet */
+    if (node_ptr->uptime == 0)
+    {
+        ilog("%s node uptime is zero - not rebooted yet",
+             node_ptr->hostname.c_str());
+        return RETRY;
+    }
+
+    /* On first mtcAlive arrival after entering Booting phase, capture the uptime
+     * snapshot. This ensures we get the actual node uptime from the message,
+     * not a stale value from a previous enable attempt. */
+    if (node_ptr->uptime_at_offline == 0)
+    {
+        node_ptr->uptime_at_offline = node_ptr->uptime;
+        ilog("%s offline time snapshot (from first mtcAlive): host uptime_at_offline=%u secs, last_known_uptime=%u secs",
+             node_ptr->hostname.c_str(),
+             node_ptr->uptime_at_offline,
+             node_ptr->last_known_uptime);
+
+        /* Check if first mtcAlive uptime is significantly less than last known uptime
+         * This indicates the node has rebooted (uptime was reset) */
+        if (node_ptr->last_known_uptime > 0 && node_ptr->uptime < node_ptr->last_known_uptime)
+        {
+            /* Uptime decreased significantly from before going offline - definitive reboot */
+            plog("%s node has rebooted: uptime decreased from %u (last known) to %u (now) secs",
+                 node_ptr->hostname.c_str(),
+                 node_ptr->last_known_uptime,
+                 node_ptr->uptime);
+            return PASS;
+        }
+    }
+
+    /* Minimum time we expect a reboot to take (2 minutes as specified) */
+    unsigned int reboot_validation_threshold = daemon_get_cfg_ptr()->reboot_validation_threshold;
+
+    struct timespec now_time = {0, 0};
+    time_delta_type time_delta = {0,0};
+
+    /* Get current time from mtcAgent perspective (monotonic clock for reliability) */
+    if (clock_gettime(CLOCK_MONOTONIC, &now_time) != 0)
+    {
+        wlog("%s failed to get current time for reboot validation",
+                 node_ptr->hostname.c_str());
+        /* Default to rejecting if we can't validate - safer than accepting */
+        return FAIL_OPERATION;
+    }
+
+    /* Calculate the local time delta since node went offline */
+    if (timedelta(node_ptr->offline_detection_time, now_time, time_delta) != PASS)
+    {
+        wlog("%s failed to calculate time delta for reboot validation",
+                 node_ptr->hostname.c_str());
+        /* Default to rejecting if we can't validate */
+        return FAIL_OPERATION;
+    }
+
+    unsigned int local_time_delta_secs = time_delta.secs;
+
+    /* Calculate drift: measures if uptime is aging normally (drift~0) or reset (large drift).
+     * drift = (current_uptime - saved_uptime) - elapsed_time_since_offline
+     * If node didn't reboot: uptime aged normally, drift ≈ 0 (within ±time_drift_tolerance)
+     * If node rebooted: uptime reset, drift becomes large positive value (outside ±tolerance) */
+    unsigned int uptime_delta = node_ptr->uptime - node_ptr->uptime_at_offline;
+    int uptime_drift = (int)uptime_delta - (int)local_time_delta_secs;
+
+    /* Log detailed info for debugging */
+
+    /* If we haven't waited long enough since offline detection, it's too early
+     * to confirm a reboot. Wait for at least the threshold to pass. */
+    if (local_time_delta_secs < reboot_validation_threshold)
+    {
+        ilog("%s not enough time elapsed since offline detection ; elapsed=%u < threshold=%u secs - wait longer",
+             node_ptr->hostname.c_str(),
+             local_time_delta_secs,
+             reboot_validation_threshold);
+        return RETRY;
+    }
+
+    /* At this point:
+     * - We've waited >= reboot_validation_threshold since node went offline
+     * - Node is sending mtcAlive messages
+     * - node_ptr->uptime is non-zero (checked above)
+     *
+     * Key insight: if the node truly rebooted, its uptime would have reset to
+     * near-zero. If it's the old instance still running, its uptime continues
+     * to age normally. So:
+     *
+     * uptime_delta = current_uptime - uptime_at_offline
+     *
+     * If uptime_delta ≈ elapsed_time: old instance (uptime aged normally)
+     * If uptime_delta << elapsed_time: new instance (uptime reset on reboot) */
+
+    /* If current uptime is less than saved uptime, the node has rebooted.
+     * After the threshold has passed, this is a definitive reboot indicator
+     * since uptime would never naturally decrease. */
+    if (node_ptr->uptime < node_ptr->uptime_at_offline)
+    {
+        plog("%s node has rebooted: current uptime=%u is less than saved uptime=%u",
+             node_ptr->hostname.c_str(),
+             node_ptr->uptime,
+             node_ptr->uptime_at_offline);
+        return PASS;
+    }
+
+    /* Get configurable time_drift_tolerance before using it in validation */
+    int time_drift_tolerance = daemon_get_cfg_ptr()->time_drift_tolerance;
+
+    /* Always check the drift - the reboot time loss (shutdown + BIOS) creates a
+     * definitive drift signature regardless of starting uptime.
+     * Use configurable time_drift_tolerance for clock skew allowance */
+    if (uptime_drift >= -time_drift_tolerance && uptime_drift <= time_drift_tolerance)
+    {
+        wlog("%s reboot validation failed : time drift=%d secs (within ±%d sec tolerance)",
+             node_ptr->hostname.c_str(), uptime_drift, time_drift_tolerance);
+        return FAIL_OPERATION;
+    }
+
+    /* Uptime delta doesn't match elapsed time, indicating a reboot */
+    plog("%s node has rebooted: time drift=%d secs",
+         node_ptr->hostname.c_str(), uptime_drift);
+    return PASS;
+}
+
 void nodeLinkClass::start_offline_handler ( struct nodeLinkClass::node * node_ptr )
 {
     bool already_active = false ;
@@ -4697,6 +4861,61 @@ void nodeLinkClass::set_uptime ( string & hostname, unsigned int uptime, bool fo
     set_uptime ( node_ptr, uptime, force );
 }
 
+/* Update mtcAlive message info - combines uptime, health, flags, sequence and last_known_uptime */
+
+void nodeLinkClass::update_mtcAlive_info ( string & hostname, unsigned int uptime, int health, int flags, 
+                                           unsigned int seq, unsigned int last_uptime, int iface, bool force )
+{
+    nodeLinkClass::node* node_ptr ;
+    node_ptr = nodeLinkClass::getNode ( hostname );
+    if ( node_ptr != NULL )
+    {
+        /* Update uptime */
+        if ((force == true ) ||
+            (( uptime != 0 ) && ( node_ptr->uptime == 0 )) ||
+            (( node_ptr->uptime != 0 ) && ( uptime == 0 )))
+        {
+            mtcInvApi_update_uptime ( node_ptr, uptime );
+        }
+        node_ptr->uptime = uptime ;
+
+        /* Update health - using NODE_HEALTH_UNKNOWN/NODE_HEALTHY/NODE_UNHEALTHY constants */
+        switch ( health )
+        {
+            case NODE_HEALTH_UNKNOWN:
+            case NODE_HEALTHY:
+            case NODE_UNHEALTHY:
+            {
+                if ( health == NODE_UNHEALTHY )
+                {
+                    if ( node_ptr->health != NODE_UNHEALTHY )
+                    {
+                        if ( node_ptr->adminState == MTC_ADMIN_STATE__UNLOCKED )
+                        {
+                            wlog ("%s Health State Change -> UNHEALTHY\n", node_ptr->hostname.c_str());
+                        }
+                    }
+                }
+                node_ptr->health = health ;
+                break ;
+            }
+            default:
+            {
+                wlog ("%s Unexpected health code (%d), defaulting to (unknown)\n", node_ptr->hostname.c_str(), health );
+                break ;
+            }
+        }
+
+        /* Update mtce flags - call private version with node_ptr */
+        set_mtce_flags ( node_ptr, flags, iface );
+
+        /* update sequence number */
+        set_mtcAlive ( node_ptr, seq, iface);
+
+        /* Capture the last known uptime from mtcAlive message for reboot detection */
+        node_ptr->last_known_uptime = last_uptime ;
+    }
+}
 
 unsigned int  nodeLinkClass::get_uptime ( string & hostname )
 {
@@ -4748,6 +4967,15 @@ void nodeLinkClass::set_mtce_flags ( string hostname, int flags, int iface )
     nodeLinkClass::node* node_ptr = nodeLinkClass::getNode ( hostname );
     if ( node_ptr != NULL )
     {
+        set_mtce_flags ( node_ptr, flags, iface );
+    }
+}
+
+/* Private version that operates on node_ptr directly */
+void nodeLinkClass::set_mtce_flags ( struct nodeLinkClass::node * node_ptr, int flags, int iface )
+{
+    if ( node_ptr != NULL )
+    {
         /* Deal with host level */
         node_ptr->mtce_flags = flags ;
         if ( flags & MTC_FLAG__MAIN_GOENABLED )
@@ -4773,7 +5001,7 @@ void nodeLinkClass::set_mtce_flags ( string hostname, int flags, int iface )
             if ( flags & MTC_FLAG__MAIN_GOENABLE_FAIL )
             {
                 elog ("%s goEnabled failed (oob:%08X) ; see %s:%s for details",
-                        hostname.c_str(), flags, hostname.c_str(), MTCCLIENT_LOG_FILE);
+                        node_ptr->hostname.c_str(), flags, node_ptr->hostname.c_str(), MTCCLIENT_LOG_FILE);
                 node_ptr->goEnabled_failed = true ;
                 alarm_enabled_failure ( node_ptr, true );
                 mtcInvApi_update_task ( node_ptr, MTC_TASK_MAIN_INTEST_FAIL );
@@ -4782,7 +5010,7 @@ void nodeLinkClass::set_mtce_flags ( string hostname, int flags, int iface )
             if ( flags & MTC_FLAG__SUBF_GOENABLE_FAIL )
             {
                 ilog ("%s goEnabled subfunction failed (oob:%08X) ; see %s:%s for details",
-                        hostname.c_str(), flags, hostname.c_str(), MTCCLIENT_LOG_FILE);
+                        node_ptr->hostname.c_str(), flags, node_ptr->hostname.c_str(), MTCCLIENT_LOG_FILE);
                 node_ptr->goEnabled_failed_subf = true ;
                 alarm_compute_failure ( node_ptr, FM_ALARM_SEVERITY_CRITICAL );
                 mtcInvApi_update_task ( node_ptr, MTC_TASK_SUBF_INTEST_FAIL );
@@ -4813,7 +5041,7 @@ void nodeLinkClass::set_mtce_flags ( string hostname, int flags, int iface )
             if ( flags & MTC_FLAG__MAIN_SERVICES_FAIL )
             {
                 elog ("%s start host services failed (oob:%08X) ; see %s:%s for details",
-                          hostname.c_str(), flags, hostname.c_str(), MTCCLIENT_LOG_FILE);
+                          node_ptr->hostname.c_str(), flags, node_ptr->hostname.c_str(), MTCCLIENT_LOG_FILE);
                 node_ptr->hostservices_failed = true ;
                 alarm_enabled_failure ( node_ptr, true );
                 // mtcInvApi_update_task ( node_ptr, MTC_TASK_MAIN_SERVICE_FAIL );
@@ -4822,7 +5050,7 @@ void nodeLinkClass::set_mtce_flags ( string hostname, int flags, int iface )
             if ( flags & MTC_FLAG__SUBF_SERVICES_FAIL )
             {
                 ilog ("%s start host subfunction services failed (oob:%08X) ; see %s:%s for details",
-                          hostname.c_str(), flags, hostname.c_str(), MTCCLIENT_LOG_FILE);
+                          node_ptr->hostname.c_str(), flags, node_ptr->hostname.c_str(), MTCCLIENT_LOG_FILE);
                 node_ptr->hostservices_failed_subf = true ;
                 alarm_compute_failure ( node_ptr, FM_ALARM_SEVERITY_CRITICAL );
                 // mtcInvApi_update_task ( node_ptr, MTC_TASK_SUBF_SERVICE_FAIL );
@@ -4842,13 +5070,13 @@ void nodeLinkClass::set_mtce_flags ( string hostname, int flags, int iface )
             (( node_ptr->operState == MTC_OPER_STATE__ENABLED ) ||
              ( node_ptr->adminAction == MTC_ADMIN_ACTION__RECOVER )))
         {
-            if (( hostname == CONTROLLER_0 ) || ( hostname == CONTROLLER_1 ))
+            if (( node_ptr->hostname == CONTROLLER_0 ) || ( node_ptr->hostname == CONTROLLER_1 ))
             {
                 elog ("%s reported unhealthy by SM (%s)",
-                          hostname.c_str(),
+                          node_ptr->hostname.c_str(),
                           get_iface_name_str(iface));
 
-                if ( hostname != this->my_hostname )
+                if ( node_ptr->hostname != this->my_hostname )
                 {
                      force_full_enable ( node_ptr );
                 }
@@ -4859,7 +5087,7 @@ void nodeLinkClass::set_mtce_flags ( string hostname, int flags, int iface )
             else
             {
                 slog ("%s reported unhealthy by SM ; compare error",
-                          hostname.c_str());
+                          node_ptr->hostname.c_str());
             }
         }
 
@@ -4946,40 +5174,6 @@ void nodeLinkClass::set_mtce_flags ( string hostname, int flags, int iface )
             {
                 node_ptr->goEnabled_subf = false ;
             }
-        }
-    }
-}
-
-void nodeLinkClass::set_health ( string & hostname, int health )
-{
-    switch ( health )
-    {
-        case NODE_HEALTH_UNKNOWN:
-        case NODE_HEALTHY:
-        case NODE_UNHEALTHY:
-        {
-            nodeLinkClass::node* node_ptr ;
-            node_ptr = nodeLinkClass::getNode ( hostname );
-            if ( node_ptr != NULL )
-            {
-                if ( health == NODE_UNHEALTHY )
-                {
-                    if ( node_ptr->health != NODE_UNHEALTHY )
-                    {
-                        if ( node_ptr->adminState == MTC_ADMIN_STATE__UNLOCKED )
-                        {
-                            wlog ("%s Health State Change -> UNHEALTHY\n", hostname.c_str());
-                        }
-                    }
-                }
-                node_ptr->health = health ;
-            }
-            break ;
-        }
-        default:
-        {
-            wlog ("%s Unexpected health code (%d), defaulting to (unknown)\n", hostname.c_str(), health );
-            break ;
         }
     }
 }

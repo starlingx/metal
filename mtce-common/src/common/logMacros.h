@@ -168,6 +168,8 @@ typedef struct
     int   online_period                ; /**< locked availability refresh     */
     int   insv_test_period             ; /**< insv test period in secs        */
     int   oos_test_period              ; /**< oos test period in secs         */
+    int   reboot_validation_threshold  ; /**< reboot validation threshold secs*/
+    int   time_drift_tolerance         ; /**< time drift tolerance in secs    */
     int   failsafe_shutdown_delay      ; /**< seconds before failsafe reboot  */
     int   hostwd_update_period         ; /**< expect hostwd to be updated     */
     int   autorecovery_threshold       ; /**< AIO stop autorecovery threshold */

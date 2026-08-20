@@ -185,6 +185,16 @@ int timeout_config_handler (       void * user,
         config_ptr->oos_test_period = atoi(value);
         ilog (" Oost Period:%4d secs (controller)\n", config_ptr->oos_test_period);
     }
+    else if (MATCH("timeouts", "reboot_validation_threshold"))
+    {
+        config_ptr->reboot_validation_threshold = atoi(value);
+        ilog ("Reboot Valid: %3d secs\n", config_ptr->reboot_validation_threshold);
+    }
+    else if (MATCH("timeouts", "time_drift_tolerance"))
+    {
+        config_ptr->time_drift_tolerance = atoi(value);
+        ilog ("Time Drift Tol: %3d secs\n", config_ptr->time_drift_tolerance);
+    }
     else if (MATCH("timeouts", "audit_period"))
     {
         config_ptr->audit_period = atoi(value);
@@ -422,6 +432,8 @@ void daemon_dump_cfg ( void )
     if ( ptr->online_period              ) { ilog ("online_period         = %d\n", ptr->online_period               );}
     if ( ptr->insv_test_period           ) { ilog ("insv_test_period      = %d\n", ptr->insv_test_period            );}
     if ( ptr->oos_test_period            ) { ilog (" oos_test_period      = %d\n", ptr->oos_test_period             );}
+    if ( ptr->reboot_validation_threshold ) { ilog ("reboot_validation_thr = %d\n", ptr->reboot_validation_threshold  );}
+    if ( ptr->time_drift_tolerance       ) { ilog ("time_drift_tolerance  = %d\n", ptr->time_drift_tolerance         );}
 
     /* mtcClient & hbsClient */
     if ( ptr->failsafe_shutdown_delay ) { ilog ("failsafe_shutdown_dela= %d\n", ptr->failsafe_shutdown_delay     );}

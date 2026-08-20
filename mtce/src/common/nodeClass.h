@@ -207,6 +207,15 @@ private:
         unsigned int uptime ;
         unsigned int uptime_save ;
 
+        /** Timestamp when node went offline (monotonic clock for reliable interval measurement) */
+        struct timespec offline_detection_time = {0, 0};
+
+        /** Last reported uptime value before node went offline */
+        unsigned int uptime_at_offline = 0;
+
+        /** Last known uptime before going offline (saved for reboot detection) */
+        unsigned int last_known_uptime = 0;
+
         /** Set to true once the host's add FSM is done  */
         bool   add_completed ;
 
@@ -933,6 +942,7 @@ private:
     bool get_mtcAlive_gate ( struct nodeLinkClass::node * node_ptr );
     void ctl_mtcAlive_gate ( struct nodeLinkClass::node * node_ptr, bool gate_state );
     void set_mtcAlive      ( struct nodeLinkClass::node * node_ptr, unsigned int sequence, int iface);
+    void set_mtce_flags    ( struct nodeLinkClass::node * node_ptr, int flags, int iface );
 
     /*********               mtcInfo in the database              ************/
     int    mtcInfo_set ( struct nodeLinkClass::node * node_ptr, string key, string value );
@@ -1017,6 +1027,11 @@ private:
     int ar_handler ( struct nodeLinkClass::node * node_ptr,
                      autorecovery_disable_cause_enum cause,
                      string ar_disable_banner);
+
+    /** Validates whether a node has actually rebooted based on uptime and time deltas.
+     * Returns PASS if node has rebooted, RETRY if stale message detected (retry reboot),
+     * FAIL_OPERATION if validation failed */
+    int has_node_rebooted ( struct nodeLinkClass::node * node_ptr );
 
     /** ***********************************************************************
       *
@@ -1868,6 +1883,8 @@ public:
     void         set_uptime ( string & hostname, unsigned int uptime, bool force );
     unsigned int get_uptime ( string & hostname );
 
+    void update_mtcAlive_info ( string & hostname, unsigned int uptime, int health, int flags, unsigned int seq, unsigned int last_uptime, int iface, bool force );
+
     void set_uptime_refresh_ctr ( string & hostname, int value );
     int  get_uptime_refresh_ctr ( string & hostname );
 
@@ -1901,7 +1918,6 @@ public:
       * - NODE_UNHEALTHY         (2)
       *
       * */
-    void set_health ( string & hostname, int health );
 
     /** Returns true when a 'go enabled' message for that
       * hostnamed node is received */

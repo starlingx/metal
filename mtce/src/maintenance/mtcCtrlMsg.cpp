@@ -375,10 +375,13 @@ int mtc_service_inbox ( nodeLinkClass   *  obj_ptr,
                 }
             }
 
-            obj_ptr->set_uptime     ( hostname , msg.parm[MTC_PARM_UPTIME_IDX], false );
-            obj_ptr->set_health     ( hostname , msg.parm[MTC_PARM_HEALTH_IDX] );
-            obj_ptr->set_mtce_flags ( hostname , msg.parm[MTC_PARM_FLAGS_IDX], iface );
-            obj_ptr->set_mtcAlive   ( hostname , msg.parm[MTC_PARM_SEQ_IDX], iface);
+            obj_ptr->update_mtcAlive_info ( hostname ,
+                                            msg.parm[MTC_PARM_UPTIME_IDX],
+                                            msg.parm[MTC_PARM_HEALTH_IDX],
+                                            msg.parm[MTC_PARM_FLAGS_IDX],
+                                            msg.parm[MTC_PARM_SEQ_IDX],
+                                            msg.parm[MTC_PARM_UPTIME_IDX],
+                                            iface, false );
 
             mlog2("%s Uptime:%d Health:%d Flags:0x%x Seq:%5d mtcAlive:%s  (%s)\n",
                       hostname.c_str(),
