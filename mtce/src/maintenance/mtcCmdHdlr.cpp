@@ -356,6 +356,14 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
                 mtcInvApi_update_task ( node_ptr, MTC_TASK_REBOOT_REQUEST );
             }
 
+            /* Reset the reboot retry counter for this enable-level retry cycle.
+             * Each cycle gets a fresh counter starting from 0, allowing up to
+             * RESET_PROG_MAX_REBOOTS_B4_RETRY attempts within the cycle.
+             * After exhausting all reboot attempts, RESET_PROGRESSION_RETRY
+             * increments parm2; if parm2 exceeds parm1 (max cycles), the reset
+             * progression command fails. */
+            node_ptr->cmd_retries = 0 ;
+
             start_offline_handler ( node_ptr );
 
             node_ptr->mtcCmd_work_fifo_ptr->stage = MTC_CMD_STAGE__REBOOT ;
@@ -503,21 +511,26 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
                         }
                         else
                         {
-                            ilog ("%s bmc not provisioned ; search for offline", node_ptr->hostname.c_str());
+                            /* No BMC - check if node is going offline naturally (race condition:
+                             * node may be rebooting but ACK was lost). Give offline check a chance
+                             * before retrying reboot. */
+                            ilog ("%s bmc not provisioned ; checking if offline before reboot retry",
+                                  node_ptr->hostname.c_str());
                             mtcTimer_start ( node_ptr->mtcCmd_timer, mtcTimer_handler, offline_timeout_secs());
                             node_ptr->mtcCmd_work_fifo_ptr->stage = MTC_CMD_STAGE__OFFLINE_CHECK ;
                         }
                     }
                     else
                     {
-                        int retry_delay = MTC_CMD_RSP_TIMEOUT ;
-                        wlog ("%s reboot ACK timeout ; reboot retry (%d of %d) in %d secs",
-                                      node_ptr->hostname.c_str(),
-                                      node_ptr->cmd_retries,
-                                      RESET_PROG_MAX_REBOOTS_B4_RESET-1,
-                                      retry_delay);
-                        mtcTimer_start ( node_ptr->mtcCmd_timer, mtcTimer_handler, retry_delay );
-                        node_ptr->mtcCmd_work_fifo_ptr->stage = MTC_CMD_STAGE__REBOOT ;
+                        /* ACK timeout - node may be rebooting but ACK was lost/delayed.
+                         * Check if it's going offline before retrying reboot. Avoids race condition
+                         * where we keep sending reboot when node is already rebooting. */
+                        ilog ("%s reboot ACK timeout ; checking if offline before retry (%d of %d)",
+                              node_ptr->hostname.c_str(),
+                              node_ptr->cmd_retries,
+                              RESET_PROG_MAX_REBOOTS_B4_RESET);
+                        mtcTimer_start ( node_ptr->mtcCmd_timer, mtcTimer_handler, offline_timeout_secs());
+                        node_ptr->mtcCmd_work_fifo_ptr->stage = MTC_CMD_STAGE__OFFLINE_CHECK ;
                     }
                 }
             }
@@ -553,8 +566,10 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
                 /* start timer that verifies board has reset */
                 mtcTimer_reset ( node_ptr->mtcCmd_timer );
 
-                /* progress to RESET if we have tried 5 times already */
-                if ( ++node_ptr->cmd_retries >= RESET_PROG_MAX_REBOOTS_B4_RESET )
+                /* Reboot ACK received - proceed to wait for offline.
+                 * Retry counting happens in REBOOT_ACK on timeout (line 485).
+                 * Here we just check if max retries already reached. */
+                if ( node_ptr->cmd_retries >= RESET_PROG_MAX_REBOOTS_B4_RESET )
                 {
                     int reset_delay = bmc_reset_delay - (RESET_PROG_MAX_REBOOTS_B4_RESET * MTC_CMD_RSP_TIMEOUT) ;
                     node_ptr->bmc_reset_pending_log_throttle = 0 ;
@@ -754,8 +769,11 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
 
             else if ( node_ptr->mtcCmd_timer.ring == true )
             {
-                if ( ++node_ptr->cmd_retries < RESET_PROG_MAX_REBOOTS_B4_RETRY )
+                /* Node not offline after reboot attempt - either reboot didn't work,
+                 * or ACK was lost but node IS rebooting. Retry. */
+                if ( node_ptr->cmd_retries < RESET_PROG_MAX_REBOOTS_B4_RETRY )
                 {
+                    ++node_ptr->cmd_retries;
                     ilog ("%s reboot (retry %d of %d)\n",
                               node_ptr->hostname.c_str(),
                               node_ptr->cmd_retries,
@@ -774,16 +792,24 @@ int nodeLinkClass::cmd_handler ( struct nodeLinkClass::node * node_ptr )
         }
         case MTC_CMD_STAGE__RESET_PROGRESSION_RETRY:
         {
-            /* Complete command if we reach max retries */
+            /* Increment and check the enable-level retry counter.
+             * parm2 counts which cycle we're on (0->1->2->...)
+             * parm1 specifies maximum cycles allowed.
+             * Each cycle allows RESET_PROG_MAX_REBOOTS_B4_RETRY reboot attempts. */
             if ( ++node_ptr->mtcCmd_work_fifo_ptr->parm2 > node_ptr->mtcCmd_work_fifo_ptr->parm1 )
             {
-                plog ("%s reset progression done\n", node_ptr->hostname.c_str());
+                ilog ("%s reset progression exhausted after %d reboot cycles\n",
+                      node_ptr->hostname.c_str(),
+                      node_ptr->mtcCmd_work_fifo_ptr->parm2 - 1);
                 node_ptr->mtcCmd_work_fifo_ptr->status = FAIL_RETRY ;
                 node_ptr->mtcCmd_work_fifo_ptr->stage = MTC_CMD_STAGE__DONE ;
             }
             else
             {
-                wlog ("%s reset progression retry\n", node_ptr->hostname.c_str());
+                ilog ("%s reset progression retry cycle %d of %d\n",
+                      node_ptr->hostname.c_str(),
+                      node_ptr->mtcCmd_work_fifo_ptr->parm2,
+                      node_ptr->mtcCmd_work_fifo_ptr->parm1);
                 node_ptr->mtcCmd_work_fifo_ptr->stage = MTC_CMD_STAGE__RESET_PROGRESSION_START ;
             }
 

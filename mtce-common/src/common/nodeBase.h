@@ -827,6 +827,11 @@ typedef struct
 #define RESET_PROG_MAX_REBOOTS_B4_RESET (5)
 #define RESET_PROG_MAX_REBOOTS_B4_RETRY (RESET_PROG_MAX_REBOOTS_B4_RESET+2)
 
+/* Enable-level retry cycles for reset progression.
+ * Each cycle allows RESET_PROG_MAX_REBOOTS_B4_RETRY reboot attempts.
+ * A value of 1 means: initial attempt + 1 retry cycle = 2 total cycles. */
+#define RESET_PROG_MAX_ENABLE_RETRIES (1)
+
 const char * get_mtcNodeCommand_str ( int cmd );
 
 /** Maintenance Commands used to specify HTTP REST API Command operations  */

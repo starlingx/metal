@@ -518,6 +518,12 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
              ***************************************************************/
             bool degrade_only = false ;
 
+            /* Reset retries counter when entering failure state */
+            node_ptr->retries = 0;
+
+            /* Reset reset progression retry counter for the next enable attempt */
+            node_ptr->cmd.parm2 = 0;
+
             /* Complete the add operation even if the node failed ; for any reason */
             if ( node_ptr->add_completed == false )
             {
@@ -764,6 +770,9 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                       node_ptr->hostname.c_str(),
                       this->dor_mode_active ? " (DOR active)" : "" );
 
+            /* Reset retries counter at the start of a new enable sequence */
+            node_ptr->retries = 0;
+
             /* clear all the past enable failure bools */
             clear_main_failed_bools ( node_ptr );
             clear_subf_failed_bools ( node_ptr );
@@ -947,7 +956,7 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
         {
             if ( node_ptr->mtcTimer.ring == true )
             {
-                /* Don't do reset progression if the node was recently powered on. */
+                /* Timer expired - check if we can retry or should fail */
                 time_t now_time_secs = time(NULL);
                 if ( (now_time_secs-node_ptr->power_on_time_secs) < MTC_MINS_2 )
                 {
@@ -958,9 +967,57 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                     mtcInvApi_update_task ( node_ptr, MTC_TASK_BOOTING );
                     enableStageChange ( node_ptr, MTC_ENABLE__INTEST_START );
                 }
+                else if ( node_ptr->mtcCmd_done_fifo.size() )
+                {
+                    /* Command completed - check its status */
+                    node_ptr->mtcCmd_done_fifo_ptr = node_ptr->mtcCmd_done_fifo.begin();
+                    if ( node_ptr->mtcCmd_done_fifo_ptr->status == PASS )
+                    {
+                        /* Reset/reboot succeeded, proceed to booting */
+                        mtcInvApi_update_task ( node_ptr, MTC_TASK_BOOTING );
+                        enableStageChange ( node_ptr, MTC_ENABLE__INTEST_START );
+                    }
+                    else if ( node_ptr->mtcCmd_done_fifo_ptr->status == FAIL_RETRY )
+                    {
+                        /* Reset progression command returned FAIL_RETRY status.
+                         * Check if we've exhausted enable-level retries (parm2 > parm1).
+                         * parm1=0 means cmd_handler manages retries, exit immediately.
+                         * parm1>0 means enable FSM retries; only fail if limit reached. */
+                        if ( node_ptr->mtcCmd_done_fifo_ptr->parm1 == 0 ||
+                             node_ptr->mtcCmd_done_fifo_ptr->parm2 > node_ptr->mtcCmd_done_fifo_ptr->parm1 )
+                        {
+                            elog("%s Reset Progression exhausted (parm2:%d > parm1:%d) - failing enable",
+                                 node_ptr->hostname.c_str(),
+                                 node_ptr->mtcCmd_done_fifo_ptr->parm2,
+                                 node_ptr->mtcCmd_done_fifo_ptr->parm1);
+                            enableStageChange ( node_ptr, MTC_ENABLE__FAILURE );
+                        }
+                        else
+                        {
+                            /* Enable-level retries still available, try again.
+                             * Preserve parm2 (retry attempt count) from the completed command
+                             * for use in the next cycle */
+                            node_ptr->cmd.parm2 = node_ptr->mtcCmd_done_fifo_ptr->parm2;
+                            wlog("%s Reset Progression failed - retrying (cycle %d of %d)",
+                                 node_ptr->hostname.c_str(),
+                                 node_ptr->mtcCmd_done_fifo_ptr->parm2,
+                                 node_ptr->mtcCmd_done_fifo_ptr->parm1);
+                            enableStageChange ( node_ptr, MTC_ENABLE__RESET_PROGRESSION );
+                        }
+                    }
+                    else
+                    {
+                        /* Other failure - log it but retry progression */
+                        wlog("%s Reset Progression failed (status:%d) - retrying",
+                             node_ptr->hostname.c_str(), node_ptr->mtcCmd_done_fifo_ptr->status);
+                        enableStageChange ( node_ptr, MTC_ENABLE__RESET_PROGRESSION );
+                    }
+                    /* Remove the reset progression command now that it is done */
+                    node_ptr->mtcCmd_done_fifo.pop_front();
+                }
                 else
                 {
-                    /* now reset/reboot the node by running reset progression */
+                    /* Timer expired but command not done - retry progression */
                     enableStageChange ( node_ptr, MTC_ENABLE__RESET_PROGRESSION );
                 }
                 node_ptr->mtcTimer.ring = false ;
@@ -981,12 +1038,28 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
              * mtcAlive message after reset */
             node_ptr->health = NODE_HEALTH_UNKNOWN ;
 
-            node_ptr->mtcCmd_work_fifo.clear();
-            mtcCmd_init ( node_ptr->cmd );
+            /* Preserve parm1 and parm2 (retry limits and count) across init clearance.
+             * parm1 = max enable-level retries (number of reset progression cycles)
+             * parm2 = current retry attempt counter (incremented by RESET_PROGRESSION_RETRY) */
+            int preserved_parm1 = node_ptr->cmd.parm1;
+            int preserved_parm2 = node_ptr->cmd.parm2;
+
+            /* Only initialize on first entry; preserve parm1/parm2 across retries */
+            if ( node_ptr->cmd.parm2 == 0 )
+            {
+                mtcCmd_init ( node_ptr->cmd );
+                node_ptr->cmd.parm1 = RESET_PROG_MAX_ENABLE_RETRIES ;
+                node_ptr->cmd.parm2 = 0    ; /* start retry counter at 0 */
+            }
+            else
+            {
+                /* Restore parm1 and parm2 for retry cycle */
+                node_ptr->cmd.parm1 = preserved_parm1;
+                node_ptr->cmd.parm2 = preserved_parm2;
+            }
             node_ptr->cmd.stage = MTC_CMD_STAGE__START ;
             node_ptr->cmd.cmd   = MTC_OPER__RESET_PROGRESSION ;
             node_ptr->cmd_retries = 0  ; /* init fsm retries count */
-            node_ptr->cmd.parm1 = 0    ; /* set progression retries */
             node_ptr->cmd.task  = true ; /* send task updates */
             node_ptr->mtcCmd_work_fifo.push_front(node_ptr->cmd);
 
@@ -1028,8 +1101,24 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                               node_ptr->cmd.parm1,
                               node_ptr->mtcCmd_done_fifo_ptr->status );
 
-                    /* trigger some delay before another attempt */
-                    enableStageChange ( node_ptr, MTC_ENABLE__RECOVERY_TIMER );
+                    /* Preserve parm2 (current cycle count) from the completed command
+                     * for use in the next retry cycle. parm1 specifies max cycles. */
+                    node_ptr->cmd.parm2 = node_ptr->mtcCmd_done_fifo_ptr->parm2;
+
+                    /* Check if we've exhausted all retry cycles:
+                     * parm2 is current cycle count, parm1 is maximum cycles allowed.
+                     * If parm2 > parm1, we've exceeded the limit and should fail. */
+                    if ( node_ptr->mtcCmd_done_fifo_ptr->parm2 > node_ptr->mtcCmd_done_fifo_ptr->parm1 )
+                    {
+                        elog("%s Reset Progression failed after %d cycles - enable failed",
+                             node_ptr->hostname.c_str(), node_ptr->mtcCmd_done_fifo_ptr->parm1);
+                        enableStageChange ( node_ptr, MTC_ENABLE__FAILURE );
+                    }
+                    else
+                    {
+                        /* Retry cycles still available, attempt reset again */
+                        enableStageChange ( node_ptr, MTC_ENABLE__RECOVERY_TIMER );
+                    }
                 }
                 else /* ... we got the reset or reboot */
                 {
@@ -1063,6 +1152,25 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                 ilog ("%s clearing force full enable recursion prevention flag", node_ptr->hostname.c_str());
                 node_ptr->forcing_full_enable = false ;
             }
+
+            /* Capture the mtcAgent local time when entering booting phase.
+             * This will be used later to validate whether the next mtcAlive
+             * message represents a real reboot or a stale message from a
+             * slow shutdown.
+             * NOTE: The uptime snapshot will be taken from the first mtcAlive
+             * message that arrives (in has_node_rebooted), not here, so we get
+             * the actual node uptime instead of the stale value.
+             * Reset uptime_at_offline to 0 to allow fresh snapshot capture on
+             * next mtcAlive arrival (needed for retry cycles). */
+            if (clock_gettime(CLOCK_MONOTONIC, &node_ptr->offline_detection_time) != 0)
+            {
+                wlog("%s failed to capture offline detection time", node_ptr->hostname.c_str());
+            }
+            node_ptr->uptime_at_offline = 0;
+
+            ilog("%s Booting phase entered: local time=%lld (uptime snapshot will be taken from first mtcAlive)",
+                 node_ptr->hostname.c_str(),
+                 (long long)node_ptr->offline_detection_time.tv_sec);
 
             /* Set uptime to zero in mtce and in the database */
             node_ptr->uptime_save = 0 ;
@@ -1111,6 +1219,103 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
             /* search for the mtc alive message */
             if ( node_ptr->mtcAlive_online == true )
             {
+                /* Reboot validation is not wanted or required for self */
+                if ( node_ptr->hostname != this->my_hostname )
+                {
+                    /* Validate that the node has actually rebooted based on uptime and
+                    * local time deltas. This prevents false positives from stale mtcAlive
+                    * messages arriving during node booting from a slowly-shutting-down node. */
+                    int reboot_validation_result = has_node_rebooted(node_ptr);
+                    if ( reboot_validation_result == RETRY )
+                    {
+                       /* Not a real reboot - this is a stale mtcAlive message.
+                        * Ignore, clear the mtcAlive_online flag and continue
+                        * waiting for the next mtcAlive.
+                        * Identify which network the message arrived on and clear that
+                        * interface's tracking to avoid duplicate logs. */
+                        for (int i = 0; i < MTCALIVE_INTERFACES_MAX; i++)
+                        {
+                            if (node_ptr->mtcAlive_sequence[i] > 0)
+                            {
+                                ilog("%s rejecting leaky shutdown mtcAlive message from %s network - node has not rebooted",
+                                         node_ptr->hostname.c_str(),
+                                         get_iface_name_str(i));
+
+                                /* Log drift tracking as superset of validation data */
+                                unsigned int uptime_delta = node_ptr->uptime - node_ptr->uptime_at_offline;
+                                struct timespec now_time = {0, 0};
+                                time_delta_type time_delta = {0,0};
+                                if (clock_gettime(CLOCK_MONOTONIC, &now_time) == 0 &&
+                                    timedelta(node_ptr->offline_detection_time, now_time, time_delta) == PASS)
+                                {
+                                    int uptime_drift = (int)uptime_delta - (int)time_delta.secs;
+                                    int time_drift_tolerance = daemon_get_cfg_ptr()->time_drift_tolerance;
+                                    ilog("%s drift tracking: local: offline_time=%u now_time=%u (elapsed=%u) ; remote: last_known_uptime=%u, uptime_at_offline=%u, now_uptime=%u (delta=%u) ; drift=%d secs, tolerance=±%d secs",
+                                         node_ptr->hostname.c_str(),
+                                         (unsigned int)node_ptr->offline_detection_time.tv_sec,
+                                         (unsigned int)now_time.tv_sec,
+                                         (unsigned int)time_delta.secs,
+                                         node_ptr->last_known_uptime,
+                                         node_ptr->uptime_at_offline,
+                                         node_ptr->uptime,
+                                         uptime_delta,
+                                         uptime_drift,
+                                         time_drift_tolerance);
+                                }
+
+                                node_ptr->mtcAlive_sequence[i] = 0;  /* clear this interface's tracking */
+                                break;
+                            }
+                        }
+                        node_ptr->mtcAlive_online = false;
+                        break;
+                    }
+                    else if ( reboot_validation_result == FAIL_OPERATION )
+                    {
+                       /* Validation failed - cannot determine reboot status.
+                        * Implement retry logic with threshold, using the same retry counter
+                        * that's managed through the reset progression flow. */
+
+                        /* Increment retry counter */
+                        node_ptr->retries++;
+
+                        char buffer[BUFFER_SIZE] = {0};
+                        int reboot_retry_max = 5;  /* same threshold as reset progression */
+
+                        if ( node_ptr->retries < reboot_retry_max )
+                        {
+                            /* Still have retries left - go back and reboot again */
+                            snprintf ( buffer, BUFFER_SIZE, MTC_TASK_REBOOT_FAIL_RETRY,
+                                    node_ptr->retries, reboot_retry_max );
+                            wlog ("%s %s\n", node_ptr->hostname.c_str(), buffer );
+                            mtcInvApi_update_task ( node_ptr, buffer );
+
+                            /* Clear work queue to prevent interference from old reboot commands
+                             * before retrying reset progression. Ensures clean state transition. */
+                            workQueue_purge   ( node_ptr );
+                            doneQueue_purge   ( node_ptr );
+
+                            /* Reset progression to try rebooting again */
+                            enableStageChange ( node_ptr, MTC_ENABLE__RESET_PROGRESSION );
+                        }
+                        else
+                        {
+                            /* Max retries exceeded - fail the enable sequence */
+                            snprintf ( buffer, BUFFER_SIZE, MTC_TASK_REBOOT_FAIL );
+                            elog ("%s %s\n", node_ptr->hostname.c_str(), buffer );
+                            mtcInvApi_update_task ( node_ptr, buffer );
+
+                            /* Force enable failure */
+                            enableStageChange ( node_ptr, MTC_ENABLE__FAILURE );
+
+                            if ( node_ptr->availStatus != MTC_AVAIL_STATUS__FAILED )
+                            {
+                                availStatusChange ( node_ptr, MTC_AVAIL_STATUS__FAILED );
+                            }
+                        }
+                        break;
+                    }
+                }
                 node_ptr->hbsClient_ready = false ;
                 mtcTimer_reset ( node_ptr->mtcTimer );
 
@@ -3348,6 +3553,12 @@ int nodeLinkClass::offline_handler ( struct nodeLinkClass::node * node_ptr )
                         node_ptr->mtcAlive_pxeboot_count = 0 ;
                         for (int i = 0 ; i < MTCALIVE_INTERFACES_MAX ; i++)
                             node_ptr->mtcAlive_sequence[i] = 0;
+
+                        /* Clear the offline detection time so it can be retaken
+                         * on the next Booting phase entry */
+                        node_ptr->offline_detection_time.tv_sec = 0;
+                        node_ptr->offline_detection_time.tv_nsec = 0;
+                        node_ptr->uptime_at_offline = 0;
 
                         plog ("%s going offline ; (threshold (%d msec * %d)\n",
                                   node_ptr->hostname.c_str(),
