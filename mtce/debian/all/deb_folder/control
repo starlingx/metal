@@ -20,7 +20,7 @@ Homepage: https://www.starlingx.io
 
 Package: mtce
 Architecture: any
-Depends: ${misc:Depends}, ${shlibs:Depends}, ipmitool, redfishtool
+Depends: ${misc:Depends}, ${shlibs:Depends}, ipmitool, redfishtool, jq
 Description: StarlingX Host Maintenance Services
  The host maintenance services package contains a suite of daemons that
  provide host maintainability and a high level of fault detection with

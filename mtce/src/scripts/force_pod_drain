@@ -3,11 +3,23 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 #
-# The script will run during kubelet.service ExecStop.
-# This script detects whether systemd state is 'stopping' due to
-# shutdown/reboot, then does a kubectl drain on this Kubernetes node
-# to force shutdown of pods.
+# This script performs a two-phase pod shutdown for AIO-SX systems
+# before a lazy reboot. It ensures RBD-backed storage is cleanly
+# unmapped while the Ceph cluster is still reachable, preventing
+# the libceph kernel module from stalling during shutdown.
 #
+# Phase 1: Cordon + selectively delete non-Ceph pods (Ceph stays alive)
+# Phase 2: Wait for RBD device cleanup (via rbd-preshutdown)
+#
+# This script is launched by mtcAgent as part of the AIO-SX
+# lazy_graceful_fs_reboot path. It runs BEFORE SM begins its
+# service shutdown, so cluster IPs and Ceph pods are still active.
+#
+# Direct pod deletion (not eviction) is used because:
+# - AIO-SX has a single node; PDBs serve no availability purpose
+# - kubectl drain cannot selectively exclude a namespace
+# - Cordon prevents controllers from rescheduling deleted pods
+# - Graceful termination is still respected (SIGTERM + grace period)
 
 NAME=$(basename "${0}")
 
@@ -16,11 +28,11 @@ if [[ "$1" == "-h" || "$1" == "--help" ]]; then
     echo "Usage: $NAME <timeout_seconds> <completion_file>"
     echo ""
     echo "Arguments:"
-    echo "  timeout_seconds   Maximum time in seconds to wait for pod drain"
-    echo "  completion_file   File to touch when drain operation completes"
+    echo "  timeout_seconds  Maximum time in seconds to wait for pod drain"
+    echo "  completion_file  File to touch when drain operation completes"
     echo ""
     echo "Example:"
-    echo "  $NAME 120 /tmp/drain_complete"
+    echo "  $NAME 180 /tmp/drain_complete"
     exit 1
 fi
 
@@ -46,14 +58,36 @@ KUBECONFIG="--kubeconfig=/etc/kubernetes/admin.conf"
 REBOOT_CORDONED=/etc/platform/.reboot_cordoned
 UNLOCK_READY=/etc/platform/.unlock_ready
 
+# Namespace where Rook-Ceph pods reside
+CEPH_NAMESPACE="rook-ceph"
+
+# Script for RBD device cleanup
+RBD_PRESHUTDOWN=/usr/local/sbin/rbd-preshutdown
+
+# Timeout for waiting for RBD devices to be unmapped by CSI (seconds)
+RBD_UNMAP_TIMEOUT=60
+
+# Grace period for pod deletion (seconds)
+POD_GRACE_PERIOD=30
+
 # Log info message to /var/log/daemon.log
 function LOG {
     logger -p daemon.info -t "${NAME}($$): " "${@}"
 }
 
+# Log warning message to /var/log/daemon.log
+function WARN {
+    logger -p daemon.warning -t "${NAME}($$): " "${@}"
+}
+
+# Log error message to /var/log/daemon.log
+function ERROR {
+    logger -p daemon.error -t "${NAME}($$): " "${@}"
+}
+
 LOG "Args: timeout=${TMOUT}s, completion_file=${TOUCH_FILE}"
 
-# Perform kubectl drain on this Kubernetes node.
+# Exit early if already cordoned (previous drain completed)
 if [ -f "${REBOOT_CORDONED}" ]; then
     LOG "Already cordoned. Do nothing."
     exit 0
@@ -62,30 +96,143 @@ if [ -f "${UNLOCK_READY}" ]; then
     LOG "Unlock ready."
 fi
 
-# Skip waiting if pod is stuck terminating for specified duration
-SKIP_TIMEOUT="--skip-wait-for-delete-timeout=30"
+###############################################################################
+# Phase 1: Cordon the node and selectively delete non-Ceph pods
+#
+# Rook-Ceph OSD/MON pods are preserved so that:
+# - The Ceph cluster remains operational
+# - CSI can cleanly flush dirty pages and unmap RBD devices
+# - The kernel libceph client can complete outstanding I/O
+#
+# The node is cordoned first to prevent Deployment/ReplicaSet controllers
+# from rescheduling deleted pods. On AIO-SX there is only one node, so
+# pods will remain in Pending state (cannot schedule on a cordoned node).
+#
+# Direct pod deletion bypasses PDB enforcement. On AIO-SX, PDBs serve no
+# availability purpose (single node, system rebooting, no alternate node).
+# Graceful termination is still respected - pods receive SIGTERM and are
+# given a grace period to shut down cleanly before SIGKILL. Ceph remains
+# available throughout, so any remaining dirty pages are flushed by the
+# kernel during the subsequent CSI unmount.
+###############################################################################
 
-# Maximum time to wait before failing the drain command.
-TIMEOUT="--timeout=$((${TMOUT:-120} - 1))s"
+LOG "Phase 1: Cordoning node ${HOSTNAME}"
+kubectl cordon "${HOSTNAME}" ${KUBECONFIG} 2>&1 | \
+    while read -r line; do LOG "  $line"; done
 
-# Prepare the Kubernetes node for maintenance by marking the node
-# unschedulable and evicting pods. This improves pod recovery after
-# reboot since pods are able to shutdown gracefully.
-# Ignore failures since we can't do anything anyway (e.g., due to
-# timeout waiting for unsatisfied pod-disruption-budget).
-LOG "Draining all pods for graceful shutdown."
-timeout "${TMOUT:-120}s" stdbuf -oL -eL kubectl drain "${HOSTNAME}" ${KUBECONFIG} \
-    --ignore-daemonsets --delete-emptydir-data --force --disable-eviction=true \
-    ${SKIP_TIMEOUT} "${TIMEOUT}" 2>&1 | LOG
-RC=$?
-LOG "Drain Done with eviction disabled ; rc:$RC"
+# Calculate phase 1 timeout (reserve time for phase 2)
+PHASE1_TIMEOUT=$(( ${TMOUT:-180} - RBD_UNMAP_TIMEOUT - 10 ))
+if [ ${PHASE1_TIMEOUT} -lt 30 ]; then
+    PHASE1_TIMEOUT=30
+fi
+
+LOG "Phase 1: Deleting non-Ceph pods (preserving ${CEPH_NAMESPACE} namespace)"
+
+# Build list of pods to delete:
+#   - NOT in the rook-ceph namespace (Ceph must stay alive)
+#   - NOT managed by a DaemonSet (equivalent to --ignore-daemonsets)
+POD_LIST=$(kubectl get pods --all-namespaces \
+    --field-selector spec.nodeName="${HOSTNAME}" \
+    -o json ${KUBECONFIG} 2>/dev/null | \
+    jq -r --arg ns "${CEPH_NAMESPACE}" '
+    .items[] |
+    select(.metadata.namespace != $ns) |
+    select(
+        (.metadata.ownerReferences // []) |
+        map(.kind) |
+        index("DaemonSet") | not
+    ) |
+    "\(.metadata.namespace)/\(.metadata.name)"')
+
+# Capture the pod list for counting and iteration
+POD_LIST_RESULT="${POD_LIST}"
+
+POD_COUNT=0
+if [ -n "${POD_LIST_RESULT}" ]; then
+    POD_COUNT=$(echo "${POD_LIST_RESULT}" | wc -l)
+fi
+
+LOG "Phase 1: Found ${POD_COUNT} non-Ceph pods to delete"
+
+if [ "${POD_COUNT}" -gt 0 ]; then
+
+    # Delete pods in parallel
+    while read -r pod; do
+        if [ -z "$pod" ]; then
+            continue
+        fi
+        ns="${pod%%/*}"
+        name="${pod##*/}"
+        LOG "Phase 1: Deleting pod '${name}' in namespace '${ns}'"
+        kubectl delete pod -n "${ns}" "${name}" \
+            --grace-period=${POD_GRACE_PERIOD} \
+            ${KUBECONFIG} 2>&1 | while read -r line; do LOG "  $line"; done &
+    done < <(echo "${POD_LIST_RESULT}")
+
+    # Wait for all background deletes to complete (with timeout)
+    PHASE1_START=$(date +%s)
+    while [ "$(jobs -r -p | wc -l)" -gt 0 ]; do
+        ELAPSED=$(( $(date +%s) - PHASE1_START ))
+        REMAINING=$(jobs -r -p | wc -l)
+        LOG "Phase 1: Waiting for pod deletions ... ${ELAPSED}s elapsed, ${REMAINING} delete job(s) remaining"
+        if [ ${ELAPSED} -ge ${PHASE1_TIMEOUT} ]; then
+            WARN "Phase 1: Timeout after ${ELAPSED}s waiting for pod deletions"
+            # Word splitting is intentional: jobs -p may list multiple PIDs
+            # shellcheck disable=SC2046
+            kill $(jobs -p) 2>/dev/null
+            break
+        fi
+        sleep 1
+    done
+    wait 2>/dev/null
+
+    ELAPSED=$(( $(date +%s) - PHASE1_START ))
+    LOG "Phase 1: Pod deletion completed in ${ELAPSED}s"
+else
+    LOG "Phase 1: No non-Ceph pods to delete"
+fi
+
+###############################################################################
+# Phase 2: RBD device cleanup
+#
+# Call rbd-preshutdown to wait for CSI-driven unmap and force-cleanup if
+# needed. At this point Ceph is still alive (pods preserved in Phase 1),
+# so the clean unmap path (zero data loss) should succeed.
+###############################################################################
+
+LOG "Phase 2: RBD device cleanup"
+
+if [ -x "${RBD_PRESHUTDOWN}" ]; then
+    ${RBD_PRESHUTDOWN} --wait-timeout ${RBD_UNMAP_TIMEOUT} --skip-state-check
+    RC=$?
+    if [ ${RC} -ne 0 ]; then
+        ERROR "Phase 2: ${RBD_PRESHUTDOWN} returned rc=${RC}"
+    fi
+else
+    WARN "Phase 2: ${RBD_PRESHUTDOWN} not found or not executable - skipping"
+fi
+
+###############################################################################
+# Finalize
+#
+# At this point either:
+# - All RBD devices have been cleanly unmapped (happy path)
+# - RBD devices were force-unmapped (fallback path)
+# - RBD devices could not be unmapped (error path - proceed anyway)
+#
+# Signal completion so mtcAgent can proceed with the lazy reboot.
+# SM will then shut down services (including IPs and containerd).
+# If any RBD state remains, ceph-preshutdown.sh (if present) will
+# make a final attempt as ExecStopPost on containerd.
+###############################################################################
 
 touch "${REBOOT_CORDONED}"
 
-# Touch the specified file if provided
 if [ -n "${TOUCH_FILE}" ]; then
     touch "${TOUCH_FILE}"
     LOG "Touched completion file: ${TOUCH_FILE}"
 fi
+
+LOG "Pod drain and RBD cleanup complete - safe for SM shutdown"
 
 exit 0

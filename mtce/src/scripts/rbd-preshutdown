@@ -1,0 +1,234 @@
+#!/bin/bash
+# Copyright (c) 2026 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# RBD Pre-Shutdown Cleanup
+#
+# Waits for kernel RBD devices (/dev/rbd*) to be unmapped, and if they
+# are not unmapped within a timeout, force-unmounts and force-unmaps them.
+# Optionally removes the rbd and libceph kernel modules.
+#
+# This script is the successor to /usr/sbin/ceph-preshutdown.sh (which
+# ships with the bare-metal Ceph packages scheduled for removal). It is
+# storage-backend agnostic - it operates on kernel RBD state regardless
+# of whether devices were provisioned by bare-metal Ceph or Rook-Ceph.
+#
+# Callable from multiple shutdown paths:
+#   1. force_pod_drain (lock/unlock) - with --wait-timeout (Ceph alive)
+#   2. containerd ExecStopPost (reboot) - with --force-only (Ceph may be dead)
+#
+# When called via ExecStopPost (no arguments or --force-only), the script
+# checks whether the system is shutting down. If not (e.g., containerd is
+# being restarted by puppet), the script exits without taking action.
+#
+# Coexistence: This script coexists safely with ceph-preshutdown.sh.
+# Both are idempotent - if one runs first and cleans up all /dev/rbd*
+# devices, the other finds nothing to do.
+#
+# Usage:
+#   rbd-preshutdown [--wait-timeout <seconds>] [--force-only] [--skip-state-check]
+#
+# Options:
+#   --wait-timeout <seconds>  Time to wait for CSI to unmap devices (default: 60)
+#                             Set to 0 to skip waiting and go straight to force.
+#   --force-only              Skip the wait phase, immediately force-unmount/unmap.
+#                             Use this when Ceph is known to be unreachable.
+#   --skip-state-check        Do not check systemd state. Use when called from
+#                             force_pod_drain (we know shutdown is intended).
+
+NAME=$(basename "${0}")
+
+# Defaults
+WAIT_TIMEOUT=60
+FORCE_ONLY=false
+SKIP_STATE_CHECK=false
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --wait-timeout)
+            WAIT_TIMEOUT="${2}"
+            SKIP_STATE_CHECK=true  # Explicit invocation implies shutdown intent
+            shift 2
+            ;;
+        --force-only)
+            FORCE_ONLY=true
+            shift
+            ;;
+        --skip-state-check)
+            SKIP_STATE_CHECK=true
+            shift
+            ;;
+        -h|--help)
+            echo "Usage: $NAME [--wait-timeout <seconds>] [--force-only] [--skip-state-check]"
+            echo ""
+            echo "Options:"
+            echo "  --wait-timeout <seconds>  Wait for CSI unmap (default: 60, 0=skip)"
+            echo "  --force-only              Skip wait, force-unmap immediately"
+            echo "  --skip-state-check        Skip systemd state check"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            exit 1
+            ;;
+    esac
+done
+
+# Log to /var/log/daemon.log
+function LOG {
+    logger -p daemon.info -t "${NAME}($$): " "${@}"
+}
+
+function WARN {
+    logger -p daemon.warning -t "${NAME}($$): " "${@}"
+}
+
+function ERROR {
+    logger -p daemon.error -t "${NAME}($$): " "${@}"
+}
+
+###############################################################################
+# Systemd state check
+#
+# When called via ExecStopPost on containerd (no explicit arguments), we
+# must verify the system is actually shutting down. Containerd may be
+# restarted during normal operations (puppet reconfiguration, etc.).
+# Unmapping RBD devices during a service restart would disrupt running pods.
+#
+# This check mirrors the logic in ceph-preshutdown.sh (added in 2020,
+# Bug #1901449).
+#
+# When called from force_pod_drain (--wait-timeout or --skip-state-check),
+# this check is skipped because we know shutdown is intended.
+###############################################################################
+
+if [ "${SKIP_STATE_CHECK}" = false ]; then
+    state=$(timeout 10 systemctl is-system-running)
+    RC=$?
+    case ${RC} in
+        124)
+            # systemctl hung - proceed with cleanup to prevent shutdown hang
+            LOG "systemctl timed out. System state unknown. Proceeding with cleanup."
+            ;;
+        [01])
+            # 0=running; 1=initializing, starting, degraded, maintenance, stopping
+            if [ "$state" != "stopping" ]; then
+                LOG "System is ${state} - not shutting down. Leaving RBD devices mounted."
+                exit 0
+            fi
+            LOG "System is stopping - proceeding with RBD cleanup"
+            ;;
+    esac
+fi
+
+# Set nullglob so /dev/rbd[0-9]* returns empty if no match
+shopt -s nullglob
+
+# Check if any RBD devices exist
+if [ -z "$(echo /dev/rbd[0-9]*)" ]; then
+    LOG "No RBD devices found - nothing to clean up"
+    shopt -u nullglob
+    exit 0
+fi
+
+RBD_DEVS=$(echo /dev/rbd[0-9]* | wc -w)
+LOG "Found ${RBD_DEVS} RBD device(s)"
+
+###############################################################################
+# Wait Phase: Allow CSI to cleanly unmap RBD devices
+#
+# When called from force_pod_drain (lock/unlock path), the Ceph cluster is
+# still alive. CSI NodeUnstageVolume should be in progress, flushing dirty
+# pages and unmapping devices. Waiting here allows zero-data-loss cleanup.
+#
+# When called with --force-only (reboot path, or Ceph known dead), this
+# phase is skipped entirely.
+###############################################################################
+
+if [ "${FORCE_ONLY}" = false ] && [ "${WAIT_TIMEOUT}" -gt 0 ]; then
+    LOG "Waiting up to ${WAIT_TIMEOUT}s for CSI to unmap RBD devices"
+
+    ELAPSED=0
+    while [ -n "$(echo /dev/rbd[0-9]*)" ]; do
+        sleep 1
+        ELAPSED=$((ELAPSED + 1))
+
+        # Log progress every 10 seconds
+        if [ $((ELAPSED % 10)) -eq 0 ]; then
+            RBD_REMAINING=$(echo /dev/rbd[0-9]* | wc -w)
+            LOG "Waiting for RBD unmap ... ${ELAPSED}s elapsed, ${RBD_REMAINING} device(s) remaining"
+        fi
+
+        if [ ${ELAPSED} -ge "${WAIT_TIMEOUT}" ]; then
+            RBD_REMAINING=$(echo /dev/rbd[0-9]* | wc -w)
+            WARN "Timeout after ${ELAPSED}s - ${RBD_REMAINING} RBD device(s) still mapped"
+            break
+        fi
+    done
+
+    # Check if wait was successful
+    if [ -z "$(echo /dev/rbd[0-9]*)" ]; then
+        LOG "All RBD devices unmapped cleanly in ${ELAPSED}s"
+        shopt -u nullglob
+        exit 0
+    fi
+fi
+
+###############################################################################
+# Force Phase: Unmount, unmap, and remove kernel modules
+#
+# Either the wait timed out, or --force-only was specified.
+# Force-unmount and force-unmap all remaining RBD devices.
+#
+# rbd unmap -o force instructs the kernel to abort pending I/O.
+# If Ceph is unreachable, in-flight writes in dirty pages will be lost.
+# This is acceptable because:
+#   - The system is shutting down; the data would be lost anyway after
+#     the current 9-minute stall expires
+#   - This bounds the stall to seconds instead of minutes
+###############################################################################
+
+WARN "Forcing RBD cleanup"
+
+# Force-unmount all RBD-backed filesystems
+for dev in /dev/rbd[0-9]*; do
+    for mnt in $(mount | awk -v dev="$dev" '($1 == dev) {print $3}'); do
+        WARN "Force unmounting ${mnt} (${dev})"
+        umount -f "${mnt}" 2>&1 | while read -r line; do LOG "  $line"; done
+    done
+done
+
+# Force-unmap all RBD devices
+for dev in /dev/rbd[0-9]*; do
+    WARN "Force unmapping ${dev}"
+    rbd unmap -o force "${dev}" 2>&1 | while read -r line; do LOG "  $line"; done
+done
+
+# Brief wait for force operations to complete
+sleep 5
+
+# Remove kernel modules if all devices are gone
+if [ -z "$(echo /dev/rbd[0-9]*)" ]; then
+    LOG "All RBD devices unmapped after force cleanup"
+    if lsmod | grep -q '^rbd\>'; then
+        LOG "Removing rbd kernel module"
+        modprobe -r rbd 2>/dev/null
+    fi
+    if lsmod | grep -q '^libceph\>'; then
+        LOG "Removing libceph kernel module"
+        modprobe -r libceph 2>/dev/null
+    fi
+else
+    ERROR "RBD devices still present after force cleanup"
+    for dev in /dev/rbd[0-9]*; do
+        ERROR "  Device: ${dev}"
+    done
+    mount | grep '/dev/rbd' | while read -r line; do
+        ERROR "  Mount: $line"
+    done
+fi
+
+shopt -u nullglob
+exit 0

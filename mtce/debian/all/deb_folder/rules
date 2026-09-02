@@ -138,6 +138,7 @@ override_dh_auto_install:
 
 	# general scripts
 	install -m 700 -p -D scripts/delayed_sysrq_reboot.sh $(LOCAL_SBINDIR)/delayed_sysrq_reboot
+	install -m 755 -p -D scripts/rbd-preshutdown $(LOCAL_SBINDIR)/rbd-preshutdown
 
 	# syslog configuration
 	install -m 644 -p -D scripts/mtce.syslog $(SYSCONFDIR)/syslog-ng/conf.d/mtce.conf
@@ -157,6 +158,8 @@ override_dh_auto_install:
 	# Presets
 	install -d $(SYSCONFDIR)/systemd/system-preset
 	install -m 544 scripts/55-crash-dump-manager.preset $(SYSCONFDIR)/systemd/system-preset
+	install -d $(SYSCONFDIR)/systemd/system/containerd.service.d
+	install -m 644 scripts/stx-rbd-preshutdown-override.conf $(SYSCONFDIR)/systemd/system/containerd.service.d/
 
 override_dh_installsystemd:
 	dh_installsystemd --name crash-dump-manager

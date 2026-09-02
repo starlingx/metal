@@ -23,6 +23,7 @@ etc/services.d/storage/mtcTest
 etc/services.d/worker/mtcTest
 etc/syslog-ng/conf.d/mtce.conf
 etc/systemd/system-preset/
+etc/systemd/system/containerd.service.d/stx-rbd-preshutdown-override.conf
 usr/lib/tmpfiles.d/mtc.conf
 usr/lib/ocf/resource.d/platform/mtcAgent
 usr/local/bin/fsmond
@@ -37,6 +38,7 @@ usr/local/sbin/delayed_sysrq_reboot
 usr/sbin/crash-dump-manager
 usr/sbin/dmemchk.sh
 usr/sbin/fsync
+usr/local/sbin/rbd-preshutdown
 usr/local/sbin/force_pod_drain
 usr/share/mtce/hwclock.service
 usr/share/mtce/hwclock.sh
