@@ -114,6 +114,22 @@ typedef struct
     unsigned int mtcAlive_mgmnt_sequence = 0 ;
     unsigned int mtcAlive_clstr_sequence = 0 ;
 
+    // Set true by stop_pmon once pmon is confirmed inactive. A reboot/reset
+    // command is received on every provisioned network, so stop_pmon can be
+    // called several times ; this guard skips the redundant teardown after
+    // the first confirmed stop. Held in the daemon control struct (not a
+    // function-local static) so its lifetime and ownership are unambiguous.
+    // Cleared naturally by a real reboot restarting the mtcClient.
+    bool pmon_stopped = false ;
+
+    // Set true once the shutdown-jobs watcher has been launched for this
+    // reboot/reset flow. Guards against launching it more than once as the
+    // reboot command arrives per network (and on re-sends). The watcher is
+    // only launched if its script is present on disk, so its absence
+    // disables the feature. Cleared naturally by a real reboot restarting
+    // the mtcClient.
+    bool shutdown_watch_started = false ;
+
     /* Maintain pxeboot, management and cluser network interface information */
     iface_info_type  iface_info[MTCALIVE_INTERFACES_MAX];
 

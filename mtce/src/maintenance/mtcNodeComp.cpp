@@ -289,6 +289,24 @@ static int mtc_config_handler ( void * user,
         config_ptr->failsafe_shutdown_delay = atoi(value);
         ilog ("Shutdown TO : %d secs\n", config_ptr->failsafe_shutdown_delay );
     }
+    else if (MATCH("client", "want_watch_shutdown_jobs"))
+    {
+        config_ptr->want_watch_shutdown_jobs = atoi(value);
+        ilog ("Shutdown Mon: %s\n",
+              config_ptr->want_watch_shutdown_jobs ? "Yes" : "No" );
+    }
+    else if (MATCH("client", "shutdown_job_watch_interval"))
+    {
+        config_ptr->shutdown_job_watch_interval = atoi(value);
+        ilog ("Shutdown Mon: sample interval %d secs\n",
+              config_ptr->shutdown_job_watch_interval );
+    }
+    else if (MATCH("client", "shutdown_job_watch_heartbeat"))
+    {
+        config_ptr->shutdown_job_watch_heartbeat = atoi(value);
+        ilog ("Shutdown Mon: heartbeat %d secs\n",
+              config_ptr->shutdown_job_watch_heartbeat );
+    }
     if (( ctrl.nodetype & CONTROLLER_TYPE ) &&
         (MATCH("client", "sync_b4_peer_ctrlr_reset")))
     {
@@ -304,6 +322,14 @@ static int mtc_config_handler ( void * user,
 int daemon_configure ( void )
 {
     int rc = FAIL ;
+
+    /* Default the shutdown-jobs watcher to disabled ; mtc.conf may override. */
+    mtc_config.want_watch_shutdown_jobs = 0 ;
+
+    /* Defaults for the shutdown-jobs watcher timing ; mtc.conf may override.
+     * Set before the ini parse so absence of the keys leaves the defaults. */
+    mtc_config.shutdown_job_watch_interval  = 1 ;   /* sample every 1s        */
+    mtc_config.shutdown_job_watch_heartbeat = 30 ;  /* heartbeat every 30s    */
 
     /* Read the ini */
     mtc_config.mask = 0 ;

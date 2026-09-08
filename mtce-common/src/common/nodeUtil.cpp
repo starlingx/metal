@@ -1052,6 +1052,12 @@ int double_fork ( void )
         // Create a dynamic unit name using the current program name.
         // Do this so that if multiple maintenance processes use this
         // API they don't nave a unit name collision.
+        //
+        // Note: the unit name is fixed per program, so systemd will not
+        // start a second instance while one of the same name already
+        // exists. Repeated calls in the same reboot flow (one per network,
+        // plus re-sends) therefore do not spawn multiple failsafe units;
+        // the existing one is reused/kept and duplicates are no-ops.
         snprintf(unit_arg, sizeof(unit_arg),
                  "--unit=%s-delayed-failsafe-reboot",
                  program_invocation_short_name);
@@ -1066,6 +1072,41 @@ int double_fork ( void )
         execv(cmd[0], (char * const *)cmd);
         exit(EXIT_FAILURE);
     }
+
+#ifdef WANT_FAILSAFE_SYSRQ_INSTANCE_TRACKING
+    /* DEBUG: before logging this launch, count both (a) how many delayed
+     * failsafe reboot script processes are already running, and (b) how many
+     * matching systemd transient units exist. This watches for unbounded
+     * growth of failsafe launches across repeated reboot commands.
+     * execute_pipe_cmd runs in the parent.
+     * Compile-time gated by WANT_FAILSAFE_SYSRQ_INSTANCE_TRACKING ; off by
+     * default so the extra shell-outs are not incurred in the reboot path. */
+    {
+        char count_cmd [MAX_FILENAME_LEN];
+        char proc_out  [64] = {0};
+        char unit_out  [64] = {0};
+
+        /* (a) running delayed-reboot script processes ; match full path */
+        snprintf(count_cmd, sizeof(count_cmd),
+                 "pgrep -fc %s", MTC_DELAYED_SYSRQ_REBOOT_SCRIPT);
+        execute_pipe_cmd(count_cmd, proc_out, sizeof(proc_out));
+        proc_out[strcspn(proc_out, "\r\n")] = '\0'; /* strip trailing newline */
+
+        /* (b) matching systemd transient units for this program */
+        snprintf(count_cmd, sizeof(count_cmd),
+                 "systemctl list-units --all --no-legend '%s-delayed-failsafe-reboot*' 2>/dev/null | grep -c .",
+                 program_invocation_short_name);
+        execute_pipe_cmd(count_cmd, unit_out, sizeof(unit_out));
+        unit_out[strcspn(unit_out, "\r\n")] = '\0'; /* strip trailing newline */
+
+        ilog("failsafe reboot: %s existing delayed-reboot process(es) and %s "
+             "matching systemd unit(s) before this launch (pid:%d)",
+             proc_out[0] ? proc_out : "0",
+             unit_out[0] ? unit_out : "0",
+             parent);
+    }
+#endif /* WANT_FAILSAFE_SYSRQ_INSTANCE_TRACKING */
+
     ilog ("failsafe reboot script launched ; reboot in %d seconds ; calling pid:%d",
            delay_in_secs, parent);
 }

@@ -60,40 +60,157 @@ extern "C"
  *               cancel the sysreq failsafe thread.
  *
  ************************************************************************/
+/* Path to the optional shutdown-jobs watcher script. */
+#define SHUTDOWN_JOBS_WATCH_SCRIPT "/usr/local/sbin/systemd_shutdown_jobs_watch"
+#define SHUTDOWN_JOBS_WATCH_LOG    "/var/log/systemd_shutdown_jobs.log"
+
+/************************************************************************
+ *
+ * Name        : watch_shutdown_jobs
+ *
+ * Purpose     : If the 'want_watch_shutdown_jobs' feature is enabled in
+ *               mtc.conf and the watcher script is present on disk,
+ *               launch it (once) via systemd-run as a named systemd
+ *               transient unit on the first reboot/reset of this flow.
+ *               Running as a transient unit lets it survive mtcClient
+ *               exit and keep sampling systemd busyness/jobs through the
+ *               shutdown transition. Guarded so it is launched at most
+ *               once per process.
+ *
+ * Assumptions : The watcher script manages its own log rotation on
+ *               startup (systemd_shutdown_jobs.log -> .log.1 -> .log.2),
+ *               so mtcClient does not remove or rotate the log here.
+ *               This is by design: logrotate does not run during the
+ *               shutdown transition the watcher is meant to capture.
+ *
+ * Details     : Launched as a named systemd transient unit ; the fixed
+ *               --unit name also prevents a duplicate if this is somehow
+ *               reached again. The transient-unit properties keep the
+ *               watcher logging as far into the shutdown transition as
+ *               possible WITHOUT stalling the shutdown itself:
+ *                 DefaultDependencies=no : do not order this unit to be
+ *                                          stopped early in the shutdown
+ *                                          transaction (keeps it alive
+ *                                          through most of the teardown).
+ *                 Before=shutdown.target : ordered so it is stopped as
+ *                                          late as possible.
+ *                 TimeoutStopSec=1       : if/when systemd does stop it,
+ *                                          it must exit within 1s ;
+ *                                          guarantees it can never delay
+ *                                          the shutdown.
+ *                 KillMode=mixed         : prompt, clean termination on
+ *                                          stop.
+ *               The configured sample interval and heartbeat are read
+ *               from mtc.conf and passed to the script as positional
+ *               args (arg1=interval secs, arg2=heartbeat secs ; 0=off).
+ *
+ ************************************************************************/
+void watch_shutdown_jobs ( void )
+{
+    ctrl_type * ctrl_ptr = get_ctrl_ptr() ;
+
+    if ( ctrl_ptr->shutdown_watch_started == true )
+        return ;
+
+    if ( daemon_is_file_present ( SHUTDOWN_JOBS_WATCH_SCRIPT ) == false )
+        return ; /* script not installed */
+
+    ctrl_ptr->shutdown_watch_started = true ;
+
+    /* Watcher timing from mtc.conf ; see the function header for the
+     * transient-unit property rationale. */
+    int interval  = daemon_get_cfg_ptr()->shutdown_job_watch_interval ;
+    int heartbeat = daemon_get_cfg_ptr()->shutdown_job_watch_heartbeat ;
+
+    char cmd[512] ;
+    snprintf ( cmd, sizeof(cmd),
+               "/usr/bin/systemd-run --unit=mtc-shutdown-jobs-watch "
+               "-p DefaultDependencies=no "
+               "-p Before=shutdown.target "
+               "-p TimeoutStopSec=1 "
+               "-p KillMode=mixed "
+               SHUTDOWN_JOBS_WATCH_SCRIPT " %d %d >/dev/null 2>&1",
+               interval, heartbeat );
+    int rc = system(cmd);
+    ilog("shutdown-jobs watcher launched via systemd-run "
+         "(interval:%ds heartbeat:%ds rc:%d)", interval, heartbeat, rc);
+}
+
 void stop_pmon( void )
 {
     /* max pipe command response length */
     #define PIPE_COMMAND_RESPON_LEN (100)
 
-    ilog("Stopping collectd.");
+    /* A reboot/reset command is received on every provisioned network, so
+     * stop_pmon can be invoked several times. The teardown only needs to
+     * run once ; running it again re-issues the collectd/pmon stop and the
+     * status pipe command, which under shutdown load can block for tens of
+     * seconds. This guard skips the redundant teardown after the first
+     * confirmed stop. It lives in the daemon control struct (not a
+     * function-local static) so its ownership and lifetime are unambiguous,
+     * and is cleared naturally by a real reboot restarting the mtcClient. */
+    ctrl_type * ctrl_ptr = get_ctrl_ptr() ;
+
+    if ( ctrl_ptr->pmon_stopped == true )
+    {
+        ilog("pmon already stopped ; skipping (pid:%d)", getpid());
+        return ;
+    }
+
+    ilog("Stopping collectd. (pid:%d)", getpid());
     int rc = system("/usr/local/sbin/pmon-stop collectd");
     sleep (2);
-    ilog("Stopping pmon to prevent process recovery during shutdown");
-    for ( int retry = 0 ; retry < 5 ; retry++ )
+    ilog("Stopping pmon to prevent process recovery during shutdown (pid:%d)", getpid());
+    bool confirmed_inactive = false ;
+    for ( int retry = 0 ; ( retry < 5 ) && ( confirmed_inactive == false ) ; retry++ )
     {
-        char pipe_cmd_output [PIPE_COMMAND_RESPON_LEN] ;
         rc = system("/usr/bin/systemctl stop pmon");
-        sleep(2);
+        ilog("pmon stop complete (rc:%d) (retry:%d) (pid:%d)", rc, retry, getpid());
 
-        /* confirm pmon is no longer active */
-        execute_pipe_cmd ( "/usr/bin/systemctl is-active pmon", &pipe_cmd_output[0], PIPE_COMMAND_RESPON_LEN );
-        if ( strnlen ( pipe_cmd_output, PIPE_COMMAND_RESPON_LEN ) > 0 )
+        /* Confirm pmon is no longer active. Give the is-active query its own
+         * short retry loop (3 tries, 1 sec apart) before falling back to
+         * re-issuing 'systemctl stop pmon'. Service the daemon signal
+         * handler each iteration so signals are not starved while waiting. */
+        for ( int query = 0 ; query < 3 ; query++ )
         {
-            string temp = pipe_cmd_output ;
-            if ( temp.find ("inactive") != string::npos )
+            char pipe_cmd_output [PIPE_COMMAND_RESPON_LEN] ;
+            execute_pipe_cmd ( "/usr/bin/systemctl is-active pmon", &pipe_cmd_output[0], PIPE_COMMAND_RESPON_LEN );
+            if ( strnlen ( pipe_cmd_output, PIPE_COMMAND_RESPON_LEN ) > 0 )
             {
-                ilog("pmon is now inactive (%d:%d)", retry, rc);
-                break ;
+                string temp = pipe_cmd_output ;
+                if ( temp.find ("inactive") != string::npos )
+                {
+                    ilog("pmon is now inactive (%d:%d) (pid:%d)", retry, rc, getpid());
+                    /* success ; latch so stop_pmon is not run again.
+                     * The /var/log/no_stop_pmon_guard debug file disables the
+                     * latch so every reboot command re-runs the teardown (used
+                     * to reproduce/measure the repeated-call stall). */
+                    if ( daemon_is_file_present ( "/var/log/no_stop_pmon_guard" ) )
+                    {
+                        wlog("stop_pmon guard disabled ; not latching (pid:%d)", getpid());
+                    }
+                    else
+                    {
+                        ctrl_ptr->pmon_stopped = true ;
+                    }
+                    confirmed_inactive = true ;
+                    break ;
+                }
+                else
+                {
+                    ilog("pmon is not inactive (%s) ; is-active query %d of 3 (%d:%d)",
+                          temp.c_str(), query+1, retry, rc);
+                }
             }
             else
             {
-                ilog("pmon is not inactive (%s) ; retrying (%d:%d)",
-                      temp.c_str(), retry, rc);
+                elog("pmon status query failed ; is-active query %d of 3 (%d:%d)",
+                      query+1, retry, rc);
             }
-        }
-        else
-        {
-            elog("pmon status query failed ; retrying (%d:%d)", retry, rc);
+
+            /* service signals while waiting so they are not starved */
+            daemon_signal_hdlr ();
+            sleep (1);
         }
     }
 }
@@ -659,15 +776,31 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
 
         if ( msg.cmd == MTC_CMD_REBOOT )
         {
+            if ( daemon_get_cfg_ptr()->want_watch_shutdown_jobs )
+                watch_shutdown_jobs();
+
+            stop_pmon();
+
             if ( daemon_is_file_present ( MTC_CMD_FIT__NO_REBOOT ) )
             {
                 ilog ("Reboot - fit bypass (%s)", iface_name_ptr);
                 return (PASS);
             }
-            stop_pmon();
             ilog ("Reboot (%s)", iface_name_ptr);
             daemon_log ( NODE_RESET_FILE, "reboot command" );
-            launch_failsafe_reboot ( delay );
+            /* Debug/isolation: the /var/log/avoid_failsafe file skips the
+             * systemd-run failsafe reboot launch so we can test whether the
+             * repeated failsafe (systemd-run) invocation - not the reboot
+             * itself - is what makes a subsequent 'systemctl stop pmon'
+             * stall. */
+            if ( daemon_is_file_present ( "/var/log/avoid_failsafe" ) )
+            {
+                wlog ("avoid_failsafe present ; skipping launch_failsafe_reboot (%s)", iface_name_ptr);
+            }
+            else
+            {
+                launch_failsafe_reboot ( delay );
+            }
             rc = system("/usr/bin/systemctl reboot");
         }
         if ( msg.cmd == MTC_CMD_LAZY_REBOOT )
@@ -692,12 +825,16 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
                     sleep (1);
                 } while ( remaining_lazy_delay-- > 0 ) ;
             }
+            if ( daemon_get_cfg_ptr()->want_watch_shutdown_jobs )
+                watch_shutdown_jobs();
             ilog ("Lazy Reboot (%s) ; now", iface_name_ptr);
             launch_failsafe_reboot ( delay );
             rc = system("/usr/bin/systemctl reboot");
         }
         else if ( msg.cmd == MTC_CMD_RESET )
         {
+            if ( daemon_get_cfg_ptr()->want_watch_shutdown_jobs )
+                watch_shutdown_jobs();
             if ( daemon_is_file_present ( MTC_CMD_FIT__NO_RESET ) )
             {
                 ilog ("Reset - fit bypass (%s)", iface_name_ptr);
@@ -723,6 +860,9 @@ int mtc_service_command ( mtc_socket_type * sock_ptr, int interface )
              */
             stop_pmon();
             launch_failsafe_reboot ( delay/2 );
+
+            if ( daemon_get_cfg_ptr()->want_watch_shutdown_jobs )
+                watch_shutdown_jobs();
 
             /* We fork the wipedisk command as it may take upwards of 30s
              * If we hold this thread for that long pmon will kill mtcClient

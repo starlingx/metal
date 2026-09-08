@@ -171,6 +171,9 @@ typedef struct
     int   reboot_validation_threshold  ; /**< reboot validation threshold secs*/
     int   time_drift_tolerance         ; /**< time drift tolerance in secs    */
     int   failsafe_shutdown_delay      ; /**< seconds before failsafe reboot  */
+    int   want_watch_shutdown_jobs     ; /**< 1=launch shutdown-jobs watcher on reboot */
+    int   shutdown_job_watch_interval  ; /**< watcher sample interval in secs */
+    int   shutdown_job_watch_heartbeat ; /**< watcher heartbeat in secs ; 0=off */
     int   hostwd_update_period         ; /**< expect hostwd to be updated     */
     int   autorecovery_threshold       ; /**< AIO stop autorecovery threshold */
     int   bmc_audit_period             ; /**< bmc audit period cadence        */
