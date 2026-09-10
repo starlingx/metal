@@ -543,6 +543,13 @@ private:
         list<mtcCmd>           mtcCmd_done_fifo ;
         list<mtcCmd>::iterator mtcCmd_done_fifo_ptr;
 
+        /* Enable-level reset-progression retry bookkeeping.
+         * Seeded at MTC_ENABLE__START, copied into the reset
+         * progression command's parm1/parm2 when queued, and
+         * refreshed from the completed command on each cycle.           */
+        int reset_prog_cycles_max ; /* maximum enable-level reset cycles */
+        int reset_prog_cycle      ; /* current cycle counter             */
+
         /** @} private_libEvent_structs and utils */
 
         /**

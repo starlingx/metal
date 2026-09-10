@@ -791,6 +791,9 @@ nodeLinkClass::node* nodeLinkClass::addNode( string hostname )
     ptr->retries = 0 ;
     ptr->http_retries_cur = 0 ;
     ptr->cmd_retries = 0 ;
+
+    ptr->reset_prog_cycles_max = RESET_PROG_MAX_ENABLE_RETRIES ;
+    ptr->reset_prog_cycle      = 0 ;
     ptr->power_action_retries = 0 ;
     ptr->power_status_retries = 0 ;
     ptr->want_power_action = false ;

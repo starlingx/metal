@@ -77,6 +77,18 @@ using namespace std;
 int nodeLinkClass::calc_reset_prog_timeout ( struct nodeLinkClass::node * node_ptr,
                                                                     int   retries )
 {
+    /* Sanitize the retry count before using it as a multiplier below.
+     * Clamp to the default RESET_PROG_MAX_ENABLE_RETRIES. */
+    if (( retries < 0 ) || ( retries > RESET_PROG_MAX_ENABLE_RETRIES ))
+    {
+        slog ("%s reset progression retry count out of range (%d) ; "
+              "clamping to %d\n",
+                  node_ptr->hostname.c_str(),
+                  retries,
+                  RESET_PROG_MAX_ENABLE_RETRIES );
+        retries = RESET_PROG_MAX_ENABLE_RETRIES ;
+    }
+
     /* for the management interface */
     int to = MTC_RESET_PROG_OFFLINE_TIMEOUT ;
 
@@ -521,8 +533,9 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
             /* Reset retries counter when entering failure state */
             node_ptr->retries = 0;
 
-            /* Reset reset progression retry counter for the next enable attempt */
-            node_ptr->cmd.parm2 = 0;
+            /* Reset the enable-level reset-progression cycle counter for the
+             * next enable attempt. */
+            node_ptr->reset_prog_cycle = 0;
 
             /* Complete the add operation even if the node failed ; for any reason */
             if ( node_ptr->add_completed == false )
@@ -786,6 +799,11 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
             mtcCmd_workQ_purge ( node_ptr );
             mtcCmd_doneQ_purge ( node_ptr );
 
+            /* Seed the enable-level reset-progression retry counters at the
+             * start of every enable sequence. Using dedicated per-node members. */
+            node_ptr->reset_prog_cycles_max = RESET_PROG_MAX_ENABLE_RETRIES ;
+            node_ptr->reset_prog_cycle      = 0 ;
+
             node_ptr->mtce_flags = 0 ;
 
             /* Assert the mtc alive gate */
@@ -995,13 +1013,14 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                         else
                         {
                             /* Enable-level retries still available, try again.
-                             * Preserve parm2 (retry attempt count) from the completed command
-                             * for use in the next cycle */
-                            node_ptr->cmd.parm2 = node_ptr->mtcCmd_done_fifo_ptr->parm2;
-                            wlog("%s Reset Progression failed - retrying (cycle %d of %d)",
+                             * Carry the current cycle count from the completed
+                             * command into the dedicated per-node counter for
+                             * the next cycle. */
+                            node_ptr->reset_prog_cycle = node_ptr->mtcCmd_done_fifo_ptr->parm2;
+                            wlog("%s Reset Progression failed - retrying (cycle %d of %d) - failed progression",
                                  node_ptr->hostname.c_str(),
-                                 node_ptr->mtcCmd_done_fifo_ptr->parm2,
-                                 node_ptr->mtcCmd_done_fifo_ptr->parm1);
+                                 node_ptr->reset_prog_cycle,
+                                 node_ptr->reset_prog_cycles_max);
                             enableStageChange ( node_ptr, MTC_ENABLE__RESET_PROGRESSION );
                         }
                     }
@@ -1038,25 +1057,15 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
              * mtcAlive message after reset */
             node_ptr->health = NODE_HEALTH_UNKNOWN ;
 
-            /* Preserve parm1 and parm2 (retry limits and count) across init clearance.
-             * parm1 = max enable-level retries (number of reset progression cycles)
-             * parm2 = current retry attempt counter (incremented by RESET_PROGRESSION_RETRY) */
-            int preserved_parm1 = node_ptr->cmd.parm1;
-            int preserved_parm2 = node_ptr->cmd.parm2;
-
-            /* Only initialize on first entry; preserve parm1/parm2 across retries */
-            if ( node_ptr->cmd.parm2 == 0 )
-            {
-                mtcCmd_init ( node_ptr->cmd );
-                node_ptr->cmd.parm1 = RESET_PROG_MAX_ENABLE_RETRIES ;
-                node_ptr->cmd.parm2 = 0    ; /* start retry counter at 0 */
-            }
-            else
-            {
-                /* Restore parm1 and parm2 for retry cycle */
-                node_ptr->cmd.parm1 = preserved_parm1;
-                node_ptr->cmd.parm2 = preserved_parm2;
-            }
+            /* Build the reset progression command from a clean scratch struct
+             * and stamp the enable-level retry bookkeeping onto it from the
+             * dedicated per-node counters. reset_prog_cycles_max is the max
+             * number of cycles ; reset_prog_cycle is the current cycle count,
+             * seeded to 0 at MTC_ENABLE__START and carried forward across
+             * cycles below. */
+            mtcCmd_init ( node_ptr->cmd );
+            node_ptr->cmd.parm1 = node_ptr->reset_prog_cycles_max ;
+            node_ptr->cmd.parm2 = node_ptr->reset_prog_cycle ;
             node_ptr->cmd.stage = MTC_CMD_STAGE__START ;
             node_ptr->cmd.cmd   = MTC_OPER__RESET_PROGRESSION ;
             node_ptr->cmd_retries = 0  ; /* init fsm retries count */
@@ -1065,7 +1074,8 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
 
             /* calculate the overall timeout period taking into account
              * all the reboot/reset sources that will be tried */
-            overall_timeout = calc_reset_prog_timeout ( node_ptr , node_ptr->cmd.parm1 ) ;
+            overall_timeout = calc_reset_prog_timeout ( node_ptr , node_ptr->reset_prog_cycles_max ) ;
+            mtcTimer_reset ( node_ptr->mtcTimer );
             mtcTimer_start ( node_ptr->mtcTimer, mtcTimer_handler, overall_timeout ) ;
             enableStageChange ( node_ptr, MTC_ENABLE__RESET_WAIT );
 
@@ -1096,22 +1106,22 @@ int nodeLinkClass::enable_handler ( struct nodeLinkClass::node * node_ptr )
                 node_ptr->mtcCmd_done_fifo.begin();
                 if ( node_ptr->mtcCmd_done_fifo_ptr->status != PASS )
                 {
-                    wlog ("%s Reset Unsuccessful (retries:%d) (rc:%d)\n",
+                    wlog ("%s Reset Unsuccessful (cycles_max:%d) (rc:%d)\n",
                               node_ptr->hostname.c_str(),
-                              node_ptr->cmd.parm1,
+                              node_ptr->reset_prog_cycles_max,
                               node_ptr->mtcCmd_done_fifo_ptr->status );
 
-                    /* Preserve parm2 (current cycle count) from the completed command
-                     * for use in the next retry cycle. parm1 specifies max cycles. */
-                    node_ptr->cmd.parm2 = node_ptr->mtcCmd_done_fifo_ptr->parm2;
+                    /* Carry the current cycle count from the completed command
+                     * back into the dedicated per-node counter for the next
+                     * retry cycle. reset_prog_cycles_max is the maximum. */
+                    node_ptr->reset_prog_cycle = node_ptr->mtcCmd_done_fifo_ptr->parm2;
 
-                    /* Check if we've exhausted all retry cycles:
-                     * parm2 is current cycle count, parm1 is maximum cycles allowed.
-                     * If parm2 > parm1, we've exceeded the limit and should fail. */
-                    if ( node_ptr->mtcCmd_done_fifo_ptr->parm2 > node_ptr->mtcCmd_done_fifo_ptr->parm1 )
+                    /* Check if we've exhausted all retry cycles: current cycle
+                     * count exceeding the maximum means fail the enable. */
+                    if ( node_ptr->reset_prog_cycle > node_ptr->reset_prog_cycles_max )
                     {
                         elog("%s Reset Progression failed after %d cycles - enable failed",
-                             node_ptr->hostname.c_str(), node_ptr->mtcCmd_done_fifo_ptr->parm1);
+                             node_ptr->hostname.c_str(), node_ptr->reset_prog_cycles_max);
                         enableStageChange ( node_ptr, MTC_ENABLE__FAILURE );
                     }
                     else
