@@ -1282,6 +1282,9 @@ private:
     void bmc_load_protocol          ( struct nodeLinkClass::node * node_ptr );
     void bmc_default_query_controls ( struct nodeLinkClass::node * node_ptr );
     int  bmc_default_to_ipmi        ( struct nodeLinkClass::node * node_ptr );
+    /* Common IPMI/Redfish BMC provisioning completion ; corrects availStatus
+     * to be consistent with the just learned power status */
+    void bmc_align_power_state  ( struct nodeLinkClass::node * node_ptr );
 
     void set_uptime ( struct nodeLinkClass::node * node_ptr, unsigned int uptime, bool force );
 

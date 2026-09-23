@@ -3771,6 +3771,14 @@ int nodeLinkClass::online_handler ( struct nodeLinkClass::node * node_ptr )
                         ilog ("%s mtcAlive ; going 'online'\n",
                                   node_ptr->hostname.c_str());
 
+                        /* mtcAlive proves the host is powered on ; refresh stale power_on
+                         * so the bmc_handler power-off monitor won't re-assert POWERED_OFF. */
+                        if ( node_ptr->power_on == false )
+                        {
+                            ilog ("%s power is on ; inferred by mtcAlive", node_ptr->hostname.c_str());
+                            node_ptr->power_on = true ;
+                        }
+
                         mtcInvApi_update_state ( node_ptr, MTC_JSON_INV_AVAIL, "online" );
                         if (( AIO_SYSTEM ) && ( is_controller(node_ptr) == true ))
                         {
@@ -8334,6 +8342,8 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
                                               KPI_STR__ACCESSIBLE,
                                               node_ptr->start_bmc_prov_time );
 
+                bmc_align_power_state ( node_ptr );
+
                 node_ptr->bmc_thread_ctrl.done = true  ;
                 node_ptr->bmc_thread_info.command = 0  ;
 
@@ -8443,15 +8453,7 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
                         }
                         ilog ("%s power is %s", node_ptr->hostname.c_str(), node_ptr->power_on ? "on" : "off" );
 
-                        if ( node_ptr->power_on == false )
-                        {
-                            availStatusChange ( node_ptr, MTC_AVAIL_STATUS__POWERED_OFF );
-
-                            if ( node_ptr->adminState == MTC_ADMIN_STATE__UNLOCKED )
-                            {
-                                wlog ("%s is powered off while in the unlocked state", node_ptr->hostname.c_str());
-                            }
-                        }
+                        bmc_align_power_state ( node_ptr );
                     }
                 } /* else wait longer */
             } /* end power query operation */
@@ -8662,8 +8664,8 @@ int nodeLinkClass::bmc_handler ( struct nodeLinkClass::node * node_ptr )
 
                             /* save the power on state and if power is off update inventory */
                             node_ptr->power_on = node_ptr->bmc_info.power_on ;
-                            if ( node_ptr->power_on == false )
-                                availStatusChange ( node_ptr, MTC_AVAIL_STATUS__POWERED_OFF );
+
+                            bmc_align_power_state ( node_ptr );
 
                             mtcTimer_start ( node_ptr->bmc_audit_timer,
                                              mtcTimer_handler,

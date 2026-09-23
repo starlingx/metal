@@ -5385,6 +5385,50 @@ void nodeLinkClass::bmc_access_data_init ( struct nodeLinkClass::node * node_ptr
 
 /*****************************************************************************
  *
+ * Name       : bmc_align_power_state
+ *
+ * Description: Common IPMI/Redfish BMC provisioning completion handling.
+ *
+ *              Corrects availStatus to be consistent with the just learned
+ *              power_on state ; i.e. corrects a stale 'powered off' status
+ *              to 'offline' if power is now found to be on, and corrects
+ *              to 'powered off' if power is found to be off and availStatus
+ *              does not already reflect that.
+ *
+ *              Called by bmc_handler for both the IPMI power status query
+ *              (BMC provisioning) path and the Redfish BMC audit path.
+ *
+ *****************************************************************************/
+void nodeLinkClass::bmc_align_power_state ( struct nodeLinkClass::node * node_ptr )
+{
+    if (( node_ptr->power_on == false ) &&
+        ( node_ptr->availStatus != MTC_AVAIL_STATUS__POWERED_OFF ))
+    {
+        ilog ("%s detected as powered off while %s-%s-%s ; correcting to 'powered off'",
+                node_ptr->hostname.c_str(),
+                get_adminState_str (node_ptr->adminState).c_str(),
+                get_operState_str  (node_ptr->operState).c_str(),
+                get_availStatus_str(node_ptr->availStatus).c_str());
+        availStatusChange ( node_ptr, MTC_AVAIL_STATUS__POWERED_OFF );
+        if ( node_ptr->adminState == MTC_ADMIN_STATE__UNLOCKED )
+        {
+            wlog ("%s is powered off while in the unlocked state", node_ptr->hostname.c_str());
+        }
+    }
+    else if (( node_ptr->power_on == true ) &&
+             ( node_ptr->availStatus == MTC_AVAIL_STATUS__POWERED_OFF ))
+    {
+        ilog ("%s detected as powered on host while %s-%s-%s state ; correcting to 'offline'",
+                node_ptr->hostname.c_str(),
+                get_adminState_str (node_ptr->adminState).c_str(),
+                get_operState_str  (node_ptr->operState).c_str(),
+                get_availStatus_str(node_ptr->availStatus).c_str());
+        availStatusChange ( node_ptr, MTC_AVAIL_STATUS__OFFLINE );
+    }
+}
+
+/*****************************************************************************
+ *
  * Name       : set_bm_prov
  *
  * Description: Manage the local provisioning state of the
