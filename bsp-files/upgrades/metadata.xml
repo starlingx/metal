@@ -4,9 +4,11 @@
     <supported_upgrades>
         <upgrade>
             <version>25.09</version>
+            <required_patch>WRCP-25.09.400</required_patch>
         </upgrade>
         <upgrade>
             <version>26.03</version>
+            <required_patch>WRCP-26.03.200</required_patch>
         </upgrade>
     </supported_upgrades>
 </build>
