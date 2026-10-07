@@ -131,17 +131,44 @@ LOG "Phase 1: Deleting non-Ceph pods (preserving ${CEPH_NAMESPACE} namespace)"
 # Build list of pods to delete:
 #   - NOT in the rook-ceph namespace (Ceph must stay alive)
 #   - NOT managed by a DaemonSet (equivalent to --ignore-daemonsets)
+#   - NOT mirror/static pods. Static pods (e.g. the control-plane
+#     apiserver/scheduler/controller-manager) are run by kubelet from on-disk
+#     manifests; kubectl can only delete the mirror object, which kubelet
+#     immediately recreates, so a blocking delete never completes and stalls
+#     the drain when the API is unreachable (e.g. enroll). kubelet stops them
+#     at node shutdown regardless. This matches "kubectl drain", which also
+#     leaves mirror pods alone. Mirror pods carry the
+#     kubernetes.io/config.mirror annotation.
 POD_LIST=$(kubectl get pods --all-namespaces \
     --field-selector spec.nodeName="${HOSTNAME}" \
     -o json ${KUBECONFIG} 2>/dev/null | \
     jq -r --arg ns "${CEPH_NAMESPACE}" '
     .items[] |
+
+    # Exclude Ceph pods
     select(.metadata.namespace != $ns) |
+
+    # Exclude DaemonSet-managed pods
     select(
         (.metadata.ownerReferences // []) |
         map(.kind) |
         index("DaemonSet") | not
     ) |
+
+    # Exclude mirror/static pods
+    select(
+        (.metadata.annotations["kubernetes.io/config.mirror"] // "") == ""
+    ) |
+
+    # Explicit control-plane static pod exclusion (owner Node + tier=control-plane)
+    select(
+        (
+            ((.metadata.ownerReferences // []) | map(.kind) | index("Node"))
+            and
+            (.metadata.labels.tier == "control-plane")
+        ) | not
+    ) |
+
     "\(.metadata.namespace)/\(.metadata.name)"')
 
 # Capture the pod list for counting and iteration
