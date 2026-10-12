@@ -195,7 +195,7 @@ else
 
 fi
 
-if [ "${legacy_bios}" != "1" ] && [ -n "${install_kargs}" ]; then
+if [ "${legacy_bios}" != "1" -a -n "${install_kargs}" ]; then
   menuentry "Local Factory Restore" --id=local-factory-restore --unrestricted {
     set fallback=0
     efi-watchdog enable 0 180
