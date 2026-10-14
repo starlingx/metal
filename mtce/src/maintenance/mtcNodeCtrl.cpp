@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016, 2023-2025 Wind River Systems, Inc.
+ * Copyright (c) 2013, 2016, 2023-2026 Wind River Systems, Inc.
 *
 * SPDX-License-Identifier: Apache-2.0
 *
@@ -1638,6 +1638,9 @@ void daemon_service_run ( void )
     set_inotify_watch_file ( SHADOW_FILE,
                              mtcInv.inotify_shadow_file_fd ,
                              mtcInv.inotify_shadow_file_wd );
+
+    /* Update data from shadow file on start. */
+    mtcInv.manage_shadow_change ( mtcInv.my_hostname );
 
     /* inform the heartbeat service that this controller is active */
     send_hbs_command ( mtcInv.my_hostname, MTC_CMD_ACTIVE_CTRL );
