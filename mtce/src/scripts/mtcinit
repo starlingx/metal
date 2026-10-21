@@ -1,12 +1,12 @@
 #! /bin/sh
 #
-# Copyright (c) 2013-2014, 2016 Wind River Systems, Inc.
+# Copyright (c) 2013-2014, 2016, 2026 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
 
 
-. /etc/init.d/functions
+. /lib/lsb/init-functions
 
 MTCCLIENT_NAME="mtcClient"
 MTCCLIENT="/usr/local/bin/${MTCCLIENT_NAME}"
