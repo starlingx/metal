@@ -1,6 +1,6 @@
 #! /bin/sh
 #
-# Copyright (c) 2013-2014 Wind River Systems, Inc.
+# Copyright (c) 2013-2014, 2026 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -15,7 +15,7 @@
 # Short-Description: Loop trying to bring up the mgmt interface 
 ### END INIT INFO
 
-. /etc/init.d/functions
+. /lib/lsb/init-functions
 
 PLATFORM_CONF="/etc/platform/platform.conf"
 
